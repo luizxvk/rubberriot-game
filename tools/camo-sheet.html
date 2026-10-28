@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><title>Camuflagens</title>
+<style>body{margin:0;background:#dcd7cb;font:11px sans-serif}#g{display:grid;grid-template-columns:repeat(6,220px)}div.c{position:relative}span{position:absolute;left:3px;top:2px;background:#fff9;padding:0 3px}</style>
+<div id="g"></div><pre id="o"></pre>
+<script type="module">
+// Folha de camuflagens: cada uma em t=1 s; anima = diferenca entre t=1 e t=1,7 (deve ser > 0 nas animadas)
+import * as THREE from 'three';
+import { loadArsenal, buildGun } from '../src/arsenal.js';
+import { CAMOS, camoTime } from '../src/camos.js';
+await loadArsenal();
+const W = 220, H = 110;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0xdcd7cb);
+sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); sc.add(dl);
+const cam = new THREE.OrthographicCamera(-0.55, 0.55, 0.28, -0.28, 0.01, 10); cam.position.set(3, 0, 0); cam.lookAt(0, 0, 0);
+const px = () => { const gl = r.getContext(), a = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, a); return a; };
+const out = [];
+const cases = [];
+for (const c of CAMOS) { if (c.react) for (let s = 0; s < 4; s++) cases.push([c, s]); else cases.push([c, 0]); }
+for (const [c, stage] of cases) {
+  const gun = buildGun('rifle', { body: 'fusil_1', camo: c.id });
+  const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();
+  const u = gun.userData.mat?.userData?.u; if (u?.uReact) u.uReact.value = stage;
+  const box = new THREE.Box3().setFromObject(gun), cc = box.getCenter(new THREE.Vector3()); gun.position.sub(cc); sc.add(gun);
+  camoTime.value = 1.0; r.render(sc, cam); const a = px(); const url = r.domElement.toDataURL();
+  camoTime.value = 1.7; r.render(sc, cam); const b = px();
+  let diff = 0; for (let i = 0; i < a.length; i += 4) diff += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+  sc.remove(gun);
+  const anim = (diff / (W * H)).toFixed(2);
+  out.push(`${c.id}${c.react ? ' estagio ' + stage : ''} ${c.anim ? 'ANIMADA' : 'estatica'} diferenca=${anim}`);
+  const d = document.createElement('div'); d.className = 'c'; d.innerHTML = `<img src="${url}"><span>${c.id}${c.react ? ' ' + stage : ''} (${anim})</span>`;
+  document.getElementById('g').appendChild(d);
+}
+document.getElementById('o').textContent = out.join('\n'); document.title = 'pronto';
+</script>

@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><pre id="o"></pre>
+<script type="module">
+// Mede o vidro (rear) e o furo (vertices do corpo da mira perto da traseira) de cada luneta
+import { loadArsenal, _dbg } from '../src/arsenal.js';
+await loadArsenal();
+const out = [];
+for (const [n, p] of Object.entries(_dbg.parts)) {
+  if (!p.lens) continue;
+  const L = p.lens, pos = p.geo.attributes.position, idx = p.geo.index.array;
+  // furo: vertices do corpo no plano da lente traseira, dentro de 1.6r do centro
+  let ymin = Infinity, ymax = -Infinity, xmin = Infinity, xmax = -Infinity;
+  for (const i of idx) { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (Math.abs(z - L.z) < 0.05 && Math.hypot(x - L.c.x, y - L.c.y) < L.r * 1.05) { ymin = Math.min(ymin, y); ymax = Math.max(ymax, y); xmin = Math.min(xmin, x); xmax = Math.max(xmax, x); } }
+  const b = p.box;
+  out.push(`${n} lensZ=${L.z.toFixed(2)} fz=${L.f.z.toFixed(2)} boxZ=${p.box.min.z.toFixed(2)}..${p.box.max.z.toFixed(2)} c=(${L.c.x.toFixed(3)},${L.c.y.toFixed(3)}) r=${L.r.toFixed(3)} ring y ${ymin.toFixed(3)}..${ymax.toFixed(3)} x ${xmin.toFixed(3)}..${xmax.toFixed(3)} box y ${b.min.y.toFixed(2)}..${b.max.y.toFixed(2)}`);
+}
+document.getElementById('o').textContent = out.join('\n'); document.title = 'pronto';
+</script>

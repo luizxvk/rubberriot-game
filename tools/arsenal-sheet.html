@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8"><title>Conferencia do arsenal</title>
+<style>body{margin:0;background:#dcd7cb;font:12px sans-serif}#g{display:grid;grid-template-columns:repeat(4,max-content)}div.c{position:relative}span{position:absolute;left:4px;top:2px;background:#fff8;padding:0 3px}</style>
+<div id="g"></div>
+<script type="module">
+// Folha de conferencia: cada corpo com pecas originais, punho e pente trocados (vista de lado)
+import * as THREE from 'three';
+import { loadArsenal, buildGun, CATEGORY, nativePart, chargerOptions } from '../src/arsenal.js';
+await loadArsenal();
+const Z = +(new URLSearchParams(location.search).get('z') || 1);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(320 * Z, 160 * Z);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0xdcd7cb);
+sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); sc.add(dl);
+const cam = new THREE.OrthographicCamera(-0.55, 0.55, 0.28, -0.28, 0.01, 10); cam.position.set(3, 0, 0); cam.lookAt(0, 0, 0);
+const g = document.getElementById('g');
+const cases = [];
+const q = new URLSearchParams(location.search), only = q.get('cat'), onlyBody = q.get('body'), nat = q.has('nat');
+for (const [cat, C] of Object.entries(CATEGORY)) {
+  if (only && only !== cat) continue;
+  C.bodies.forEach((body, i) => {
+    if (onlyBody && onlyBody !== body) return;
+    if (nat) { cases.push([cat, { body }]); return; }
+    if (q.has('scopes')) { for (const scope of C.scopes) if (!q.get('scope') || q.get('scope') === scope) cases.push([cat, { body, scope }]); return; }
+    if (q.has('lasers')) { for (const laser of ['laser_1', 'laser_2']) cases.push([cat, { body, laser }]); return; }
+    if (q.has('mags')) { for (const charger of chargerOptions(body, cat)) cases.push([cat, { body, charger }]); return; }
+    const other = chargerOptions(body, cat).slice(1);
+    cases.push([cat, { body, handle: C.handles[i % Math.max(1, C.handles.length)] || null, charger: other[i % Math.max(1, other.length)] || null, scope: C.scopes[(i * 3 + 1) % C.scopes.length] }]);
+  });
+}
+for (const [cat, lo] of cases) {
+  const gun = buildGun(cat, lo);
+  const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent(); // feixe longo nao entra no enquadramento
+  const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3());
+  gun.position.sub(c); sc.add(gun);
+  const k = Math.max(box.max.z - box.min.z, (box.max.y - box.min.y) * 2) / 1.0;
+  cam.left = -0.55 * k; cam.right = 0.55 * k; cam.top = 0.28 * k; cam.bottom = -0.28 * k; cam.updateProjectionMatrix();
+  // marca a mao esquerda (punho) em vermelho
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.012 * k), new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false }));
+  gun.userData.gripL.add(dot);
+  const dotR = new THREE.Mesh(new THREE.SphereGeometry(0.012 * k), new THREE.MeshBasicMaterial({ color: 0x0066ff, depthTest: false }));
+  gun.userData.gripR.add(dotR);
+  r.render(sc, cam); sc.remove(gun);
+  const d = document.createElement('div'); d.className = 'c';
+  d.innerHTML = `<img src="${r.domElement.toDataURL()}"><span>${lo.body} | ${lo.scope || '-'} | ${lo.charger || '-'} | ${lo.handle || '-'}</span>`;
+  g.appendChild(d);
+}
+document.title = 'pronto';
+</script>

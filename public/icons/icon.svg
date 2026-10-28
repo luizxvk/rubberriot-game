@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Rubber Riot: olhos de torta (rubber hose anos 30) num selo de papel com borda de tinta -->
+  <rect width="512" height="512" rx="112" fill="#141210"/>
+  <circle cx="256" cy="262" r="210" fill="#ece9e1" stroke="#141210" stroke-width="22"/>
+  <circle cx="256" cy="262" r="178" fill="none" stroke="#141210" stroke-width="8"/>
+  <g stroke="#141210" stroke-width="16">
+    <ellipse cx="190" cy="236" rx="62" ry="98" fill="#ffffff"/>
+    <ellipse cx="322" cy="236" rx="62" ry="98" fill="#ffffff"/>
+  </g>
+  <!-- pupila preta com a fatia de torta cortada -->
+  <path d="M205 210 a34 52 0 1 0 0.1 0 Z M205 262 L231 226 L234 250 Z" fill="#141210" fill-rule="evenodd"/>
+  <path d="M337 210 a34 52 0 1 0 0.1 0 Z M337 262 L363 226 L366 250 Z" fill="#141210" fill-rule="evenodd"/>
+  <path d="M168 378 q88 58 176 0" fill="none" stroke="#a83a2c" stroke-width="22" stroke-linecap="round"/>
+</svg>

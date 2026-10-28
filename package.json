@@ -1,0 +1,19 @@
+{
+  "name": "rubber-riot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5197 --host",
+    "server": "node server.js",
+    "sfx": "node scripts/gen-sfx.mjs",
+    "rovex": "vite build && node scripts/para-rovex.mjs"
+  },
+  "dependencies": {
+    "three": "0.169.0",
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.10"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Rubber Riot",
+  "short_name": "Rubber Riot",
+  "description": "Tiroteio de borracha em desenho dos anos 30.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#141210",
+  "theme_color": "#141210",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

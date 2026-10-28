@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><pre id="o"></pre>
+<script type="module">
+import { loadArsenal, _dbg, gripInfo } from '../src/arsenal.js';
+await loadArsenal();
+const out = [];
+for (const body of new URLSearchParams(location.search).get('b').split(',')) {
+  const b = _dbg.parts[body].box, pr = _dbg.profile(body), h = b.max.y - b.min.y;
+  const mag = _dbg.nativePart(body, 'charger'), mb = mag && _dbg.parts[mag].box;
+  out.push(body + ' h=' + h.toFixed(3) + ' z ' + b.min.z.toFixed(2) + '..' + b.max.z.toFixed(2) + ' mag z ' + (mb ? mb.min.z.toFixed(2) + '..' + mb.max.z.toFixed(2) : '-') + ' grip ' + JSON.stringify(gripInfo(body), (k, v) => typeof v === 'number' ? +v.toFixed(3) : v));
+  out.push(' lo(rel h): ' + pr.lo.map(v => ((v - b.min.y) / h).toFixed(2)).join(' '));
+}
+document.getElementById('o').textContent = out.join('\n'); document.title = 'pronto';
+</script>

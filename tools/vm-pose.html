@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>Pose do viewmodel</title>
+<style>body{margin:0;background:#bbb}</style>
+<script type="module">
+// Print da pose em primeira pessoa: ?w=rifle&pose=sprint|tac|hip&fov=..
+import * as THREE from 'three';
+import { loadArsenal } from '../src/arsenal.js';
+import { ViewModel } from '../src/viewmodel.js';
+await loadArsenal();
+const q = new URLSearchParams(location.search), pose = q.get('pose') || 'sprint';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.setClearColor(0xc9c4b8); document.body.appendChild(r.domElement);
+const vm = new ViewModel(); vm.camera.fov = +(q.get('fov') || 58); vm.camera.aspect = innerWidth / innerHeight; vm.camera.updateProjectionMatrix();
+vm.setWeapon(q.get('w') || 'rifle', { ...(q.get('scope') ? { scope: q.get('scope') } : {}), ...(q.get('laser') ? { laser: q.get('laser') } : {}) }, true);
+if (pose === 'ads' && vm.gun.userData.scope?.lens) vm.gun.userData.scope.lens.material.uniforms.uOn && (vm.gun.userData.scope.lens.material.uniforms.uOn.value = 1);
+const insp = q.get('t'); if (insp !== null) { if (q.get('streak')) vm.callStreak(q.get('streak')); else vm.inspect(); }
+const N = insp !== null ? Math.round(+insp * 60) : 120;
+for (let i = 0; i < N; i++) vm.update({ dt: 1 / 60, moving: false, speed: 0, sprint: pose === 'sprint', firing: false, tac: pose === 'tac', ads: pose === 'ads' ? 1 : 0, crouch: false, slide: false, air: false, lookDX: 0, lookDY: 0 });
+r.render(vm.scene, vm.camera); document.title = 'pronto';
+</script>

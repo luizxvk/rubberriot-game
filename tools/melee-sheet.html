@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Armas brancas</title>
+<style>body{margin:0;background:#dcd7cb;font:12px sans-serif}#g{display:grid;grid-template-columns:repeat(5,300px)}div.c{position:relative}span{position:absolute;left:4px;top:2px;background:#fff8;padding:0 3px}</style>
+<div id="g"></div>
+<script type="module">
+// Folha das armas brancas do glb: vista de lado, ponto azul = min z, vermelho = max z
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const g = await new GLTFLoader().loadAsync('../models/src/melee.glb');
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(300, 150);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0xdcd7cb);
+sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.5));
+const cam = new THREE.OrthographicCamera(-1, 1, 0.5, -0.5, 0.01, 50); cam.position.set(20, 0, 0); cam.lookAt(0, 0, 0);
+const meshes = []; g.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+for (const m of meshes) {
+  const geo = m.geometry.clone(); geo.computeBoundingBox(); const b = geo.boundingBox, c = b.getCenter(new THREE.Vector3());
+  geo.translate(-c.x, -c.y, -c.z);
+  const mesh = new THREE.Mesh(geo, m.material); sc.add(mesh);
+  const k = Math.max(b.max.z - b.min.z, (b.max.y - b.min.y) * 2) * 0.55;
+  Object.assign(cam, { left: -k, right: k, top: k / 2, bottom: -k / 2 }); cam.updateProjectionMatrix();
+  const d1 = new THREE.Mesh(new THREE.SphereGeometry(k * 0.03), new THREE.MeshBasicMaterial({ color: 0x0066ff, depthTest: false })); d1.position.set(0, 0, b.min.z - c.z); sc.add(d1);
+  const d2 = new THREE.Mesh(new THREE.SphereGeometry(k * 0.03), new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false })); d2.position.set(0, 0, b.max.z - c.z); sc.add(d2);
+  r.render(sc, cam); sc.remove(mesh, d1, d2);
+  const d = document.createElement('div'); d.className = 'c';
+  d.innerHTML = `<img src="${r.domElement.toDataURL()}"><span>${meshes.indexOf(m)} ${m.material.name}</span>`;
+  document.getElementById('g').appendChild(d);
+}
+document.title = 'pronto';
+</script>

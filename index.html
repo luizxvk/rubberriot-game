@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#141210">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rubber Riot</title>
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="./icons/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Grandstander:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- luva que aponta (usada nos menus) -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="glove" viewBox="0 0 64 40">
+    <path d="M2 14h18c2-6 8-9 14-8l20 1c4 0 6 3 6 6s-3 5-6 5H40c2 0 4 2 4 4s-2 4-4 4c2 0 3 2 3 4s-2 4-4 4H22C12 34 6 28 2 26z" fill="#faf8f2" stroke="#141210" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M40 22h-8M39 30h-8M2 14v12" fill="none" stroke="#141210" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div id="iris" aria-hidden="true"></div>
+
+<!-- ======== MENU ======== -->
+<main id="menu" class="screen on">
+  <section class="poster" id="scr-home">
+    <div class="poster-frame">
+      <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="pt">PT</button></div>
+      <p class="bill-top" data-i18n="presents">A Fokus Studios apresenta</p>
+      <h1 class="title"><span>Rubber</span><span>Riot</span></h1>
+      <p class="tagline" data-i18n="tagline">Um tiroteio de borracha na Vila Borracha</p>
+      <nav class="bill" aria-label="Menu principal">
+        <button data-go="solo" class="bill-item" data-i18n="play">Jogar</button>
+        <button data-go="mp" class="bill-item" data-i18n="multiplayer">Multiplayer</button>
+        <button data-go="arsenal" class="bill-item" data-i18n="arsenal">Arsenal</button>
+        <button data-go="challenges" class="bill-item" data-i18n="challenges">Desafios</button>
+        <button data-go="settings" class="bill-item" data-i18n="settings">Ajustes</button>
+        <button data-go="controls" class="bill-item" data-i18n="controls">Controles</button>
+        <button id="installApp" class="bill-item" data-i18n="installApp" hidden>Instalar app</button>
+      </nav>
+    </div>
+  </section>
+
+  <section class="card" id="scr-solo" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="pickShow">Escolha o espetaculo</h2></header>
+    <div class="modes" id="modeList" role="radiogroup" aria-label="Modo de jogo"></div>
+    <p class="mode-desc" id="modeDesc"></p>
+    <div class="field"><span data-i18n="mapLabel">Mapa</span><div class="seg" id="mapSel"></div></div>
+    <div class="row">
+      <label class="field"><span><i data-i18n="botsIn">Bots na vila</i> <b id="botsVal">7</b></span><input type="range" id="bots" min="1" max="11" value="7"></label>
+      <div class="field"><span data-i18n="botAim">Pontaria dos bots</span>
+        <div class="seg" id="diff" role="radiogroup">
+          <button data-v="0.7" data-i18n="easy">Molenga</button><button data-v="1" class="on" data-i18n="mid">Esperto</button><button data-v="1.35" data-i18n="hard">Afiado</button>
+        </div>
+      </div>
+    </div>
+    <button class="big" id="playSolo" data-i18n="curtains">Abrir as cortinas</button>
+  </section>
+
+  <section class="card" id="scr-mp" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="multiplayer">Multiplayer</h2></header>
+    <p class="mp-who" id="mpWho"></p>
+    <label class="field" id="mpNameField" hidden><span data-i18n="yourName">Seu nome</span><input id="mpName" maxlength="14" placeholder="Borrao"></label>
+    <form class="ticket" id="mpJoin" autocomplete="off">
+      <label class="ticket-stub" for="mpRoom" data-i18n="haveCode">Tem um codigo?</label>
+      <input class="ticket-code" id="mpRoom" maxlength="8" placeholder="ABC123" spellcheck="false" autocapitalize="characters" inputmode="text" aria-describedby="mpErr">
+      <button class="ticket-go" id="joinCode" type="submit" data-i18n="joinCode">Entrar</button>
+    </form>
+    <h3 class="mp-sub" data-i18n="newRoom">Ou monte a sua sala</h3>
+    <div class="modes compact" id="mpModeList" role="radiogroup" aria-label="Modo da sala"></div>
+    <div class="field"><span data-i18n="mapLabel">Mapa</span><div class="seg" id="mpMapSel"></div></div>
+    <label class="field"><span><i data-i18n="botsFill">Bots completando a sala</i> <b id="mpBotsVal">5</b></span><input type="range" id="mpBots" min="0" max="11" value="5"></label>
+    <p class="err" id="mpErr" role="alert"></p>
+    <button class="big" id="playMp" data-i18n="createRoom">Criar sala</button>
+  </section>
+
+  <section class="card" id="scr-challenges" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="challenges">Desafios</h2></header>
+    <div class="ch-head"><h3 data-i18n="chDaily">Do dia</h3><small id="chReset"></small></div>
+    <ul class="ch-list" id="chDaily"></ul>
+    <div class="ch-head"><h3 data-i18n="chCareerU">Desbloqueios</h3></div>
+    <ul class="ch-list" id="chCareer"></ul>
+  </section>
+
+  <section class="card wide" id="scr-arsenal" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="arsenal">Arsenal</h2></header>
+    <div class="cats" id="catTabs" role="tablist"></div>
+    <div class="equip" id="equipBar"></div>
+    <div class="smith">
+      <div class="slots" id="slotList"></div>
+      <div class="smith-side">
+        <div class="picker" id="picker"></div>
+        <div class="stats" id="statBars"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="scr-settings" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="settings">Ajustes</h2></header>
+    <div class="settings" id="settingsList"></div>
+  </section>
+
+  <section class="card" id="scr-controls" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="controls">Controles</h2></header>
+    <dl class="keys">
+      <dt>W A S D</dt><dd data-i18n="k_move">Andar</dd>
+      <dt>Shift</dt><dd data-i18n="k_sprint">Correr (segurar)</dd>
+      <dt data-i18n="key_space">Espaco</dt><dd data-i18n="k_jump">Pular. No ar, pula de novo.</dd>
+      <dt>C / Ctrl</dt><dd data-i18n="k_crouch">Agachar. Correndo, entra de carrinho.</dd>
+      <dt data-i18n="key_lmb">Botao esquerdo</dt><dd data-i18n="k_fire">Atirar</dd>
+      <dt data-i18n="key_rmb">Botao direito</dt><dd data-i18n="k_ads">Mirar</dd>
+      <dt>R</dt><dd data-i18n="k_reload">Recarregar</dd>
+      <dt data-i18n="key_wheel">1 a 8, rodinha</dt><dd data-i18n="k_swap">Trocar de arma</dd>
+      <dt>Q</dt><dd data-i18n="k_last">Arma anterior</dd>
+      <dt>G</dt><dd data-i18n="k_frag">Granada</dd>
+      <dt>F</dt><dd data-i18n="k_flash">Flash</dd>
+      <dt>X</dt><dd data-i18n="k_streak">Sequencia</dd>
+      <dt>Tab</dt><dd data-i18n="k_board">Placar</dd>
+      <dt>Esc</dt><dd data-i18n="k_pause">Pausa</dd>
+    </dl>
+  </section>
+</main>
+
+<!-- ======== HUD ======== -->
+<!-- ======== LOBBY ======== -->
+<!-- o mapa em 3D gira atras; aqui so o letreiro, o elenco e os botoes -->
+<section id="lobby" hidden>
+  <header class="lb-marquee">
+    <h2 class="lb-map" id="lbMap">Vila</h2>
+    <p class="lb-mode" id="lbMode"></p>
+    <div class="lb-room" id="lbRoom" hidden>
+      <span data-i18n="lbRoomLbl">Sala</span><b id="lbRoomCode"></b>
+      <button class="lb-copy" id="lbCopy" data-i18n-aria="copyCode" aria-label="Copiar codigo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+      <button class="lb-invite" id="lbInvite" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span data-i18n="lbInvite">Convidar amigos</span></button>
+    </div>
+  </header>
+  <div class="lb-leader" id="lbLeader" hidden aria-live="assertive">
+    <svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92"/><circle cx="100" cy="100" r="74"/><path class="sweep" id="lbSweep" d=""/><line x1="100" y1="0" x2="100" y2="200"/><line x1="0" y1="100" x2="200" y2="100"/></svg>
+    <b id="lbCount">5</b>
+  </div>
+  <div class="lb-bill">
+    <h3 data-i18n="lbCast">Elenco da sessao</h3>
+    <ol id="lbPlayers"></ol>
+    <p class="lb-status" id="lbStatus" aria-live="polite"></p>
+  </div>
+  <div class="lb-friends" id="lbFriends" hidden role="dialog" aria-labelledby="lbFriendsTitle">
+    <header><h3 id="lbFriendsTitle" data-i18n="inviteTitle">Chamar pra sala</h3><button class="lb-x" id="lbFriendsClose" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></header>
+    <ul id="lbFriendList"></ul>
+  </div>
+  <div class="lb-actions">
+    <button class="lb-leave" id="lbLeave" data-i18n="lbLeave">Sair do lobby</button>
+    <button class="big lb-ready" id="lbReady" aria-pressed="false" data-i18n="lbReady">Estou pronto</button>
+  </div>
+</section>
+
+<!-- ======== CARREGANDO (intertitulo de cinema mudo) ======== -->
+<section id="loading" hidden>
+  <div class="ld-card">
+    <p class="ld-mode" id="ldMode"></p>
+    <h2 class="ld-map" id="ldMap"></h2>
+    <p class="ld-tip" id="ldTip"></p>
+    <div class="ld-film" aria-hidden="true"><i id="ldBar"></i></div>
+  </div>
+</section>
+
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div class="plaque" id="scorePlaque"></div>
+  </div>
+  <ol class="feed" id="feed" aria-live="polite"></ol>
+  <div class="cross" id="cross"><i></i><i></i><i></i><i></i></div>
+  <div class="hitmark" id="hitmark"></div>
+  <div class="reticle" id="reticle"></div>
+  <div class="scope-ring" id="scopeRing"><i></i><i></i></div>
+  <div class="stamp" id="stamp"></div>
+  <div class="objectives" id="objMarkers"></div>
+  <div class="hurt-dir" id="hurtDir"></div>
+  <div class="hud-bl">
+    <div class="hp"><span class="hp-num" id="hpNum">100</span><span class="hp-bar"><i id="hpBar"></i></span></div>
+    <div class="tac" id="tacBar" aria-label="Folego da disparada"><i></i></div>
+  </div>
+  <div class="hud-br">
+    <div class="wname" id="wName">Matraca</div>
+    <div class="ammo"><b id="ammoMag">32</b><span id="ammoRes">/ 192</span></div>
+    <div class="wslots" id="wSlots"></div>
+  </div>
+  <div class="msg" id="centerMsg"></div>
+  <div class="fps" id="fps" hidden></div>
+  <div class="board" id="board" hidden></div>
+</div>
+
+<div id="dead" class="dead" hidden>
+  <p class="dead-title" data-i18n="pancake">Virou panqueca!</p>
+  <p class="dead-by" id="deadBy"></p>
+  <p class="dead-t" id="deadT"></p>
+  <button class="big dead-go" id="deadGo" hidden data-i18n="respawn">Renascer</button>
+</div>
+
+<!-- editor do HUD de toque: arrasta os botoes; tamanho e opacidade -->
+<div id="hudEdit" hidden>
+  <div class="he-bar">
+    <b data-i18n="hudEdit">Ajustar HUD e botoes</b>
+    <label><span data-i18n="heSize">Tamanho</span><input type="range" id="heScale" min="0.7" max="1.4" step="0.05"></label>
+    <label><span data-i18n="heAlpha">Opacidade</span><input type="range" id="heAlpha" min="0.3" max="1" step="0.05"></label>
+    <button id="heReset" data-i18n="heReset">Restaurar</button>
+    <button id="heSave" class="he-save" data-i18n="heSave">Salvar</button>
+  </div>
+  <p class="he-hint" data-i18n="heHint">Arraste qualquer botao ou o analogico pra onde preferir.</p>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="card small">
+    <h2 data-i18n="intermission">Intervalo</h2>
+    <div class="pk" id="pausePick" role="radiogroup" aria-labelledby="pkLbl"><p class="pk-lbl" id="pkLbl" data-i18n="pickNext">Arma no proximo renascimento</p><div class="pk-list" id="pkList"></div></div>
+    <button class="big" id="resume" data-i18n="resume">Voltar pro tiroteio</button>
+    <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botoes</button>
+    <button class="plain" id="pauseSettings" data-i18n="settings">Ajustes</button>
+    <button class="plain" id="quit" data-i18n="quit">Sair pro menu</button>
+  </div>
+</div>
+
+<div id="theend" class="overlay end" hidden>
+  <div class="end-card">
+    <p class="end-the" data-i18n="theEnd">Fim</p>
+    <p class="end-win" id="endWin"></p>
+    <div class="end-board" id="endBoard"></div>
+    <p class="end-next" id="endNext"></p>
+  </div>
+</div>
+
+<div id="rotate" class="rotate"><p data-i18n="rotate">Vire o celular de lado pra jogar.</p></div>
+<div id="touch" hidden></div>
+
+<script type="module" src="./src/boot.js"></script>
+</body>
+</html>

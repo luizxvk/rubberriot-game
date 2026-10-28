@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><pre id="o"></pre>
+<script type="module">
+import { loadArsenal, buildGun, _dbg } from '../src/arsenal.js';
+await loadArsenal();
+const out = [];
+for (const [n, p] of Object.entries(_dbg.parts)) if (p.lens && p.box.max.z - p.box.min.z >= 0.6) {
+  const g = buildGun(n.startsWith('sniper') ? 'sniper' : 'rifle', { scope: n });
+  const lens = g.userData.scope?.lens;
+  out.push(n + ' tubo=' + _dbg.rearTube(n) + ' vidro ' + (p.box.max.z - p.lens.z).toFixed(2) + ' pra dentro');
+}
+document.getElementById('o').textContent = out.join('\n'); document.title = 'pronto';
+</script>
