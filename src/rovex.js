@@ -2,7 +2,17 @@
 // do site), entao o login dela (token no localStorage) vale aqui direto. A pagina da Rovex
 // passa a base da API em ?api= e o convite chega como ?sala=.
 const qs = new URLSearchParams(location.search);
-export const API = (qs.get('api') || '/api').replace(/\/$/, '');
+// site proprio (rubberriot.tryrovex.com): outra origem, entao o jogo guarda a PROPRIA sessao,
+// vinda da tela "autorizar app" da Rovex (cofre RUBBER_RIOT, nao derruba o login do site).
+export const STANDALONE = !qs.has('api') && /(^|\.)rubberriot\.tryrovex\.com$/.test(location.hostname);
+export const API = STANDALONE ? 'https://api.tryrovex.com/api' : (qs.get('api') || '/api').replace(/\/$/, '');
+const OWN = 'rr_token';
+if (STANDALONE && location.hash.startsWith('#token=')) {
+  try { localStorage.setItem(OWN, decodeURIComponent(location.hash.slice(7))); } catch { /* */ }
+  history.replaceState(null, '', location.pathname + location.search);
+}
+export const AUTH_URL = 'https://tryrovex.com/autorizar-app?app=rubber-riot&callback=' + encodeURIComponent('https://rubberriot.tryrovex.com/');
+export function logout() { try { localStorage.removeItem(OWN); } catch { /* */ } }
 export const inviteRoom = (qs.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || null;
 export const inRovex = qs.has('api');
 
@@ -14,7 +24,7 @@ export const MP_URL = qs.get('mp')
       : `ws://${location.hostname}:3000/rubber-riot/ws`);
 
 export function token() {
-  try { return localStorage.getItem('token') || sessionStorage.getItem('token') || null; } catch { return null; }
+  try { return STANDALONE ? localStorage.getItem(OWN) : (localStorage.getItem('token') || sessionStorage.getItem('token') || null); } catch { return null; }
 }
 
 async function call(path, opt = {}) {
@@ -26,6 +36,7 @@ async function call(path, opt = {}) {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
       body: opt.body ? JSON.stringify(opt.body) : undefined,
     });
+    if (r.status === 401 && STANDALONE) logout(); // sessao do jogo vencida ou revogada: volta pro "Entrar"
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
   } finally { clearTimeout(to); }

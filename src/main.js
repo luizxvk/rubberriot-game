@@ -862,8 +862,9 @@ $('rovexStrip').hidden = inRovex;
 // dentro da Rovex (iframe) nao tem "instalar app": o service worker so existe no jogo solto
 if ('serviceWorker' in navigator && !inRovex) navigator.serviceWorker.register('./sw.js').catch(() => {});
 let installEvt = null;
-addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('installApp').hidden = false; });
-addEventListener('appinstalled', () => { installEvt = null; $('installApp').hidden = true; });
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('installApp').hidden = false; $('gateInstall').hidden = false; });
+addEventListener('appinstalled', () => { installEvt = null; $('installApp').hidden = true; $('gateInstall').hidden = true; });
+$('gateInstall').onclick = () => $('installApp').click();
 $('installApp').onclick = async () => {
   if (!installEvt) return;
   installEvt.prompt();
