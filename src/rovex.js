@@ -6,8 +6,12 @@ export const API = (qs.get('api') || '/api').replace(/\/$/, '');
 export const inviteRoom = (qs.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || null;
 export const inRovex = qs.has('api');
 
-// servidor multiplayer: na Fly em producao; no dev (vite 5197) o server.js local
-export const MP_URL = qs.get('mp') || (location.port === '5197' ? `ws://${location.hostname}:5196` : 'wss://rubber-riot-mp.fly.dev');
+// servidor multiplayer: dentro do backend da Rovex, no app rovex-games (Fly), em /rubber-riot/ws.
+// Jogo solto no dev (vite 5197): o server.js local. Rovex no dev (api relativa): o backend local.
+export const MP_URL = qs.get('mp')
+  || (location.port === '5197' ? `ws://${location.hostname}:5196`
+    : /^https?:/.test(API) ? 'wss://rovex-games.fly.dev/rubber-riot/ws'
+      : `ws://${location.hostname}:3000/rubber-riot/ws`);
 
 export function token() {
   try { return localStorage.getItem('token') || sessionStorage.getItem('token') || null; } catch { return null; }

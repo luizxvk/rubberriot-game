@@ -857,6 +857,8 @@ $('touch').addEventListener('pointerdown', (e) => {
 }, true);
 
 // ---------- instalar como app (Android: abre em tela cheia, sem barra do navegador) ----------
+// fora da Rovex (site solto), a faixa discreta chamando pra plataforma
+$('rovexStrip').hidden = inRovex;
 // dentro da Rovex (iframe) nao tem "instalar app": o service worker so existe no jogo solto
 if ('serviceWorker' in navigator && !inRovex) navigator.serviceWorker.register('./sw.js').catch(() => {});
 let installEvt = null;

@@ -3,7 +3,9 @@
 import * as THREE from 'three';
 import { moveBody, raycast, rayPlayer, hasLOS } from '../shared/map.js';
 import { WEAPONS, PRIMARIES, NADES, bodyTrait } from '../shared/weapons.js';
-import { loadoutStats } from './arsenal.js';
+import { loadoutStats, nativePart } from './arsenal.js';
+import { CAMOS } from './camos.js';
+import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
 import { isTouch } from './input.js';
 
@@ -28,8 +30,21 @@ export class Player {
     this.patIdx = 0; this.patT = 0;
   }
 
-  // pecas da arma: na escada de armas o modelo e' o do degrau (sem acessorios), fora dela a classe do Arsenal
-  lo(id) { return this.g.mode === 'gungame' && this.ggBody && id === this.wpn ? { body: this.ggBody } : this.g.loadouts[id]; }
+  // pecas da arma: na escada de armas o modelo e' o do degrau, fora dela a classe do Arsenal
+  lo(id) { return this.g.mode === 'gungame' && this.ggBody && id === this.wpn ? this.ggLo(id, this.ggBody) : this.g.loadouts[id]; }
+
+  // escada de armas: mira padrao do modelo (sniper sai com a luneta dela) e uma camuflagem sorteada
+  // entre as que o jogador ja liberou pra essa arma; fica a mesma enquanto durar a partida
+  ggLo(wpn, body) {
+    const key = wpn + '|' + body;
+    let lo = (this.ggCache ||= new Map()).get(key);
+    if (!lo) {
+      const camos = CAMOS.filter(c => c.id !== 'none' && camoUnlocked(wpn, c));
+      lo = { body, scope: wpn === 'sniper' ? nativePart(body, 'scope') : null, charger: wpn === 'melee' ? undefined : nativePart(body, 'charger'), camo: camos.length ? camos[Math.floor(Math.random() * camos.length)].id : null };
+      this.ggCache.set(key, lo);
+    }
+    return lo;
+  }
 
   stats(id = this.wpn) {
     const W = WEAPONS[id];
