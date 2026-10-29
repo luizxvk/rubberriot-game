@@ -1,9 +1,9 @@
-// Jogador local: movimento rapido de boomer shooter (corrida, disparada, carrinho,
-// pulo duplo), tiro hitscan/projetil, recarga e troca de arma.
+// Jogador local: movimento firme estilo COD (anda, corre, agacha, pula baixo; sem carrinho
+// e sem pulo duplo), tiro hitscan, recarga e troca de arma.
 import * as THREE from 'three';
 import { moveBody, raycast, rayPlayer, hasLOS } from '../shared/map.js';
-import { WEAPONS, PRIMARIES, NADES, bodyTrait } from '../shared/weapons.js';
-import { loadoutStats, nativePart } from './arsenal.js';
+import { WEAPONS, PRIMARIES, NADES, INFECT, bodyTrait } from '../shared/weapons.js';
+import { loadoutStats, nativePart, CATEGORY, infectLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
@@ -31,16 +31,26 @@ export class Player {
   }
 
   // pecas da arma: na escada de armas o modelo e' o do degrau, fora dela a classe do Arsenal
-  lo(id) { return this.g.mode === 'gungame' && this.ggBody && id === this.wpn ? this.ggLo(id, this.ggBody) : this.g.loadouts[id]; }
+  lo(id) {
+    if (this.g.mode === 'gungame' && this.ggBody && id === this.wpn) return this.ggLo(id, this.ggBody);
+    // infectado: todo sobrevivente com a mesma arma sorteada pela partida (o modelo tambem), sempre
+    // com o kit completo (ponto vermelho, laser, pente grande, empunhadura)
+    if (this.g.mode === 'infect' && this.g.myTeam !== 'red' && id !== 'melee' && CATEGORY[id]) {
+      const k = this.g.snap?.infKit?.body ?? 0, bodies = CATEGORY[id].bodies, key = id + '|' + k;
+      return (this.infCache ||= {})[key] ||= infectLoadout(id, { body: bodies[k % bodies.length] });
+    }
+    return this.g.loadouts[id];
+  }
 
-  // escada de armas: mira padrao do modelo (sniper sai com a luneta dela) e uma camuflagem sorteada
-  // entre as que o jogador ja liberou pra essa arma; fica a mesma enquanto durar a partida
+  // escada de armas: toda arma sai com mira, a do proprio modelo (ou a primeira da categoria
+  // quando o modelo nao tem), e uma camuflagem sorteada entre as liberadas; fica a mesma na partida
   ggLo(wpn, body) {
     const key = wpn + '|' + body;
     let lo = (this.ggCache ||= new Map()).get(key);
     if (!lo) {
       const camos = CAMOS.filter(c => c.id !== 'none' && camoUnlocked(wpn, c));
-      lo = { body, scope: wpn === 'sniper' ? nativePart(body, 'scope') : null, charger: wpn === 'melee' ? undefined : nativePart(body, 'charger'), camo: camos.length ? camos[Math.floor(Math.random() * camos.length)].id : null };
+      const scope = wpn === 'melee' ? null : nativePart(body, 'scope') || CATEGORY[wpn]?.scopes?.[0] || null;
+      lo = { body, scope, charger: wpn === 'melee' ? undefined : nativePart(body, 'charger'), camo: camos.length ? camos[Math.floor(Math.random() * camos.length)].id : null };
       this.ggCache.set(key, lo);
     }
     return lo;
@@ -59,14 +69,18 @@ export class Player {
     this.alive = true; this.hp = 100;
     this.nades = { frag: 1, flash: 1 }; this.patIdx = 0;
     this.owned = []; this.ammo = {};
-    // fora da escada de armas: nasce com a classe montada no Arsenal (principal + pistola)
+    // escada de armas e infectado: o servidor decide o kit (infectado = so a lamina)
     if (this.g.mode === 'gungame') { this.give(ev.wpn, false); this.equip(ev.wpn, true); }
+    else if (this.g.mode === 'infect' && ev.owned?.length) {
+      for (const w of ev.owned) this.give(w, false);
+      this.equip(ev.wpn, true);
+    }
     else {
       const primary = PRIMARIES.includes(this.g.settings.primary) ? this.g.settings.primary : 'smg';
       this.give('pistol', false); this.give(primary, false); this.give('melee', false);
       this.equip(primary, true);
     }
-    this.slideT = 0; this.crouch = false; this.tacFuel = 3.5;
+    this.crouch = false; this.tacFuel = 3.5;
   }
 
   give(id, announce = true, force = false) {
@@ -77,7 +91,7 @@ export class Player {
       this.owned.sort((a, b) => SLOT_ORDER.indexOf(a) - SLOT_ORDER.indexOf(b));
     }
     this.ammo[id] = { mag, reserve: W.reserve ?? Infinity };
-    if (force) { this.owned = [id]; this.equip(id); }
+    if (force) { this.owned = [id]; this.ammo = { [id]: this.ammo[id] }; this.equip(id); }
     else if (announce && SLOT_ORDER.indexOf(id) > SLOT_ORDER.indexOf(this.wpn)) this.equip(id);
   }
 
@@ -114,6 +128,11 @@ export class Player {
   update(dt, inp) {
     const S = this.g.settings;
     if (!this.alive) { this.firing = false; return; }
+    // contagem de inicio (todo mundo carregando / 3, 2, 1): da pra olhar em volta, nao da pra se mexer
+    // plantando / desarmando: parado no lugar, segurando o botao
+    const B = this.g.snap?.bomb, acting = B && B.actor === this.g.myId && B.prog > 0;
+    if (this.g.mode === 'bomb') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
+    if (this.g.snap?.freeze > 0 || acting) inp = { ...inp, moveX: 0, moveZ: 0, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false };
     const safe = { pos: [...this.pos], vel: [...this.vel], yaw: this.yaw, pitch: this.pitch };
     this.step(dt, inp, S);
     // trava: numero invalido nunca chega na camera (congelava a tela e o audio)
@@ -136,12 +155,14 @@ export class Player {
     const ry = this.recoilY * Math.min(1, dt * 10); this.recoilY -= ry; this.yaw += ry;
 
     const { W, st, mag } = this.stats();
-    // celular: mira assistida puxa pro inimigo perto do centro; tiro automatico dispara com ele na mira
-    // (vale pra automatica, semi, rajada e ferrolho: o gatilho "aperta" sozinho a cada tiro liberado)
+    // celular e controle: mira assistida puxa pro inimigo perto do centro. Tiro automatico (so no
+    // toque) dispara com ele na mira: vale pra automatica, semi, rajada e ferrolho.
     let autoShot = false;
-    if (isTouch && (S.aimAssist || S.autoFire) && !W.melee) {
+    const pad = this.g.pad?.active;
+    if ((isTouch || pad) && (S.aimAssist || (isTouch && S.autoFire)) && !W.melee) {
       const ads = this.adsK > 0.5;
-      const tg = S.aimAssist ? this.assistTarget(ads ? 0.1 : 0.14) : null;
+      // controle: so puxa mirando ou atirando (no quadril parado ficaria grudento)
+      const tg = S.aimAssist && (!pad || ads || inp.fire) ? this.assistTarget(ads ? 0.1 : 0.14) : null;
       if (tg) {
         const k = Math.min(1, (ads ? 5 : 2.6) * dt);
         let dy = Math.atan2(-tg.d[0], -tg.d[2]) - this.yaw;
@@ -150,7 +171,7 @@ export class Player {
         this.yaw += dy * k; this.pitch += dp * k * 0.6;
       }
       const am = this.ammo[this.wpn];
-      if (S.autoFire && am && (am.mag === Infinity || am.mag > 0) && this.reloadT <= 0) {
+      if (isTouch && S.autoFire && am && (am.mag === Infinity || am.mag > 0) && this.reloadT <= 0) {
         const cp = Math.cos(this.pitch);
         const hit = this.traceTargets(this.eyePos(), [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp], 250);
         autoShot = !!hit.player && hit.dist < (this.wpn === 'shotgun' ? 22 : 120);
@@ -162,7 +183,7 @@ export class Player {
     const moving = Math.hypot(mx, mz) > 0.1;
 
     // corrida e disparada (duplo toque no Shift ou botao da disparada)
-    const wantSprint = inp.sprint && mz > 0.3 && this.onGround !== false && !inp.ads && this.slideT <= 0;
+    const wantSprint = inp.sprint && mz > 0.3 && this.onGround !== false && !inp.ads;
     if (wantSprint && !this.sprint && this.sprintOut <= 0) this.sprint = true;
     if (!inp.sprint && !this.tac) this.sprint = false;
     if (mz <= 0.3 || inp.ads) { this.sprint = false; this.tac = false; }
@@ -171,20 +192,10 @@ export class Player {
     if (this.tac) { this.tacFuel -= dt; if (this.tacFuel <= 0) { this.tac = false; } }
     else this.tacFuel = Math.min(3.5, this.tacFuel + dt * 0.9);
 
-    // agachar / carrinho
-    if (inp.crouchPressed) {
-      if ((this.sprint || this.tac) && this.onGround) {
-        this.slideT = 0.8; this.sprint = false; this.tac = false;
-        const hs = Math.hypot(this.vel[0], this.vel[2]) || 1;
-        const boost = Math.max(hs, 15) / hs;
-        this.vel[0] *= boost; this.vel[2] *= boost;
-        audio.play('slide', { vol: 0.7, jitter: 0, dur: this.slideT });
-      } else this.crouch = !this.crouch;
-    }
-    if (inp.crouchHeld === false && this.slideT <= 0 && S.holdCrouch) this.crouch = false;
-    if (this.slideT > 0) { this.slideT -= dt; this.crouch = true; if (this.slideT <= 0 && !inp.crouchHeld) this.crouch = false; }
-    if (inp.jumpPressed && this.slideT > 0) this.slideT = 0;
-    if (inp.jumpPressed || this.sprint) { if (this.crouch && this.slideT <= 0 && (inp.jumpPressed || this.sprint)) this.crouch = false; }
+    // agachar (alterna; com "agachar segurando" solta quando larga a tecla). Correr levanta.
+    if (inp.crouchPressed) { this.crouch = !this.crouch; if (this.crouch) { this.sprint = false; this.tac = false; } }
+    if (inp.crouchHeld === false && S.holdCrouch) this.crouch = false;
+    if (this.crouch && (inp.jumpPressed || this.sprint)) { this.crouch = false; if (inp.jumpPressed) inp = { ...inp, jumpPressed: false }; }
 
     // velocidade alvo
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -194,41 +205,29 @@ export class Player {
     speed *= st.move ?? 1;
     if (this.adsK > 0.3) speed *= 0.6;
     if (W.id === 'minigun' || this.wpn === 'minigun') speed *= this.firing ? 0.6 : 0.85;
+    if (this.g.mode === 'infect' && this.g.myTeam === 'red') speed *= INFECT.speed;
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
-    if (this.slideT > 0) {
-      const f = this.onGround ? 1.6 : 0.3;
-      this.vel[0] = damp(this.vel[0], 0, f, dt); this.vel[2] = damp(this.vel[2], 0, f, dt);
-    } else {
-      const acc = this.onGround ? 14 : 3.2;
-      this.vel[0] = damp(this.vel[0], wx * speed, acc, dt);
-      this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
-    }
-    // pulo e pulo duplo
-    if (inp.jumpPressed) {
-      if (this.onGround) { this.vel[1] = 8.6; this.onGround = false; audio.play('jump', { vol: 0.45 }); }
-      else if (this.airJumps > 0) {
-        this.airJumps--; this.vel[1] = 7.6;
-        this.vel[0] += wx * 3; this.vel[2] += wz * 3;
-        audio.play('whoosh', { vol: 0.4, rate: 1.3 });
-        this.g.fx.puff([this.pos[0], this.pos[1], this.pos[2]], 3, 0.4, 0xece9e1, 0.4);
-      }
-    }
+    // chao: acelera e freia firme (sem patinar); no ar quase nao muda a direcao
+    const acc = this.onGround ? 22 : 1.6;
+    this.vel[0] = damp(this.vel[0], wx * speed, acc, dt);
+    this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
+    // pulo baixo e unico (~1 m), sem pulo no ar
+    if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4; this.onGround = false; audio.play('jump', { vol: 0.45 }); }
     this.vel[1] -= 24 * dt;
     const vy = this.vel[1];
     this.wasGround = this.onGround;
     this.onGround = moveBody(this.g.M, this.pos, this.vel, dt, 0.4, this.crouch ? 1.1 : 1.7);
     if (this.onGround) {
-      this.airJumps = 1;
       if (!this.wasGround && vy < -6) { this.g.vm.landed(-vy); audio.play('land', { vol: Math.min(0.8, -vy / 20) }); }
     }
-    const eyeT = this.slideT > 0 ? 0.8 : this.crouch ? 1.05 : 1.6;
+    const eyeT = this.crouch ? 1.05 : 1.6;
     this.eye = damp(this.eye, eyeT, 12, dt);
 
     // passos no ritmo do balanco: fluido, alternando pe e variando um tiquinho
     const hs = Math.hypot(this.vel[0], this.vel[2]);
-    if (this.onGround && hs > 1.5 && this.slideT <= 0) {
+    if (this.onGround && hs > 1.5) {
       const rate = this.tac ? 15 : this.sprint ? 12.5 : 9.5;
       const prev = Math.floor(this.stepPhase / Math.PI);
       this.stepPhase += dt * rate * Math.min(1.2, hs / 7);
@@ -240,7 +239,7 @@ export class Player {
 
     // mira
     const adsTime = 0.16 * st.adsTime * (this.wpn === 'sniper' ? 1.5 : 1);
-    const canAds = !W.noAds && this.reloadT <= 0 && !this.sprint && !this.tac && this.slideT <= 0;
+    const canAds = !W.noAds && this.reloadT <= 0 && !this.sprint && !this.tac;
     this.adsK = damp(this.adsK, inp.ads && canAds ? 1 : 0, 1 / adsTime * 1.6, dt);
     if (inp.adsPressed && canAds) audio.play('ads', { vol: 0.35 });
 
@@ -251,6 +250,9 @@ export class Player {
       if (inp.lastPressed) this.equip(this.lastWpn);
     }
     if (inp.reloadPressed) this.startReload();
+    // toque: com o pente vazio recarrega sozinho (o tiro automatico nunca "aperta" com o pente vazio,
+    // entao a arma ficava parada em 0 ate achar o botao de recarregar)
+    { const am = this.ammo[this.wpn]; if (isTouch && am && am.mag === 0 && am.reserve > 0 && this.reloadT <= 0 && this.switchT <= 0) this.startReload(); }
     // faca rapida (V / botao): golpe com a lamina equipada, sem largar a arma
     this.meleeCd = (this.meleeCd || 0) - dt;
     if (inp.meleePressed && this.meleeCd <= 0 && this.switchT <= 0 && this.throwT <= 0) this.melee();
@@ -302,13 +304,13 @@ export class Player {
 
     // camera
     this.zoomNow = st.zoom || W.zoom;
-    const lean = this.slideT > 0 ? 0.08 : -mx * 0.018;
-    this.roll = damp(this.roll, lean, 8, dt);
+    // camera reta: andar de lado nao inclina a cabeca (era o que deixava o movimento "mole")
+    this.roll = damp(this.roll, 0, 10, dt);
 
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / 20;
-      const anim = !this.onGround ? 'jump' : this.slideT > 0 ? 'slide' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
+      const anim = !this.onGround ? 'jump' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
       this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn });
     }
   }

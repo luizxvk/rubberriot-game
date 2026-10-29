@@ -1,13 +1,13 @@
 // Progressao: XP do jogador (nivel 1..55) e de cada arma (nivel 1..20).
 // Pecas do Arsenal e camuflagens desbloqueiam por nivel. Fica salvo neste aparelho.
-import { LOCKED_BY, unlockDone } from './challenges.js';
-import { pushSoon } from './rovex.js';
+import { LOCKED_BY, unlockDone, bpOwned, legendOwned } from './challenges.js';
+import { pushSoon, me as rovexMe } from './rovex.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
 export const MAX_LEVEL = 55;
 export const MAX_WPN_LEVEL = 20;
 
-export const XP = { kill: 100, assist: 50, head: 40, streak: 150, flagCap: 300, flagReturn: 75, zone: 150, win: 500, match: 200 };
+export const XP = { kill: 100, assist: 50, head: 40, streak: 150, flagCap: 300, flagReturn: 75, zone: 150, win: 500, match: 200, survive: 60, plant: 250, defuse: 300, roundWin: 100 };
 
 // xp acumulado pra chegar no nivel n
 export const levelXp = (n) => n <= 1 ? 0 : Math.round(600 * (n - 1) + 90 * (n - 1) ** 2);
@@ -55,6 +55,7 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
 // ---------- desbloqueios ----------
 // peca na posicao i da lista da categoria abre no nivel da arma 1 + i*1.5 (a primeira ja vem aberta)
 export function partReq(i) { return i <= 0 ? 1 : Math.min(MAX_WPN_LEVEL, 1 + Math.ceil(i * 1.5)); }
+export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 export function partUnlocked(wpn, i, id) {
   if (data.unlockAll) return true;
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
@@ -71,6 +72,9 @@ export function reqProgress(wpn, req) {
 
 export function camoUnlocked(wpn, camo) {
   if (data.unlockAll) return true;
+  if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite
+  if (camo.elite) return !!rovexMe?.elite;     // exclusiva do Elite da Rovex
+
   if (LOCKED_BY[camo.id]) return unlockDone(LOCKED_BY[camo.id].id);
   if (!camo.req) return true;
   if (camo.req.wpn && wpnLevel(wpn) < camo.req.wpn) return false;

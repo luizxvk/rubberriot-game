@@ -2,6 +2,51 @@ import { t } from './i18n.js';
 // Entrada unificada: teclado + mouse (pointer lock) e controles de toque no celular.
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
+// Sliders em aparelho de toque: o range nativo pula pro dedo assim que encosta na trilha, entao rolar a tela
+// de Ajustes por cima dele mudava o valor. No toque o input nao recebe o dedo (CSS) e so a
+// bolinha arrasta, na horizontal; deslizar na vertical em cima dele rola a tela normalmente.
+function touchRanges() {
+  document.body.classList.add('touchrange');
+  const THUMB = 13, HIT = 30;
+  let drag = null;
+  const valueAt = (inp, x) => {
+    const r = inp.getBoundingClientRect(), min = +inp.min || 0, max = +(inp.max || 100), step = +inp.step || 1;
+    const f = Math.min(1, Math.max(0, (x - r.left - THUMB) / (r.width - THUMB * 2)));
+    return Math.round((min + f * (max - min)) / step) * step;
+  };
+  addEventListener('pointerdown', (e) => {
+    const finger = e.pointerType === 'touch', pad = finger ? HIT : 8;
+    for (const inp of document.querySelectorAll('input[type=range]')) {
+      const r = inp.getBoundingClientRect();
+      if (!r.width || inp.disabled || e.clientY < r.top - pad || e.clientY > r.bottom + pad || e.clientX < r.left - pad || e.clientX > r.right + pad) continue;
+      const min = +inp.min || 0, max = +(inp.max || 100);
+      const tx = r.left + THUMB + ((+inp.value - min) / (max - min || 1)) * (r.width - THUMB * 2);
+      // dedo: so pela bolinha (senao rolar a tela mexia no valor). mouse/caneta: clica em qualquer ponto da trilha
+      if (finger && Math.abs(e.clientX - tx) > HIT) continue;
+      drag = { inp, id: e.pointerId };
+      inp.classList.add('grab'); inp.focus({ preventScroll: true });
+      if (!finger) { e.preventDefault(); setValue(inp, e.clientX); }
+      return;
+    }
+  }, true);
+  const setValue = (inp, x) => {
+    const v = valueAt(inp, x);
+    if (String(v) !== inp.value) { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+  };
+  addEventListener('pointermove', (e) => {
+    if (drag && e.pointerId === drag.id) setValue(drag.inp, e.clientX);
+  }, true);
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.inp.classList.remove('grab');
+    drag.inp.dispatchEvent(new Event('change', { bubbles: true }));
+    drag = null;
+  };
+  addEventListener('pointerup', end, true);
+  addEventListener('pointercancel', end, true);
+}
+if (isTouch) touchRanges();
+
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -48,32 +93,34 @@ export class Input {
 
   // fotografia do frame (e zera as bordas)
   read() {
-    const k = this.keys, t = this.touch;
+    const k = this.keys, t = this.touch, pd = this.pad || {};
     const has = (c) => k.has(c);
     const edge = (c) => this.edges.has(c);
-    let mx = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0) + t.mx;
-    let mz = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0) + t.mz;
+    let mx = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0) + t.mx + (pd.mx || 0);
+    let mz = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0) + t.mz + (pd.mz || 0);
     mx = Math.max(-1, Math.min(1, mx)); mz = Math.max(-1, Math.min(1, mz));
     const s = {
       moveX: mx, moveZ: mz,
       lookX: this.lookX, lookY: this.lookY,
-      fire: this.mouse.fire || t.fire, firePressed: edge('FIRE'),
-      ads: this.mouse.ads || t.ads, adsPressed: edge('ADS'),
-      sprint: has('ShiftLeft') || has('ShiftRight') || t.sprint || this.settings?.autoSprint,
+      fire: this.mouse.fire || t.fire || !!pd.fire, firePressed: edge('FIRE'),
+      ads: this.mouse.ads || t.ads || !!pd.ads, adsPressed: edge('ADS'),
+      sprint: has('ShiftLeft') || has('ShiftRight') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
       tacPressed: edge('TAC'),
       jumpPressed: edge('Space') || edge('JUMP'),
       crouchPressed: edge('KeyC') || edge('ControlLeft') || edge('CROUCH'),
-      crouchHeld: has('KeyC') || has('ControlLeft') || t.crouchHeld,
+      crouchHeld: has('KeyC') || has('ControlLeft') || t.crouchHeld || !!pd.crouchHeld,
       reloadPressed: edge('KeyR') || edge('RELOAD'),
       fragPressed: edge('KeyG') || edge('FRAG'),
       flashPressed: edge('KeyF') || edge('FLASH'),
       streakPressed: edge('KeyX') || edge('STREAK'),
       inspectPressed: edge('KeyI') || edge('INSPECT'),
+      use: has('KeyE') || t.use || !!pd.use,
+      mapPressed: edge('KeyM') || edge('MAP'),
       meleePressed: edge('KeyV') || edge('MELEE'),
       lastPressed: edge('KeyQ'),
       slot: this.slotReq,
       wheel: this.wheelAcc + (edge('NEXT') ? 1 : 0),
-      board: has('Tab'),
+      board: has('Tab') || !!pd.board,
       pause: edge('Escape') || edge('KeyP'),
     };
     this.lookX = this.lookY = 0; this.wheelAcc = 0; this.slotReq = -1;
@@ -98,6 +145,8 @@ const ICON = {
   melee: 'M1 21h12v2H1zM5.245 8.07l2.83-2.827 14.14 14.142-2.828 2.828zM12.317 1l5.657 5.656-2.83 2.83-5.654-5.66zM3.825 9.485l5.657 5.657-2.828 2.828-5.657-5.657z',
   inspect: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
   streak: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+  // pan_tool (Material Icons): segurar pra plantar / desarmar
+  use: 'M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z',
 };
 const svg = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
 
@@ -118,20 +167,25 @@ export function buildTouch(input, root) {
     return b;
   };
   const R = 'max(20px, env(safe-area-inset-right))';
+  // botoes em arco em volta do polegar direito: canto = pular/agachar/botao grande, volta = recarregar/mirar/trocar,
+  // aro de fora (menores) = granadas, faca, sequencia, inspecionar. at(direita, baixo, tamanho) em px a partir do canto.
+  const at = (r, b, size) => ({ right: 'calc(' + R + ' + ' + r + 'px)', bottom: 'calc(max(0px, env(safe-area-inset-bottom)) + ' + b + 'px)', width: size + 'px', height: size + 'px' });
   // atirar tambem mira arrastando (olhar enquanto segura)
   let fireId = null, fx = 0, fy = 0;
-  const fire = btn(t('t_fire'), 'fire', { right: R, bottom: '96px' }, (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; fx = e.clientX; fy = e.clientY; }, () => { input.touch.fire = false; fireId = null; });
+  const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; fx = e.clientX; fy = e.clientY; }, () => { input.touch.fire = false; fireId = null; });
   fire.addEventListener('pointermove', (e) => { if (e.pointerId !== fireId) return; input.lookX += (e.clientX - fx) * 1.4; input.lookY += (e.clientY - fy) * 1.4; fx = e.clientX; fy = e.clientY; });
-  btn(t('t_ads'), 'ads', { right: 'calc(' + R + ' + 104px)', bottom: '140px' }, (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); });
-  btn(t('t_jump'), 'jump', { right: R, bottom: '18px' }, () => input.edges.add('JUMP'));
-  btn(t('t_crouch'), 'crouch', { right: 'calc(' + R + ' + 84px)', bottom: '22px' }, () => { input.edges.add('CROUCH'); });
-  btn(t('t_reload'), 'reload', { right: 'calc(' + R + ' + 176px)', bottom: '86px' }, () => input.edges.add('RELOAD'));
-  btn(t('t_swap'), 'swap', { right: 'calc(' + R + ' + 14px)', bottom: '204px' }, () => input.edges.add('NEXT'));
-  btn(t('t_frag'), 'frag', { right: 'calc(' + R + ' + 196px)', bottom: '18px', width: '52px', height: '52px' }, () => input.edges.add('FRAG'));
-  btn(t('t_flash'), 'flash', { right: 'calc(' + R + ' + 256px)', bottom: '18px', width: '52px', height: '52px' }, () => input.edges.add('FLASH'));
-  btn(t('t_streak'), 'streak', { right: 'calc(' + R + ' + 98px)', bottom: '214px', width: '52px', height: '52px' }, () => input.edges.add('STREAK'));
-  btn(t('t_melee'), 'melee', { right: 'calc(' + R + ' + 250px)', bottom: '150px', width: '50px', height: '50px' }, () => input.edges.add('MELEE'));
-  btn(t('t_inspect'), 'inspect', { right: 'calc(' + R + ' + 186px)', bottom: '156px', width: '48px', height: '48px' }, () => input.edges.add('INSPECT'));
+  btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); });
+  btn(t('t_jump'), 'jump', at(0, 12, 66), () => input.edges.add('JUMP'));
+  btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
+  btn(t('t_reload'), 'reload', at(94, 96, 58), () => input.edges.add('RELOAD'));
+  btn(t('t_swap'), 'swap', at(12, 184, 58), () => input.edges.add('NEXT'));
+  btn(t('t_frag'), 'frag', at(148, 12, 50), () => input.edges.add('FRAG'));
+  btn(t('t_flash'), 'flash', at(206, 12, 50), () => input.edges.add('FLASH'));
+  btn(t('t_streak'), 'streak', at(156, 176, 48), () => input.edges.add('STREAK'));
+  btn(t('t_melee'), 'melee', at(162, 84, 50), () => input.edges.add('MELEE'));
+  // usar (plantar / desarmar a bomba): segurar; so aparece no modo bomba
+  input.useBtn = btn(t('t_use'), 'use', at(4, 92, 80), () => { input.touch.use = true; }, () => { input.touch.use = false; });
+  btn(t('t_inspect'), 'inspect', at(220, 84, 44), () => input.edges.add('INSPECT'));
 
   // analogico: empurrar ate a borda = corre
   let sid = null, cx = 0, cy = 0;
@@ -166,6 +220,23 @@ export function buildTouch(input, root) {
   const p = btn(t('t_pause'), 'pause', { left: 'max(12px, env(safe-area-inset-left))', top: 'max(12px, env(safe-area-inset-top))', width: '48px', height: '40px', borderRadius: '12px' }, () => input.edges.add('Escape'));
   void p;
   applyHudLayout(root, input.settings);
+  setFireButton(input);
+}
+
+// tiro automatico ligado: o botao de atirar some (o jogo atira sozinho com o inimigo na mira)
+export function setFireButton(input) {
+  if (input.fireBtn) input.fireBtn.hidden = !!input.settings?.autoFire;
+  if (input.useBtn) {
+    input.useBtn.hidden = input.mode !== 'bomb';
+    // a mao (plantar/desarmar) vai pro lugar do botao de atirar quando ele some: e onde o polegar ja esta.
+    // Com tiro manual, fica acima do recarregar, fora do meio da tela. Posicao salva no editor de HUD manda.
+    if (!input.settings?.hudLayout?.pos?.use) {
+      const R = 'max(20px, env(safe-area-inset-right))';
+      Object.assign(input.useBtn.style, input.settings?.autoFire
+        ? { right: 'calc(' + R + ' + 4px)', bottom: '92px', width: '80px', height: '80px' }
+        : { right: 'calc(' + R + ' + 214px)', bottom: '136px', width: '58px', height: '58px' });
+    }
+  }
 }
 
 // layout do HUD de toque salvo nos ajustes: { pos: { id: [x%, y%] }, scale, alpha }

@@ -14,7 +14,9 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--ink); font-family: var(--body); -webkit-tap-highlight-color: transparent; }
 body { user-select: none; -webkit-user-select: none; touch-action: none; }
-#gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+/* 100% em vez de 100vw/100vh: no celular o 100vh conta a barra do navegador escondida e o canvas
+   ficava mais alto que a tela visivel (o centro da imagem saia do centro da mira) */
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; }
 :focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
@@ -44,11 +46,29 @@ code { font-family: var(--body); font-weight: 800; background: var(--paper-2); p
 .title span + span { animation-delay: calc(var(--beat) / 2); font-size: 1.12em; }
 @keyframes bounce { from { transform: scale(1.04, .95); } to { transform: scale(.97, 1.05) translateY(-3px); } }
 .tagline { margin: 6px 0 18px; text-align: center; font-size: 16px; color: var(--graphite); font-weight: 600; }
-.bill { display: flex; flex-direction: column; border-top: 3px double var(--ink); }
-.bill-item { position: relative; text-align: left; font-family: var(--display); font-size: clamp(22px, 3vw, 30px); padding: 9px 4px 9px 52px; border-bottom: 2px solid var(--ink); transition: padding-left .18s, background .18s; }
-.bill-item::before { content: ''; position: absolute; left: 4px; top: 50%; width: 40px; height: 26px; margin-top: -13px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 40'%3E%3Cpath d='M2 14h18c2-6 8-9 14-8l20 1c4 0 6 3 6 6s-3 5-6 5H40c2 0 4 2 4 4s-2 4-4 4c2 0 3 2 3 4s-2 4-4 4H22C12 34 6 28 2 26z' fill='%23faf8f2' stroke='%23141210' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain; opacity: 0; transform: translateX(-10px); transition: opacity .15s, transform .15s; }
-.bill-item:hover, .bill-item:focus-visible { padding-left: 62px; background: var(--paper-2); }
-.bill-item:hover::before, .bill-item:focus-visible::before { opacity: 1; transform: translateX(0); }
+/* menu do cartaz: botoes impressos. Jogar em tinta com a sombra vermelha "fora de registro",
+   Multiplayer em papel com a azul, o resto em fichas 2x2 com icone */
+.bill { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px; padding: 4px 8px 8px 0; }
+.bill-item { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left; font-family: var(--display); font-size: 16px; line-height: 1;
+  padding: 9px 12px 9px 9px; background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--ink);
+  transition: transform .12s cubic-bezier(.3, 1.6, .5, 1), box-shadow .12s, background .12s; }
+.bill-item > span { min-width: 0; white-space: nowrap; }
+.bill-item svg { flex: none; width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: var(--ink); fill: var(--paper); }
+.bill-item:hover, .bill-item:focus-visible { transform: translate(-2px, -2px) rotate(-1deg); box-shadow: 6px 6px 0 var(--ink); background: var(--paper-2); }
+.bill-item:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); transition-duration: .05s; }
+.bill-item.main, .bill-item.wide { grid-column: 1 / -1; }
+.bill-item.main { font-size: clamp(24px, 3vw, 32px); padding: 10px 18px 10px 12px; border-radius: 18px; gap: 14px; }
+.bill-item.main svg { width: 44px; height: 44px; padding: 7px; }
+.bill-item.play { background: var(--ink); color: var(--paper); box-shadow: 6px 6px 0 var(--red); }
+.bill-item.play svg { background: var(--red); fill: var(--paper); box-shadow: 0 0 0 2.5px var(--paper); }
+.bill-item.play:hover, .bill-item.play:focus-visible { background: var(--ink); box-shadow: 9px 8px 0 var(--red); }
+.bill-item.play:active { box-shadow: 0 0 0 var(--red); }
+.bill-item.mp { box-shadow: 6px 6px 0 var(--blue); }
+.bill-item.mp svg { background: var(--blue); }
+.bill-item.mp:hover, .bill-item.mp:focus-visible { box-shadow: 9px 8px 0 var(--blue); }
+.bill-item.mp:active { box-shadow: 0 0 0 var(--blue); }
+.bill-item:focus-visible { outline: 3px dashed var(--ink); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .bill-item { transition: none; } .bill-item:hover, .bill-item:focus-visible { transform: none; } }
 
 .card { width: min(620px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--paper); border: 4px solid var(--ink); border-radius: 24px; box-shadow: 0 0 0 5px var(--paper), 0 0 0 9px var(--ink), 10px 12px 0 9px rgba(20,18,16,.5); padding: 20px 24px 24px; }
 .card.wide { width: min(980px, 100%); }
@@ -151,7 +171,14 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 @keyframes feedIn { from { transform: translateX(20px); opacity: 0; } }
 
 .cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --g: 8px; transition: opacity .1s; }
-.cross i { position: absolute; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 3px; }
+.cross i { position: absolute; background: var(--xc, var(--paper)); border: 1.5px solid var(--ink); border-radius: 3px; }
+/* formatos da mira (Ajustes): cruz, cruz com ponto, ponto, circulo, T */
+.cross .xd, .cross .xr { position: absolute; display: none; border-radius: 50%; }
+.cross .xd { width: 6px; height: 6px; left: -4.5px; top: -4.5px; background: var(--xc, var(--paper)); border: 1.5px solid var(--ink); }
+.cross .xr { width: calc(var(--g) * 2 + 12px); height: calc(var(--g) * 2 + 12px); left: calc(-1 * var(--g) - 6px); top: calc(-1 * var(--g) - 6px); box-sizing: border-box; border: 2.5px solid var(--xc, var(--paper)); box-shadow: 0 0 0 1.5px var(--ink), inset 0 0 0 1.5px var(--ink); }
+.cross.x-dot i, .cross.x-circle i { display: none; }
+.cross.x-dot .xd, .cross.x-crossdot .xd, .cross.x-circle .xd, .cross.x-circle .xr { display: block; }
+.cross.x-tee i:nth-child(1) { display: none; }
 .cross i:nth-child(1), .cross i:nth-child(2) { width: 4px; height: 11px; left: -2px; }
 .cross i:nth-child(1) { bottom: var(--g); } .cross i:nth-child(2) { top: var(--g); }
 .cross i:nth-child(3), .cross i:nth-child(4) { height: 4px; width: 11px; top: -2px; }
@@ -211,6 +238,8 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .dead-by { margin: 10px 0 0; font-family: var(--body); font-weight: 800; font-size: 20px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px; padding: 2px 14px; }
 .dead-go { pointer-events: auto; width: auto; margin-top: 16px; padding: 10px 28px; font-size: 22px; transform: rotate(-2deg); }
 .dead.can { pointer-events: auto; }
+/* no toque a camada dos botoes (#touch, z 7) ficava por cima e engolia o toque no Renascer */
+body.touchmode .dead.can { z-index: 8; }
 .dead-t { margin: 8px 0 0; font-size: 22px; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
 
 .overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(20,18,16,.55); padding: 16px; }
@@ -223,7 +252,8 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .end-next { margin-top: 14px; font-family: var(--body); font-weight: 800; }
 
 .rotate { display: none; position: fixed; inset: 0; z-index: 60; background: var(--ink); color: var(--paper); align-items: center; justify-content: center; text-align: center; font-family: var(--display); font-size: 24px; padding: 24px; }
-@media (orientation: portrait) and (pointer: coarse) { body.ingame .rotate { display: flex; } }
+/* celular em pe: o aviso cobre tudo (menus, lobby e partida) */
+@media (orientation: portrait) and (pointer: coarse) { .rotate { display: flex; } }
 
 /* ---------- toque ---------- */
 #touch { position: fixed; inset: 0; z-index: 7; touch-action: none; }
@@ -238,7 +268,6 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
   #menu { padding-left: 16px; justify-content: center; }
   .poster-frame { padding: 18px 18px 16px; }
   .title { font-size: clamp(40px, 13vw, 64px); }
-  .bill-item { font-size: 20px; padding-top: 6px; padding-bottom: 6px; }
   .row, .settings { grid-template-columns: 1fr; }
   .smith { grid-template-columns: 1fr; }
   .slots { flex-direction: row; overflow-x: auto; }
@@ -269,7 +298,6 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 @media (max-height: 700px) {
   .poster-frame { padding: 18px 22px 16px; }
   .title { font-size: clamp(44px, 11vh, 80px); }
-  .bill-item { font-size: clamp(18px, 3.6vh, 26px); padding-top: 6px; padding-bottom: 6px; }
   .tagline { margin-bottom: 10px; }
 }
 /* celular jogando: municao no canto de cima, feed embaixo da vida */
@@ -287,8 +315,6 @@ body.touchmode .plaque { transform: scale(.85); transform-origin: top center; }
   .poster { max-height: calc(100dvh - 40px); }
   .poster-frame { padding: 14px 18px 10px; }
   .title { font-size: clamp(34px, 12vh, 54px); margin-top: 2px; }
-  .bill-item { font-size: 17px; padding: 5px 4px 5px 44px; }
-  .bill-item:hover, .bill-item:focus-visible { padding-left: 52px; }
   .lang { top: 12px; right: 14px; }
 }
 /* botoes de toque: texto sempre dentro do circulo */
@@ -304,8 +330,6 @@ body.touchmode .plaque { transform: scale(.85); transform-origin: top center; }
   .poster { max-height: calc(100dvh - 44px); }
   .poster-frame { padding: 14px 18px 10px; }
   .title { font-size: clamp(34px, 12vh, 54px); margin-top: 2px; }
-  .bill-item { font-size: 17px; padding: 5px 4px 5px 44px; }
-  .bill-item:hover, .bill-item:focus-visible { padding-left: 52px; }
   .lang { top: 12px; right: 14px; }
 }
 /* botoes de toque com icone */
@@ -622,6 +646,33 @@ body.hudedit #touch { z-index: 25; }
   background: var(--paper); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 8px 9px 0 rgba(20,18,16,.55); }
 .lb-friends header { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 8px 16px; border-bottom: 3px double var(--ink); }
 .lb-friends h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 20px; }
+/* plantar a bomba: escolher o lado (dois cartoes lado a lado; tela estreita empilha) */
+.lb-side { position: fixed; z-index: 15; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 24px); overflow-y: auto; padding: 14px 16px 12px; text-align: center;
+  background: var(--paper); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 0 0 0 100vmax rgba(20,18,16,.35), 8px 9px 0 rgba(20,18,16,.55); }
+.lb-side h3 { margin: 0 0 12px; font-family: var(--display); font-weight: 400; font-size: 24px; }
+.lb-side-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.lb-side-opts button { display: grid; justify-items: center; gap: 4px; padding: 12px 10px 10px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); color: var(--ink); font: inherit; box-shadow: 5px 5px 0 var(--c); transition: transform .12s cubic-bezier(.3, 1.6, .5, 1), box-shadow .12s; }
+.lb-side-opts button[hidden] { display: none; }
+.lb-side-opts button.red { --c: var(--red); } .lb-side-opts button.blue { --c: var(--blue); }
+.lb-side-opts button:hover, .lb-side-opts button:focus-visible { transform: translate(-1px, -1px); box-shadow: 7px 7px 0 var(--c); }
+.lb-side-opts button:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--c); }
+.lb-side-opts svg { width: 42px; height: 42px; padding: 8px; border-radius: 50%; background: var(--c); fill: var(--paper); box-shadow: 0 0 0 2.5px var(--ink); }
+.lb-side-opts b { font-family: var(--display); font-weight: 400; font-size: 22px; line-height: 1.1; }
+.lb-side-opts small { font-weight: 700; font-size: 13px; line-height: 1.3; color: var(--graphite); }
+.lb-side-opts .n { margin-top: 2px; padding: 1px 10px; border-radius: 99px; background: var(--c); color: var(--paper); font-style: normal; font-weight: 800; font-size: 12px; }
+.lb-side-note { margin: 10px 0 0; font-weight: 700; font-size: 12px; color: var(--graphite); }
+.lb-swap { display: flex; align-items: center; gap: 4px; margin: -2px auto 6px; padding: 3px 10px 3px 6px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); font-weight: 800; font-size: 12px; }
+.lb-swap[hidden] { display: none; }
+.lb-swap svg { width: 16px; height: 16px; fill: currentColor; }
+@media (max-height: 520px) {
+  .lb-side { padding: 10px 12px 8px; }
+  .lb-side h3 { font-size: 19px; margin-bottom: 8px; }
+  .lb-side-opts { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .lb-side-opts button { grid-template-columns: auto 1fr; justify-items: start; text-align: left; column-gap: 10px; row-gap: 2px; padding: 8px 10px; }
+  .lb-side-opts svg { grid-row: span 3; width: 34px; height: 34px; padding: 6px; align-self: center; }
+  .lb-side-opts b { font-size: 18px; } .lb-side-opts small { font-size: 11px; }
+  .lb-side-note { margin-top: 6px; }
+}
 .lb-x { padding: 6px; border-radius: 8px; } .lb-x svg { width: 22px; height: 22px; display: block; fill: currentColor; }
 #lbFriendList { list-style: none; margin: 0; padding: 6px 10px 10px; overflow: auto; scrollbar-width: thin; }
 #lbFriendList li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 2px dotted var(--silver); }
@@ -639,7 +690,7 @@ body.hudedit #touch { z-index: 25; }
 }
 
 /* faixa da Rovex: so no site solto (rubberriot.tryrovex.com), linha fina embaixo do cartaz */
-.rovex-strip { position: fixed; z-index: 3; right: max(16px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 4px; padding: 5px 8px 5px 12px; background: var(--paper); border: 2px solid var(--ink); border-radius: 30px; font-weight: 700; font-size: 13px; color: var(--ink); text-decoration: none; }
+.rovex-strip { position: fixed; z-index: 12; right: max(16px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 4px; padding: 5px 8px 5px 12px; background: var(--paper); border: 2px solid var(--ink); border-radius: 30px; font-weight: 700; font-size: 13px; color: var(--ink); text-decoration: none; }
 .rovex-strip svg { width: 16px; height: 16px; fill: currentColor; }
 .rovex-strip:hover, .rovex-strip:focus-visible { background: var(--ink); color: var(--paper); }
 #menu.smithing .rovex-strip, #menu:has(section:not(#scr-home):not([hidden])) .rovex-strip { display: none; }
@@ -647,14 +698,14 @@ body.hudedit #touch { z-index: 25; }
 /* cartaz em duas colunas (titulo e nivel | menu): cabe no PC de 768px e no celular deitado */
 @media (max-height: 900px) {
   .poster { width: min(760px, 100%); }
-  .poster-frame { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "top bill" "title bill" "tag bill" "lvl bill"; grid-template-rows: auto auto auto 1fr; column-gap: 26px; align-items: center; }
+  .poster-frame { display: grid; grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr); grid-template-areas: "top bill" "title bill" "tag bill" "promo bill" "lvl bill"; grid-template-rows: 1fr auto auto auto 1fr; column-gap: 22px; align-items: center; container-type: inline-size; }
+  .poster-frame .bill-top { align-self: end; }
   .poster-frame .bill-top { grid-area: top; margin-top: 18px; }
-  .poster-frame .title { grid-area: title; font-size: clamp(42px, min(6.4vw, 9vh), 78px); }
+  .poster-frame .title { grid-area: title; font-size: clamp(34px, min(9.2cqw, 14vh), 88px); }
   .poster-frame .lang { right: auto; left: 18px; }
   .poster-frame .bill-top { margin-top: 26px; }
   .poster-frame .tagline { grid-area: tag; margin-bottom: 0; }
   .poster-frame .bill { grid-area: bill; align-self: center; border-top: 0; }
-  .poster-frame .bill-item:first-child { border-top: 2px solid var(--ink); }
   .poster-frame .lvl-badge { grid-area: lvl; align-self: end; margin-top: 10px; }
 }
 
@@ -668,3 +719,447 @@ body.hudedit #touch { z-index: 25; }
 .gate-new a { color: var(--ink); text-underline-offset: 3px; }
 @media (max-height: 520px) { .gate-card { padding: 12px 20px; } .gate-card .title { font-size: 40px; } .gate-text { margin: 6px 0 10px; font-size: 14px; } }
 body.gated #menu .poster { visibility: hidden; }
+
+/* ---------- abertura: logo da Rovex sozinha no escuro, depois a iris abre o jogo ---------- */
+#splash { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; background: var(--ink); pointer-events: none; transition: opacity .45s ease-out; }
+#splash.out { opacity: 0; }
+.splash-logo { width: min(320px, 58vw); filter: brightness(0) invert(1); opacity: 0; transform: scale(.94); animation: splashIn 1.1s cubic-bezier(.2, .8, .2, 1) .15s forwards; }
+@keyframes splashIn { to { opacity: 1; transform: none; } }
+/* o cartaz e as novidades so entram depois que a iris abre */
+#menu.intro .poster, #menu.intro .news { opacity: 0; transform: translateY(14px); }
+#menu .poster, #menu .news { transition: opacity .5s ease-out, transform .5s cubic-bezier(.2, .8, .2, 1); }
+
+/* ---------- novidades: cartaz menor ao lado do menu ---------- */
+.news { position: fixed; z-index: 11; right: max(20px, 4vw); bottom: max(20px, env(safe-area-inset-bottom)); width: min(340px, calc(100vw - 40px)); max-height: min(420px, calc(100dvh - 40px)); overflow: auto;
+  background: var(--paper); border: 4px solid var(--ink); border-radius: 20px; padding: 12px 16px 14px; box-shadow: 0 0 0 4px var(--paper), 0 0 0 8px var(--ink), 8px 10px 0 8px rgba(20,18,16,.45); scrollbar-width: thin; }
+.news[hidden] { display: none; }
+.news header { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 6px; }
+.news h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 19px; line-height: 1.1; }
+.news-x { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 2.5px solid var(--ink); display: grid; place-items: center; }
+.news-x svg { width: 18px; height: 18px; fill: currentColor; }
+.news-x:focus-visible, .keys-tabs button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+.news ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.news li { display: grid; gap: 1px; }
+.news li b { font-family: var(--display); font-weight: 400; font-size: 15px; line-height: 1.15; }
+.news li span { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--graphite); }
+#menu:not(.home) .news { display: none; }
+/* a faixa da Rovex fica no canto de baixo: as novidades sobem pra nao cobrir o botao dela */
+#rovexStrip:not([hidden]) ~ .news { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 58px); max-height: min(420px, calc(100dvh - 100px)); }
+@media (max-width: 760px), (max-height: 520px) {
+  /* mesma largura do cartaz do menu (.poster), um embaixo do outro */
+  .news { position: static; width: min(460px, 100%); flex: none; margin-top: 14px; max-height: none; box-shadow: 0 0 0 4px var(--paper), 0 0 0 8px var(--ink); }
+  #menu.home .poster { flex: none; }
+  #menu.home { flex-direction: column; justify-content: flex-start; overflow-y: auto; }
+  #menu.home .poster { max-height: none; }
+}
+
+/* ---------- lobby: escolher a arma ---------- */
+.lb-pick { grid-area: pick; justify-self: end; width: min(420px, 100%); background: var(--paper); border: 4px solid var(--ink); border-radius: 20px; padding: 10px 14px 12px; box-shadow: 6px 7px 0 rgba(20,18,16,.5); }
+.lb-pick[hidden] { display: none; }
+.lb-pick h3 { margin: 0 0 8px; font-family: var(--display); font-weight: 400; font-size: 18px; }
+.lb-pick .pk-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#lobby { grid-template-areas: "marq marq" "bill pick" "bill leader" "bill act"; grid-template-rows: auto auto 1fr auto; }
+@media (max-width: 760px), (max-height: 520px) {
+  #lobby { grid-template-areas: "marq" "leader" "pick" "bill" "act"; grid-template-rows: auto auto auto 1fr auto; overflow-y: auto; }
+  .lb-pick { justify-self: stretch; width: 100%; }
+}
+@media (max-width: 420px) { .lb-pick .pk-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- contagem de inicio: a mesma pelicula do lobby, no meio da tela ---------- */
+.countin { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 10px; text-align: center; }
+.countin[hidden] { display: none; }
+.countin b { display: grid; place-items: center; width: clamp(120px, 18vmin, 180px); aspect-ratio: 1; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 4px var(--ink), 7px 8px 0 4px rgba(20,18,16,.55);
+  font-family: var(--display); font-weight: 400; font-size: clamp(64px, 10vmin, 104px); line-height: 1; color: var(--paper); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
+.countin b:empty { display: none; }
+.countin b.go { width: auto; aspect-ratio: auto; border-radius: 22px; padding: 4px 26px; font-size: clamp(44px, 7vmin, 72px); background: var(--red); }
+.countin b.tick { animation: countTick .35s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes countTick { from { transform: scale(1.35); } }
+.countin small { font-family: var(--body); font-weight: 800; font-size: 16px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; padding: 3px 14px; }
+.countin small:empty { display: none; }
+
+/* ---------- aviso grande (infectado / ultimo sobrevivente) ---------- */
+.alert { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; text-align: center; animation: alertIn 2.8s ease-out forwards; }
+.alert[hidden] { display: none; }
+.alert b { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 5.5vw, 54px); line-height: 1; color: var(--paper); background: var(--red); border: 4px solid var(--ink); border-radius: 16px; padding: 6px 20px; box-shadow: 5px 6px 0 var(--ink); transform: rotate(-2deg); }
+.alert.blue b { background: var(--blue); }
+.alert small { font-family: var(--body); font-weight: 800; font-size: 15px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; padding: 2px 12px; }
+.alert small:empty { display: none; }
+@keyframes alertIn { 0% { opacity: 0; transform: translateX(-50%) scale(1.25); } 8% { opacity: 1; transform: translateX(-50%) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- fim de partida: resultado + progresso ---------- */
+.end-card { width: min(980px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; scrollbar-width: thin; }
+.end-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; text-align: left; margin-top: 6px; }
+.end-panel { background: var(--paper); color: var(--ink); border: 4px solid var(--ink); border-radius: 20px; padding: 12px 16px 14px; box-shadow: 6px 7px 0 rgba(20,18,16,.6); min-width: 0; }
+.end-panel h3 { margin: 0 0 8px; font-family: var(--display); font-weight: 400; font-size: 20px; border-bottom: 2px solid var(--ink); padding-bottom: 4px; }
+.end-panel h4 { margin: 12px 0 6px; font-family: var(--display); font-weight: 400; font-size: 16px; }
+.end-panel h4[hidden] { display: none; }
+.end-board { max-width: none; }
+.end-board div { background: var(--paper-2); }
+.end-board div.me { background: var(--ink); color: var(--paper); }
+.end-lvl { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+.end-lvl > b { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--paper); font-family: var(--display); font-weight: 400; font-size: 19px; }
+.end-lvl > b.up { animation: countTick .4s cubic-bezier(.3, 1.6, .5, 1); background: var(--red); }
+.end-lvl small { display: block; font-weight: 800; font-size: 13px; margin-bottom: 3px; }
+.end-lvl .xpbar { height: 14px; }
+.end-lvl .xpbar i { transition: width .25s linear; }
+.end-lvl em { font-style: normal; font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.end-xplist { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; font-weight: 800; font-size: 14px; }
+.end-xplist li { display: flex; justify-content: space-between; border-bottom: 1.5px dotted var(--graphite); padding: 2px 0; }
+.end-xplist li span:last-child { font-variant-numeric: tabular-nums; }
+.end-unl { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.end-unl li { display: grid; gap: 2px; padding: 6px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper-2); }
+.end-unl img { width: 100%; aspect-ratio: 2; object-fit: contain; border-radius: 8px; background: var(--paper); }
+.end-unl small { font-weight: 700; font-size: 11.5px; color: var(--graphite); }
+.end-unl b { font-family: var(--display); font-weight: 400; font-size: 13.5px; line-height: 1.15; }
+.end-unl:empty { display: none; }
+@media (max-width: 760px), (max-height: 520px) {
+  .end-the { font-size: clamp(48px, 12vw, 90px); }
+  .end-cols { grid-template-columns: 1fr; }
+}
+
+/* ---------- controles: abas teclado / controle / toque ---------- */
+.keys-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.keys-tabs button { border: 3px solid var(--ink); border-radius: 30px; padding: 5px 14px; font-family: var(--display); font-size: 14px; }
+.keys-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+
+/* desafio novo (ainda nao visto) */
+.ch-new { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--red); color: var(--paper); font-family: var(--display); font-weight: 400; font-size: 11px; line-height: 1.6; vertical-align: 2px; }
+/* selo "novo": adesivo torto no canto da ficha, nunca come o texto */
+.bill-item .ch-new { position: absolute; top: -9px; right: -6px; margin: 0; font-size: 11px; border: 2px solid var(--ink); transform: rotate(6deg); }
+
+/* tiro automatico ligado: sem botao de atirar */
+.tbtn[hidden] { display: none; }
+
+/* controle: o item focado no menu ganha o mesmo destaque do mouse */
+body.pad :focus { outline: 4px solid var(--red); outline-offset: 3px; }
+
+/* ajustes: escolha da mira com previa (o mesmo elemento da partida, em cima de um fundo de cena) */
+.xh-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; }
+.xh-prev { position: relative; height: 72px; border: 3px solid var(--ink); border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, #cfc9bd 0 55%, #8a857c 55%); }
+.xh-prev .cross { --g: 7px; }
+.xh-opts { display: grid; gap: 8px; }
+.xh-opts .seg { flex-wrap: wrap; }
+.xh-cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.xh-cols button { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--ink); }
+.xh-cols button[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink); }
+.xh-field { grid-column: 1 / -1; }
+.xh-opts .seg button { white-space: nowrap; }
+/* anel de alerta (visualizar sons) em volta da mira */
+.threat { position: absolute; left: 50%; top: 50%; width: 240px; height: 240px; margin: -120px 0 0 -120px; pointer-events: none; }
+
+/* ---------- lobby no celular: nada apertado ----------
+   Deitado (pouca altura): duas colunas. Esquerda = letreiro + contagem; direita = arma, elenco
+   (rola sozinho) e os botoes sempre no rodape. Em pe: uma coluna que rola, botoes presos embaixo. */
+@media (max-height: 520px) and (orientation: landscape) {
+  #lobby { height: 100dvh; overflow: hidden; gap: 10px 16px;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "marq pick" "leader pick" "leader bill" "leader act"; align-items: stretch;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .lb-map { font-size: clamp(34px, 7vw, 54px); }
+  .lb-mode { margin-top: 6px; font-size: 13px; }
+  .lb-leader { justify-self: start; align-self: center; width: clamp(96px, 26vh, 130px); }
+  .lb-pick { justify-self: stretch; width: 100%; padding: 8px 12px 10px; }
+  .lb-pick h3 { font-size: 15px; margin-bottom: 6px; }
+  .lb-pick .pk-list { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .lb-pick .pk-list button { padding: 4px 3px; font-size: 11.5px; }
+  .lb-bill { width: 100%; max-height: none; min-height: 0; overflow-y: auto; align-self: stretch; padding: 10px 14px; box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink); }
+  .lb-bill h3 { font-size: 17px; margin-bottom: 4px; }
+  #lbPlayers li { padding: 4px 2px 4px 14px; font-size: 14px; }
+  .lb-actions { justify-self: stretch; justify-content: space-between; gap: 12px; }
+  .lb-actions .big { min-width: 0; flex: 1; padding: 10px 14px; font-size: 19px; }
+}
+@media (max-width: 760px) and (min-height: 521px) {
+  #lobby { height: 100dvh; grid-template-rows: auto auto auto minmax(0, 1fr) auto; overflow: hidden; }
+  .lb-bill { min-height: 0; overflow-y: auto; }
+  .lb-leader { width: 110px; }
+}
+/* selo "novo" no menu estreito: fica na linha do texto em vez de por cima */
+@media (max-width: 520px), (max-height: 520px) {
+}
+
+/* aviso de municao embaixo da mira */
+.ammo-alert { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); font-family: var(--display); font-weight: 400; font-size: 17px; line-height: 1; padding: 5px 14px 6px; border-radius: 12px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); white-space: nowrap; box-shadow: 3px 4px 0 var(--ink); }
+.ammo-alert[hidden] { display: none; }
+.ammo-alert.low { font-family: var(--body); font-weight: 800; font-size: 13px; padding: 2px 10px; border-width: 2px; box-shadow: none; background: rgba(236,233,225,.85); }
+.ammo-alert.empty { background: var(--red); color: var(--paper); animation: ammoPulse .7s ease-in-out infinite alternate; }
+.ammo-alert.out { background: var(--ink); color: var(--paper); border-color: var(--paper); box-shadow: 0 0 0 3px var(--ink); }
+.ammo-alert.busy { font-family: var(--body); font-weight: 800; font-size: 13px; padding: 2px 10px; border-width: 2px; box-shadow: none; }
+@keyframes ammoPulse { to { transform: translateX(-50%) scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .ammo-alert.empty { animation: none; } }
+/* toque: o feed sai de baixo do minimapa e vai pra direita, embaixo da arma/municao (3 linhas no maximo) */
+body.touchmode .feed { top: calc(max(10px, env(safe-area-inset-top)) + 80px); right: max(12px, env(safe-area-inset-right)); left: auto; align-items: flex-end; font-size: 11px; max-width: 46vw; }
+body.touchmode .feed li { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.touchmode .feed li:nth-child(n+4) { display: none; }
+
+/* aviso de girar o celular: cartaz de papel, o celular desenhado deita uma vez e repete */
+.rotate { background: var(--ink); z-index: 70; }
+.rot-card { width: min(340px, 100%); background: var(--paper); color: var(--ink); border: 4px solid var(--ink); border-radius: 24px; padding: 22px 22px 20px; text-align: center;
+  box-shadow: 0 0 0 5px var(--paper), 0 0 0 9px var(--ink); }
+.rot-card h2 { margin: 6px 0 6px; font-family: var(--display); font-weight: 400; font-size: 26px; line-height: 1.05; }
+.rot-card p { margin: 0; font-family: var(--body); font-weight: 700; font-size: 15px; line-height: 1.35; color: var(--graphite); }
+.rot-phone { width: 120px; height: 120px; }
+.rot-phone rect, .rot-phone circle { fill: var(--paper); stroke: var(--ink); stroke-width: 4; }
+.rot-phone .rot-screen { fill: var(--paper-2); stroke-width: 2.5; }
+.rot-phone circle { fill: var(--ink); stroke: none; }
+.rot-arrow, .rot-head { fill: none; stroke: var(--red); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.rot-g { transform-origin: 60px 54px; animation: rotPhone 2.4s cubic-bezier(.6, 0, .2, 1) infinite; }
+@keyframes rotPhone { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+@media (prefers-reduced-motion: reduce) { .rot-g { animation: none; transform: rotate(-90deg); } }
+
+/* ---------- plantar a bomba ---------- */
+.plaque .fuse { background: var(--red); color: var(--paper); }
+.bomb-bar { position: absolute; left: 50%; top: calc(50% + 84px); transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; }
+.bomb-bar[hidden] { display: none; }
+.bomb-bar small { font-family: var(--display); font-weight: 400; font-size: 16px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; padding: 3px 12px; box-shadow: 3px 4px 0 var(--ink); white-space: nowrap; }
+.bomb-bar .bb { display: none; width: 220px; height: 16px; border: 3px solid var(--ink); border-radius: 10px; background: var(--paper); overflow: hidden; }
+.bomb-bar.busy .bb { display: block; }
+.bomb-bar .bb i { display: block; height: 100%; background: var(--red); }
+.bomb-tag { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); font-family: var(--body); font-weight: 800; font-size: 13px; color: var(--paper); background: var(--red); border: 2.5px solid var(--ink); border-radius: 20px; padding: 3px 12px; }
+.bomb-tag[hidden] { display: none; }
+body.touchmode .bomb-tag { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 60px); }
+/* espectador: a tela de morte desce pro rodape e libera a visao */
+.dead.spec { justify-content: flex-end; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+.dead.spec .dead-title { font-size: clamp(26px, 5vw, 40px); }
+.spec-bar { display: flex; gap: 10px; margin-top: 10px; pointer-events: auto; }
+.spec-bar[hidden] { display: none; }
+.spec-bar button { font-family: var(--display); font-size: 16px; padding: 6px 16px; border-radius: 14px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 3px 4px 0 var(--ink); }
+body.touchmode .dead.spec { z-index: 8; pointer-events: auto; }
+
+/* ---------- celular deitado: cartaz e novidades lado a lado, tudo na tela sem rolar ----------
+   A pagina nao rola: o cartaz encolhe o titulo e as fichas; so a lista de novidades rola por dentro. */
+@media (max-height: 520px) and (orientation: landscape) {
+  #menu.home { flex-direction: row; align-items: stretch; justify-content: center; gap: 18px; overflow: hidden; padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  #menu.home .poster { flex: 1 1 auto; width: auto; max-width: 600px; max-height: 100%; min-width: 0; }
+  .poster-frame { padding: 10px 14px 10px; border-width: 3px; border-radius: 20px; column-gap: 14px; box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink); overflow: hidden; }
+  .poster-frame::before { inset: 6px; border-radius: 14px; }
+  .poster-frame .title { -webkit-text-stroke-width: 2.5px; text-shadow: 3px 3px 0 var(--ink); }
+  .poster-frame .bill-top { margin-top: 30px; font-size: 12px; display: block; }
+  .poster-frame .lvl-badge { align-self: end; }
+  .poster-frame .lang { top: 12px; left: 14px; }
+  .bill { gap: 7px; padding: 6px 6px 6px 0; }
+  .bill-item { font-size: 14px; padding: 5px 9px 5px 6px; gap: 7px; border-radius: 12px; box-shadow: 3px 3px 0 var(--ink); }
+  .bill-item svg { width: 24px; height: 24px; padding: 4px; }
+  .bill-item.main { font-size: 20px; padding: 6px 12px 6px 7px; border-radius: 14px; }
+  .bill-item.main svg { width: 32px; height: 32px; padding: 5px; }
+  .bill-item.play, .bill-item.mp { box-shadow: 4px 4px 0 var(--red); }
+  .bill-item.mp { box-shadow: 4px 4px 0 var(--blue); }
+  .bill-item .ch-new { font-size: 10px; padding: 0 4px; top: -8px; }
+  .lvl-badge { margin-top: 6px; }
+  .news { position: static; flex: 0 1 clamp(200px, 32vw, 290px); width: auto; max-width: none; max-height: 100%; margin: 0; overflow-y: auto; padding: 8px 12px 10px; border-width: 3px; border-radius: 18px; box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink); }
+  .news h2 { font-size: 15px; }
+  .news-x { width: 28px; height: 28px; }
+  .news li b { font-size: 13px; }
+  .news li span { font-size: 12px; }
+  /* a faixa da Rovex fica no canto: as novidades param antes dela */
+  #rovexStrip:not([hidden]) ~ .news { max-height: calc(100% - 38px); align-self: flex-start; }
+}
+/* deitado estreito (iPhone SE, 740 e menores): fichas pequenas com o icone em cima do nome */
+@media (max-height: 520px) and (orientation: landscape) and (max-width: 800px) {
+  .news { flex-basis: clamp(180px, 29vw, 240px); }
+  .bill-item:not(.main) { flex-direction: column; justify-content: center; gap: 3px; padding: 5px 4px 6px; font-size: 12.5px; text-align: center; }
+  .bill-item:not(.main) svg { width: 22px; height: 22px; padding: 3px; }
+  .bill-item.main { font-size: 18px; }
+}
+
+/* celular jogando com controle: os botoes de toque saem da tela ate o proximo toque */
+body.pad.touchmode:not(.hudedit) #touch { display: none; }
+/* toque: o slider nao pega o dedo (a bolinha arrasta pelo input.js) e a linha dele rola na vertical */
+body.touchrange input[type=range] { pointer-events: none; }
+body.touchrange :has(> input[type=range]) { touch-action: pan-y; }
+body.touchrange input[type=range].grab::-webkit-slider-thumb { box-shadow: inset -4px -4px 0 var(--silver), 0 0 0 5px rgba(20,18,16,.25); }
+
+/* jogo sem barra de rolagem visivel em lugar nenhum (rolar continua: dedo, rodinha, controle) */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* aviso grande no celular deitado: menor e no alto, sem entrar na area dos botoes de toque */
+@media (max-height: 520px) {
+  .alert { top: 64px; max-width: min(520px, 56vw); }
+  .alert b { font-size: clamp(20px, 6vh, 28px); padding: 4px 14px; border-width: 3px; box-shadow: 3px 4px 0 var(--ink); }
+  .alert small { font-size: 12px; }
+}
+/* botao de mao (plantar/desarmar): apagado longe do ponto, vermelho pulsando quando da pra usar */
+#touch .tbtn.use { opacity: calc(var(--tb-alpha, 1) * .5); }
+#touch .tbtn.use svg { width: 34px; height: 34px; }
+#touch .tbtn.use.can { opacity: var(--tb-alpha, 1); background: var(--red); color: var(--paper); border-color: var(--ink); animation: usePulse .8s ease-in-out infinite alternate; }
+#touch .tbtn.use.can.on { animation: none; background: var(--ink); }
+@keyframes usePulse { from { box-shadow: 0 0 0 0 rgba(168,58,44,.7); } to { box-shadow: 0 0 0 12px rgba(168,58,44,0); } }
+@media (prefers-reduced-motion: reduce) { #touch .tbtn.use.can { animation: none; } }
+/* celular deitado baixo (ate 400 px): a vida sobe pro lado do pause e o minimapa vem logo embaixo,
+   acima do analogico (preso no rodape ele subia ate em cima da barra de vida) */
+@media (max-height: 400px) {
+  body.touchmode .hud-bl { top: max(10px, env(safe-area-inset-top)); left: calc(max(18px, env(safe-area-inset-left)) + 54px); }
+  body.touchmode .radar { top: calc(max(10px, env(safe-area-inset-top)) + 56px); bottom: auto; width: 104px; height: 104px; }
+}
+/* icone proporcional ao botao (os botoes agora tem 3 tamanhos: canto, volta e aro de fora) */
+#touch .tbtn svg { width: 46%; height: 46%; }
+#touch .tbtn.fire svg, #touch .tbtn.use svg { width: 50%; height: 50%; }
+body.touchmode .bomb-bar { top: calc(50% - 58px); transform: translate(-50%, -100%); }
+
+/* ---------- desafio de elite ---------- */
+/* plaquinha rastreada na partida: tinta preta com a estrela vermelha, logo abaixo do placar */
+.elite-track { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 64px); transform: translateX(-50%); display: flex; align-items: center; gap: 8px; max-width: min(380px, 70vw);
+  padding: 5px 10px 6px 6px; background: var(--ink); color: var(--paper); border: 2.5px solid var(--paper); border-radius: 14px; box-shadow: 0 0 0 2.5px var(--ink), 4px 5px 0 2.5px rgba(20,18,16,.5); font-family: var(--body); }
+.elite-track[hidden] { display: none; }
+.elite-track > i { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--red); font-style: normal; font-size: 16px; line-height: 1; box-shadow: 0 0 0 2px var(--paper); }
+.elite-track > span { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.elite-track small { font-weight: 800; font-size: 10px; color: var(--silver); }
+.elite-track b { font-family: var(--display); font-weight: 400; font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.elite-track .xpbar { height: 7px; border-color: var(--paper); background: rgba(236,233,225,.2); }
+.elite-track .xpbar i { display: block; height: 100%; background: var(--red); }
+.elite-track em { flex: none; font-style: normal; font-family: var(--display); font-size: 15px; font-variant-numeric: tabular-nums; }
+.elite-track.done { background: #b8862b; color: var(--ink); border-color: var(--ink); box-shadow: 0 0 0 2.5px #f6d36b, 4px 5px 0 2.5px rgba(20,18,16,.5); }
+.elite-track.done small { color: var(--ink); }
+.elite-track.done .xpbar i { background: var(--ink); }
+.elite-track.pop { animation: elitePop .35s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes elitePop { from { transform: translateX(-50%) scale(.85); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .elite-track.pop { animation: none; } }
+body.touchmode .elite-track { top: calc(max(10px, env(safe-area-inset-top)) + 56px); max-width: 46vw; }
+/* cartao do elite na tela de desafios: placa de tinta com a estrela vermelha (o resto da lista e papel) */
+.elite-card { position: relative; display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; padding: 10px 14px 10px 10px; background: var(--ink); color: var(--paper); border-radius: 16px; box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink), 5px 6px 0 6px var(--red); }
+.elite-card:empty { display: none; }
+.el-star { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--red); font-size: 26px; box-shadow: 0 0 0 3px var(--paper); }
+.el-body { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.el-body small { font-weight: 800; font-size: 12px; color: var(--silver); }
+.el-body b { font-family: var(--display); font-weight: 400; font-size: 18px; line-height: 1.1; }
+.el-body .ch-bar { border-color: var(--paper); background: rgba(236,233,225,.18); }
+.el-body .ch-bar i { background: var(--red); }
+.el-body .el-rw { color: var(--paper); font-weight: 700; }
+.el-side { flex: none; display: grid; justify-items: end; gap: 2px; }
+.el-side em { font-style: normal; font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.el-side small { font-weight: 800; font-size: 12px; color: #f6d36b; }
+.elite-card.done { box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink), 5px 6px 0 6px #b8862b; }
+@media (max-height: 520px) { .el-star { width: 38px; height: 38px; font-size: 20px; } .el-body b { font-size: 15px; } }
+/* elite concluido: placa de tinta no meio da tela, sol de raios vermelho/dourado girando atras da arma */
+.elite-win { position: absolute; left: 50%; top: 46%; z-index: 9; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); display: grid; justify-items: center; gap: 4px; padding: 14px 18px 14px; overflow: hidden; text-align: center;
+  background: var(--ink); color: var(--paper); border-radius: 22px; box-shadow: 0 0 0 4px #f6d36b, 0 0 0 8px var(--ink), 8px 10px 0 8px rgba(20,18,16,.5); pointer-events: none; animation: ewIn .55s cubic-bezier(.3, 1.6, .5, 1); }
+.ew-rays { position: absolute; left: 50%; top: 48%; width: 760px; height: 760px; margin: -380px 0 0 -380px; z-index: 0; opacity: .55;
+  background: repeating-conic-gradient(from 0deg, #a83a2c 0 9deg, transparent 9deg 18deg); animation: ewSpin 9s linear infinite;
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 60%); mask: radial-gradient(circle, #000 18%, transparent 60%); }
+.elite-win > :not(.ew-rays) { position: relative; z-index: 1; }
+.ew-stamp { margin: 0; font-family: var(--display); font-size: clamp(22px, 4.6vw, 32px); line-height: 1; color: #f6d36b; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 3px 3px 0 var(--red); transform: rotate(-3deg); }
+.elite-win img { width: min(300px, 70vw); aspect-ratio: 2; object-fit: contain; filter: drop-shadow(0 0 14px rgba(246,211,107,.55)); animation: ewGun 1.2s ease-in-out infinite alternate; }
+.elite-win b { font-family: var(--display); font-weight: 400; font-size: 24px; line-height: 1.05; }
+.elite-win small { font-weight: 800; font-size: 13px; color: var(--silver); }
+.elite-win em { font-style: normal; font-family: var(--display); font-size: 18px; color: var(--ink); background: #f6d36b; border-radius: 12px; padding: 1px 12px; margin-top: 2px; }
+.elite-win.out { opacity: 0; transform: translate(-50%, -50%) scale(.92); transition: opacity .45s, transform .45s; }
+@keyframes ewIn { from { opacity: 0; transform: translate(-50%, -50%) scale(.6) rotate(-4deg); } }
+@keyframes ewSpin { to { transform: rotate(360deg); } }
+@keyframes ewGun { from { transform: translateY(2px) rotate(-1.5deg); } to { transform: translateY(-3px) rotate(1.5deg); } }
+@media (max-height: 520px) { .elite-win { top: 50%; padding: 10px 14px; width: min(360px, 56vw); } .elite-win img { width: min(220px, 46vw); } .elite-win b { font-size: 19px; } }
+@media (prefers-reduced-motion: reduce) { .ew-rays, .elite-win img { animation: none; } }
+
+/* ---------- arsenal (gunsmith): arma grande a esquerda, painel a direita ----------
+   Pecas em blocos de papel impresso (mesmo traco dos botoes do menu). O unico destaque forte e o bloco
+   Variante (tinta + sombra vermelha, como o Jogar). Tocou numa peca: o painel vira a lista dela, com
+   "Pecas" pra voltar; os status ficam sempre a vista. */
+#scr-arsenal { display: flex; flex-direction: column; }
+#scr-arsenal .equip { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; }
+#scr-arsenal .gs-id { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: wrap; }
+#scr-arsenal .gs-name { font-family: var(--display); font-weight: 400; font-size: 28px; line-height: 1; }
+#scr-arsenal .gs-bp { font-family: var(--display); font-size: 14px; color: var(--paper); background: var(--red); border: 2px solid var(--ink); border-radius: 10px; padding: 1px 8px; }
+#scr-arsenal .equip .big { width: auto; margin: 0; padding: 8px 14px; font-size: 15px; border-radius: 12px; box-shadow: 0 4px 0 var(--graphite); }
+#scr-arsenal .equip .equipped { padding: 5px 10px; font-size: 12.5px; border-width: 2px; }
+#scr-arsenal .wlevel { flex-basis: 100%; margin-top: 0; }
+#scr-arsenal .smith { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-height: 0; }
+#scr-arsenal .slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; flex-direction: initial; overflow: visible; }
+#scr-arsenal .slots[hidden] { display: none; }
+#scr-arsenal .slot { min-width: 0; text-align: left; padding: 7px 10px 8px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); transition: transform .12s cubic-bezier(.3, 1.6, .5, 1), box-shadow .12s, background .12s; }
+#scr-arsenal .slot small { display: block; font-weight: 800; font-size: 11px; color: var(--graphite); }
+#scr-arsenal .slot span { display: block; font-family: var(--display); font-size: 14px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#scr-arsenal .slot:hover, #scr-arsenal .slot:focus-visible { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); background: var(--paper-2); }
+#scr-arsenal .slot:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+#scr-arsenal .slot.disabled { opacity: .45; box-shadow: none; border-style: dashed; cursor: default; transform: none; }
+#scr-arsenal .slot-bp { grid-column: 1 / -1; padding: 9px 12px 10px; border-style: dashed; box-shadow: none; }
+#scr-arsenal .slot-bp span { font-size: 17px; }
+#scr-arsenal .slot-bp.set { border-style: solid; background: var(--ink); color: var(--paper); box-shadow: 5px 5px 0 var(--red); }
+#scr-arsenal .slot-bp.set small { color: var(--silver); }
+#scr-arsenal .slot-bp.set:hover { background: var(--ink); box-shadow: 7px 7px 0 var(--red); }
+#scr-arsenal .slot .cmini { width: 14px; height: 14px; vertical-align: -2px; border: 2px solid currentColor; }
+/* lista de opcoes do slot */
+#scr-arsenal .gs-pick { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+#scr-arsenal .gs-pick[hidden] { display: none; }
+#scr-arsenal .gs-pick-head { display: flex; align-items: center; gap: 10px; }
+#scr-arsenal .gs-pick-head h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 20px; }
+#scr-arsenal .gs-back { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px 4px 6px; border: 3px solid var(--ink); border-radius: 30px; font-family: var(--display); font-size: 14px; background: var(--paper); }
+#scr-arsenal .gs-back svg { width: 20px; height: 20px; fill: currentColor; }
+#scr-arsenal .gs-back:hover { background: var(--ink); color: var(--paper); }
+#scr-arsenal .picker { max-height: 250px; }
+/* variante na lista: cartao maior com amostra da camo, nome e os +/- */
+#scr-arsenal .opt.bp { text-align: left; display: grid; gap: 3px; padding: 8px 10px 10px; }
+#scr-arsenal .opt.bp .cswatch { width: 100%; height: 30px; border-radius: 8px; border: 2px solid var(--ink); }
+#scr-arsenal .opt.bp .bp-name { font-family: var(--display); font-size: 16px; line-height: 1.1; }
+#scr-arsenal .opt.bp small { font-weight: 700; font-size: 11.5px; }
+#scr-arsenal .opt.bp-free { display: grid; align-content: center; gap: 4px; font-family: var(--display); font-size: 15px; }
+#scr-arsenal .opt.bp-free small { font-family: var(--body); font-weight: 700; font-size: 11.5px; }
+#scr-arsenal .picker:has(.opt.bp) { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+/* status: duas colunas compactas */
+#scr-arsenal .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; padding-top: 8px; border-top: 3px double var(--ink); }
+#scr-arsenal .stats .fmrow { grid-column: 1 / -1; }
+#scr-arsenal .stat { grid-template-columns: 92px 1fr 38px; gap: 6px; font-size: 12px; }
+#scr-arsenal .stat .bar { height: 10px; }
+#scr-arsenal .stat em { font-size: 12px; }
+
+/* celular deitado: painel com altura da tela, tudo dentro sem rolar a pagina; so as listas rolam por dentro */
+@media (max-height: 520px) {
+  #menu.smithing .card.wide#scr-arsenal { width: min(600px, 66vw); height: 100%; max-height: none; overflow: hidden; padding: 8px 12px 10px; }
+  #scr-arsenal .card-head { margin-bottom: 4px; padding-bottom: 4px; }
+  #scr-arsenal .card-head h2 { font-size: 20px; }
+  #scr-arsenal .card-head .back { width: 32px; height: 32px; font-size: 16px; }
+  #scr-arsenal .cats { margin: 0 0 6px; }
+  #scr-arsenal .equip { margin-bottom: 6px; gap: 4px 8px; }
+  #scr-arsenal .gs-name { font-size: 19px; }
+  #scr-arsenal .gs-bp { font-size: 11px; }
+  #scr-arsenal .equip .big { padding: 5px 10px; font-size: 12px; }
+  #scr-arsenal .wlevel { font-size: 11px; }
+  #scr-arsenal .smith { flex: 1; grid-template-columns: minmax(0, 1fr) minmax(0, .82fr); grid-template-rows: minmax(0, 1fr); gap: 10px; }
+  #scr-arsenal .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; align-content: start; overflow-y: auto; padding: 2px 5px 5px 2px; }
+  #scr-arsenal .slot { padding: 3px 7px 4px; border-width: 2px; border-radius: 9px; box-shadow: 2px 2px 0 var(--ink); }
+  #scr-arsenal .slot small { font-size: 9.5px; }
+  #scr-arsenal .slot span { font-size: 11.5px; }
+  #scr-arsenal .slot-bp span { font-size: 13px; }
+  #scr-arsenal .slot-bp.set { box-shadow: 3px 3px 0 var(--red); }
+  #scr-arsenal .gs-pick { overflow: hidden; }
+  #scr-arsenal .gs-pick-head h3 { font-size: 15px; }
+  #scr-arsenal .gs-back { padding: 2px 9px 2px 4px; font-size: 12px; border-width: 2px; }
+  #scr-arsenal .picker { max-height: none; flex: 1; min-height: 0; overflow-y: auto; }
+  #scr-arsenal .picker:has(.opt.bp) { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  #scr-arsenal .stats { grid-template-columns: 1fr; align-content: start; gap: 2px; padding-top: 0; border-top: 0; border-left: 3px double var(--ink); padding-left: 8px; overflow-y: auto; }
+  #scr-arsenal .stat { grid-template-columns: 70px 1fr 32px; font-size: 10px; gap: 4px; }
+  #scr-arsenal .stat .bar { height: 8px; border-width: 1.5px; }
+  #scr-arsenal .stat em { font-size: 10px; }
+}
+.elite-win img { background: radial-gradient(ellipse 50% 46% at 50% 50%, var(--paper) 0 62%, rgba(236,233,225,0) 100%); border-radius: 14px; }
+/* selo Elite da Rovex (lobby e placar): violeta da marca, hexagono + nome */
+/* cores oficiais do Elite (ElitePage da Rovex): violet-500 -> indigo-600, texto violet-200, fundo #0f0a1e */
+:root { --elite: #8b5cf6; --elite-2: #4f46e5; --elite-ink: #0f0a1e; --elite-soft: #ddd6fe; }
+.elite-tag { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px 0 3px; vertical-align: 1px; border-radius: 8px; background: linear-gradient(135deg, var(--elite), var(--elite-2)); color: #fff; border: 2px solid var(--ink); font-family: var(--display); font-style: normal; font-weight: 400; font-size: 11px; line-height: 1.5; }
+.elite-tag svg { width: 12px; height: 12px; fill: currentColor; }
+
+/* faixa do Elite Rovex no cartaz: uma linha (logo | nome + legenda | chip XP 2x | seta).
+   E container de si mesma: estreita = some a legenda, mais estreita = some a seta. Ja Elite = fundo escuro + chip "Ativo". */
+.elite-promo { container-type: inline-size; display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 6px 8px; border-radius: 12px; border: 3px solid var(--ink); background: linear-gradient(135deg, var(--elite), var(--elite-2)); color: #fff; text-decoration: none; box-shadow: 3px 3px 0 var(--ink); transition: transform .12s cubic-bezier(.3, 1.6, .5, 1), box-shadow .12s; }
+.poster-frame .elite-promo { grid-area: promo; align-self: center; margin-right: 10px; } /* respiro discreto ate a coluna do Jogar */
+.elite-promo:hover, .elite-promo:focus-visible { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+.elite-promo:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+.elite-promo .ep-hex { flex: none; width: 26px; height: 26px; fill: #fff; }
+.elite-promo .ep-hex-in { fill-opacity: .14; }
+.elite-promo .ep-hex-out { fill: none; stroke: #fff; stroke-width: 4; }
+.elite-promo .ep-txt { flex: 1; min-width: 0; display: grid; }
+.elite-promo b { font-family: var(--display); font-weight: 400; font-size: 15px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.elite-promo small { font-weight: 700; font-size: 11px; line-height: 1.3; color: var(--elite-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.elite-promo .ep-chip { flex: none; padding: 2px 7px; border-radius: 99px; background: #fff; color: var(--elite-2); font-family: var(--display); font-style: normal; font-size: 11px; line-height: 1.3; white-space: nowrap; }
+.elite-promo .ep-go { flex: none; width: 18px; height: 18px; margin-left: -4px; fill: currentColor; }
+.elite-promo.on { background: var(--elite-ink); }
+.elite-promo.on .ep-hex { fill: var(--elite); } .elite-promo.on .ep-hex-out { stroke: var(--elite); }
+.elite-promo.on .ep-chip { background: var(--elite); color: #fff; }
+.elite-promo.on .ep-go { display: none; }
+@container (max-width: 230px) { .elite-promo small { display: none; } }
+@container (max-width: 190px) { .elite-promo .ep-go { display: none; } }
+@container (max-width: 165px) { .elite-promo .ep-chip { display: none; } }
+@media (max-height: 520px) {
+  .elite-promo { margin-top: 6px; padding: 4px 6px; gap: 6px; border-width: 2px; border-radius: 10px; box-shadow: 2px 2px 0 var(--ink); }
+  .elite-promo .ep-hex { width: 20px; height: 20px; }
+  .elite-promo b { font-size: 13px; }
+  .elite-promo small { display: none; }
+  .elite-promo .ep-chip { font-size: 10px; padding: 1px 6px; }
+}

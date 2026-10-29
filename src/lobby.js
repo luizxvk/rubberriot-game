@@ -1,14 +1,15 @@
 // Lobby antes da partida (o mapa gira atras) e a tela de carregamento com dicas.
-import { t, modeName } from './i18n.js';
+import { t, modeName, eliteTag } from './i18n.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
+import { TEAM_MAX } from '../shared/weapons.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const TIPS = 10;
+const TIPS = 12;
 
 export class Lobby {
-  constructor({ onReady, onLeave, onStart }) {
+  constructor({ onReady, onLeave, onStart, onTeam }) {
     this.ready = false;
     this.isHost = false;
     this.lastCount = -1;
@@ -26,6 +27,13 @@ export class Lobby {
     };
     $('lbInvite').onclick = () => (this.friendsOpen ? this.closeFriends() : this.openFriends());
     $('lbFriendsClose').onclick = () => this.closeFriends();
+    // bomba: tocar num lado manda pro servidor e fecha; "Trocar lado" abre de novo
+    for (const b of $('lbSide').querySelectorAll('[data-side]')) b.onclick = () => {
+      audio.play('ui_click', { ui: true });
+      this.sideOpen = false; $('lbSide').hidden = true;
+      onTeam(b.dataset.side);
+    };
+    $('lbSwap').onclick = () => { this.closeFriends(); this.sideOpen = true; audio.play('ui_click', { ui: true }); if (this.lastMsg) this.renderSide(this.lastMsg, this.myId); };
   }
 
   // sala com codigo (multiplayer): mostra o codigo e libera o convite
@@ -64,10 +72,11 @@ export class Lobby {
     this.setReady(false);
     this.lastCount = -1;
     this.okIds.clear();
+    this.sideOpen = true; // bomba: o popup do lado abre toda vez que o lobby aparece
     $('lbLeader').hidden = true;
     $('lobby').hidden = false;
   }
-  hide() { this.closeFriends(); $('lobby').hidden = true; }
+  hide() { this.closeFriends(); $('lbSide').hidden = true; $('lobby').hidden = true; }
   get open() { return !$('lobby').hidden; }
 
   setReady(v) {
@@ -78,7 +87,25 @@ export class Lobby {
     if (v) audio.play('ui_click', { ui: true });
   }
 
+  // plantar a bomba: popup com os dois lados e quanta gente tem em cada; lado cheio some
+  renderSide(m, myId) {
+    const bomb = m.mode === 'bomb' && m.phase === 'lobby';
+    $('lbSwap').hidden = !bomb;
+    const on = bomb && this.sideOpen;
+    $('lbSide').hidden = !on;
+    if (!on) return;
+    const n = { red: 0, blue: 0 };
+    for (const p of m.players) if (!p.bot && p.id !== myId && p.team in n) n[p.team]++;
+    for (const b of $('lbSide').querySelectorAll('[data-side]')) {
+      const k = b.dataset.side;
+      b.hidden = n[k] >= TEAM_MAX;
+      b.querySelector('.n').textContent = t('sideCount', { n: n[k], max: TEAM_MAX });
+    }
+  }
+
   render(m, myId) {
+    this.lastMsg = m; this.myId = myId;
+    this.renderSide(m, myId);
     $('lbMap').textContent = t('map_' + m.map);
     $('lbMode').textContent = modeName(m.mode);
     const host = m.host === myId;
@@ -89,7 +116,7 @@ export class Lobby {
     $('lbPlayers').innerHTML = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${esc(p.name)}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="lv">${t('lvlShort', { n: p.lvl })}</span><span class="stamp">${t('lbReadyStamp')}</span></li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="lv">${t('lvlShort', { n: p.lvl })}</span><span class="stamp">${t('lbReadyStamp')}</span></li>`;
     }).join('');
     // carimbo so anima em quem acabou de ficar pronto
     const now = new Set(list.filter(p => p.ready).map(p => p.id));

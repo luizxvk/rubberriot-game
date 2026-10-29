@@ -86,6 +86,24 @@ function inspectPose(k, p) {
   return out;
 }
 const STREAK_DUR = 1.3;
+// golpe com a faca na mao (BO3): prepara a direita, corta atravessando pra esquerda e volta.
+// Chave: [t, x, y, z, rx, ry, rz] somado a pose da faca.
+const SLASH = [
+  [0, 0, 0, 0, 0, 0, 0],
+  [0.2, 0.05, 0.05, 0.05, 0.15, -0.55, -0.35],
+  [0.48, -0.26, -0.03, -0.14, -0.1, 0.85, 0.55],
+  [0.66, -0.3, -0.07, -0.08, -0.15, 0.95, 0.6],
+  [1, 0, 0, 0, 0, 0, 0],
+];
+// faca rapida com arma na mao: a lamina entra pela direita, corta na frente e sai baixa a esquerda.
+// Chave: [t, x, y, z, rx, ry, rz] da faca em relacao a camera.
+const QUICK = [
+  [0, 0.42, -0.34, -0.58, -0.1, 0.7, -0.5],
+  [0.22, 0.3, -0.14, -0.62, -0.05, 0.95, -0.35],
+  [0.5, -0.04, -0.18, -0.64, 0.05, 1.3, -0.15],
+  [0.72, -0.2, -0.28, -0.6, 0.1, 1.45, -0.05],
+  [1, -0.3, -0.48, -0.52, 0.15, 1.55, 0.05],
+];
 // objetos dos chamados de sequencia (feitos no codigo, traco de tinta igual o resto)
 function makeProp(kind) {
   const g = new THREE.Group(), hand = new THREE.Object3D();
@@ -104,6 +122,13 @@ function makeProp(kind) {
     const bar = ink(new THREE.CylinderGeometry(0.008, 0.008, 0.1, 8), 0x2a2724, 0.003); bar.rotation.z = Math.PI / 2; bar.position.y = 0.045; pl.add(bar);
     g.add(pl); g.userData.plunger = pl;
     hand.position.set(0, 0.16, 0); pl.add(hand); hand.position.set(0, 0.06, 0);
+  } else if (kind === 'nuke') {
+    // Torta Atomica: forma de torta com creme e um botao vermelho enorme no meio (aperta igual a campainha)
+    const tin = ink(new THREE.CylinderGeometry(0.075, 0.06, 0.03, 18), 0xbdb7ac, 0.004); g.add(tin);
+    const cream = ink(new THREE.SphereGeometry(0.07, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xf4efe2, 0.004); cream.scale.y = 0.45; cream.position.y = 0.014; g.add(cream);
+    const bt = ink(new THREE.CylinderGeometry(0.022, 0.024, 0.02, 14), 0xa83a2c, 0.003); bt.position.y = 0.05; bt.userData.y0 = 0.05; g.add(bt);
+    g.userData.button = bt;
+    hand.position.set(0, 0.1, 0); bt.add(hand); hand.position.set(0, 0.03, 0);
   } else {
     // campainha de balcao: cupula dourada + botao
     const dome = ink(new THREE.SphereGeometry(0.05, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0xd8b24a, 0.004); g.add(dome);
@@ -215,14 +240,21 @@ export class ViewModel {
   update(st) {
     const dt = st.dt, s = this.s, g = this.gun?.userData || {};
     this.ads = st.ads;
+    if (this.gun) this.gun.userData.fxHidden = st.ads > 0.3; // efeito da camo lendaria some mirando
     // pose alvo
     let tx = 0.19, ty = -0.19, tz = -0.4, trx = 0.02, tryy = 0.05, trz = 0;
     // pistola de braco esticado (MW 2019): mais longe do rosto
     const pistol = this.wpn === 'pistol';
     if (pistol) { tx = 0.16; ty = -0.17; tz = -0.52; }
-    if (this.wpn === 'melee') { tx = 0.2; ty = -0.2; tz = -0.38; trx = 0.6; tryy = 0.15; trz = -0.2; }
+    // faca na mao: baixa a direita, lamina pra frente e levemente pra dentro (o antebraco aparece)
+    if (this.wpn === 'melee') { tx = 0.2; ty = -0.25; tz = -0.46; trx = 0.18; tryy = 0.32; trz = 0.22; }
     if (st.tac) {
       tx = 0.2; ty = -0.17; tz = -0.44; trx = 0.95; tryy = 0.35; trz = -0.55;
+    } else if (st.sprint && pistol) {
+      // corrida de pistola (BO3): pistola erguida perto do peito, cano pra cima
+      tx = 0.13; ty = -0.17; tz = -0.4; trx = 1.05; tryy = -0.12; trz = -0.28;
+    } else if (st.sprint && this.wpn === 'melee') {
+      tx = 0.2; ty = -0.27; tz = -0.42; trx = 0.6; tryy = 0.2; trz = 0.3;
     } else if (st.sprint) {
       // corrida estilo COD: arma baixa no canto, cano caido pra esquerda
       tx = 0.15; ty = -0.23; tz = -0.4; trx = -0.42; tryy = 0.72; trz = 0.36;
@@ -238,6 +270,7 @@ export class ViewModel {
       const tilt = -(g.scope?.tilt || 0);
       eye.applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
       const ax = -eye.x, ay = -eye.y, az = -relief - eye.z;
+      this.adsEye = eye.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), -tilt);
       tx = THREE.MathUtils.lerp(tx, ax, st.ads); ty = THREE.MathUtils.lerp(ty, ay, st.ads); tz = THREE.MathUtils.lerp(tz, az, st.ads);
       // mirando: arma reta, sem inclinacao da pose de quadril
       trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy *= 1 - st.ads; trz *= 1 - st.ads;
@@ -253,8 +286,7 @@ export class ViewModel {
         tx += insp[0]; ty += insp[1]; tz += insp[2]; trx += insp[3]; tryy += insp[4]; trz += insp[5];
       }
     }
-    if (st.slide) { trz += 0.4; ty -= 0.03; }
-    if (st.crouch && !st.slide) ty -= 0.01;
+    if (st.crouch) ty -= 0.01;
 
     // depois de uma volta inteira, a rotacao volta pra faixa normal sem desenrolar
     if (!insp && Math.abs(s.ry) > Math.PI) s.ry -= Math.sign(s.ry) * Math.PI * 2;
@@ -274,6 +306,8 @@ export class ViewModel {
       by = -Math.abs(Math.cos(this.bobT)) * amp * 0.9 * adsK;
       brz = Math.sin(this.bobT) * (st.sprint || st.tac ? 0.08 : 0.02) * adsK;
       if (st.tac) brx = Math.sin(this.bobT * 2) * 0.1;
+      // pistola erguida: o pulo do passo sobe e desce o cano no ritmo
+      if (st.sprint && pistol) { by = -Math.abs(Math.sin(this.bobT)) * 0.035; brx = Math.abs(Math.sin(this.bobT)) * 0.12; brz = Math.sin(this.bobT) * 0.06; }
     } else {
       const t = performance.now() / 1000;
       by = Math.sin(t * 1.8) * 0.003 * adsK; bx = Math.cos(t * 0.9) * 0.002 * adsK;
@@ -303,19 +337,30 @@ export class ViewModel {
     if (this.boltT > 0) { this.boltT -= dt; const bp = 1 - Math.max(0, this.boltT) / this.boltDur; bo = bp > 0 && bp <= 1 ? Math.sin(bp * Math.PI) : 0; }
     // faca rapida: a arma sai rapido (15% do tempo), fica fora e so volta nos 20% finais
     const out = this.swingT > 0 ? Math.min(1, sp / 0.15, (1 - sp) / 0.2) : 0;
-    const dipQ = this.swingQuick ? out : 0, cut = this.swingQuick ? 0 : sw2;
+    const dipQ = this.swingQuick ? out : 0;
+    const cut = this.swingT > 0 && !this.swingQuick ? inspectPose(SLASH, sp) : null;
     let sk = 0, skp = 0;
     if (this.streakT > 0) { this.streakT -= dt; skp = 1 - Math.max(0, this.streakT) / STREAK_DUR; sk = Math.min(1, skp / 0.18, (1 - skp) / 0.18); }
     const kickAds = st.ads > 0.5 ? 0.45 : 1;
+    const c = cut || [0, 0, 0, 0, 0, 0];
     this.rig.position.set(
-      s.x + bx + this.swayX * adsK,
-      s.y + by - this.land - sw * 0.35 - rl * 0.06 - th * 0.22 + this.swayY * adsK - dipQ * 0.75 + cut * 0.06 - sk * 0.12,
-      s.z + this.kick * kickAds);
+      s.x + bx + this.swayX * adsK + c[0],
+      s.y + by - this.land - sw * 0.35 - rl * 0.06 - th * 0.22 + this.swayY * adsK - dipQ * 0.75 - sk * 0.12 + c[1],
+      s.z + this.kick * kickAds + c[2]);
     this.rig.rotation.set(
-      s.rx + brx + this.kickR * kickAds * 0.5 - sw * 0.9 + rl * 0.35 - dipQ * 1.1 - cut * 0.9,
-      s.ry + this.swayX * 2 * adsK + cut * 0.5,
-      s.rz + brz + rl * 0.7 + cut * 1.2 + bo * 0.22, 'YXZ');
-    const sq = this.squash * 0.12;
+      s.rx + brx + this.kickR * kickAds * 0.5 - sw * 0.9 + rl * 0.35 - dipQ * 1.1 + c[3],
+      s.ry + this.swayX * 2 * adsK + c[4],
+      s.rz + brz + rl * 0.7 + bo * 0.22 + c[5], 'YXZ');
+    // mirando, o recuo e o balanco giram a arma EM VOLTA DO OLHO: o ponto da mira fica onde o tiro
+    // vai. Antes girava em volta do punho e o ponto subia dezenas de pixels a cada rajada.
+    if (st.ads > 0 && this.adsEye) {
+      const qb = new THREE.Quaternion().setFromEuler(new THREE.Euler(s.rx, s.ry, s.rz, 'YXZ'));
+      const drift = this.adsEye.clone().applyQuaternion(this.rig.quaternion).sub(this.adsEye.clone().applyQuaternion(qb));
+      this.rig.position.addScaledVector(drift, -st.ads);
+    }
+    // achatado de desenho a cada tiro: so no quadril (mirando ele esticava a arma a partir do punho
+    // e jogava a lente pra cima)
+    const sq = this.squash * 0.12 * (1 - st.ads);
     this.holder.scale.set(1 + sq * 0.5, 1 + sq * 0.5, 1 - sq);
 
     // braco esquerdo solta da arma na recarga e na disparada (bomba no ritmo)
@@ -323,11 +368,13 @@ export class ViewModel {
     const pR = new THREE.Vector3(), pL = new THREE.Vector3();
     if (g.gripR) g.gripR.getWorldPosition(pR);
     if (g.gripL) g.gripL.getWorldPosition(pL);
+    if (st.sprint && pistol) pL.set(-0.24 + Math.sin(this.bobT) * 0.04, -0.4 + Math.cos(this.bobT) * 0.06, -0.3 + Math.sin(this.bobT) * 0.08);
     if (st.tac) pL.set(-0.2 + Math.sin(this.bobT) * 0.05, -0.2 + Math.cos(this.bobT) * 0.08, -0.35 + Math.sin(this.bobT) * 0.1);
     if (insp) pL.add(new THREE.Vector3(insp[6], insp[7], insp[8]).applyQuaternion(this.rig.quaternion));
     if (rl > 0) pL.lerp(new THREE.Vector3(pR.x - 0.02, pR.y - 0.12, pR.z + 0.02), rl);
     if (th > 0) pL.lerp(new THREE.Vector3(-0.12, -0.05 + th * 0.1, -0.5), th);
-    if (this.wpn === 'melee') pL.set(-0.26, -0.42, -0.3);
+    // faca na mao: a esquerda fica fora da tela (baixa, de lado)
+    if (this.wpn === 'melee') pL.set(-0.34, -0.62, -0.25);
     if (this.prop) {
       this.prop.visible = this.streakT > 0;
       if (this.prop.visible) {
@@ -347,10 +394,10 @@ export class ViewModel {
     if (this.knife) {
       this.knife.visible = this.swingQuick && this.swingT > 0;
       if (this.knife.visible) {
-        // corte em diagonal: entra alto pela direita, sai baixo pela esquerda
-        const e = sp * sp * (3 - 2 * sp);
-        this.knife.position.set(0.34 - e * 0.5, 0.02 - e * 0.26, -0.34 - e * 0.14);
-        this.knife.rotation.set(-0.2 - e * 0.5, 0.5 - e * 1.1, -1.1 + e * 2.1, 'YXZ');
+        // corte na frente, da direita pra esquerda (BO3), longe o bastante pra luva nao tampar a tela
+        const q = inspectPose(QUICK, sp);
+        this.knife.position.set(q[0], q[1], q[2]);
+        this.knife.rotation.set(q[3], q[4], q[5], 'YXZ');
         this.knife.updateMatrixWorld(true);
         this.knife.userData.gripR.getWorldPosition(pR);
         pL.y -= dipQ * 0.6;

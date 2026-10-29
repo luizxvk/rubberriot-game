@@ -9,7 +9,13 @@ const THEME = {
   vila: { sky: 0xd8d4ca, ground: ['#cfc9bd', '#7e786e'], roads: true, trees: [[-12, -12], [12, 12], [-40, 14], [40, -14], [-30, 30], [30, -30]] },
   fabrica: { sky: 0xc9c4ba, ground: ['#bdb7ab', '#6e6a63'], hazard: true, trees: [] },
   fronteira: { sky: 0xdcd8cc, ground: ['#d3cdb8', '#8a8470'], paths: true, trees: [[-40, -36], [40, 36], [-62, 10], [62, -10], [-14, 50], [14, -50], [-56, -50], [56, 50]] },
+  // estaleiro: asfalto do porto com faixas de seguranca, sem arvore la dentro
+  estaleiro: { sky: 0xcfd3d2, ground: ['#b9b6ae', '#6a675f'], hazard: true, hazardStrips: [[40, 1, 0, -15], [40, 1, 0, 15]], trees: [] },
+  // refinaria: areia do deserto, ceu quente
+  refinaria: { sky: 0xe6d9bf, ground: ['#dccaa0', '#9c8662'], trees: [] },
 };
+// conteineres: cores de carga desbotadas, uma por semente
+const CONT_COLS = [0x9c4a36, 0x3f6a8a, 0x5f7f3e, 0xb08a3a, 0x7a4f7a, 0x4f7f7a, 0xa8653a, 0x5a5f8f];
 
 // Monta o cenario do mapa M num grupo (troca de mapa = remove o grupo e monta outro)
 export function buildWorld(scene, M) {
@@ -40,7 +46,7 @@ export function buildWorld(scene, M) {
   if (TH.hazard) {
     // faixas de seguranca da fabrica no chao
     const hz = hazardTexture();
-    for (const [w, d, x, z] of [[ARENA * 1.6, 1.2, 0, -19], [ARENA * 1.6, 1.2, 0, 19], [1.2, 30, -16, 0], [1.2, 30, 16, 0]]) {
+    for (const [w, d, x, z] of TH.hazardStrips || [[ARENA * 1.6, 1.2, 0, -19], [ARENA * 1.6, 1.2, 0, 19], [1.2, 30, -16, 0], [1.2, 30, 16, 0]]) {
       const r = new THREE.Mesh(new THREE.PlaneGeometry(w, d), toon(0xffffff, { map: hz }));
       r.rotation.x = -Math.PI / 2; r.position.set(x, 0.012, z);
       root.add(r);
@@ -103,6 +109,44 @@ export function buildWorld(scene, M) {
     let mesh;
     if (b.kind === 'wall') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: brick });
     else if (b.kind === 'crate') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.045, { map: plank });
+    else if (b.kind === 'container') {
+      // conteiner: caixa colorida com a chapa ondulada (frisos) e as portas na ponta
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const col = CONT_COLS[(b.seed || 0) % CONT_COLS.length];
+      const body = ink(new THREE.BoxGeometry(w, h, d), col, 0.06); body.position.y = h / 2; g.add(body);
+      const alongX = w > d, len = Math.max(w, d), n = Math.floor(len / 0.5);
+      for (let i = 1; i < n; i++) {
+        const k = -len / 2 + i * (len / n);
+        const rib = ink(new THREE.BoxGeometry(alongX ? 0.06 : w + 0.06, h * 0.86, alongX ? d + 0.06 : 0.06), col, 0);
+        rib.material = rib.material.clone(); rib.material.color.multiplyScalar(0.82);
+        rib.position.set(alongX ? k : 0, h / 2, alongX ? 0 : k);
+        g.add(rib);
+      }
+      for (const e of [-1, 1]) {
+        const door = ink(new THREE.BoxGeometry(alongX ? 0.08 : w * 0.92, h * 0.9, alongX ? d * 0.92 : 0.08), PAL.dark, 0.02);
+        door.position.set(alongX ? e * (len / 2 + 0.02) : 0, h / 2, alongX ? 0 : e * (len / 2 + 0.02));
+        g.add(door);
+      }
+      root.add(g);
+      continue;
+    }
+    else if (b.kind === 'concrete') mesh = ink(new THREE.BoxGeometry(w, h, d), PAL.light, 0.06, { map: sideTex });
+    else if (b.kind === 'silo') {
+      // silo de oleo: cilindro com faixas, tampa e escadinha pintada
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const r = Math.min(w, d) / 2;
+      const body = ink(new THREE.CylinderGeometry(r, r, h, 24), PAL.paper, 0.08); body.position.y = h / 2; g.add(body);
+      for (const y of [h * 0.3, h * 0.7]) { const band = ink(new THREE.CylinderGeometry(r * 1.02, r * 1.02, 0.35, 24), PAL.red, 0); band.position.y = y; g.add(band); }
+      const cap = ink(new THREE.CylinderGeometry(r * 0.2, r, 0.9, 24), PAL.mid, 0.05); cap.position.y = h + 0.45; g.add(cap);
+      root.add(g);
+      continue;
+    }
+    else if (b.kind === 'gantry' || b.kind === 'derrick') {
+      // viga de guindaste / cabeca da bomba: amarelo de maquina pesada com faixa de seguranca
+      mesh = ink(new THREE.BoxGeometry(w, h, d), 0xd9a63a, 0.05);
+      const stripe = ink(new THREE.BoxGeometry(w + 0.04, h * 0.4, d + 0.04), 0xffffff, 0, { map: hazardTex });
+      stripe.position.set(cx, b.min[1] + h / 2, cz); root.add(stripe);
+    }
     else if (b.kind === 'pillar') mesh = ink(new THREE.CylinderGeometry(w / 2, w / 2 * 1.3, h, 8), PAL.dark, 0.04);
     else if (b.kind === 'tank') { addTank(root, cx, b.min[1], cz, w, h, dancers); continue; }
     else if (b.kind === 'vat') {

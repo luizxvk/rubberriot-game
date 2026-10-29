@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
 import { STREAKS } from '../shared/weapons.js';
-import { t, wName, modeName } from './i18n.js';
+import { t, wName, modeName, eliteTag } from './i18n.js';
+import { isTouch } from './input.js';
 
 const $ = (id) => document.getElementById(id);
 const TEAM = { red: 'h_red', blue: 'h_blue' };
@@ -51,6 +52,7 @@ export class Hud {
     this.el.cross.style.opacity = sprinting || p.adsK > 0.5 || !p.alive ? 0 : 1;
     // reticula agora mora na lente 3D da mira (nada de overlay 2D)
     void g;
+    this.ammoAlert(p, a);
     this.el.tac.style.width = (p.tacFuel / 3.5 * 100) + '%';
     if (this.msgT > 0) { this.msgT -= dt; if (this.msgT <= 0) this.el.msg.classList.remove('on'); }
     if (settings.showFps) {
@@ -59,12 +61,38 @@ export class Hud {
     } else this.el.fps.hidden = true;
   }
 
+  // aviso de municao embaixo da mira: baixa, vazia (recarregue) e acabou de vez (troque de arma)
+  ammoAlert(p, a) {
+    const el = this.el.ammoAlert || (this.el.ammoAlert = $('ammoAlert'));
+    const W = WEAPONS[p.wpn];
+    let txt = '', cls = '';
+    if (p.alive && a && a.mag !== Infinity && !W.melee && p.reloadT <= 0) {
+      const mag = p.stats().mag;
+      const key = p.g.pad?.active ? 'X' : isTouch ? '' : 'R';
+      if (a.mag === 0 && a.reserve <= 0) { txt = t('ammoOut'); cls = 'out'; }
+      else if (a.mag === 0) { txt = key ? t('ammoReloadKey', { k: key }) : t('ammoReload'); cls = 'empty'; }
+      else if (a.mag <= Math.max(2, Math.ceil(mag * 0.25))) { txt = t('ammoLow'); cls = 'low'; }
+    } else if (p.alive && p.reloadT > 0) { txt = t('ammoReloading'); cls = 'busy'; }
+    if (el.textContent !== txt) el.textContent = txt;
+    el.className = 'ammo-alert ' + cls;
+    el.hidden = !txt;
+  }
+
   score(snap, me, players) {
     const mode = snap.mode, cfg = MODES[mode];
     const sec = Math.max(0, Math.ceil(snap.time));
     const clock = `<div><span class="lbl">${t('h_time')}</span><span class="val">${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}</span></div>`;
     let html;
-    if (cfg.teams) {
+    if (mode === 'bomb') {
+      // rodadas de cada lado + relogio da rodada (ou o pavio da bomba plantada)
+      const B = snap.bomb, planted = B?.state === 'planted';
+      const mid = `<div class="${planted ? 'fuse' : ''}"><span class="lbl">${planted ? t('bombLbl') : t('roundN', { n: snap.round?.n || 1 })}</span><span class="val">${planted ? Math.ceil(snap.time) + 's' : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`}</span></div>`;
+      html = `<div class="red"><span class="lbl">${t('bomb_atk')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('bomb_def')}</span><span class="val">${snap.teamScore.blue}</span></div>`;
+    } else if (mode === 'infect') {
+      // infectado: quantos de cada lado + o relogio (ou quanto falta pra sair o primeiro infectado)
+      const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
+      html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
+    } else if (cfg.teams) {
       let mid = `<div><span class="lbl">${modeName(mode)}</span><span class="val">${cfg.limit}</span></div>`;
       if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''}">${z.id}</span>`).join('')}</div>`;
       if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${cfg.limit}</span></div>`;
@@ -79,6 +107,106 @@ export class Hud {
     if (html !== this.lastPlaque) { this.el.plaque.innerHTML = html; this.lastPlaque = html; }
   }
 
+  // contagem de inicio: "esperando todo mundo carregar" e depois 3, 2, 1, Ja! (le o congelamento
+  // que vem no snapshot: vale igual no solo e no multiplayer)
+  countIn(snap) {
+    const el = this.cin || (this.cin = { box: $('countIn'), num: $('countNum'), sub: $('countSub') });
+    const now = performance.now(), f = snap?.freeze || 0;
+    if (this.lastFreeze > 0 && f <= 0 && !snap?.loading) this.goUntil = now + 800;
+    this.lastFreeze = f;
+    let num = '', sub = '', go = false;
+    if (snap?.loading) sub = t('countWait');
+    else if (f > 0.05 && f < 4) { num = String(Math.max(1, Math.min(3, Math.ceil(f - 0.5)))); sub = t('countReady'); }
+    else if (now < (this.goUntil || 0)) { num = t('countGo'); go = true; }
+    el.box.hidden = !num && !sub;
+    if (el.num.textContent !== num) {
+      el.num.textContent = num;
+      el.num.classList.toggle('go', go);
+      el.num.classList.remove('tick'); void el.num.offsetWidth; if (num) el.num.classList.add('tick');
+    }
+    if (el.sub.textContent !== sub) el.sub.textContent = sub;
+  }
+
+  // anel de alerta em volta da mira (estilo "visualizar sons"): de que lado vem o inimigo perto.
+  // Vermelho com estouro = atirando; claro com pegadas = andando. Mais forte quanto mais perto.
+  threat(G, on) {
+    let cv = this.threatCv;
+    if (!cv) {
+      cv = this.threatCv = document.createElement('canvas');
+      cv.className = 'threat'; cv.setAttribute('aria-hidden', 'true');
+      document.getElementById('hud').appendChild(cv);
+    }
+    const p = G.player, S = 240, dpr = Math.min(2, devicePixelRatio || 1);
+    if (cv.width !== S * dpr) { cv.width = cv.height = S * dpr; }
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, S, S);
+    if (!on || !p?.alive) return;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+    const R = 84, MAX = 32;
+    for (const r of G.remotes.values()) {
+      if (!r.alive || !G.isEnemy(r)) continue;
+      const dx = r.pos[0] - p.pos[0], dz = r.pos[2] - p.pos[2], d = Math.hypot(dx, dz);
+      if (d > MAX || d < 0.5) continue;
+      const shooting = (G.seen.get(r.id) || 0) > G.t + 1.2;
+      const moving = (r.speed || 0) > 2.2;
+      if (!shooting && !moving) continue;
+      const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz); // 0 = na frente
+      const k = 1 - d / MAX;
+      const front = Math.abs(a) < 0.45 ? 0.45 : 1; // na frente voce ja ve: o arco fica discreto
+      const ca = a - Math.PI / 2, span = 0.22 + k * 0.28;
+      g.globalAlpha = (0.35 + k * 0.65) * front;
+      g.lineCap = 'round';
+      g.lineWidth = 4 + k * 7 + 3; g.strokeStyle = '#141210';
+      g.beginPath(); g.arc(S / 2, S / 2, R, ca - span, ca + span); g.stroke();
+      g.lineWidth = 4 + k * 7; g.strokeStyle = shooting ? '#e0301e' : '#ece9e1';
+      g.beginPath(); g.arc(S / 2, S / 2, R, ca - span, ca + span); g.stroke();
+      // marca no meio do arco: estouro (tiro) ou duas pegadas (passos)
+      const mx = S / 2 + Math.cos(ca) * (R + 16), my = S / 2 + Math.sin(ca) * (R + 16);
+      g.fillStyle = shooting ? '#e0301e' : '#ece9e1'; g.strokeStyle = '#141210'; g.lineWidth = 2;
+      if (shooting) {
+        g.beginPath();
+        for (let i = 0; i < 10; i++) { const q = (i / 10) * Math.PI * 2, rr = i % 2 ? 3 : 7; g.lineTo(mx + Math.cos(q) * rr, my + Math.sin(q) * rr); }
+        g.closePath(); g.fill(); g.stroke();
+      } else {
+        for (const s of [-1, 1]) { g.beginPath(); g.ellipse(mx + s * 3 * Math.cos(ca + Math.PI / 2), my + s * 3 * Math.sin(ca + Math.PI / 2) - s * 2, 2.4, 3.6, ca + Math.PI / 2, 0, Math.PI * 2); g.fill(); g.stroke(); }
+      }
+    }
+    g.globalAlpha = 1;
+  }
+
+  // plantar a bomba: barra de progresso (quem planta/desarma) e dica do que fazer ali
+  bomb(G) {
+    const el = this.bel || (this.bel = { bar: $('bombBar'), lbl: $('bombLbl'), fill: $('bombFill'), tag: $('bombTag') });
+    const snap = G.snap, B = snap?.bomb, p = G.player;
+    if (G.mode !== 'bomb' || !B || !p?.alive) { el.bar.hidden = true; el.tag.hidden = true; return; }
+    const key = p.g.pad?.active ? 'X' : isTouch ? '✋' : 'E';
+    let lbl = '', prog = -1;
+    if (B.actor === G.myId && B.prog > 0) { lbl = t(B.kind === 'defuse' ? 'bombDefusing' : 'bombPlanting'); prog = B.prog / (B.kind === 'defuse' ? 6 : 3.2); }
+    else if (B.state === 'carried' && B.carrier === G.myId && snap.sites?.some(s => Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]) < s.r)) lbl = t('bombHoldPlant', { k: key });
+    else if (B.state === 'planted' && G.myTeam === 'blue' && Math.hypot(p.pos[0] - B.pos[0], p.pos[2] - B.pos[2]) < 2.6) lbl = t('bombHoldDefuse', { k: key });
+    el.bar.hidden = !lbl;
+    el.bar.classList.toggle('busy', prog >= 0);
+    // botao de mao no toque: pulsa quando da pra plantar/desarmar ali, apagado quando nao da
+    const ub = G.input?.useBtn;
+    if (ub) ub.classList.toggle('can', !!lbl);
+    if (el.lbl.textContent !== lbl) el.lbl.textContent = lbl;
+    el.fill.style.width = Math.max(0, Math.min(1, prog)) * 100 + '%';
+    const carrying = B.state === 'carried' && B.carrier === G.myId;
+    el.tag.hidden = !carrying || !!lbl; // com a dica de plantar na tela, a etiqueta repetia a mesma coisa
+    if (carrying) el.tag.textContent = t('bombCarry');
+  }
+
+  // aviso grande no meio de cima da tela (infectado, ultimo sobrevivente)
+  alert(title, sub = '', tone = 'red') {
+    const el = $('bigAlert');
+    el.hidden = true; void el.offsetWidth;
+    $('alertTitle').textContent = title; $('alertSub').textContent = sub;
+    el.className = 'alert ' + tone;
+    el.hidden = false;
+    clearTimeout(this.alertT); this.alertT = setTimeout(() => { el.hidden = true; }, 2900);
+  }
+
   feed(html, mine) {
     const li = document.createElement('li');
     li.innerHTML = html;
@@ -89,6 +217,26 @@ export class Hud {
   }
 
   // banner de desbloqueio (fila: um por vez); foto da arma + o que abriu
+  // desafio de elite rastreado: plaquinha sob o placar a cada avanco (some em 3 s)
+  eliteTrack(label, prog, n, done = false) {
+    let el = document.getElementById('eliteTrack');
+    if (!el) { el = document.createElement('div'); el.id = 'eliteTrack'; el.className = 'elite-track'; el.setAttribute('role', 'status'); document.getElementById('hud').appendChild(el); }
+    el.classList.toggle('done', done);
+    el.innerHTML = `<i aria-hidden="true">★</i><span><small>${t('elTitle')}</small><b>${label}</b><span class="xpbar"><i style="width:${Math.round(prog / n * 100)}%"></i></span></span><em>${done ? '✓' : prog + '/' + n}</em>`;
+    el.hidden = false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    clearTimeout(this.eliteT); this.eliteT = setTimeout(() => { el.hidden = true; }, done ? 5000 : 3000);
+  }
+
+  // elite concluido na partida: cartaz grande com a arma ganha em cima de um sol de raios girando
+  eliteBanner({ title, name, sub, xp, img }) {
+    const el = document.createElement('div');
+    el.className = 'elite-win'; el.setAttribute('role', 'status');
+    el.innerHTML = `<div class="ew-rays" aria-hidden="true"></div><p class="ew-stamp">${title}</p>${img ? `<img src="${img}" alt="">` : ''}<b>${name}</b>${sub ? `<small>${sub}</small>` : ''}<em>+${xp} XP</em>`;
+    document.getElementById('hud').appendChild(el);
+    setTimeout(() => el.classList.add('out'), 4600);
+    setTimeout(() => el.remove(), 5100);
+  }
+
   unlockBanner({ kind, name, img, more = 0 }) {
     const el = document.createElement('div');
     el.className = 'unl-banner';
@@ -217,13 +365,16 @@ export class Hud {
     // granadas e sequencias prontas
     const me = snap.players.find(o => o.id === G.myId);
     const ready = me?.ready || [];
-    const key = (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0);
+    // tecla de cada aparelho: teclado G/F/X, controle LB/RB/direcional pra cima, toque = icone do botao
+    const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb';
+    const [kf, kl, ks] = dev === 'pad' ? ['LB ', 'RB ', '▲ '] : dev === 'touch' ? ['', '', '★ '] : ['G ', 'F ', 'X '];
+    const key = (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev;
     if (key !== this.kitKey) {
       this.kitKey = key;
       let el = document.getElementById('kit');
       if (!el) { el = document.createElement('div'); el.id = 'kit'; el.className = 'kit'; document.getElementById('hud').appendChild(el); }
-      el.innerHTML = `<span class="${p.nades.frag ? '' : 'off'}">G ${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">F ${t('n_flash')}</span>` +
-        (ready.length ? `<span class="ready">X ${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0) })}</span>`);
+      el.innerHTML = `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
+        (ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0) })}</span>`);
     }
   }
 
@@ -237,6 +388,13 @@ export class Hud {
         pts.push({ p: [f.pos[0], f.pos[1] + 3.6, f.pos[2]], cls: team, txt: '⚑', sub: label });
         if (me && me.team && f.carrier === me.id && this.M) pts.push({ p: [this.M.flagBase[me.team][0], 3, this.M.flagBase[me.team][2]], cls: me.team, txt: '⌂', sub: t('o_base') });
       }
+    } else if (mode === 'bomb' && snap.sites) {
+      const B = snap.bomb;
+      for (const s of snap.sites) {
+        const here = B?.state === 'planted' && B.site === s.id;
+        pts.push({ p: [s.pos[0], s.pos[1] + 2.6, s.pos[2]], cls: here ? 'red' : '', txt: s.id, sub: here ? t('bombHere') : '' });
+      }
+      if (B?.state === 'dropped') pts.push({ p: [B.pos[0], B.pos[1] + 1.6, B.pos[2]], cls: 'red', txt: '●', sub: t('bombDropped') });
     } else if (mode === 'dom') {
       for (const z of snap.zones) {
         const def = (this.M?.zones.find(q => q.id === z.id) || { pos: [0, 0, 0] }).pos;
@@ -261,7 +419,8 @@ export class Hud {
     b.hidden = !show;
     if (!show || !snap) return;
     const cfg = MODES[snap.mode];
-    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}"><td>${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
+    const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
+    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}"><td>${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
     let html = `<h3>${modeName(snap.mode)}</h3>`;

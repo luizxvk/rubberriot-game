@@ -1,6 +1,7 @@
 // Desafios: 3 diarios (sorteados pela data, trocam a meia-noite) + carreira em 3 niveis.
 // Progresso fica salvo neste aparelho. track() devolve o que acabou de completar (pra dar XP e banner).
 import { pushSoon } from './rovex.js';
+import { BLUEPRINTS } from '../shared/weapons.js';
 const KEY = 'rr_challenges_v1';
 
 // tipo de evento: kill (wpn, head), assist, streak, win, match, flagCap
@@ -44,6 +45,35 @@ export const UNLOCKS = [
   { id: 'u_tr_gold', n: 20, xp: 3000, ok: (e) => e.type === 'streak', reward: { slot: 'tracer', id: 'tr:gold' } },
   { id: 'u_tr_ice', n: 25, xp: 2000, ok: K('sniper'), reward: { slot: 'tracer', id: 'tr:ice' } },
 ];
+// Desafio de ELITE: 1 por dia (sorteado pela data), dificil, vale muito XP e da a proxima variante de elite
+// que o jogador ainda nao tem (arma montada + camo lendaria). Com todas na mao, so o XP.
+// max: o progresso e o maior valor visto (ex.: sequencia sem cair), nao uma soma.
+export const ELITE = [
+  { id: 'e_head', n: 40, xp: 8000, ok: (e) => e.type === 'kill' && e.head },
+  { id: 'e_streak', n: 12, xp: 9000, max: (e) => (e.type === 'kill' ? e.streak || 0 : -1) },
+  { id: 'e_multi', n: 6, xp: 8500, ok: (e) => e.type === 'multi' },
+  { id: 'e_melee', n: 15, xp: 8000, ok: K('melee') },
+  { id: 'e_sniperhead', n: 15, xp: 9000, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper' },
+  { id: 'e_wins', n: 5, xp: 8500, ok: (e) => e.type === 'win' },
+  { id: 'e_nuke', n: 1, xp: 10000, ok: (e) => e.type === 'streak' && e.kind === 'nuke' },
+  { id: 'e_kills', n: 120, xp: 8000, ok: K() },
+];
+export const BP_ORDER = Object.keys(BLUEPRINTS);
+export const bpOwned = (id) => !!data.bps[id];
+// camo lendaria: vem junto com a variante que a usa
+export const legendOwned = (camoId) => BP_ORDER.some(id => BLUEPRINTS[id].lo.camo === camoId && bpOwned(id));
+export function eliteToday() {
+  const day = today();
+  if (data.elite.day !== day) {
+    const rnd = seeded(day + '|elite');
+    const c = ELITE[Math.floor(rnd() * ELITE.length)];
+    data.elite = { day, id: c.id, prog: 0, done: false, reward: BP_ORDER.find(id => !bpOwned(id)) || null };
+    save();
+  }
+  const c = ELITE.find(x => x.id === data.elite.id) || ELITE[0];
+  return { ...c, prog: Math.min(c.n, data.elite.prog), done: data.elite.done, reward: data.elite.reward };
+}
+
 // item -> desafio que libera (o arsenal consulta isso)
 export const LOCKED_BY = Object.fromEntries(UNLOCKS.map(u => [u.reward.id, u]));
 export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u.id === id)?.n ?? Infinity);
@@ -64,7 +94,7 @@ let data = load();
 function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
-  return { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {} };
+  return { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {} };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
@@ -95,6 +125,19 @@ export function track(e) {
     if (c.done || !c.ok(e)) continue;
     data.daily[c.id] = (data.daily[c.id] || 0) + 1;
     if (data.daily[c.id] >= c.n) { data.done[c.id] = true; got.push({ kind: 'daily', id: c.id, xp: c.xp, wpn: c.wpn }); }
+  }
+  const el = eliteToday();
+  if (!el.done) {
+    const before = data.elite.prog;
+    if (el.max) data.elite.prog = Math.max(data.elite.prog, el.max(e));
+    else if (el.ok(e)) data.elite.prog++;
+    if (data.elite.prog !== before) {
+      if (data.elite.prog >= el.n) {
+        data.elite.done = true;
+        if (el.reward) data.bps[el.reward] = true;
+        got.push({ kind: 'elite', id: el.id, xp: el.xp, reward: el.reward ? { slot: 'bp', id: el.reward, wpn: BLUEPRINTS[el.reward].wpn } : null });
+      } else got.push({ kind: 'eliteProg', id: el.id, xp: 0, prog: data.elite.prog, n: el.n });
+    }
   }
   for (const u of activeUnlocks()) {
     if (!u.ok(e)) continue;

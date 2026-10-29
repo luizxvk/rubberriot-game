@@ -1,8 +1,8 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, PRIMARIES, NADES, STREAKS, bodyTrait } from './weapons.js';
-import { getMap, MODE_MAP, moveBody, raycast, hasLOS } from './map.js';
-import { navPath } from './nav.js';
+import { WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS } from './map.js';
+import { navPath, floorAt, standable } from './nav.js';
 
 const BOT_NAMES = ['Botao', 'Salsicha', 'Rolha', 'Bigorna', 'Carvao', 'Pipoca', 'Tamanco', 'Fuligem',
   'Manivela', 'Gaita', 'Biscoito', 'Trombone', 'Pavio', 'Sabugo', 'Mola', 'Tinteiro'];
@@ -17,8 +17,9 @@ export class Core {
     this.mode = MODES[mode] ? mode : 'ffa';
     this.cfg = MODES[this.mode];
     this.M = getMap(map && map !== 'auto' ? map : MODE_MAP[this.mode]);
-    this.wantBots = bots;
+    this.wantBots = Math.max(0, Math.min(MAX_PLAYERS - 1, bots | 0));
     this.difficulty = difficulty;
+    this.skill = botSkill(difficulty);
     this.send = send;
     this.players = new Map();
     this.snapT = 0;
@@ -32,8 +33,14 @@ export class Core {
 
   reset() {
     const M = this.M;
-    this.time = MATCH_TIME;
+    this.time = this.cfg.time || MATCH_TIME;
     this.over = false;
+    // infectado: todo mundo comeca sobrevivente; o primeiro infectado sai em INFECT.firstIn s
+    this.infT = INFECT.firstIn; this.infStarted = false; this.lastStand = null; this.surviveT = INFECT.surviveTick;
+    if (this.mode === 'infect') for (const p of this.players.values()) p.team = 'blue';
+    // infectado: a partida sorteia UMA arma (categoria + modelo) e todo sobrevivente sai com ela
+    const opts = INFECT.survivorPrimaries;
+    this.infKit = { wpn: opts[Math.floor(Math.random() * opts.length)], body: Math.floor(Math.random() * 1000) };
     this.overT = 0;
     this.teamScore = { red: 0, blue: 0 };
     this.flags = {
@@ -42,24 +49,134 @@ export class Core {
     };
     this.zones = M.zones.map(z => ({ id: z.id, pos: z.pos, r: z.r, owner: null, prog: 0 }));
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = [];
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = [];
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {};
       this.spawn(p);
     }
+    if (this.mode === 'bomb') {
+      // pontos de bomba no chao de verdade (a grade de alturas diz onde)
+      const S = BOMB_SITES[M.id] || { A: [M.zones[0].pos[0], M.zones[0].pos[2]], B: [M.zones[2].pos[0], M.zones[2].pos[2]] };
+      this.sites = Object.entries(S).map(([id, [x, z]]) => ({ id, pos: [x, floorAt(M, x, z), z], r: BOMB.siteR }));
+      this.roundN = 0;
+      this.newRound();
+    }
+  }
+
+  // ---------- plantar a bomba: rodadas ----------
+  newRound() {
+    this.roundN++;
+    // intervalo: os times trocam de lado (o placar vai junto com cada time)
+    if (this.roundN === BOMB.swapAfter + 1) {
+      for (const p of this.players.values()) p.team = p.team === 'red' ? 'blue' : 'red';
+      this.teamScore = { red: this.teamScore.blue, blue: this.teamScore.red };
+      this.event({ k: 'halftime' });
+    }
+    this.roundT = BOMB.round; this.time = BOMB.round; this.roundOver = 0;
+    for (const p of this.players.values()) { p.using = false; this.spawn(p); }
+    const atk = [...this.players.values()].filter(p => p.team === 'red');
+    const carrier = atk.length ? atk[Math.floor(Math.random() * atk.length)] : null;
+    this.bomb = { state: carrier ? 'carried' : 'dropped', carrier: carrier ? carrier.id : null, pos: carrier ? [...carrier.pos] : [0, 0, 0], site: null, t: 0, prog: 0, actor: null, goal: Math.random() < 0.5 ? 'A' : 'B' };
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = [];
+    if (this.roundN > 1) this.freezeT = COUNT_IN;
+    this.event({ k: 'round', n: this.roundN, carrier: this.bomb.carrier });
+  }
+
+  roundEnd(team, why) {
+    if (this.roundOver > 0 || this.over) return;
+    this.teamScore[team]++;
+    for (const p of this.players.values()) if (p.team === team) p.score += 100;
+    this.roundOver = BOMB.roundEnd;
+    this.event({ k: 'roundEnd', winner: team, why, n: this.roundN });
+    if (this.teamScore[team] >= this.cfg.limit) this.end(team);
+  }
+
+  tickBomb(dt) {
+    if (this.roundOver > 0) {
+      this.roundOver -= dt;
+      if (this.roundOver <= 0 && !this.over) this.newRound();
+      return;
+    }
+    const B = this.bomb, alive = (t) => [...this.players.values()].filter(p => p.alive && p.team === t);
+    if (B.state === 'planted') B.t -= dt; else this.roundT -= dt;
+    this.time = Math.max(0, B.state === 'planted' ? B.t : this.roundT);
+    // bomba no chao: qualquer atacante vivo que passar em cima pega
+    if (B.state === 'carried') {
+      const c = this.players.get(B.carrier);
+      if (!c || !c.alive || c.team !== 'red') { B.state = 'dropped'; B.carrier = null; if (c) B.pos = [...c.pos]; this.event({ k: 'bomb', act: 'drop', pos: B.pos }); }
+      else B.pos = [...c.pos];
+    }
+    if (B.state === 'dropped') for (const p of alive('red')) {
+      if (dist2(p.pos, B.pos) > 1.7 * 1.7) continue;
+      B.state = 'carried'; B.carrier = p.id; this.event({ k: 'bomb', act: 'take', id: p.id }); break;
+    }
+    // plantar: quem carrega, dentro de um ponto, segurando o botao
+    let acted = false;
+    if (B.state === 'carried') {
+      const c = this.players.get(B.carrier), site = this.sites.find(s => Math.hypot(c.pos[0] - s.pos[0], c.pos[2] - s.pos[2]) < s.r && Math.abs(c.pos[1] - s.pos[1]) < 2);
+      if (site && c.using) {
+        acted = true; B.actor = c.id; B.kind = 'plant'; B.prog += dt;
+        if (B.prog >= BOMB.plant) {
+          B.state = 'planted'; B.site = site.id; B.pos = [...c.pos]; B.carrier = null; B.t = BOMB.fuse; B.prog = 0;
+          c.score += 300;
+          this.event({ k: 'bomb', act: 'plant', id: c.id, site: site.id, pos: B.pos });
+        }
+      }
+    } else if (B.state === 'planted') {
+      // desarmar: defensor vivo colado na bomba segurando o botao (o primeiro que comecou continua)
+      const d = (B.actor && this.players.get(B.actor)) || null;
+      const cand = d && d.alive && d.team === 'blue' && d.using && dist2(d.pos, B.pos) < BOMB.defuseR ** 2 ? d
+        : alive('blue').find(p => p.using && dist2(p.pos, B.pos) < BOMB.defuseR ** 2);
+      if (cand) {
+        acted = true; if (B.actor !== cand.id) B.prog = 0;
+        B.actor = cand.id; B.kind = 'defuse'; B.prog += dt;
+        if (B.prog >= BOMB.defuse) { cand.score += 300; this.event({ k: 'bomb', act: 'defuse', id: cand.id }); B.state = 'defused'; this.roundEnd('blue', 'defuse'); return; }
+      }
+      if (B.t <= 0) {
+        B.state = 'exploded';
+        this.event({ k: 'boom', pos: [B.pos[0], B.pos[1] + 0.5, B.pos[2]], owner: null, big: true });
+        for (const v of this.players.values()) if (v.alive && Math.sqrt(dist2(v.pos, B.pos)) < BOMB.blast) this.damage(v, null, 999, 'bomb', false);
+        this.roundEnd('red', 'boom');
+        return;
+      }
+    }
+    if (!acted) { B.prog = 0; B.actor = null; }
+    // fim por eliminacao ou tempo
+    const r = alive('red').length, b = alive('blue').length;
+    if (!b && this.players.size) this.roundEnd('red', 'elim');
+    else if (!r && B.state !== 'planted') this.roundEnd('blue', 'elim');
+    else if (this.roundT <= 0 && B.state !== 'planted') this.roundEnd('blue', 'time');
   }
 
   // ---------- jogadores ----------
-  pickTeam() {
+  pickTeam(bot = false) {
     if (!this.cfg.teams) return null;
+    // infectado: antes do primeiro infectado todo mundo e sobrevivente; depois, quem chega entra infectado
+    if (this.mode === 'infect') return this.infStarted ? 'red' : 'blue';
+    // bomba: gente vai pro lado com menos gente (bots nao contam: eles trocam de lado pra completar)
+    if (this.mode === 'bomb' && !bot) { const n = this.teamHumans(); return n.red <= n.blue ? 'red' : 'blue'; }
     let r = 0, b = 0;
     for (const p of this.players.values()) { if (p.team === 'red') r++; else if (p.team === 'blue') b++; }
     return r <= b ? 'red' : 'blue';
   }
 
+  // gente em cada lado (skip = quem esta trocando de lado)
+  teamHumans(skip) {
+    const n = { red: 0, blue: 0 };
+    for (const p of this.players.values()) if (!p.bot && p.id !== skip && p.team in n) n[p.team]++;
+    return n;
+  }
+
+  // lobby da bomba: bots completam o lado mais vazio, pra sala ficar equilibrada em volta de quem escolheu
+  spreadBots() {
+    if (this.mode !== 'bomb' || this.phase !== 'lobby') return;
+    const n = this.teamHumans();
+    for (const p of this.players.values()) if (p.bot) { p.team = n.red <= n.blue ? 'red' : 'blue'; n[p.team]++; }
+  }
+
   addPlayer(id, name, bot = false) {
     const p = {
-      id, name, bot, team: this.pickTeam(), hp: 100, alive: false, respawnT: 0.2,
+      id, name, bot, team: this.pickTeam(bot), hp: 100, alive: false, respawnT: 0.2,
       pos: [0, 0, 0], vel: [0, 0, 0], yaw: 0, pitch: 0, anim: 'idle', wpn: 'pistol', lastWpn: 'pistol',
       kills: 0, deaths: 0, score: 0, gunLvl: 0, streak: 0, ready: [], owned: new Set(SPAWN_KIT),
       nades: { frag: 1, flash: 1 }, budget: 300, los: null,
@@ -67,9 +184,13 @@ export class Core {
     };
     this.players.set(id, p);
     // humano nasce no proximo tick, depois do 'welcome' chegar
-    if (bot) this.spawn(p); else p.respawnT = 0.05;
+    if (this.mode === 'bomb' && this.phase === 'play' && this.bomb) { p.alive = false; p.respawnT = 0; }
+    else if (bot) this.spawn(p); else p.respawnT = 0.05;
     return p;
   }
+
+  // sala cheia (16 pessoas): recusa (o servidor manda 'full' antes de chegar aqui)
+  full() { return this.humans() >= MAX_PLAYERS; }
 
   join(id, name) {
     const p = this.addPlayer(id, (name || 'Player').slice(0, 14));
@@ -86,12 +207,16 @@ export class Core {
     if (!p) return;
     this.dropFlag(p);
     this.players.delete(id);
+    if (this.waitLoad?.delete(id) && !this.waitLoad.size) this.startCountdown();
     this.balanceBots();
+    if (this.mode === 'infect') this.checkInfect();
   }
 
   // modelo travado do degrau da escada de armas (fora dela, null)
   ggBody(p) { return this.mode === 'gungame' ? GUN_LADDER[Math.min(p.gunLvl, GUN_LADDER.length - 1)].body : null; }
   bodyOf(p, wpn) { return this.ggBody(p) || p.los?.[wpn]?.body; }
+  // variante de elite equipada (escada de armas usa o modelo do degrau, sem variante)
+  bpOf(p, wpn) { return this.ggBody(p) ? {} : bpMods(p.los?.[wpn]?.bp); }
 
   // host = humano mais antigo na sala (Map guarda a ordem de entrada); saiu, passa pro proximo
   hostId() { for (const p of this.players.values()) if (!p.bot) return p.id; return null; }
@@ -101,41 +226,82 @@ export class Core {
   balanceBots() {
     const humans = this.humans();
     const bots = [...this.players.values()].filter(p => p.bot);
-    const want = Math.max(0, this.wantBots - Math.max(0, humans - 1));
+    const want = Math.max(0, Math.min(this.wantBots - Math.max(0, humans - 1), MAX_PLAYERS - humans));
     while (bots.length < want) {
       const name = BOT_NAMES[this.botSeq++ % BOT_NAMES.length];
       bots.push(this.addPlayer('bot' + this.botSeq, name, true));
     }
     while (bots.length > want) this.players.delete(bots.pop().id);
+    this.spreadBots();
+  }
+
+  // melhor ponto da lista: longe de inimigo, fora da visao dele e sem colar em colega
+  bestSpawn(list, enemies, mates) {
+    let best = null;
+    for (const s of list) {
+      if (!standable(this.M, s[0], s[1])) continue;
+      const y = floorAt(this.M, s[0], s[1]);
+      let m = 60;
+      for (const e of enemies) m = Math.min(m, Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]));
+      // alguem ja olhando pra la? nascer na mira e' o pior que existe
+      const seen = enemies.some(e => Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]) < 45 && hasLOS(this.M, [e.pos[0], e.pos[1] + 1.5, e.pos[2]], [s[0], y + 1.4, s[1]]));
+      const crowd = mates.some(o => Math.hypot(o.pos[0] - s[0], o.pos[2] - s[1]) < 2.2);
+      const sc = m - (seen ? 25 : 0) - (crowd ? 10 : 0) + rnd(0, 8);
+      if (!best || sc > best.sc) best = { s, y, sc };
+    }
+    return best;
   }
 
   spawn(p) {
     const S = this.M.spawns;
+    const infect = this.mode === 'infect';
     let list = S.ffa;
-    if (this.cfg.teams && p.team) list = S[p.team];
-    const enemies = [...this.players.values()].filter(o => o !== p && o.alive && (!this.cfg.teams || o.team !== p.team));
-    let best = list[0], bestScore = -1;
-    for (const s of list) {
-      let m = 1e9;
-      for (const e of enemies) m = Math.min(m, (e.pos[0] - s[0]) ** 2 + (e.pos[2] - s[1]) ** 2);
-      const sc = Math.sqrt(m) + rnd(0, 14);
-      if (sc > bestScore) { bestScore = sc; best = s; }
-    }
-    p.pos = [best[0] + rnd(-1, 1), 0, best[1] + rnd(-1, 1)];
+    if (this.cfg.teams && p.team && !infect && S[p.team]) list = S[p.team];
+    const enemies = [...this.players.values()].filter(o => o !== p && o.alive && this.enemies(p, o));
+    const mates = [...this.players.values()].filter(o => o !== p && o.alive && !this.enemies(p, o));
+    let pick = this.bestSpawn(list, enemies, mates);
+    // base do time "quente" (inimigo em cima): nasce num ponto neutro
+    if (list !== S.ffa && (!pick || pick.sc < 6)) { const alt = this.bestSpawn(S.ffa, enemies, mates); if (alt && (!pick || alt.sc > pick.sc)) pick = alt; }
+    const s = pick ? pick.s : list[0];
+    let x = s[0], z = s[1];
+    const jx = x + rnd(-0.8, 0.8), jz = z + rnd(-0.8, 0.8);
+    if (standable(this.M, jx, jz) && Math.abs(floorAt(this.M, jx, jz) - floorAt(this.M, x, z)) < 0.1) { x = jx; z = jz; }
+    const y = floorAt(this.M, x, z);
+    p.pos = [x, y, z];
     p.vel = [0, 0, 0];
-    p.yaw = Math.atan2(-p.pos[0], -p.pos[2]);
+    p.yaw = this.openYaw(x, y, z);
     p.hp = p.bot ? BOT_HP : 100;
-    p.maxHp = p.hp;
     p.alive = true;
     p.nades = { frag: 1, flash: 1 };
     p.owned = new Set(SPAWN_KIT);
     if (this.mode !== 'gungame') p.owned.add('melee');
     if (this.mode === 'gungame') p.wpn = GUN_LADDER[Math.min(p.gunLvl, GUN_LADDER.length - 1)].wpn;
+    else if (infect && p.team === 'red') { p.owned = new Set(['melee']); p.wpn = 'melee'; p.hp = INFECT.hp; p.nades = { frag: 0, flash: 1 }; }
+    else if (infect) {
+      // sobrevivente: a arma sorteada da partida (igual pra todo mundo), pistola e faca
+      const prim = this.infKit.wpn;
+      p.owned = new Set([prim, 'pistol', 'melee']); p.wpn = prim;
+    }
     else if (p.bot) p.wpn = ['smg', 'rifle', 'shotgun', 'pistol', 'smg', 'rifle'][Math.floor(Math.random() * 6)];
     else p.wpn = PRIMARIES.includes(p.primary) ? p.primary : 'smg';
+    p.maxHp = p.hp;
     p.owned.add(p.wpn);
-    if (p.bot) { this.botReload(p, true); p.ai.blind = 0; }
-    this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p) });
+    if (p.bot) { this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; }
+    this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team });
+  }
+
+  // nasce olhando pro lado mais aberto (puxado pro meio do mapa), nunca de cara pra parede
+  openYaw(x, y, z) {
+    const toC = Math.atan2(x, z);
+    let best = toC, bs = -Infinity;
+    for (let i = 0; i < 12; i++) {
+      const a = toC + (i / 12) * Math.PI * 2;
+      const d = [-Math.sin(a), 0, -Math.cos(a)];
+      const free = Math.min(30, raycast(this.M, [x, y + 1.5, z], d, 30).dist);
+      const sc = free + Math.cos(a - toC) * 8;
+      if (sc > bs) { bs = sc; best = a; }
+    }
+    return best;
   }
 
   // ---------- mensagens do cliente ----------
@@ -148,10 +314,28 @@ export class Core {
         this.lobbyT = 0;
         break;
       }
+      // plantar a bomba: escolher o lado no lobby (lado com 8 pessoas recusa; bots se arrumam em volta)
+      case 'team': {
+        if (this.mode !== 'bomb' || this.phase !== 'lobby' || (m.team !== 'red' && m.team !== 'blue')) break;
+        if (m.team !== p.team && this.teamHumans(id)[m.team] >= TEAM_MAX) break;
+        p.team = m.team;
+        this.spreadBots();
+        this.lobbyT = 0;
+        break;
+      }
       // so o host (primeiro humano da sala) solta a contagem; quem nao deu pronto entra igual
       case 'start': {
         if (id !== this.hostId() || this.phase !== 'lobby') break;
         this.phase = 'count'; this.countT = COUNTDOWN; this.lobbyT = 0;
+        break;
+      }
+      // segurando o botao de usar (plantar / desarmar)
+      case 'use':
+        p.using = !!m.v && p.alive;
+        break;
+      // terminou de carregar a partida: quando todo humano avisar, sai a contagem
+      case 'loaded': {
+        if (this.waitLoad?.delete(id) && !this.waitLoad.size) this.startCountdown();
         break;
       }
       case 'respawn': {
@@ -160,6 +344,7 @@ export class Core {
       }
       case 'loadout': {
         if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(99, Math.round(m.lvl)));
+        if (typeof m.elite === 'boolean') p.elite = m.elite; // selo Elite da Rovex (so visual)
         if (PRIMARIES.includes(m.primary)) p.primary = m.primary;
         p.los = cleanLoadouts(m.los);
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
@@ -171,7 +356,7 @@ export class Core {
         if (!Array.isArray(m.pos) || m.pos.length !== 3 || !m.pos.every(Number.isFinite)) return;
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
         p.pos = m.pos; p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
-        if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn) { p.lastWpn = p.wpn; p.wpn = m.wpn; }
+        if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn && (this.mode !== 'infect' || p.owned.has(m.wpn))) { p.lastWpn = p.wpn; p.wpn = m.wpn; }
         break;
       case 'swing':
         if (p.alive) this.event({ k: 'swing', id });
@@ -206,6 +391,8 @@ export class Core {
   validHit(p, v, m) {
     const w = WEAPONS[m.wpn];
     if (!w || !Number.isFinite(m.dmg) || m.dmg <= 0) return 0;
+    // infectado so mata na lamina
+    if (this.mode === 'infect' && p.team === 'red' && !w.melee) return 0;
     // faca rapida vale com qualquer arma na mao; o resto so com a arma que ele segura
     if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return 0;
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
@@ -216,7 +403,7 @@ export class Core {
     const chest = [v.pos[0], v.pos[1] + 1.1, v.pos[2]], head = [v.pos[0], v.pos[1] + 1.6, v.pos[2]];
     if (!hasLOS(this.M, eye, chest) && !hasLOS(this.M, eye, head)) return 0;
     const tr = bodyTrait(this.bodyOf(p, m.wpn));
-    const maxShot = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * 1.25;
+    const maxShot = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (this.bpOf(p, m.wpn).dmg || 1) * 1.25;
     const dmg = Math.min(m.dmg, maxShot);
     if (p.budget < dmg) return Math.max(0, p.budget);
     p.budget -= dmg;
@@ -240,18 +427,19 @@ export class Core {
   }
 
   kill(v, a, wpn, head) {
-    v.alive = false; v.hp = 0; v.respawnT = RESPAWN; v.deaths++; v.streak = 0;
+    v.alive = false; v.hp = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : RESPAWN; v.deaths++; v.streak = 0;
     this.dropFlag(v);
     const suicide = !a || a === v;
     if (!suicide) {
-      a.kills++; a.streak++; a.score += 100;
+      // abate da propria Torta Atomica nao conta pra sequencia (senao ela se alimentava)
+      a.kills++; if (wpn !== 'nuke') a.streak++; a.score += 100;
       if (this.cfg.teams && this.mode === 'tdm') this.teamScore[a.team]++;
       if (this.mode === 'gungame' && WEAPONS[wpn]) {
         a.gunLvl++;
         if (a.gunLvl >= GUN_LADDER.length) { a.gunLvl = GUN_LADDER.length - 1; this.end(a.name); }
         else { a.wpn = GUN_LADDER[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
       }
-      for (const [kind, s] of Object.entries(STREAKS)) {
+      if (this.mode !== 'infect' && this.mode !== 'bomb' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
         if (a.streak === s.kills) {
           a.ready.push(kind);
           this.event({ k: 'streakReady', id: a.id, kind });
@@ -268,8 +456,71 @@ export class Core {
     }
     v.dmgBy = {};
     this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, pos: v.pos });
+    // sobrevivente que cai (de qualquer jeito) vira infectado
+    if (this.mode === 'infect' && v.team === 'blue' && this.infStarted) this.infect(v, suicide ? null : a);
     if (this.mode === 'ffa' && !suicide && a.kills >= this.cfg.limit) this.end(a.name);
     if (this.mode === 'tdm' && !suicide && this.teamScore[a.team] >= this.cfg.limit) this.end(a.team);
+  }
+
+  // ---------- infectado ----------
+  infect(v, by, first = false) {
+    v.team = 'red';
+    v.streak = 0;
+    if (v.alive) {
+      // vivo (o primeiro sorteado): larga tudo e fica so com a lamina na hora
+      v.owned = new Set(['melee']); v.wpn = 'melee'; v.nades = { frag: 0, flash: 1 };
+      if (v.bot) this.botReload(v, true);
+      this.event({ k: 'give', id: v.id, wpn: 'melee', force: true });
+    }
+    this.event({ k: 'infected', id: v.id, by: by ? by.id : null, first });
+    this.checkInfect();
+  }
+
+  checkInfect() {
+    if (this.mode !== 'infect' || !this.infStarted || this.over) return;
+    const surv = [...this.players.values()].filter(p => p.team === 'blue');
+    if (!surv.length) { this.end('red'); return; }
+    // ultimo sobrevivente: radar o resto da partida e municao cheia (todo mundo fica sabendo)
+    if (surv.length === 1 && !this.lastStand) {
+      const last = surv[0];
+      this.lastStand = last.id;
+      this.uavs.push({ owner: last.id, team: 'blue', t: 9999 });
+      if (last.alive) for (const w of last.owned) if (w !== 'melee') this.event({ k: 'give', id: last.id, wpn: w, refill: true });
+      this.event({ k: 'lastStand', id: last.id });
+    }
+    // o infectado saiu e nao sobrou nenhum: sorteia outro
+    if (![...this.players.values()].some(p => p.team === 'red')) {
+      const alive = surv.filter(p => p.alive);
+      if (alive.length > 1) this.infect(alive[Math.floor(Math.random() * alive.length)], null, true);
+    }
+  }
+
+  tickInfect(dt) {
+    let r = 0, b = 0;
+    for (const p of this.players.values()) { if (p.team === 'red') r++; else b++; }
+    this.teamScore.red = r; this.teamScore.blue = b;
+    if (!this.infStarted) {
+      this.infT -= dt;
+      if (this.infT > 0) return;
+      const alive = [...this.players.values()].filter(p => p.alive);
+      if (alive.length < 2) { this.infT = 1; return; }
+      this.infStarted = true;
+      this.infect(alive[Math.floor(Math.random() * alive.length)], null, true);
+      return;
+    }
+    // sobreviver rende pontos (e XP no cliente)
+    this.surviveT -= dt;
+    if (this.surviveT <= 0) {
+      this.surviveT = INFECT.surviveTick;
+      for (const p of this.players.values()) if (p.alive && p.team === 'blue') { p.score += 50; this.event({ k: 'survive', id: p.id }); }
+    }
+  }
+
+  // ---------- contagem de inicio (todo mundo carregou) ----------
+  startCountdown() {
+    this.waitLoad = null;
+    this.freezeT = COUNT_IN;
+    this.event({ k: 'countdown', t: COUNT_IN });
   }
 
   // ---------- granadas ----------
@@ -343,10 +594,22 @@ export class Core {
       this.event({ k: 'anvilWarn', list });
     }
     if (kind === 'blimp') this.blimps.push({ owner: p.id, team: p.team, t: STREAKS.blimp.time, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
-    this.event({ k: 'streak', id: p.id, kind, team: p.team });
+    if (kind === 'nuke') this.nukes.push({ owner: p.id, t: STREAKS.nuke.delay });
+    this.event({ k: 'streak', id: p.id, kind, team: p.team, delay: kind === 'nuke' ? STREAKS.nuke.delay : undefined });
   }
 
   tickStreaks(dt) {
+    // Torta Atomica: quando o pavio acaba, todo inimigo vivo cai; a partida segue (quem chamou saiu = cancela)
+    for (const n of this.nukes) {
+      n.t -= dt;
+      if (n.t > 0 || this.over) continue;
+      const o = this.players.get(n.owner);
+      if (!o) continue;
+      const hit = [...this.players.values()].filter(v => v.alive && this.enemies(o, v));
+      this.event({ k: 'nuke', id: o.id, team: o.team, n: hit.length });
+      for (const v of hit) if (v.alive && !this.over) this.kill(v, o, 'nuke', false);
+    }
+    this.nukes = this.nukes.filter(n => n.t > 0 && this.players.has(n.owner) && !this.over);
     for (const u of this.uavs) u.t -= dt;
     this.uavs = this.uavs.filter(u => u.t > 0 && this.players.has(u.owner));
     for (let i = this.anvils.length - 1; i >= 0; i--) {
@@ -470,18 +733,22 @@ export class Core {
     ai.think -= dt;
     if (ai.think <= 0) {
       ai.think = 0.25;
-      let best = null, bd = 60 * 60;
+      const sk = this.skill;
+      let best = null, bd = sk.sight * sk.sight;
       if (ai.blind <= 0) for (const o of this.players.values()) {
         if (!o.alive || !this.enemies(p, o)) continue;
         const d = dist2(o.pos, p.pos);
         if (d < bd && hasLOS(M, eye, [o.pos[0], o.pos[1] + 1.4, o.pos[2]])) { bd = d; best = o; }
       }
-      if (best && best !== ai.target) ai.react = 0.35 / this.difficulty;
+      // alvo novo: demora pra reagir e a mira comeca fria (esquenta com o tempo nele)
+      if (best && best !== ai.target) { ai.react = sk.react * rnd(0.8, 1.25); ai.onT = 0; }
       ai.target = best;
       ai.goal = this.botGoal(p);
     }
     const w = WEAPONS[p.wpn];
     let moveDir = null, wantYaw = p.yaw, sprint = false;
+    // plantar a bomba: bot segura o botao no ponto (ataque) ou em cima da bomba (defesa) quando ninguem o ve
+    if (this.mode === 'bomb') p.using = this.botWantsUse(p);
     const t = ai.target && ai.target.alive ? ai.target : null;
     if (ai.reloadT > 0) { ai.reloadT -= dt; if (ai.reloadT <= 0) ai.mag = Math.round(w.mag); }
     if (t) {
@@ -490,11 +757,16 @@ export class Core {
       wantYaw = Math.atan2(-dx, -dz);
       p.pitch = Math.atan2((t.pos[1] - p.pos[1]), d) * 0.8;
       ai.t -= dt;
-      if (ai.t <= 0) { ai.t = rnd(0.5, 1.4); ai.strafe = Math.random() < 0.5 ? -1 : 1; }
+      if (ai.t <= 0) { ai.t = rnd(0.5, 1.4); ai.strafe = (Math.random() < 0.5 ? -1 : 1) * this.skill.strafe; }
+      ai.onT = (ai.onT || 0) + dt;
       const fx = dx / (d || 1), fz = dz / (d || 1);
       const ideal = WEAPONS[p.wpn]?.melee ? 0.8 : p.wpn === 'shotgun' ? 6 : p.wpn === 'sniper' ? 30 : 14;
-      const adv = d > ideal + 3 ? 1 : d < ideal - 3 ? -0.6 : 0;
+      let adv = d > ideal + 3 ? 1 : d < ideal - 3 ? -0.6 : 0;
+      // contra quem esta de lamina (infectado): recua atirando, nunca deixa encostar
+      if (WEAPONS[t.wpn]?.melee && !WEAPONS[p.wpn]?.melee) adv = d < 9 ? -1 : d > 16 ? 0.4 : 0;
       moveDir = [fx * adv - fz * ai.strafe * 0.8, fz * adv + fx * ai.strafe * 0.8];
+      // de lamina nao tem por que dancar de lado: vai reto ate encostar
+      if (WEAPONS[p.wpn]?.melee) moveDir = d > 0.7 ? [fx, fz] : null;
       if (ai.goal && (this.mode === 'ctf' || this.mode === 'dom') && d > 5) {
         const gd = Math.hypot(ai.goal[0] - p.pos[0], ai.goal[2] - p.pos[2]);
         const g = this.botSteer(p, ai.goal, dt);
@@ -506,17 +778,21 @@ export class Core {
       const facing = Math.abs(angDiff(p.yaw, wantYaw)) < 0.25;
       if (ai.reloadT <= 0 && ai.mag <= 0) this.botReload(p);
       // granada de vez em quando, em arco ate o alvo
-      if (ai.nadeT <= 0 && p.nades.frag > 0 && d > 9 && d < 24 && !this.over) {
+      ai.pauseT = (ai.pauseT || 0) - dt;
+      if (ai.nadeT <= 0 && this.skill.nades && p.nades.frag > 0 && d > 9 && d < 24 && !this.over) {
         ai.nadeT = rnd(8, 16); p.nades.frag--;
         const up = 0.25 + d * 0.012;
         this.throwNade(p, 'frag', norm([fx, up, fz]));
         const n = this.nades[this.nades.length - 1];
         const sp = Math.min(19, 6 + d * 0.55);
         n.vel = [fx * sp, up * sp + 3, fz * sp];
-      } else if (ai.react <= 0 && facing && ai.fireT <= 0 && !this.over && ai.reloadT <= 0 && ai.mag > 0) {
+      } else if (ai.react <= 0 && facing && ai.fireT <= 0 && ai.pauseT <= 0 && !this.over && ai.reloadT <= 0 && ai.mag > 0) {
         ai.mag--;
-        ai.fireT = w.rate * (w.auto ? 1.6 : 1.3) + (p.wpn === 'sniper' ? 0.8 : 0);
+        ai.fireT = w.rate * this.skill.rate + (p.wpn === 'sniper' ? 0.8 : 0);
         this.botShoot(p, t, d);
+        // atira em rajadas e respira entre elas (quanto mais facil, mais curta e mais pausa)
+        if (!(ai.burstLeft > 0)) ai.burstLeft = Math.round(rnd(...this.skill.burst));
+        if (--ai.burstLeft <= 0) ai.pauseT = rnd(...this.skill.pause);
       }
     } else if (ai.reloadT <= 0 && ai.mag < w.mag * 0.5 && ai.mag < w.mag) this.botReload(p);
     if (!moveDir && ai.goal) {
@@ -524,10 +800,12 @@ export class Core {
       const g = d > 1.5 ? this.botSteer(p, ai.goal, dt) : null;
       if (g) { moveDir = g; if (!t) { wantYaw = Math.atan2(-g[0], -g[1]); p.pitch *= 0.9; } sprint = !t && ai.blind <= 0; }
     }
+    if (p.using) moveDir = null;
     if (ai.blind > 0) wantYaw = p.yaw + Math.sin(ai.blind * 6) * 0.5;
-    p.yaw += clampA(angDiff(p.yaw, wantYaw), (t ? 7 : 5) * dt * this.difficulty);
+    p.yaw += clampA(angDiff(p.yaw, wantYaw), (t ? this.skill.turn : 5) * dt);
 
-    const speed = sprint ? 10.5 : ai.blind > 0 ? 3 : 7;
+    let speed = sprint ? 10.5 : ai.blind > 0 ? 3 : 7;
+    if (this.mode === 'infect' && p.team === 'red') speed *= INFECT.speed;
     const ground = p.onGround;
     const acc = ground ? 12 : 3;
     const tx = moveDir ? moveDir[0] * speed : 0, tz = moveDir ? moveDir[1] * speed : 0;
@@ -537,10 +815,10 @@ export class Core {
     ai.stuckT += dt;
     if (ai.stuckT > 0.6) {
       const moved = Math.hypot(p.pos[0] - ai.last[0], p.pos[2] - ai.last[2]);
-      if (moveDir && moved < 1.2 && ground) { p.vel[1] = 8.5; ai.strafe *= -1; ai.t = 1; ai.path = null; }
+      if (moveDir && moved < 1.2 && ground) { p.vel[1] = 7.2; ai.strafe *= -1; ai.t = 1; ai.path = null; }
       ai.last = [...p.pos]; ai.stuckT = 0;
     }
-    if (t && ground && Math.random() < dt * 0.5) p.vel[1] = 8.5;
+    if (t && ground && this.skill.strafe > 0.5 && Math.random() < dt * 0.35) p.vel[1] = 7.2;
     p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7);
     const hs = Math.hypot(p.vel[0], p.vel[2]);
     p.anim = !p.onGround ? 'jump' : ai.reloadT > 0 ? 'reload' : hs > 9 ? 'sprint' : hs > 1 ? 'run' : 'idle';
@@ -570,8 +848,40 @@ export class Core {
     return d > 0.05 ? [dx / d, dz / d] : null;
   }
 
+  botWantsUse(p) {
+    const B = this.bomb;
+    if (!B || p.ai.target?.alive) return false;
+    if (B.state === 'carried' && B.carrier === p.id) return this.sites.some(s => Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]) < s.r - 0.6);
+    if (B.state === 'planted' && p.team === 'blue') return dist2(p.pos, B.pos) < (BOMB.defuseR - 0.4) ** 2;
+    return false;
+  }
+
   botGoal(p) {
     const FB = this.M.flagBase;
+    if (this.mode === 'bomb' && this.bomb) {
+      const B = this.bomb, site = (id) => this.sites.find(s => s.id === id) || this.sites[0];
+      const ring = (c, r) => { const a = (p.id.charCodeAt(p.id.length - 1) * 1.7) % 6.28; return [c[0] + Math.cos(a) * r, c[1], c[2] + Math.sin(a) * r]; };
+      if (p.team === 'red') {
+        if (B.state === 'carried' && B.carrier === p.id) return site(B.goal).pos;
+        if (B.state === 'dropped') return B.pos;
+        if (B.state === 'planted') return ring(B.pos, 6);
+        return ring(site(B.goal).pos, 5);
+      }
+      if (B.state === 'planted' || B.state === 'dropped') return B.pos;
+      return ring(site(p.id.charCodeAt(p.id.length - 1) % 2 ? 'A' : 'B').pos, 3);
+    }
+    if (this.mode === 'infect') {
+      const surv = [...this.players.values()].filter(o => o.alive && o.team === 'blue' && o !== p);
+      const inf = [...this.players.values()].filter(o => o.alive && o.team === 'red' && o !== p);
+      // infectado: cola no sobrevivente mais perto
+      if (p.team === 'red') { let b = null, bd = Infinity; for (const o of surv) { const d = dist2(o.pos, p.pos); if (d < bd) { bd = d; b = o; } } return b ? [...b.pos] : p.ai.goal; }
+      // sobrevivente: segura um canto longe dos infectados (troca quando eles chegam perto)
+      const far = (q) => inf.reduce((m, o) => Math.min(m, Math.hypot(o.pos[0] - q[0], o.pos[2] - q[1])), 99);
+      if (p.ai.goal && far([p.ai.goal[0], p.ai.goal[2]]) > 14 && Math.random() > 0.05) return p.ai.goal;
+      let best = null, bs = -1;
+      for (const q of this.M.spawns.ffa) { const sc = far(q) + rnd(0, 10); if (sc > bs) { bs = sc; best = q; } }
+      return best ? [best[0], floorAt(this.M, best[0], best[1]), best[1]] : p.ai.goal;
+    }
     if (this.mode === 'ctf') {
       const mine = p.team, theirs = mine === 'red' ? 'blue' : 'red';
       if (this.carrying(p)) return FB[mine];
@@ -592,7 +902,7 @@ export class Core {
     if (!p.ai.goal || dist2(p.ai.goal, p.pos) < 9 || Math.random() < 0.1) {
       const ens = [...this.players.values()].filter(o => o.alive && this.enemies(p, o));
       if (ens.length && Math.random() < 0.6) return [...ens[Math.floor(Math.random() * ens.length)].pos];
-      const pk = this.pickups.filter(x => x.active);
+      const pk = this.pickups.filter(x => x.active && x.kind === 'wpn');
       if (pk.length) return pk[Math.floor(Math.random() * pk.length)].pos;
     }
     return p.ai.goal;
@@ -611,13 +921,15 @@ export class Core {
     const aim = [t.pos[0], t.pos[1] + 1.1, t.pos[2]];
     const dir = norm([aim[0] - o[0], aim[1] - o[1], aim[2] - o[2]]);
     const tSpeed = t.bot ? Math.hypot(t.vel[0], t.vel[2]) : (t.anim === 'sprint' || t.anim === 'tac' ? 11 : t.anim === 'run' ? 6 : 1);
-    let pHit = (0.62 - d * 0.009 - tSpeed * 0.018) * this.difficulty;
-    pHit = Math.max(0.08, Math.min(0.85, pHit));
+    // mira esquenta: comeca em 35% do maximo do nivel e chega nele depois de 'warm' s no alvo
+    const sk = this.skill, warm = Math.min(1, 0.35 + 0.65 * (p.ai.onT || 0) / sk.warm);
+    let pHit = sk.aim * warm - d * 0.006 - tSpeed * 0.015;
+    pHit = Math.max(0.04, Math.min(0.85, pHit));
     const pellets = w.pellets || 1;
     let dmg = 0, head = false;
     for (let i = 0; i < pellets; i++) {
       const falloff = p.wpn === 'shotgun' ? Math.max(0.15, 1 - d / 22) : 1;
-      if (Math.random() < pHit) { dmg += w.dmg * falloff; if (Math.random() < 0.12) head = true; }
+      if (Math.random() < pHit) { dmg += w.dmg * falloff; if (Math.random() < sk.head) head = true; }
     }
     const miss = dmg === 0;
     const e = miss ? [aim[0] + rnd(-1.5, 1.5), aim[1] + rnd(-0.6, 1.2), aim[2] + rnd(-1.5, 1.5)] : aim;
@@ -646,11 +958,16 @@ export class Core {
       this.snapshot(dt);
       return;
     }
-    if (this.freezeT > 0) this.freezeT -= dt; else this.time -= dt;
-    if (this.time <= 0) {
+    if (this.freezeT > 0) {
+      this.freezeT -= dt;
+      // ninguem avisou que carregou a tempo: solta a contagem assim mesmo
+      if (this.waitLoad && this.freezeT <= 0) this.startCountdown();
+    } else if (this.mode !== 'bomb') this.time -= dt;
+    if (this.time <= 0 && this.mode !== 'bomb') {
       this.time = 0;
       let winner = null;
-      if (this.cfg.teams) winner = this.teamScore.red === this.teamScore.blue ? 'empate' : this.teamScore.red > this.teamScore.blue ? 'red' : 'blue';
+      if (this.mode === 'infect') winner = 'blue';
+      else if (this.cfg.teams) winner = this.teamScore.red === this.teamScore.blue ? 'empate' : this.teamScore.red > this.teamScore.blue ? 'red' : 'blue';
       else {
         let best = null;
         for (const p of this.players.values()) if (!best || p.kills > best.kills || (this.mode === 'gungame' && p.gunLvl > best.gunLvl)) best = p;
@@ -662,11 +979,12 @@ export class Core {
     for (const p of this.players.values()) {
       // orcamento de dano: enche no ritmo da arma (barra trapaca de cliente)
       const w = WEAPONS[p.wpn];
-      if (w) { const tr = bodyTrait(this.bodyOf(p, p.wpn)), dmg = w.dmg * (w.pellets || 1) * (tr.dmg || 1); p.budget = Math.min(dmg * 5, p.budget + (dmg / (w.rate * (tr.rate || 1))) * 1.6 * dt); }
+      if (w) { const tr = bodyTrait(this.bodyOf(p, p.wpn)), bm = this.bpOf(p, p.wpn), dmg = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (bm.dmg || 1); p.budget = Math.min(dmg * 5, p.budget + (dmg / (w.rate * (tr.rate || 1) * (bm.rate || 1))) * 1.6 * dt); }
       if (!p.alive) {
         p.respawnT -= dt;
         // humano: depois do minimo, renasce quando pedir (botao/toque) ou sozinho 5 s depois
-        if (p.respawnT <= 0 && (p.bot || p.wantSpawn || p.respawnT <= -AUTO_SPAWN || p.deaths === 0)) { p.wantSpawn = false; this.spawn(p); }
+        // plantar a bomba: quem cai so volta na proxima rodada
+        if (this.mode !== 'bomb' && p.respawnT <= 0 && (p.bot || p.wantSpawn || p.respawnT <= -AUTO_SPAWN || p.deaths === 0)) { p.wantSpawn = false; this.spawn(p); }
         continue;
       }
       if (p.bot && !(this.freezeT > 0)) this.tickBot(p, dt);
@@ -676,11 +994,17 @@ export class Core {
     this.tickNades(dt);
     this.tickStreaks(dt);
 
+    if (this.mode === 'infect' && !(this.freezeT > 0)) this.tickInfect(dt);
+
+    if (this.mode === 'bomb' && !(this.freezeT > 0)) this.tickBomb(dt);
+
     for (const k of this.pickups) {
+      if (this.mode === 'bomb') break; // so as armas de cada um, nada no chao
       if (this.mode === 'gungame' && k.kind === 'wpn') continue;
       if (!k.active) { k.t -= dt; if (k.t <= 0) { k.active = true; this.event({ k: 'pickup', id: k.id, active: true }); } continue; }
       for (const p of this.players.values()) {
         if (!p.alive || dist2(p.pos, k.pos) > 1.6 * 1.6) continue;
+        if (this.mode === 'infect' && p.team === 'red') continue; // infectado nao pega nada
         if (k.kind === 'hp') { if (p.hp >= (p.maxHp || 100)) continue; p.hp = Math.min(p.maxHp || 100, p.hp + 50); }
         else {
           p.owned.add(k.wpn);
@@ -705,8 +1029,10 @@ export class Core {
       else if ((this.countT -= dt) <= 0) {
         this.phase = 'play';
         this.reset();
-        // todo mundo carregando: ninguem leva dano e bot fica parado nos primeiros segundos
-        this.freezeT = 3.2;
+        // todo mundo carregando: ninguem se mexe nem leva dano ate o ultimo humano avisar que
+        // carregou ('loaded'); ai sai a contagem de 3 s. Espera maxima: LOAD_WAIT.
+        this.waitLoad = new Set(humans.map(h => h.id));
+        this.freezeT = LOAD_WAIT;
         this.event({ k: 'start' });
       }
     }
@@ -715,7 +1041,7 @@ export class Core {
     this.lobbyT = 0.25;
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, map: this.M.id, host: this.hostId(),
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id) })),
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), elite: !!p.elite })),
     });
   }
 
@@ -723,22 +1049,30 @@ export class Core {
     this.snapT -= dt;
     if (this.snapT > 0) return;
     this.snapT = 1 / 20;
+    // infectado: o placar e' a contagem de cada lado (vale desde a contagem de inicio)
+    if (this.mode === 'infect') { let r = 0, b = 0; for (const p of this.players.values()) { if (p.team === 'red') r++; else b++; } this.teamScore.red = r; this.teamScore.blue = b; }
+    // numeros arredondados (cm na posicao, milesimo de radiano na mira): o snapshot vai 15x/s pra cada
+    // pessoa da sala e as 16 casas decimais eram metade do tamanho dele. Na tela nao muda nada.
+    const r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
     const players = [];
     for (const p of this.players.values()) {
       players.push({
         id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive,
-        pos: p.pos, yaw: p.yaw, pitch: p.pitch, anim: p.anim, wpn: p.wpn,
-        kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: p.score, gunLvl: p.gunLvl, respawnT: p.respawnT,
-        nades: p.nades, ready: p.ready, streak: p.streak,
+        pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
+        kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: p.score, gunLvl: p.gunLvl, respawnT: r2(p.respawnT),
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite,
       });
     }
     this.send(null, {
-      t: 'snap', mode: this.mode, map: this.M.id, time: this.time, over: this.over, overT: this.overT,
+      t: 'snap', mode: this.mode, map: this.M.id, time: r2(this.time), over: this.over, overT: this.overT,
+      freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
+      bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
+      round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,
       teamScore: { red: Math.floor(this.teamScore.red), blue: Math.floor(this.teamScore.blue) },
       flags: this.flags, zones: this.zones.map(z => ({ id: z.id, owner: z.owner, prog: z.prog })),
       pickups: this.pickups.map(k => k.active),
-      nades: this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos })),
-      blimps: this.blimps.map(b => ({ pos: b.pos, team: b.team, owner: b.owner })),
+      nades: this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos.map(r2) })),
+      blimps: this.blimps.map(b => ({ pos: b.pos.map(r2), team: b.team, owner: b.owner })),
       uavs: this.uavs.map(u => ({ owner: u.owner, team: u.team })),
       players,
     });
@@ -757,16 +1091,19 @@ function cleanLoadouts(los) {
     const l = los[w];
     if (!l || typeof l !== 'object') continue;
     const o = {};
-    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo']) {
+    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo', 'bp']) {
       const v = l[k];
       o[k] = typeof v === 'string' && v.length <= 24 && /^[#\w-]+$/.test(v) ? v : null;
     }
+    if (o.bp && BLUEPRINTS[o.bp]?.wpn !== w) o.bp = null;
     out[w] = o;
   }
   return out;
 }
 
 const COUNTDOWN = 5;
+const COUNT_IN = 3.5;   // contagem 3, 2, 1 antes de soltar todo mundo
+const LOAD_WAIT = 15;   // espera maxima pelo carregamento do mais lento
 const AUTO_SPAWN = 5;
 // nivel do bot: fixo por id, so pra lista do lobby ter cara de gente
 function botLevel(id) { let h = 2166136261; for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return 3 + (h % 50); }

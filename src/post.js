@@ -25,7 +25,8 @@ const FilmShader = {
       vec3 silver = vec3(l) * vec3(1.0, 0.985, 0.95);
       vec3 col;
       if (mode < 0.5) col = silver;
-      else col = mix(vec3(l), c, 0.55) * vec3(1.0, 0.985, 0.95);
+      else if (mode < 1.5) col = mix(vec3(l), c, 0.55) * vec3(1.0, 0.985, 0.95);
+      else col = mix(vec3(l), c, 1.08); // modo colorido: as cores inteiras (um tico mais vivas), so o filme por cima
       float filmK = 1.0;
       // tremulacao do projetor
       col *= 1.0 + (h(vec2(fr, 3.0)) - 0.5) * 0.07 * grain * filmK;

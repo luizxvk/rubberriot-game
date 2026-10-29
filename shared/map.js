@@ -187,14 +187,119 @@ function fronteira() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira };
+// ---------- Estaleiro (minusculo, conteineres, tiroteio sem parar) ----------
+// Grade de conteineres com corredores curtos: de qualquer lugar voce esta a 2 esquinas
+// de alguem. Pilhas duplas fecham a visao; o portico do guindaste passa por cima.
+function estaleiro() {
+  const A = 22, { boxes, box, walls } = builder(A);
+  walls(6);
+  // conteiner deitado (6 x 2.6 x 2.6); along = 'x' ou 'z'
+  const cont = (cx, cz, along, y0 = 0, seed = 0) => box(cx, cz, along === 'x' ? 6 : 2.6, along === 'x' ? 2.6 : 6, 2.6, y0, 'container', { seed, along });
+  // anel de fora: um conteiner em cada lado de cada quadrante, alternando a direcao
+  cont(-11, -6, 'z', 0, 1); cont(11, 6, 'z', 0, 2); cont(-6, 11, 'x', 0, 3); cont(6, -11, 'x', 0, 4);
+  cont(-11, 8, 'z', 0, 5); cont(11, -8, 'z', 0, 6); cont(8, 11, 'x', 0, 7); cont(-8, -11, 'x', 0, 8);
+  // miolo: quatro conteineres em cata-vento em volta do centro, dois com outro em cima
+  cont(-4, -4.5, 'x', 0, 9); cont(4, 4.5, 'x', 0, 10); cont(4.5, -4, 'z', 0, 11); cont(-4.5, 4, 'z', 0, 12);
+  cont(-4, -4.5, 'x', 2.6, 13); cont(4, 4.5, 'x', 2.6, 14);
+  // caixotes baixos: cobertura que da pra pular
+  for (const [x, z] of [[0, 0], [-16, 0], [16, 0], [0, -16], [0, 16], [-16, -16], [16, 16]]) box(x, z, 1.6, 1.6, 1.2, 0, 'crate');
+  box(-15.5, 15.5, 2.4, 2.4, 1.6, 0, 'crate'); box(15.5, -15.5, 2.4, 2.4, 1.6, 0, 'crate');
+  // portico do guindaste: duas pernas nas pontas e a viga la no alto (nao atrapalha ninguem)
+  for (const s of [-1, 1]) box(s * 19.5, 0, 1.2, 1.2, 9, 0, 'pillar');
+  box(0, 0, 40, 1.4, 1.2, 9, 'gantry');
+  return {
+    id: 'estaleiro', arena: A, boxes, theme: 'estaleiro',
+    spawns: {
+      red: [[-8, -19], [8, -19], [-17, -19], [17, -19], [0, -19], [-13, -15]],
+      blue: [[-8, 19], [8, 19], [-17, 19], [17, 19], [0, 19], [13, 15]],
+      ffa: [[-19, -19], [19, 19], [-19, 19], [19, -19], [-19, -3], [19, 3], [0, -19], [0, 19], [-8, 0], [8, 0], [0, -8], [0, 8], [-14, 14], [14, -14]],
+    },
+    flagBase: { red: [0, 0, -19], blue: [0, 0, 19] },
+    zones: [{ id: 'A', pos: [-16, 0, -8], r: 3.5 }, { id: 'B', pos: [0, 0, 0], r: 3.5 }, { id: 'C', pos: [16, 0, 8], r: 3.5 }],
+    pickups: [
+      { kind: 'wpn', wpn: 'shotgun', pos: [-8, 0, 0] }, { kind: 'wpn', wpn: 'shotgun', pos: [8, 0, 0] },
+      { kind: 'wpn', wpn: 'smg', pos: [0, 0, -8] }, { kind: 'wpn', wpn: 'minigun', pos: [0, 0, 8] },
+      { kind: 'hp', pos: [-19, 0, -12] }, { kind: 'hp', pos: [19, 0, 12] },
+    ],
+  };
+}
+
+// ---------- Refinaria (deserto, torre de bombeamento no meio) ----------
+// Quem esta no alto da torre ve o mapa inteiro, mas fica exposto de todo lado.
+// Embaixo: silos, linhas de cano na altura da cintura e duas barracas.
+function refinaria() {
+  const A = 36, { boxes, box, stairs, walls } = builder(A);
+  walls(7);
+  // torre: base de concreto (3 m) com escada dos dois lados, cabine em cima (mais 3 m)
+  box(0, 0, 10, 10, 3, 0, 'concrete');
+  // escada sobe NA DIRECAO dada: comeca longe da torre e chega na laje com o degrau mais alto
+  stairs(-9.2, 1.5, 1, 0, 3, 6, 0.5, 0.7);
+  stairs(9.2, -1.5, -1, 0, 3, 6, 0.5, 0.7);
+  box(1.5, 1.5, 5, 5, 3, 3, 'concrete');
+  // escada da laje ate o topo da cabine (cada degrau apoiado na laje)
+  for (let i = 0; i < 6; i++) box(0.5, -1 - (5.5 - i) * 0.65, 2, 0.65, (i + 1) * 0.5, 3, 'step');
+  // armacao da torre (decoracao): quatro pernas finas subindo e a "cabeca" da bomba la em cima
+  for (const [x, z] of [[-0.6, -0.6], [3.6, -0.6], [-0.6, 3.6], [3.6, 3.6]]) box(x, z, 0.4, 0.4, 8, 6, 'pillar');
+  box(1.5, 1.5, 6, 6, 0.5, 14, 'derrick');
+  // silos de oleo nos quatro cantos
+  for (const [x, z] of [[-24, -24], [24, 24], [-26, 22], [26, -22]]) box(x, z, 7, 7, 6, 0, 'silo');
+  box(-18, -26, 5, 5, 4, 0, 'silo'); box(18, 26, 5, 5, 4, 0, 'silo');
+  // linhas de cano: cobertura na cintura (pula por cima)
+  for (const s of [-1, 1]) {
+    box(s * 14, 0, 1, 18, 1, 0, 'pipe');
+    box(0, s * 15, 14, 1, 1, 0, 'pipe');
+    box(s * 22, s * 6, 1, 10, 1, 0, 'pipe');
+  }
+  // barracas (uma por time) e conteineres soltos
+  box(0, -31, 12, 5, 4, 0, 'house', { team: 'red', roof: 'flat', seed: 2 });
+  box(0, 31, 12, 5, 4, 0, 'house', { team: 'blue', roof: 'flat', seed: 3 });
+  box(-30, 4, 2.6, 6, 2.6, 0, 'container', { seed: 4, along: 'z' });
+  box(30, -4, 2.6, 6, 2.6, 0, 'container', { seed: 5, along: 'z' });
+  box(-12, 24, 6, 2.6, 2.6, 0, 'container', { seed: 6, along: 'x' });
+  box(12, -24, 6, 2.6, 2.6, 0, 'container', { seed: 7, along: 'x' });
+  // dunas e pedras pra quebrar a linha de tiro
+  for (const [x, z, s] of [[-12, -10, 3], [12, 10, 3], [-28, -10, 4], [28, 10, 4], [-8, 22, 2.6], [8, -22, 2.6]]) box(x, z, s, s, s * 0.6, 0, 'rock');
+  for (const [x, z] of [[-6, 12], [6, -12], [-20, 14], [20, -14]]) box(x, z, 2, 2, 1.4, 0, 'crate');
+  return {
+    id: 'refinaria', arena: A, boxes, theme: 'refinaria',
+    spawns: {
+      red: [[-8, -26], [8, -26], [-16, -30], [16, -30], [-24, -32], [24, -32], [0, -24]],
+      blue: [[-8, 26], [8, 26], [-16, 30], [16, 30], [-24, 32], [24, 32], [0, 24]],
+      ffa: [[-32, -32], [32, 32], [-32, 32], [32, -32], [-32, -14], [32, 14], [-14, -32], [14, 32], [-20, 0], [20, 0], [0, -20], [0, 20], [-32, 8], [32, -8]],
+    },
+    flagBase: { red: [0, 0, -26], blue: [0, 0, 26] },
+    zones: [{ id: 'A', pos: [-22, 0, 8], r: 4.5 }, { id: 'B', pos: [0, 3, 0], r: 4 }, { id: 'C', pos: [22, 0, -8], r: 4.5 }],
+    pickups: [
+      { kind: 'wpn', wpn: 'sniper', pos: [1.5, 6, 1.5] },
+      { kind: 'wpn', wpn: 'minigun', pos: [0, 3, -3.5] },
+      { kind: 'wpn', wpn: 'shotgun', pos: [-30, 0, -4] }, { kind: 'wpn', wpn: 'shotgun', pos: [30, 0, 4] },
+      { kind: 'wpn', wpn: 'rifle', pos: [-14, 0, 20] }, { kind: 'wpn', wpn: 'rifle', pos: [14, 0, -20] },
+      { kind: 'hp', pos: [-20, 0, -6] }, { kind: 'hp', pos: [20, 0, 6] }, { kind: 'hp', pos: [0, 0, -12] }, { kind: 'hp', pos: [0, 0, 12] },
+    ],
+  };
+}
+
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria };
 export const MAP_IDS = Object.keys(BUILDERS);
 // mapa sugerido por modo
-export const MODE_MAP = { ffa: 'fabrica', gungame: 'fabrica', tdm: 'vila', dom: 'vila', ctf: 'fronteira' };
+export const MODE_MAP = { ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
+// pontos de bomba (x, z) perto do lado da defesa (azul nasce em +z); a altura sai da grade
+export const BOMB_SITES = {
+  vila: { A: [-20, 27], B: [20, 27] },
+  fabrica: { A: [-20, 21], B: [19, 14] },
+  fronteira: { A: [-30, 38], B: [30, 38] },
+  estaleiro: { A: [-13, 15], B: [13, 15] },
+  refinaria: { A: [-17, 21], B: [24, 15] },
+};
+// arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
+const MINIGUN_AT = { vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 const cache = {};
 export function getMap(id) {
   if (!BUILDERS[id]) id = 'vila';
-  return cache[id] || (cache[id] = BUILDERS[id]());
+  if (cache[id]) return cache[id];
+  const M = BUILDERS[id]();
+  M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
+  return (cache[id] = M);
 }
 
 const STEP = 0.6;

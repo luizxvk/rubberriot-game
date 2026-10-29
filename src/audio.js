@@ -109,6 +109,39 @@ class Audio {
     }
   }
 
+  // fanfarra "lendaria comica" do elite: apito de escorregador subindo, ta-da-DAAA de metais com vibrato
+  // e um prato de orquestra no fim (tudo sintetizado, sem sample)
+  fanfare(vol = 0.8) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime + 0.02, out = ctx.createGain();
+    out.gain.value = vol * this.vol.sfx; out.connect(this.uiBus);
+    // apito subindo
+    const w = ctx.createOscillator(), wg = ctx.createGain();
+    w.type = 'sine'; w.frequency.setValueAtTime(380, t0); w.frequency.exponentialRampToValueAtTime(1700, t0 + 0.42);
+    wg.gain.setValueAtTime(0, t0); wg.gain.linearRampToValueAtTime(0.35, t0 + 0.05); wg.gain.linearRampToValueAtTime(0, t0 + 0.45);
+    w.connect(wg).connect(out); w.start(t0); w.stop(t0 + 0.5);
+    // metais: ta (G4), da (C5), DAAA (acorde de do maior, segurado com vibrato)
+    const brass = (freqs, at, dur, peak) => {
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, at); lp.frequency.linearRampToValueAtTime(3200, at + 0.06); lp.Q.value = 2;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(peak, at + 0.03); g.gain.setTargetAtTime(peak * 0.7, at + 0.05, 0.1); g.gain.setTargetAtTime(0, at + dur, 0.08);
+      lp.connect(g).connect(out);
+      for (const f of freqs) {
+        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+        if (dur > 0.5) { const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 6; lg.gain.value = f * 0.012; lfo.connect(lg).connect(o.frequency); lfo.start(at + 0.15); lfo.stop(at + dur + 0.4); }
+        o.connect(lp); o.start(at); o.stop(at + dur + 0.4);
+      }
+    };
+    brass([392], t0 + 0.48, 0.12, 0.22);
+    brass([523.25], t0 + 0.64, 0.12, 0.22);
+    brass([523.25, 659.25, 783.99, 1046.5], t0 + 0.82, 1.15, 0.16);
+    // prato: ruido em agudo com cauda longa
+    const len = Math.floor(ctx.sampleRate * 1.6), nb = ctx.createBuffer(1, len, ctx.sampleRate), d = nb.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+    const n = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    n.buffer = nb; hp.type = 'highpass'; hp.frequency.value = 5200; ng.gain.value = 0.32;
+    n.connect(hp).connect(ng).connect(out); n.start(t0 + 0.82);
+  }
+
   // opts: vol, rate, jitter, pos [x,y,z], ui, key, max
   play(name, o = {}) {
     if (!this.ctx) return;

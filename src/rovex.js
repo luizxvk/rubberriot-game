@@ -48,7 +48,8 @@ export async function loadMe() {
   if (!token()) return null;
   try {
     const u = await call('/users/me', { timeout: 5000 });
-    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14) } : null;
+    // elite = assinatura Elite da Rovex ativa (o servidor ja confere a validade)
+    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14), elite: !!u.isElite } : null;
   } catch { me = null; }
   return me;
 }
@@ -86,17 +87,22 @@ export async function pullSave() {
   } catch { /* sem rede: joga com o local e sobe depois */ }
 }
 
-let timer = 0;
+// no maximo 1 gravacao a cada 30 s: com muita gente jogando, salvar a cada abate enchia o banco
+// de escrita. O que mudar no meio entra na proxima; fechar a aba grava na hora (pagehide).
+const GAP = 30000;
+let timer = 0, lastPush = 0, lastBody = '';
 export function pushSoon() {
-  if (!me) return;
-  clearTimeout(timer);
-  timer = setTimeout(pushSave, 3000);
+  if (!me || timer) return;
+  timer = setTimeout(pushSave, Math.max(3000, lastPush + GAP - Date.now()));
 }
 export function pushSave(keepalive = false) {
   if (!me) return;
-  clearTimeout(timer);
+  clearTimeout(timer); timer = 0;
   const data = {};
   for (const k of KEYS) { const v = ls.get(k); if (v != null) data[k] = v; }
-  call('/games/rubber-riot/save', { method: 'PUT', body: { data }, keepalive }).catch(() => {});
+  const body = JSON.stringify(data);
+  if (body === lastBody) return; // nada mudou desde a ultima gravacao
+  lastPush = Date.now();
+  call('/games/rubber-riot/save', { method: 'PUT', body: { data }, keepalive }).then(() => { lastBody = body; }).catch(() => {});
 }
 addEventListener('pagehide', () => { if (timer) pushSave(true); });

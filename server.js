@@ -62,7 +62,10 @@ wss.on('connection', (ws) => {
       rovexName(m.token).then(acct => {
         if (ws.readyState !== 1) return;
         const name = String(acct || m.name || 'Player').slice(0, 14);
-        room = getRoom(code, m.mode, m.map, Math.max(0, Math.min(11, Number(m.bots) || 0)));
+        const target = getRoom(code, m.mode, m.map, Math.max(0, Math.min(15, Number(m.bots) || 0)));
+        // sala com 16 pessoas: recusa (bots abrem vaga sozinhos, gente nao)
+        if (target.core.full()) { ws.send(JSON.stringify({ t: 'err', code: 'full' })); joining = false; return; }
+        room = target;
         room.clients.set(id, ws);
         room.core.join(id, name);
         ws.send(JSON.stringify({ t: 'room', code, mode: room.core.mode }));

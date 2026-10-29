@@ -1,17 +1,26 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
-import { MODES, WEAPONS, PRIMARIES, bodyTrait } from '../shared/weapons.js';
-import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive } from './challenges.js';
+import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait } from '../shared/weapons.js';
+import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
-import { DEBUG, progressInfo, wpnInfo, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress } from './progress.js';
+import { DEBUG, progressInfo, wpnInfo, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked } from './progress.js';
 import { MAP_IDS } from '../shared/map.js';
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
-import { CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady } from './arsenal.js';
+import { CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
+// mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
+export const XHAIRS = ['cross', 'crossdot', 'dot', 'circle', 'tee'];
+export const XH_COLORS = ['#ece9e1', '#3cff6b', '#ffd23a', '#3ce8ff', '#ff4a3a', '#ff6bd5'];
+const XH_CROSS = '<i></i><i></i><i></i><i></i><b class="xd"></b><u class="xr"></u>';
+export function applyCrosshair(el, S) {
+  if (!el) return;
+  el.className = 'cross x-' + (XHAIRS.includes(S.xhair) ? S.xhair : 'cross');
+  el.style.setProperty('--xc', S.xhairColor || XH_COLORS[0]);
+}
 const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a', '#5b3f8a', '#c45b8f', '#ece9e1', '#6e6a63', '#2a2724'];
 
 export function initMenus(o) {
@@ -24,9 +33,12 @@ export function initMenus(o) {
     for (const s of screens) $('scr-' + s).hidden = s !== name;
     ui.screen = name;
     $('menu').classList.toggle('smithing', name === 'arsenal');
-    if (name === 'arsenal') renderSmith();
+    $('menu').classList.toggle('home', name === 'home');
+    if (name === 'arsenal') { picking = false; renderSmith(); }
     if (name === 'mp') ui.refreshRooms && ui.refreshRooms();
-    if (name === 'challenges') renderChallenges();
+    if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
+    if (name === 'controls') renderKeys();
+    if (name === 'home') markNewChallenges();
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
   };
@@ -90,7 +102,7 @@ export function initMenus(o) {
     const name = mpName();
     if (!rovex.me) { o.settings.name = name; o.saveSettings(); }
     try { await o.onMp({ url: rovex.MP_URL, name, ...args }); }
-    catch (e) { $('mpErr').textContent = e.code === 'noroom' ? t('noRoom', { c: args.room }) : t('mpDown'); }
+    catch (e) { $('mpErr').textContent = e.code === 'noroom' ? t('noRoom', { c: args.room }) : e.code === 'full' ? t('roomFull', { c: args.room }) : e.code === 'busy' ? t('mpBusy') : t('mpDown'); }
     $('playMp').disabled = $('joinCode').disabled = false;
   }
   $('mpRoom').oninput = () => { const c = cleanCode($('mpRoom').value); if (c !== $('mpRoom').value) $('mpRoom').value = c; };
@@ -134,20 +146,24 @@ export function initMenus(o) {
     ['range', 'grain', 's_grain', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'res', 's_res', 0.4, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['seg', 'lang', 's_lang', [['en', 'English'], ['pt', 'Portugues']]],
-    ['seg', 'film', 's_film', [['color', 'film_color'], ['bw', 'film_bw']]],
+    ['seg', 'film', 's_film', [['full', 'film_full'], ['color', 'film_color'], ['bw', 'film_bw']]],
     ['toggle', 'invertY', 's_invert'],
     ['toggle', 'holdCrouch', 's_hold'],
     ['toggle', 'autoSprint', 's_auto'],
     ['toggle', 'showFps', 's_fps'],
+    ['toggle', 'threatRing', 's_threat'],
+    ['xhair'],
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
-  // mira assistida e tiro automatico so existem no toque (ligados por padrao)
+  // mira assistida: toque e controle; tiro automatico so no toque (os dois ligados por padrao)
   if (isTouch) defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssist'], ['toggle', 'autoFire', 's_autoFire']);
+  else defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssistPad']);
   const sl = $('settingsList');
   S.lang = getLang();
   S.unlockAll = progressInfo().unlockAll;
   const buildSettings = () => { sl.innerHTML = defs.map(d => {
     if (d[0] === 'range') return `<label class="field"><span>${t(d[2])} <b data-out="${d[1]}"></b></span><input type="range" data-k="${d[1]}" min="${d[3]}" max="${d[4]}" step="${d[5]}"></label>`;
+    if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
     if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : t(l)}</button>`).join('')}</div></div>`;
     return `<div class="toggle"><span id="lbl-${d[1]}">${t(d[2])}</span><button class="switch" role="switch" aria-labelledby="lbl-${d[1]}" data-t="${d[1]}"></button></div>`;
   }).join(''); };
@@ -157,6 +173,11 @@ export function initMenus(o) {
       if (d[0] === 'range') { sl.querySelector(`[data-k="${d[1]}"]`).value = S[d[1]]; sl.querySelector(`[data-out="${d[1]}"]`).textContent = d[6](Number(S[d[1]])); }
       if (d[0] === 'seg') sl.querySelectorAll(`[data-seg="${d[1]}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === S[d[1]]));
       if (d[0] === 'toggle') sl.querySelector(`[data-t="${d[1]}"]`).setAttribute('aria-checked', !!S[d[1]]);
+      if (d[0] === 'xhair') {
+        sl.querySelectorAll('[data-seg="xhair"] button').forEach(b => b.classList.toggle('on', b.dataset.v === (S.xhair || 'cross')));
+        sl.querySelectorAll('[data-xc]').forEach(b => b.setAttribute('aria-pressed', b.dataset.xc === (S.xhairColor || XH_COLORS[0])));
+        applyCrosshair(sl.querySelector('#xhPrev'), S);
+      }
     }
   };
   sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); refresh(); o.saveSettings(); });
@@ -166,6 +187,7 @@ export function initMenus(o) {
     if (seg) S[seg] = b.dataset.v;
     if (seg === 'lang') { setLang(S.lang); buildSettings(); ui.relang(); }
     if (b.dataset.t) S[b.dataset.t] = !S[b.dataset.t];
+    if (b.dataset.xc) S.xhairColor = b.dataset.xc;
     if (b.dataset.t === 'unlockAll') setUnlockAll(S.unlockAll);
     audio.play('ui_click', { ui: true, vol: 0.6 });
     refresh(); o.saveSettings();
@@ -174,21 +196,75 @@ export function initMenus(o) {
 
   // ---------- arsenal ----------
   let loadouts = getLoadouts();
-  let cat = 'rifle', slot = 'body';
+  let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee'];
-  const SLOTS = ['body', 'scope', 'ret', 'charger', 'handle', 'laser', 'tracer', 'camo', 'paint', 'accent'];
-  const SLOT_LABEL = { body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', laser: 'slot_laser', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
+  const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'laser', 'tracer', 'camo', 'paint', 'accent'];
+  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', laser: 'slot_laser', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   function renderChallenges() {
     const h = Math.ceil(msToReset() / 3600000);
     $('chReset').textContent = t('chReset', { n: h });
     const row = (name, prog, n, xp, done, extra = '') => `<li class="${done ? 'done' : ''}"><div class="ch-txt"><b>${name}</b>${extra}<span class="ch-bar"><i style="width:${Math.round(Math.min(1, prog / n) * 100)}%"></i></span></div><div class="ch-side"><em>${Math.min(prog, n)}/${n}</em><small>+${xp} XP</small></div>${done ? `<span class="ch-stamp">${t('chDoneStamp')}</span>` : ''}</li>`;
-    $('chDaily').innerHTML = dailyToday().map(c => row(t('ch_' + c.id, { n: c.n, w: c.wpn ? wName(c.wpn) : '' }), c.prog, c.n, c.xp, c.done)).join('');
+    const seen = seenChallenges(), nw = (key) => seen.has(key) ? '' : ` <span class="ch-new">${t('chNew')}</span>`;
+    // elite do dia: um so, dificil, premio = variante de elite (arma montada + camo lendaria)
+    const el = eliteToday(), bp = el.reward && BLUEPRINTS[el.reward];
+    $('chElite').className = 'elite-card' + (el.done ? ' done' : '');
+    $('chElite').innerHTML = `<div class="el-star" aria-hidden="true">★</div><div class="el-body"><small>${t('elTitle')} · ${t('chReset', { n: h })}</small><b>${t('el_' + el.id, { n: el.n })}</b>`
+      + `<span class="ch-bar"><i style="width:${Math.round(Math.min(1, el.prog / el.n) * 100)}%"></i></span>`
+      + `<small class="el-rw">${bp ? t('elReward', { v: t(el.reward), w: wName(bp.wpn), c: t('camo_' + bp.lo.camo) }) : t('elAllBp')}</small></div>`
+      + `<div class="el-side"><em>${Math.min(el.prog, el.n)}/${el.n}</em><small>+${el.xp} XP</small></div>${el.done ? `<span class="ch-stamp">${t('chDoneStamp')}</span>` : ''}`;
+    $('chDaily').innerHTML = dailyToday().map(c => row(t('ch_' + c.id, { n: c.n, w: c.wpn ? wName(c.wpn) : '' }) + nw(dailyKey(c)), c.prog, c.n, c.xp, c.done)).join('');
     const us = unlockState();
-    $('chCareer').innerHTML = us.active.map(u => row(chName(u), u.prog, u.n, u.xp, false, `<small class="ch-reward">${t('chReward')}: ${rewardName(u.reward)}</small>`)).join('')
+    $('chCareer').innerHTML = us.active.map(u => row(chName(u) + nw('u:' + u.id), u.prog, u.n, u.xp, false, `<small class="ch-reward">${t('chReward')}: ${rewardName(u.reward)}</small>`)).join('')
       + `<li class="ch-queue">${us.queued ? t('chQueue', { n: us.queued, d: us.done, t: us.total }) : us.done >= us.total ? t('chAllDone') : ''}</li>`;
   }
+  // desafio "novo" = ainda nao aparecia na lista da ultima vez que o jogador abriu a tela
+  const SEEN_KEY = 'rr_ch_seen';
+  const dailyKey = (c) => 'd:' + new Date().toISOString().slice(0, 10) + ':' + c.id + ':' + (c.wpn || '');
+  function seenChallenges() { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); } }
+  function currentChallengeKeys() { return [...dailyToday().map(dailyKey), ...unlockState().active.map(u => 'u:' + u.id)]; }
+  function markChallengesSeen() {
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(currentChallengeKeys())); } catch { /* sem storage */ }
+    markNewChallenges();
+  }
+  // selo no botao "Desafios" do menu enquanto houver desafio que o jogador nao viu
+  function markNewChallenges() {
+    const btn = document.querySelector('.bill-item[data-go="challenges"]');
+    if (!btn) return;
+    const seen = seenChallenges(), n = currentChallengeKeys().filter(k => !seen.has(k)).length;
+    btn.querySelector('.ch-new')?.remove();
+    if (n) btn.insertAdjacentHTML('beforeend', `<span class="ch-new">${t('chNew')}</span>`);
+  }
+  ui.markNewChallenges = markNewChallenges;
+
+  // ---------- controles: lista atual de comandos (teclado, controle, toque) ----------
+  let keyTab = 'kb';
+  const KEYS = {
+    kb: [['W A S D', 'k_move'], ['Mouse', 'k_look'], ['Shift', 'k_sprint'], ['key_space', 'k_jump'], ['C / Ctrl', 'k_crouch'], ['key_lmb', 'k_fire'], ['key_rmb', 'k_ads'], ['R', 'k_reload'],
+      ['key_wheel', 'k_swap'], ['Q', 'k_last'], ['V', 'k_melee'], ['G', 'k_frag'], ['F', 'k_flash'], ['X', 'k_streak'], ['I', 'k_inspect'], ['E', 'k_use'], ['M', 'k_spec'], ['Tab', 'k_board'], ['Esc', 'k_pause']],
+    pad: [['L', 'k_move'], ['R', 'k_look'], ['L3', 'k_sprint'], ['A / ✕', 'k_jump'], ['B / ○', 'k_crouch'], ['RT / R2', 'k_fire'], ['LT / L2', 'k_ads'], ['X / □', 'k_reload'],
+      ['Y / △', 'k_swap'], ['R3', 'k_melee'], ['LB / L1', 'k_frag'], ['RB / R1', 'k_flash'], ['▲', 'k_streak'], ['▼', 'k_inspect'], ['X / □ (segurar)', 'k_use'], ['Select', 'k_board'], ['Start', 'k_pause'],
+      ['▲ ▼ ◀ ▶', 'k_menu'], ['A / ✕', 'k_confirm'], ['B / ○', 'k_back']],
+    touch: [['t_stick', 'k_move'], ['t_drag', 'k_look'], ['t_auto', 'k_fire']],
+  };
+  function renderKeys() {
+    document.querySelectorAll('[data-kt]').forEach(b => b.setAttribute('aria-selected', b.dataset.kt === keyTab));
+    $('keyList').innerHTML = KEYS[keyTab].map(([k, d]) => `<dt>${k.startsWith('key_') || k.startsWith('t_') ? t(k) : k}</dt><dd>${t(d)}</dd>`).join('');
+  }
+  document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
+
+  // ---------- novidades: fechar guarda a versao; novidade nova reabre ----------
+  const NEWS_V = 3;
+  function renderNews() {
+    let closed = 0; try { closed = Number(localStorage.getItem('rr_news')) || 0; } catch { /* */ }
+    $('news').hidden = closed >= NEWS_V;
+    $('newsList').innerHTML = t('news').map(([b, sp]) => `<li><b>${b}</b><span>${sp}</span></li>`).join('');
+  }
+  $('newsClose').onclick = () => { try { localStorage.setItem('rr_news', NEWS_V); } catch { /* */ } audio.play('ui_back', { ui: true }); $('news').hidden = true; };
+  renderNews();
+  markNewChallenges();
+
   // texto do desafio de desbloqueio e o nome do premio
   function chName(u) { return t('ch_' + u.id, { n: u.n }); }
   function rewardName(r) { if (r.slot === 'tracer') return t('s_tracer') + ' ' + t('tr_' + r.id.slice(3)); return r.slot === 'camo' ? t('camo_' + r.id) : `${partName(r.slot, r.id)} (${wName(r.wpn)})`; }
@@ -205,13 +281,16 @@ export function initMenus(o) {
       return;
     }
     $('catTabs').innerHTML = CATS.map(c => `<button role="tab" aria-selected="${c === cat}" data-c="${c}">${wName(c)}</button>`).join('');
-    $('catTabs').querySelectorAll('button').forEach(b => b.onclick = () => { cat = b.dataset.c; slot = 'body'; preview = null; audio.play('ui_click', { ui: true }); renderSmith(); });
+    $('catTabs').querySelectorAll('button').forEach(b => b.onclick = () => { cat = b.dataset.c; slot = 'body'; picking = false; preview = null; audio.play('ui_click', { ui: true }); renderSmith(); });
     // equipar: principal escolhida aqui, pistola sempre como secundaria
     const isPrimary = PRIMARIES.includes(cat);
     const equipped = isPrimary ? S.primary === cat || (!S.primary && cat === 'smg') : true;
-    $('equipBar').innerHTML = isPrimary
+    // cabecalho da arma (estilo gunsmith): nome grande + variante, nivel, e equipar do lado
+    const loNow = loadouts[cat] || {};
+    const eqHtml = isPrimary
       ? (equipped ? `<p class="equipped">${t('eqDone', { w: wName(cat) })}</p>` : `<button class="big" id="equipBtn">${t('eqPrimary', { w: wName(cat) })}</button>`)
       : `<p class="equipped">${t(cat === 'melee' ? 'eqMelee' : 'eqSecondary', { w: wName(cat) })}</p>`;
+    $('equipBar').innerHTML = `<div class="gs-id"><b class="gs-name">${wName(cat)}</b>${loNow.bp ? `<span class="gs-bp">★ ${t(loNow.bp)}</span>` : ''}</div>` + eqHtml;
     const eb = $('equipBtn');
     if (eb) eb.onclick = () => { S.primary = cat; o.saveSettings(); audio.play('pickup', { ui: true, vol: 0.6 }); renderSmith(); };
     // mostra o que vale de verdade: peca salva que ainda esta bloqueada aparece como padrao
@@ -221,22 +300,28 @@ export function initMenus(o) {
     $('equipBar').insertAdjacentHTML('beforeend', `<div class="wlevel"><b>${t('wpnLevel', { n: wi.level })}</b><span class="xpbar"><i style="width:${wi.max ? 100 : Math.round(wi.into / wi.need * 100)}%"></i></span><small>${wi.max ? t('maxed') : wi.into + ' / ' + wi.need + ' XP'}</small></div>`);
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
-    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => s !== 'charger' || chargerOptions(lo.body, cat).length > 1);
+    const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
+    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp));
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
       const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && !lo.scope);
       let val;
-      if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')); val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
+      if (s === 'bp') val = lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
+      else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')); val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
       else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s]}` : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
-      return `<button class="slot ${s === slot ? 'on' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}"><small>${t(SLOT_LABEL[s])}</small><span>${val}</span></button>`;
+      return `<button class="slot slot-${s} ${s === 'bp' && lo.bp ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}</small><span>${val}</span></button>`;
     }).join('');
-    $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { slot = b.dataset.s; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
-    // celular: a faixa de slots rola de lado; manter o escolhido a vista
-    $('slotList').querySelector('.slot.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    const view = preview ? { ...lo, [preview.k]: preview.v, ...(preview.k === 'body' ? { charger: null } : {}) } : lo;
+    $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
+    // blocos de pecas OU a lista de opcoes do slot escolhido (o painel troca, nao empilha)
+    $('slotList').hidden = picking; $('pickWrap').hidden = !picking;
+    $('smith').classList.toggle('picking', picking);
+    $('pickTitle').textContent = t(SLOT_LABEL[slot]);
+    $('pickBack').onclick = () => { picking = false; preview = null; audio.play('ui_back', { ui: true, vol: 0.6 }); renderSmith(); };
+    const view = !preview ? lo : preview.k === 'bp' ? { ...lo, ...bpLoadout(preview.v) }
+      : { ...lo, [preview.k]: preview.v, ...(preview.k === 'body' ? { charger: null } : {}) };
     if (preview) $('equipBar').insertAdjacentHTML('beforeend', `<p class="peek-note">${t('peekNote')}</p>`);
     renderPicker(lo, C);
     renderStats(view);
@@ -247,6 +332,8 @@ export function initMenus(o) {
     preview = null;
     const lo = loadouts[cat];
     lo[k] = v;
+    // mexeu numa peca na mao: deixa de ser a variante (camo, cor e tracado podem trocar sem perder)
+    if (['body', 'scope', 'charger', 'handle', 'laser'].includes(k)) delete lo.bp;
     if (k === 'body') { lo.charger = null; if (cat === 'sniper' && !lo.scope) lo.scope = nativePart(v, 'scope'); }
     saveLoadouts(loadouts);
     o.loadoutsChanged(loadouts);
@@ -254,11 +341,40 @@ export function initMenus(o) {
     renderSmith();
   }
 
+  // variante de elite: aplica a montagem inteira (pecas + camo lendaria) de uma vez
+  function setVariant(id) {
+    preview = null;
+    const lo = loadouts[cat];
+    if (id) Object.assign(lo, bpLoadout(id));
+    else delete lo.bp;
+    saveLoadouts(loadouts);
+    o.loadoutsChanged(loadouts);
+    audio.play(id ? 'unlock' : 'swap', { vol: 0.5, ui: true });
+    renderSmith();
+  }
+
   function renderPicker(lo, C) {
     const p = $('picker');
+    if (slot === 'bp') {
+      const MOD_TXT = { dmg: 'st_dmg', rate: 'st_rate', spread: 'st_acc', hip: 'st_hip', kick: 'st_ctrl', adsTime: 'st_ads', reload: 'st_reload', move: 'st_move', mag: 'st_mag' };
+      // "bom" quando o numero sobe (dano, passo, pente) ou desce (o resto: cadencia lenta, recuo, abertura...)
+      const good = (k, v) => (k === 'dmg' || k === 'move' || k === 'mag') ? v > 1 : v < 1;
+      const el = eliteToday();
+      p.innerHTML = `<button class="opt bp-free ${!lo.bp ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + BP_ORDER.filter(id => BLUEPRINTS[id].wpn === cat).map(id => {
+        const B = BLUEPRINTS[id], open = bpUnlocked(id), cur = lo.bp === id;
+        const mods = Object.entries(B.mods).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
+        const lock = open ? '' : `<small class="req-ch">${el.reward === id && !el.done ? t('bpToday', { c: t('el_' + el.id, { n: el.n }) }) : t('bpLocked')}</small>${el.reward === id ? `<span class="ubar"><i style="width:${Math.round(el.prog / el.n * 100)}%"></i></span>` : ''}`;
+        return `<button class="opt bp ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'bp' && preview.v === id ? 'peek' : ''}" data-bp="${id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch anim" style="background:${CAMO_SWATCH[B.lo.camo]}"></i><span class="bp-name">${t(id)}</span><small>${t('bpSub', { c: t('camo_' + B.lo.camo) })}</small><span class="fx">${mods}</span>${lock}</button>`;
+      }).join('');
+      p.querySelectorAll('[data-bp]').forEach(b => b.onclick = () => {
+        if (b.classList.contains('locked')) { peek('bp', b.dataset.bp); return; }
+        setVariant(b.dataset.bp || null);
+      });
+      return;
+    }
     if (slot === 'camo') {
       // grupos: estaticas, animadas, reativas (cada um com titulo ocupando a linha)
-      const grp = (c) => c.react ? 'react' : c.anim ? 'anim' : 'static';
+      const grp = (c) => c.legend ? 'legend' : c.react ? 'react' : c.anim ? 'anim' : 'static';
       let last = null;
       p.innerHTML = CAMOS.map(c => {
         const g = grp(c), head = g !== last ? `<p class="pk-h">${t('cg_' + g)}</p>` : '';
@@ -268,8 +384,8 @@ export function initMenus(o) {
       function camoOpt(c) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
-        const req = lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
-        const bar = open ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
+        const req = c.elite && !open ? t('eliteOnly') : c.legend && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const bar = open || c.legend || c.elite ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {
@@ -369,6 +485,8 @@ export function initMenus(o) {
   onProgress(() => { drawLevel(); if (ui.screen === 'arsenal') renderSmith(); });
   ui.relang = () => {
     drawLevel();
+    renderNews(); markNewChallenges();
+    if (ui.screen === 'controls') renderKeys();
     markLang();
     soloMap.draw(); mpMap.draw();
     $('modeList').innerHTML = ''; $('mpModeList').innerHTML = '';

@@ -32,6 +32,13 @@ export const CAMOS = [
   // reativas: mudam de estagio a cada 2 abates na mesma vida (2, 4, 6)
   { id: 'ember', code: 24, anim: true, react: true, req: { player: 20, wpn: 16 } },
   { id: 'inkreact', code: 25, anim: true, react: true, req: { player: 42, wpn: 20 } },
+  // Elite da Rovex: reativa exclusiva de quem assina (gratis enquanto a assinatura estiver ativa)
+  { id: 'hexelite', code: 30, anim: true, react: true, elite: true },
+  // lendarias: shader proprio + efeito FORA da arma (fx, ver camofx.js). So vem com a variante de elite.
+  { id: 'hellfire', code: 26, anim: true, legend: true, fx: 'flame' },
+  { id: 'tesla', code: 27, anim: true, legend: true, fx: 'storm' },
+  { id: 'inkwell', code: 28, anim: true, legend: true, fx: 'drip' },
+  { id: 'marquee', code: 29, anim: true, legend: true, fx: 'stars' },
 ];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
@@ -62,6 +69,11 @@ export const CAMO_SWATCH = {
   phantom: 'radial-gradient(circle at 50% 40%,#e9f7ff 20%,#9fc4dd 50%,#56708a)',
   ember: 'linear-gradient(135deg,#5a5652 30%,#ff6a1a 48%,#ffd23a 52%,#3a3633 70%)',
   inkreact: 'radial-gradient(circle at 35% 45%,#141210 22%,transparent 24%),radial-gradient(circle at 70% 65%,#a83a2c 14%,transparent 16%),#ece9e1',
+  hexelite: 'radial-gradient(circle at 50% 50%,#b48cff 8%,transparent 10%) 0 0/12px 12px,linear-gradient(135deg,#2a1150,#6d3fd6 55%,#e3c14a)',
+  hellfire: 'repeating-radial-gradient(circle at 50% 110%,#120806 0 5px,#ff6a1a 5px 6px,#120806 6px 9px),#120806',
+  tesla: 'repeating-linear-gradient(90deg,#c9783f 0 4px,#7a3a18 4px 5px,#7fe6ff 5px 6px,#7a3a18 6px 7px)',
+  inkwell: 'radial-gradient(ellipse 22% 30% at 32% 45%,#141210 30%,#ece9e1 34% 58%,transparent 62%),radial-gradient(ellipse 22% 30% at 68% 45%,#141210 30%,#ece9e1 34% 58%,transparent 62%),#08070a',
+  marquee: 'radial-gradient(circle,#ffe7a0 30%,#ffb21a 45%,transparent 50%) 0 0/9px 9px,linear-gradient(#b8862b 0 18%,#a3201a 18% 82%,#b8862b 82%)',
   void: 'radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),radial-gradient(circle at 70% 60%,#fff 1px,transparent 2px),radial-gradient(circle at 50% 50%,#5b3fd6,#1b0f3d 55%,#05030d)',
 };
 
@@ -259,6 +271,81 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     float ink = max(smoothstep(th, th + 0.02, n), drip);
     vec3 c = mix(vec3(0.93, 0.9, 0.84) * sh, vec3(0.05), ink);
     if (uReact > 2.5) { float red = smoothstep(0.62, 0.64, c_fbm(p * 3.3 - t * 0.2)); c = mix(c, vec3(0.62, 0.08, 0.06), red); glow = vec3(0.8, 0.05, 0.03) * red * 0.5; }
+    return c;
+  }
+  if (k == 26) { // inferno de palco: madeira queimada com gravura art deco (leque e raios) em brasa
+    vec2 q = vec2(p.z, p.y) * 1.7; vec2 cl = fract(q) - vec2(0.5, 0.0);
+    float r = length(cl), a = atan(cl.x, cl.y);
+    float arcs = abs(fract(r * 4.0 - t * 0.35) - 0.5);
+    float rays = abs(fract(a * 1.6) - 0.5) * r * 2.4;
+    float line = 1.0 - smoothstep(0.0, 0.07, min(arcs, rays));
+    float flick = 0.55 + 0.45 * c_n(vec3(q * 3.0, t * 2.2));
+    vec3 hot = mix(vec3(1.0, 0.28, 0.03), vec3(1.0, 0.82, 0.3), flick);
+    float emb = step(0.985, c_h(floor(vec3(p.z * 14.0, p.y * 14.0 - t * 3.0, p.x * 14.0))));
+    glow = hot * line * flick * 2.0 + vec3(1.0, 0.6, 0.15) * emb * 1.6;
+    return mix(vec3(0.05, 0.03, 0.025), vec3(0.2, 0.08, 0.03), c_fbm(p * 3.0)) * sh * (1.0 - line * 0.5) + hot * line * 0.35;
+  }
+  if (k == 27) { // bobina tesla: fio de cobre enrolado; os vaos entre as voltas acendem quando o pulso passa
+    float w = fract(p.z * 13.0 + p.y * 0.35);
+    float wire = smoothstep(0.08, 0.4, w) * smoothstep(0.92, 0.6, w);
+    vec3 copper = mix(vec3(0.32, 0.13, 0.05), vec3(0.98, 0.62, 0.36), wire) * (0.55 + lum * 0.9);
+    float gap = 1.0 - smoothstep(0.0, 0.1, min(w, 1.0 - w));
+    float pulse = smoothstep(0.86, 1.0, sin(p.z * 2.6 - t * 7.0)) + smoothstep(0.93, 1.0, sin(p.z * 5.1 + t * 4.3)) * 0.6;
+    float spec = smoothstep(0.9, 1.0, wire) * 0.4;
+    glow = vec3(0.35, 0.82, 1.0) * gap * (0.25 + pulse * 2.4) + vec3(1.0, 0.75, 0.5) * spec;
+    return mix(copper, vec3(0.6, 0.9, 1.0), gap * pulse * 0.7);
+  }
+  if (k == 28) { // poco de nanquim: tinta preta brilhando, com olhos de desenho que piscam e olham em volta
+    vec2 q = vec2(p.z, p.y) * 3.2; vec2 id = floor(q), f = fract(q) - 0.5;
+    float hv = c_h(vec3(id, 5.0));
+    vec3 ink = vec3(0.025, 0.022, 0.03) + vec3(0.25) * smoothstep(0.96, 1.0, sin((p.z + p.y * 0.6) * 4.0 - t * 1.3));
+    if (hv > 0.55) {
+      float blink = step(0.06, fract(t * 0.23 + hv * 7.0));
+      vec2 e = f + vec2((hv - 0.75) * 0.3, 0.0);
+      vec2 eye = e / vec2(0.2, 0.27 * blink + 0.015);
+      float white = smoothstep(1.0, 0.9, length(eye));
+      vec2 look = vec2(sin(t * 0.9 + hv * 20.0), cos(t * 0.7 + hv * 13.0)) * 0.07;
+      float pupil = smoothstep(0.1, 0.085, length((e - look) / vec2(1.0, 1.25)));
+      float rim = smoothstep(1.12, 1.0, length(eye)) - white;
+      vec3 c = mix(ink, vec3(0.94, 0.91, 0.84), white);
+      c = mix(c, vec3(0.02), max(pupil * white, rim));
+      glow = vec3(0.9, 0.88, 0.8) * white * (1.0 - pupil) * 0.35;
+      return c;
+    }
+    glow = ink * 0.5;
+    return ink;
+  }
+  if (k == 29) { // letreiro de teatro: laca vermelha, frisos dourados e fileiras de lampadas correndo
+    float row = fract(p.y * 2.4);
+    float trim = 1.0 - smoothstep(0.06, 0.1, abs(row - 0.5));
+    vec3 lac = mix(vec3(0.42, 0.04, 0.03), vec3(0.85, 0.12, 0.08), lum * 1.5) ;
+    vec3 gold = mix(vec3(0.55, 0.37, 0.08), vec3(1.0, 0.85, 0.42), c_fbm(p * 6.0) * 0.5 + lum);
+    vec2 b = vec2(fract(p.z * 9.0) - 0.5, (row - 0.5) * 3.2);
+    float bulb = smoothstep(0.3, 0.22, length(b));
+    float on = step(0.34, fract(floor(p.z * 9.0) / 3.0 - t * 1.8));
+    vec3 c = mix(lac, gold, trim);
+    vec3 lamp = mix(vec3(0.35, 0.22, 0.08), vec3(1.0, 0.92, 0.6), on);
+    c = mix(c, lamp, bulb);
+    glow = vec3(1.0, 0.75, 0.3) * bulb * on * 2.0 + gold * trim * smoothstep(0.95, 1.0, sin(p.z * 1.4 - t * 2.0)) * 0.8;
+    return c;
+  }
+  if (k == 30) { // favo elite (reativa, assinante Elite da Rovex): favo violeta; bordas acendem, pulsam e douram
+    vec2 q = vec2(p.z, p.y) * 4.0, rr = vec2(1.0, 1.732), hh = rr * 0.5;
+    vec2 a = mod(q, rr) - hh, b = mod(q - hh, rr) - hh;
+    vec2 g = dot(a, a) < dot(b, b) ? a : b, id = q - g;
+    vec2 ap = abs(g); float hd = max(dot(ap, vec2(0.5, 0.866)), ap.x);
+    float line = 1.0 - smoothstep(0.0, 0.05, 0.5 - hd);
+    float cv = c_h(vec3(id, 1.0));
+    vec3 base = mix(vec3(0.12, 0.05, 0.26), vec3(0.26, 0.12, 0.5), cv) * sh;
+    vec3 c = mix(base, vec3(0.05, 0.02, 0.1), line);
+    if (uReact < 0.5) return c;
+    vec3 vio = vec3(0.62, 0.38, 1.0), gold = vec3(1.0, 0.8, 0.35);
+    float wave = 0.5 + 0.5 * sin(id.x * 0.6 + id.y * 0.3 - t * 3.0);
+    vec3 edge = uReact > 2.5 ? gold : vio;
+    c = mix(c, edge, line);
+    glow = edge * line * (uReact > 1.5 ? 0.8 + wave * 1.2 : 0.9);
+    if (uReact > 1.5) glow += vio * smoothstep(0.7, 1.0, wave) * (0.25 + cv * 0.3);
+    if (uReact > 2.5) glow += vec3(1.0, 0.9, 0.6) * step(0.985, c_h(vec3(id, floor(t * 5.0))));
     return c;
   }
   return vec3(1.0);

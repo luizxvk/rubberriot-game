@@ -9,7 +9,9 @@ import { toon, outline } from './toon.js';
 import { makeGun } from './guns.js';
 import { t, wName } from './i18n.js';
 import { CAMO_GLSL, camoTime, camoById } from './camos.js';
-import { bodyTrait } from '../shared/weapons.js';
+import { attachCamoFx } from './camofx.js';
+import { bodyTrait, bpMods, BLUEPRINTS } from '../shared/weapons.js';
+import { bpUnlocked } from './progress.js';
 
 const S = 0.32; // unidade do glb -> metros
 const parts = {};  // nome -> { geo, box }
@@ -27,6 +29,36 @@ export const CATEGORY = {
   melee: { bodies: MELEE, scopes: [], chargers: [], handles: [] },
   sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2'], scopes: ['sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2', 'fusil_scope_2', 'fusil_scope_6'], chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: [] },
 };
+// So uma peca (mira, pente, empunhadura), pintada como na arma: foto do banner de desbloqueio
+export function buildPartPreview(id, lo = {}) {
+  const p = parts[id];
+  if (!p || !gunTex) return null;
+  const holder = new THREE.Group(), inner = new THREE.Group();
+  inner.scale.setScalar(S); holder.add(inner);
+  const m = new THREE.Mesh(p.geo, paintMaterial(lo.paint, lo.accent, null, true));
+  outline(m, 0.0055);
+  m.position.copy(p.box.getCenter(new THREE.Vector3())).negate();
+  inner.add(m);
+  // a peca deitada de lado, como a arma no banner (a camera olha de +x)
+  holder.userData = {};
+  return holder;
+}
+
+// Kit do sobrevivente no Infectado: o corpo da classe do jogador com ponto vermelho, laser,
+// o maior pente que encaixa e empunhadura (quando a categoria tem)
+export function infectLoadout(cat, base) {
+  const C = CATEGORY[cat];
+  if (!C) return base;
+  const lo = { ...defaultLoadout(cat), ...(base || {}) };
+  if (!parts[lo.body]) lo.body = C.bodies[0];
+  lo.scope = C.scopes.find(id => parts[id] && parts[id].box.max.z - parts[id].box.min.z < 0.6) || null;
+  const mags = chargerOptions(lo.body, cat);
+  lo.charger = mags.reduce((best, id) => (loadoutStats(cat, { ...lo, charger: id }).mag > loadoutStats(cat, { ...lo, charger: best }).mag ? id : best), mags[0] || null);
+  lo.handle = C.handles[0] || null;
+  lo.laser = 'laser_1';
+  return lo;
+}
+
 // Mira laser (modulo lateral, feito no codigo): melhora o quadril, pesa um pouco na mira
 export const LASERS = ['laser_1', 'laser_2'];
 const LASER_DEF = {
@@ -207,9 +239,12 @@ function rearTube(id) {
 }
 
 // material da pintura (uniforms por arma)
-function paintMaterial(paint, accent, camo) {
+// part = peca encaixada (mira, pente, empunhadura): fica inteira na cor de destaque e nunca
+// recebe camuflagem. A camuflagem e' so do corpo, e mesmo nele o verde fica com a pintura.
+function paintMaterial(paint, accent, camo, part = false) {
   const m = toon(0xffffff, { map: gunTex, unique: true });
   m.userData.u = {
+    uPart: { value: part ? 1 : 0 },
     uPaint: { value: new THREE.Color(paint || '#ffffff') }, uPaintOn: { value: paint ? 1 : 0 },
     uAccent: { value: new THREE.Color(accent || '#ffffff') }, uAccentOn: { value: accent ? 1 : 0 },
     uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 },
@@ -220,7 +255,7 @@ function paintMaterial(paint, accent, camo) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn;\n' + CAMO_GLSL + '\nvec3 gCamoGlow = vec3(0.0);')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn; uniform float uPart;\n' + CAMO_GLSL + '\nvec3 gCamoGlow = vec3(0.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
@@ -229,15 +264,21 @@ function paintMaterial(paint, accent, camo) {
           float green = smoothstep(0.08, 0.2, tc.g - max(tc.r, tc.b));
           float bluish = smoothstep(1.25, 1.6, tc.b / (tc.r + 0.012)) * (1.0 - green);
           float light = smoothstep(0.15, 0.2, lum) * (1.0 - green);
-          float accent = max(bluish, light);
-          diffuseColor.rgb = mix(tc, uPaint * clamp(lum * 2.4, 0.35, 1.2), green * uPaintOn);
-          diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * clamp(lum * 3.0, 0.4, 1.2), accent * uAccentOn);
-          // camuflagem so no corpo: as partes de destaque ficam com a cor de destaque (ou a original)
-          if (uCamo > 0.5) {
+          float accent = uPart > 0.5 ? 1.0 - green : max(bluish, light);
+          // ⚠ a cor escolhida nunca passa de 1x: as partes claras (branco da paleta) iam a 1,2x e
+          // a luz da cena estourava a cor ate virar branco. Era isso que fazia o destaque
+          // "pegar so numa parte" (so as pecas escuras, abaixo de 1x, mostravam a cor).
+          diffuseColor.rgb = mix(tc, uPaint * clamp(0.45 + lum * 0.75, 0.45, 1.0), green * uPaintOn);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * clamp(0.55 + lum * 0.45, 0.55, 1.0), accent * uAccentOn);
+          // camuflagem so nas partes escuras do corpo: o verde fica com a pintura (ou o verde
+          // original) e o destaque com a cor de destaque. Antes ela cobria o verde tambem e a
+          // pintura sumia: das duas cores escolhidas, so o destaque aparecia.
+          if (uCamo > 0.5 && uPart < 0.5) {
             vec3 cg;
             vec3 cc = camoColor(int(uCamo + 0.5), vCamoPos, uTime, lum, cg);
-            diffuseColor.rgb = mix(cc, diffuseColor.rgb, accent);
-            gCamoGlow = cg * (1.0 - accent);
+            float keep = max(accent, green);
+            diffuseColor.rgb = mix(cc, diffuseColor.rgb, keep);
+            gCamoGlow = cg * (1.0 - keep);
           }
         }`);
   };
@@ -525,8 +566,27 @@ function bodySlot(body, slot) {
   return new THREE.Vector3(cx, pr.lo[pick] + 0.015, pr.z0 + (pick + 0.5) * pr.dz);
 }
 
+// Variante de elite montada: todas as pecas, cores e tracado + o pente grande/curto que encaixa no modelo
+export function bpLoadout(id) {
+  const B = BLUEPRINTS[id];
+  if (!B) return null;
+  const lo = { scope: null, charger: null, handle: null, laser: null, ...B.lo, bp: id };
+  if (B.mag && parts[lo.body]) {
+    const vol = (c) => { const s = parts[c].box.getSize(new THREE.Vector3()); return s.x * s.y * s.z; };
+    const opts = chargerOptions(lo.body, B.wpn).filter(c => parts[c]).sort((a, b) => vol(a) - vol(b));
+    if (opts.length > 1) lo.charger = B.mag === 'big' ? opts[opts.length - 1] : opts[0];
+  }
+  return lo;
+}
+
 // Monta a arma. Devolve o mesmo formato do makeGun (userData: muzzle, gripR, gripL, spin, scope, stats)
+// Camuflagem lendaria liga o efeito de fora da arma (fogo, raio, tinta, estrelas)
 export function buildGun(wpn, lo) {
+  const g = buildGunParts(wpn, lo), fx = camoById(lo?.camo).fx;
+  if (g && fx) attachCamoFx(g, fx);
+  return g;
+}
+function buildGunParts(wpn, lo) {
   if (wpn === 'minigun' && parts.__minigun) return buildMinigun();
   if (wpn === 'melee') return buildMelee(lo);
   const cat = CATEGORY[wpn];
@@ -539,6 +599,7 @@ export function buildGun(wpn, lo) {
   inner.scale.setScalar(S);
   holder.add(inner);
   const mat = paintMaterial(lo.paint, lo.accent, lo.camo);
+  const partMat = paintMaterial(lo.paint, lo.accent, null, true);
   const bodyBox = parts[lo.body].box;
   const len = bodyBox.max.z - bodyBox.min.z, h = bodyBox.max.y - bodyBox.min.y, cx = (bodyBox.min.x + bodyBox.max.x) / 2;
   const chargerSlot = bodySlot(lo.body, 'charger');
@@ -547,10 +608,10 @@ export function buildGun(wpn, lo) {
   const gi = gripInfo(lo.body);
   const gripZ = isPistol ? chargerSlot.z : gi ? gi.zc : Math.min(bodyBox.max.z - len * 0.15, chargerSlot.z + len * 0.17);
   const origin = new THREE.Vector3(cx, bodyBox.min.y + h * (isPistol ? 0.45 : 0.42), gripZ);
-  const add = (name, at) => {
+  const add = (name, at, m0 = mat) => {
     const p = parts[name];
     if (!p) return null;
-    const m = new THREE.Mesh(p.geo, mat);
+    const m = new THREE.Mesh(p.geo, m0);
     outline(m, 0.0055);
     const off = new THREE.Vector3();
     if (at) off.copy(at.target).sub(at.self);
@@ -564,7 +625,7 @@ export function buildGun(wpn, lo) {
     const id = lo[slot];
     if (!id || !parts[id]) continue;
     const nat = ownerBody(id) === lo.body;
-    if (slot !== 'scope') { add(id, nat ? null : { self: anchor(slot, parts[id].box), target: bodySlot(lo.body, slot) }); continue; }
+    if (slot !== 'scope') { add(id, nat ? null : { self: anchor(slot, parts[id].box), target: bodySlot(lo.body, slot) }, partMat); continue; }
     {
       const b = parts[id].box, sl = b.max.z - b.min.z, sh = b.max.y - b.min.y;
       // eixo optico = centro da lente; olho fica na traseira da mira
@@ -587,7 +648,7 @@ export function buildGun(wpn, lo) {
       if (sl >= 0.6) top = Math.max(top, topInFront(lo.body, lensC.x + shift.x, lr * 0.75, b.max.z + shift.z, b.max.z + shift.z + 0.15));
       const lift = Math.max(0, top + 0.012 - (lensC.y + shift.y - lr * 0.82));
       shift.y += lift;
-      add(id, { self: new THREE.Vector3(), target: shift });
+      add(id, { self: new THREE.Vector3(), target: shift }, partMat);
       // vao entre a mira e o corpo vira suporte (riser), nunca fica boiando
       const gap = Number.isFinite(seat) ? b.min.y + shift.y - seat : lift;
       if (gap > 0.012) {
@@ -751,6 +812,7 @@ function addLaser(holder, lo, origin, isPistol) {
   const geo = new THREE.CylinderGeometry(0.003, 0.005, 1, 8, 1, true); geo.rotateX(-Math.PI / 2); geo.translate(0, 0, -0.5);
   const beam = new THREE.Mesh(geo, beamMaterial(D.color));
   beam.position.z = -d / 2 - 0.004; beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
+  beam.userData.noFx = true; // feixe de 12 m nao conta como superficie da arma (efeito da camo lendaria)
   g.add(beam);
   holder.add(g);
   return { group: g, beam, color: D.color, len: BEAM_LEN };
@@ -791,6 +853,8 @@ export function loadoutStats(wpn, lo) {
   st.spread *= 1 / Math.sqrt(k);
   st.rate *= Math.sqrt(k);
   st.dmg *= 0.9 + 0.1 * k;
+  // variante de elite: bonus e onus por cima da montagem
+  for (const [m, v] of Object.entries(bpMods(lo.bp))) if (typeof st[m] === 'number') st[m] *= v;
   return st;
 }
 
@@ -823,6 +887,13 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   const C = CATEGORY[cat];
   if (!C || !lo) return lo;
   const out = { ...lo };
+  // variante de elite liberada: a montagem dela vale mesmo com peca que o nivel ainda nao abriu
+  const B = out.bp && BLUEPRINTS[out.bp];
+  if (B && B.wpn === cat && bpUnlocked(out.bp)) {
+    const cm = camoList.find(c => c.id === out.camo);
+    return { ...out, ...bpLoadout(out.bp), camo: cm && !camoOpen(cat, cm) ? B.lo.camo : out.camo };
+  }
+  delete out.bp;
   const ok = (list, id) => { const i = list.indexOf(id ?? null); return i < 0 || partOpen(cat, i, id); };
   if (!ok(C.bodies, out.body)) { out.body = C.bodies[0]; out.charger = null; }
   if (out.scope && !ok([null, ...C.scopes], out.scope)) out.scope = cat === 'sniper' ? nativePart(out.body, 'scope') : null;

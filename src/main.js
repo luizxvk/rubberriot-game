@@ -6,25 +6,28 @@ import { makePipeline } from './post.js';
 import { Player } from './player.js';
 import { pushSoon, me as rovexMe, inRovex } from './rovex.js';
 import { Hud } from './hud.js';
-import { Input, isTouch, buildTouch, applyHudLayout } from './input.js';
+import { Input, isTouch, buildTouch, applyHudLayout, setFireButton } from './input.js';
+import { Pad } from './gamepad.js';
 import { LocalNet, WsNet } from './net.js';
 import { audio } from './audio.js';
-import { MODES, WEAPONS, STREAKS, GUN_LADDER, PRIMARIES } from '../shared/weapons.js';
+import { MODES, WEAPONS, STREAKS, GUN_LADDER, PRIMARIES, BLUEPRINTS } from '../shared/weapons.js';
+import { updateCamoFx } from './camofx.js';
 import { getMap, hasLOS } from '../shared/map.js';
 import { loadArsenal, getLoadouts, scopeTarget } from './arsenal.js';
-import { initMenus } from './ui.js';
+import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
-import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level } from './progress.js';
+import { ink, PAL } from './toon.js';
+import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { track } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
-import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun } from './arsenal.js';
+import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun, buildPartPreview, bpLoadout } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------- ajustes ----------
-const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true };
+const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true };
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -47,7 +50,7 @@ scopeRT.texture.colorSpace = THREE.SRGBColorSpace;
 scopeTarget.texture = scopeRT.texture;
 const scopeCam = new THREE.PerspectiveCamera(20, 1, 0.05, 500);
 const vm = new ViewModel();
-const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onLeave: () => quitGame() });
+const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onLeave: () => quitGame() });
 const laserDot = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -58,15 +61,30 @@ const laserDot = (() => {
   return sp;
 })();
 const tmpV2 = new THREE.Vector3();
+// bomba de desenho: tres bananas de dinamite amarradas e um despertador com a luz que pisca
+const bombMesh = (() => {
+  const g = new THREE.Group();
+  for (const [x, z] of [[-0.12, 0], [0.12, 0], [0, 0.11]]) { const s = ink(new THREE.CylinderGeometry(0.085, 0.085, 0.5, 12), PAL.red, 0.012); s.rotation.z = Math.PI / 2; s.position.set(0, 0.09 + (z ? 0.13 : 0), x + z * 0); s.position.z = x; s.position.y = z ? 0.22 : 0.09; g.add(s); }
+  const band = ink(new THREE.BoxGeometry(0.06, 0.34, 0.36), PAL.dark, 0.008); band.position.y = 0.15; g.add(band);
+  const clock = ink(new THREE.CylinderGeometry(0.11, 0.11, 0.05, 18), PAL.white, 0.01); clock.rotation.x = Math.PI / 2; clock.position.set(0, 0.2, 0.2); g.add(clock);
+  for (const s of [-1, 1]) { const bell = ink(new THREE.SphereGeometry(0.045, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xd8b24a, 0.006); bell.position.set(s * 0.07, 0.31, 0.2); bell.rotation.z = -s * 0.5; g.add(bell); }
+  const light = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff3020 }));
+  light.position.set(0, 0.34, 0); g.add(light);
+  g.userData.light = light; g.visible = false; scene.add(g);
+  return g;
+})();
+let bombBeep = 0;
 const { composer, film, vmPass } = makePipeline(renderer, scene, camera, vm);
 
 function applySettings() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * settings.res);
   resize();
   film.uniforms.grain.value = settings.grain;
-  film.uniforms.mode.value = settings.film === 'bw' ? 0 : 1;
+  film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
   audio.setVolumes({ master: settings.master, music: settings.music, sfx: settings.sfx });
   input.settings = settings;
+  setFireButton(input);
+  applyCrosshair($('cross'), settings);
 }
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -89,6 +107,7 @@ const smithCam = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
 const smithHolder = new THREE.Group(); smithScene.add(smithHolder);
 
 const input = new Input(canvas);
+const pad = new Pad(input);
 const hud = new Hud();
 let world, objectives, fx;
 
@@ -111,26 +130,48 @@ const G = {
   },
 };
 G.fx = null;
+G.pad = pad;
+// o que o jogador levou da partida (tela de fim): XP por tipo, desbloqueios e nivel de partida
+function newMatchLog() { const pi = progressInfo(); return { xp: {}, unlocks: [], startXp: pi.xp, startLevel: pi.level }; }
+function logXp(kind, n) { const L = G.matchLog; if (L) L.xp[kind] = (L.xp[kind] || 0) + n; }
+function logUnlock(kind, name, img) { const L = G.matchLog; if (L && !L.unlocks.some(u => u.name === name)) L.unlocks.push({ kind, name, img }); }
 // XP: soma na partida, mostra "+100 Nocaute" no meio da tela e avisa quando sobe de nivel
 // evento de desafio: completou = XP + banner na hora
+// Elite da Rovex: XP em dobro em tudo (abate, partida, desafio)
+const xpMult = () => (rovexMe?.elite ? 2 : 1);
+
 function chEvent(e) {
   if (G.state !== 'game') return;
   for (const c of track(e)) {
+    // elite rastreado: cada avanco aparece na tela (sem XP ainda)
+    if (c.kind === 'eliteProg') { hud.eliteTrack(t('el_' + c.id, { n: c.n }), c.prog, c.n); continue; }
+    c.xp *= xpMult();
     G.matchXp = (G.matchXp || 0) + c.xp;
+    logXp('challenge', c.xp);
     addXp('challenge', c.xp);
     const r = c.reward;
-    const name = r ? (r.slot === 'tracer' ? t('s_tracer') + ': ' + t('tr_' + r.id.slice(3)) : r.slot === 'camo' ? t('camo_' + r.id) : partName(r.slot, r.id)) : t('ch_' + c.id, { n: '', w: c.wpn ? wName(c.wpn) : '' }).replace(/\s+/g, ' ');
+    if (c.kind === 'elite') hud.eliteTrack(t('el_' + c.id, { n: c.n }), 1, 1, true);
+    const name = r ? (r.slot === 'bp' ? t(r.id) : r.slot === 'tracer' ? t('s_tracer') + ': ' + t('tr_' + r.id.slice(3)) : r.slot === 'camo' ? t('camo_' + r.id) : partName(r.slot, r.id)) : t('ch_' + c.id, { n: '', w: c.wpn ? wName(c.wpn) : '' }).replace(/\s+/g, ' ');
     const img = r && r.slot !== 'tracer' ? unlockShot({ slot: r.slot, id: r.id, wpn: r.wpn || G.player?.wpn || 'smg' }) : null;
-    setTimeout(() => { hud.unlockBanner({ kind: t(r ? 'chUnlocked' : 'chDoneDaily'), name: name + ' +' + c.xp + ' XP', img }); audio.play(r ? 'unlock' : 'levelup', { vol: 0.7, ui: true, jitter: 0 }); }, 400);
+    if (r) logUnlock(t('chUnlocked'), name, img);
+    if (c.kind === 'elite') {
+      // elite: cartaz lendario com a arma ganha + fanfarra comica
+      const bp = r && BLUEPRINTS[r.id];
+      setTimeout(() => { hud.eliteBanner({ title: t('elDone'), name: bp ? name : t('el_' + c.id, { n: '' }), sub: bp ? `${wName(bp.wpn)} · ${t('camo_' + bp.lo.camo)}` : '', xp: c.xp, img }); audio.fanfare(0.85); }, 400);
+      if (r) { G.loadouts = matchLoadouts(); sendLoadout(); }
+      continue;
+    }
+    setTimeout(() => { hud.unlockBanner({ kind: t(c.kind === 'elite' ? 'elDone' : r ? 'chUnlocked' : 'chDoneDaily'), name: name + ' +' + c.xp + ' XP', img }); audio.play(r ? 'unlock' : 'levelup', { vol: 0.7, ui: true, jitter: 0 }); }, 400);
     if (r) { G.loadouts = matchLoadouts(); sendLoadout(); }
   }
 }
 
 function gainXp(kind, wpn = null, mult = 1) {
   if (G.state !== 'game') return;
-  const amount = Math.round((XP[kind] || 0) * mult);
+  const amount = Math.round((XP[kind] || 0) * mult * xpMult());
   if (!amount) return;
   G.matchXp = (G.matchXp || 0) + amount;
+  logXp(kind, amount);
   addXp(kind, amount, WEAPONS[wpn] ? wpn : null);
   hud.xpPop(`+${amount} ${t('xp_' + kind)}`);
 }
@@ -159,13 +200,17 @@ function unlockShot(u) {
     shotScene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); shotScene.add(dl);
     shotCam = new THREE.OrthographicCamera(-1, 1, 0.5, -0.5, 0.01, 10); shotCam.position.set(3, 0.6, 0); shotCam.lookAt(0, 0, 0);
   }
-  const lo = { ...(G.loadouts[u.wpn] || {}) };
-  if (u.slot === 'body') { lo.body = u.id; lo.charger = null; } else lo[u.slot] = u.id;
-  const gun = buildGun(u.wpn, lo);
+  let lo = { ...(G.loadouts[u.wpn] || {}) };
+  if (u.slot === 'bp') lo = bpLoadout(u.id);
+  else if (u.slot === 'body') { lo.body = u.id; lo.charger = null; } else lo[u.slot] = u.id;
+  // mira, pente e empunhadura: a foto e' so da peca nova, sozinha (nao montada na arma)
+  const gun = (u.slot === 'scope' || u.slot === 'charger' || u.slot === 'handle') && buildPartPreview(u.id, lo) || buildGun(u.wpn, lo);
   const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();
+  const fxr = gun.userData.camoFx?.root; if (fxr) fxr.removeFromParent(); // a foto e da arma, sem o efeito
   const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3());
   gun.position.sub(c); shotScene.add(gun);
-  const k = Math.max(box.max.z - box.min.z, (box.max.y - box.min.y) * 2) * 0.56;
+  const solo = !gun.userData.muzzle; // peca sozinha: mais respiro em volta
+  const k = Math.max(box.max.z - box.min.z, (box.max.y - box.min.y) * 2) * (solo ? 0.8 : 0.56);
   Object.assign(shotCam, { left: -k, right: k, top: k / 2, bottom: -k / 2 }); shotCam.updateProjectionMatrix();
   shotR.render(shotScene, shotCam); shotScene.remove(gun);
   return shotR.domElement.toDataURL();
@@ -182,14 +227,17 @@ onProgress((e) => {
   const got = [];
   for (let n = (e.wpnFrom || 0) + 1; e.wpnUp && n <= e.wpnUp; n++) got.push(...unlocksAt(e.wpn, n, 0));
   for (let n = (e.levelFrom || 0) + 1; e.levelUp && n <= e.levelUp; n++) got.push(...unlocksAt(e.wpn, 0, n));
-  // banner estilo COD: um por vez, com a foto da arma ja com a peca/camuflagem nova
+  // tudo vai pra tela de fim; na hora, banner estilo COD um por vez (ate 3)
+  const shots = got.map(u => unlockShot(u));
+  got.forEach((u, i) => logUnlock(t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), u.name, shots[i]));
   got.slice(0, 3).forEach((u, i) => setTimeout(() => {
-    hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: unlockShot(u), more: i === 2 && got.length > 3 ? got.length - 3 : 0 });
+    hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 });
     audio.play('unlock', { vol: 0.8, ui: true, jitter: 0 });
   }, 1100 + i * 3400));
 });
 window.__G = G; // atalho de depuracao
 G.addXp = addXp;
+G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
 
 // troca o cenario quando a sala usa outro mapa
 function setMap(id) {
@@ -230,6 +278,8 @@ function onSnap(s) {
     }
     seen.add(p.id);
     const r = remoteFor(p);
+    // trocou de time (infectado): o boneco e' refeito na cor nova
+    if (p.team !== r.team) { scene.remove(r.char.root); r.char = new Character(p.team, p.name); scene.add(r.char.root); r.loKey = null; }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team;
     r.kills = p.kills; r.hp = p.hp;
@@ -249,7 +299,8 @@ function onSnap(s) {
   for (const [id, m] of G.nadeMeshes) if (!alive.has(id)) { scene.remove(m); G.nadeMeshes.delete(id); }
   // dirigiveis
   const bl = s.blimps || [];
-  while (G.blimpMeshes.length < bl.length) { const m = fx.blimpMesh(bl[G.blimpMeshes.length].team); scene.add(m); G.blimpMeshes.push(m); }
+  // dirigivel nasce ja la no alto (antes nascia na origem e subia do chao)
+  while (G.blimpMeshes.length < bl.length) { const b = bl[G.blimpMeshes.length], m = fx.blimpMesh(b.team); m.position.fromArray(b.pos); scene.add(m); G.blimpMeshes.push(m); }
   while (G.blimpMeshes.length > bl.length) scene.remove(G.blimpMeshes.pop());
   bl.forEach((b, i) => { G.blimpMeshes[i].userData.to = b.pos; });
   if (G.state === 'game') hud.score(s, G.me, s.players);
@@ -274,7 +325,12 @@ function onEvent(e) {
   switch (e.k) {
     case 'spawn':
       if (e.id === G.myId && G.player) {
-        G.reactStage = 0;
+        // camo reativa: o estagio vem da sequencia do servidor. Quem morreu volta do 0; quem sobreviveu a
+        // rodada da bomba (todo mundo renasce na rodada nova) mantem o estagio
+        const meSnap = G.snap?.players?.find(o => o.id === G.myId);
+        G.reactStage = Math.min(3, Math.floor((meSnap?.streak || 0) / 2));
+        $('specBar').hidden = true; $('dead').classList.remove('spec');
+        if (e.team) G.myTeam = e.team;
         G.player.spawn(e);
         hud.hp(100); hud.weapon(G.player);
         $('dead').hidden = true;
@@ -309,6 +365,7 @@ function onEvent(e) {
       if (e.id === G.myId) { gainXp('assist'); chEvent({ type: 'assist' }); }
       break;
     case 'kill': {
+      if (e.v === G.myId && G.mode === 'bomb') { $('specBar').hidden = false; $('dead').classList.add('spec'); }
       const vPos = e.pos || posOf(e.v);
       if (vPos && inGame) {
         fx.puff([vPos[0], vPos[1] + 0.8, vPos[2]], 9, 1.1, 0xece9e1, 0.9);
@@ -321,7 +378,11 @@ function onEvent(e) {
       const html = e.a ? `<span class="${teamCls(e.a)}">${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
       if (inGame) hud.feed(html, e.a === G.myId || e.v === G.myId);
       if (e.a === G.myId && inGame) {
-        chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head });
+        chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head, streak: e.streak || 0 });
+        // multiabate: 3 derrubados em 4 s (desafio de elite)
+        const now = performance.now() / 1000;
+        G.multi = (G.multi || []).filter(x => now - x < 4); G.multi.push(now);
+        if (G.multi.length >= 3) { G.multi = []; chEvent({ type: 'multi' }); }
         // camuflagem reativa: sobe de estagio a cada 2 abates nessa vida (2, 4, 6)
         const st = Math.min(3, Math.floor((e.streak || 0) / 2));
         if (st > (G.reactStage || 0)) {
@@ -357,6 +418,7 @@ function onEvent(e) {
       break;
     case 'boom': {
       fx.explosion(e.pos);
+      if (e.big) { fx.explosion([e.pos[0] + 1.5, e.pos[1] + 1, e.pos[2]]); fx.explosion([e.pos[0] - 1.5, e.pos[1] + 2, e.pos[2] + 1]); G.shake(0.6); }
       audio.play('explosion', { pos: e.pos, vol: inGame ? 1 : 0.2, key: 'boom', max: 3 });
       if (G.player && G.player.alive) {
         const p = G.player.pos, c = [p[0], p[1] + 0.9, p[2]];
@@ -391,14 +453,24 @@ function onEvent(e) {
       setTimeout(() => audio.play('pan', { pos: e.pos, vol: 1, rate: 0.7 }) || audio.play('explosion', { pos: e.pos, vol: 0.7, rate: 1.3 }), 180);
       if (G.player && Math.hypot(G.player.pos[0] - e.pos[0], G.player.pos[2] - e.pos[2]) < 18) G.shake(0.3);
       break;
+    case 'nuke':
+      // a torta caiu: clarao branco + tremor pra todo mundo
+      if (inGame) {
+        G.flashT = Math.max(G.flashT, 1.4); G.shake(0.9);
+        audio.play('explosion', { ui: true, vol: 1, rate: 0.55 }); audio.play('pan', { ui: true, vol: 0.9, rate: 0.6 });
+        if (e.id === G.myId) hud.alert(t('nukeHit'), t('nukeHitSub', { n: e.n }), 'blue');
+      }
+      break;
     case 'streakReady':
-      if (e.id === G.myId && inGame) { hud.message(t('streakReady', { s: t('s_' + e.kind) }), 2.4); audio.play('pickup', { vol: 0.7, ui: true, rate: 0.8 }); }
+      if (e.id === G.myId && inGame) { hud.message(t('streakReady', { s: t('s_' + e.kind), k: t(pad.active ? 'how_pad' : isTouch ? 'how_touch' : 'how_kb') }), 2.4); audio.play('pickup', { vol: 0.7, ui: true, rate: 0.8 }); }
       break;
     case 'streak':
       if (inGame) {
         const mine = e.id === G.myId, ally = MODES[G.mode].teams && e.team === G.myTeam;
-        if (mine) { gainXp('streak'); vm.callStreak(e.kind); chEvent({ type: 'streak' }); }
-        hud.message(t(mine || ally ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }), 2.6);
+        if (mine) { gainXp('streak'); vm.callStreak(e.kind); chEvent({ type: 'streak', kind: e.kind }); }
+        // Torta Atomica: aviso grande pra todo mundo, com o nome de quem pediu
+        if (e.kind === 'nuke') hud.alert(t(mine ? 'nukeYou' : ally ? 'nukeAlly' : 'nukeEnemy', { n: nameOf(e.id) }), t(mine ? 'nukeYouSub' : ally ? 'nukeAllySub' : 'nukeEnemySub', { t: e.delay || 6 }), mine || ally ? 'blue' : 'red');
+        else hud.message(t(mine || ally ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }), 2.6);
         audio.play(mine || ally ? 'flag' : 'capture', { vol: 0.7, ui: true });
       }
       break;
@@ -406,6 +478,8 @@ function onEvent(e) {
       if (e.id !== G.myId) { G.remoteLo.set(e.id, e.los || {}); G.remoteTracer.set(e.id, e.tracer || 'chalk'); }
       break;
     case 'give':
+      if (e.id === G.myId && G.player && e.refill) { G.player.give(e.wpn, false); hud.weapon(G.player); break; }
+      if (e.id === G.myId && G.player && G.mode === 'infect') { G.player.forced = true; G.player.give(e.wpn, true, !!e.force); hud.weapon(G.player); break; }
       if (e.id === G.myId && G.player) {
         G.player.forced = G.mode === 'gungame';
         if (e.body) G.player.ggBody = e.body;
@@ -452,22 +526,95 @@ function onEvent(e) {
     case 'start':
       if (G.state === 'lobby') beginMatch(false);
       break;
+    // todo mundo carregou: 3, 2, 1
+    case 'countdown':
+      G.countEnd = performance.now() + e.t * 1000;
+      break;
+    case 'infected': {
+      if (!inGame) break;
+      const mine = e.id === G.myId;
+      if (mine) { G.myTeam = 'red'; hud.alert(t(e.first ? 'inf_firstYou' : 'inf_you'), t(e.first ? 'inf_firstSub' : 'inf_youSub'), 'red'); audio.play('death', { ui: true, vol: 0.6, rate: 0.8 }); }
+      else if (e.first) hud.alert(t('inf_first', { n: nameOf(e.id) }), '', 'red');
+      else hud.feed(esc(t('inf_got', { n: nameOf(e.id) })));
+      if (!mine) audio.play('capture', { ui: true, vol: 0.5 });
+      break;
+    }
+    case 'lastStand':
+      if (!inGame) break;
+      if (e.id === G.myId) { hud.alert(t('inf_lastYou'), t('inf_lastSub'), 'blue'); audio.play('flag', { ui: true, vol: 0.8 }); }
+      else hud.alert(t('inf_last', { n: nameOf(e.id) }), '', G.myTeam === 'red' ? 'red' : 'blue');
+      break;
+    case 'survive':
+      if (e.id === G.myId) gainXp('survive');
+      break;
+    // ---------- plantar a bomba ----------
+    case 'round':
+      if (!inGame) break;
+      G.spec = { i: 0, map: false };
+      for (const r of G.remotes.values()) r.char.root.visible = true;
+      hud.alert(t('roundN', { n: e.n }), t(G.myTeam === 'red' ? (e.carrier === G.myId ? 'bombYouCarry' : 'bombAtkGoal') : 'bombDefGoal'), G.myTeam === 'red' ? 'red' : 'blue');
+      break;
+    case 'roundEnd': {
+      if (!inGame) break;
+      const won = e.winner === G.myTeam;
+      hud.alert(t(won ? 'roundWon' : 'roundLost'), t('why_' + e.why), e.winner === 'red' ? 'red' : 'blue');
+      audio.play(won ? 'flag' : 'capture', { ui: true, vol: 0.8 });
+      if (won) { gainXp('roundWin'); chEvent({ type: 'win' }); }
+      break;
+    }
+    case 'halftime':
+      if (inGame) hud.message(t('bombHalf'), 3);
+      break;
+    case 'bomb':
+      if (!inGame) break;
+      if (e.act === 'plant') { hud.message(t('bombPlanted', { s: e.site }), 2.6); audio.play('flag', { ui: true, vol: 0.7, rate: 0.8 }); if (e.id === G.myId) gainXp('plant'); }
+      else if (e.act === 'defuse') { hud.feed(esc(t('bombDefusedBy', { n: nameOf(e.id) }))); if (e.id === G.myId) gainXp('defuse'); }
+      else if (e.act === 'drop') hud.feed(esc(t('bombDropFeed')));
+      else if (e.act === 'take' && e.id === G.myId) { hud.message(t('bombCarry'), 2); audio.play('pickup', { ui: true, vol: 0.6 }); }
+      break;
   }
 }
 
 function showEnd(winner) {
-  const won = winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
+  const inf = G.mode === 'infect';
+  const won = inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
   $('endWin').textContent = won;
-  const ps = [...(G.snap?.players || [])].sort((a, b) => b.score - a.score).slice(0, 6);
-  $('endBoard').innerHTML = ps.map(p => `<div><span>${esc(p.name)}</span><span>${t('endKills', { n: p.kills })}</span></div>`).join('');
-  const pi = progressInfo();
-  $('endBoard').insertAdjacentHTML('afterend', `<div class="end-xp" id="endXp">${t('xpTotal', { n: G.matchXp || 0 })} · ${t('playerLevel')} ${pi.level}<span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span></div>`);
+  const ps = [...(G.snap?.players || [])].sort((a, b) => b.score - a.score).slice(0, 8);
+  $('endBoard').innerHTML = ps.map(p => `<div class="${p.id === G.myId ? 'me' : ''}"><span>${esc(p.name)}</span><span>${t('endKills', { n: p.kills })}</span></div>`).join('');
+  // progresso: XP por tipo, nivel subindo na barra e tudo o que liberou
+  const L = G.matchLog || newMatchLog();
+  const total = Object.values(L.xp).reduce((a, b) => a + b, 0);
+  $('endXpList').innerHTML = Object.entries(L.xp).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<li><span>${esc(t('xp_' + k))}</span><span>+${v}</span></li>`).join('');
+  $('endUnlTitle').textContent = t(L.unlocks.length ? 'endUnl' : 'endNothing');
+  $('endUnl').innerHTML = L.unlocks.map(u => `<li>${u.img ? `<img alt="" src="${u.img}">` : ''}<small>${esc(u.kind)}</small><b>${esc(u.name)}</b></li>`).join('');
   G.matchXp = 0;
   $('theend').hidden = false;
+  animateEndXp(L.startXp, L.startXp + total, total);
   audio.play('flag', { vol: 0.8, ui: true });
   let n = 8;
   const tick = () => { if ($('theend').hidden) return; $('endNext').textContent = t('nextIn', { n }); if (n-- > 0) setTimeout(tick, 1000); };
   tick();
+}
+
+// barra de XP enchendo do XP de antes da partida ate o de agora (vira o nivel no caminho)
+function animateEndXp(from, to, gained) {
+  const lvlOf = (xp) => { let n = 1; while (levelXp(n + 1) <= xp && n < 99) n++; return n; };
+  const t0 = performance.now(), dur = Math.min(2200, 600 + gained * 0.9);
+  let shownLvl = lvlOf(from);
+  const step = () => {
+    if ($('theend').hidden) return;
+    const k = Math.min(1, (performance.now() - t0) / dur), e = 1 - (1 - k) ** 3;
+    const xp = from + (to - from) * e, lv = lvlOf(xp);
+    const into = xp - levelXp(lv), need = Math.max(1, levelXp(lv + 1) - levelXp(lv));
+    $('endBar').style.width = Math.min(100, into / need * 100).toFixed(1) + '%';
+    $('endXpNum').textContent = '+' + Math.round(gained * e) + ' XP';
+    const b = $('endLvl');
+    b.textContent = lv;
+    if (lv > shownLvl) { shownLvl = lv; b.classList.remove('up'); void b.offsetWidth; b.classList.add('up'); audio.play('levelup', { ui: true, vol: 0.6 }); }
+    $('endLvlTxt').textContent = lv > lvlOf(from) ? t('endLvlUp', { n: lv }) : t('endLvl', { n: lv });
+    if (k < 1) requestAnimationFrame(step);
+  };
+  step();
 }
 
 function onMsg(m) {
@@ -481,7 +628,7 @@ function onMsg(m) {
     if (m.phase === 'play' && G.state === 'lobby') beginMatch(true);
   } else if (m.t === 'lobby') {
     if (m.map) setMap(m.map);
-    if (G.state === 'lobby') lobby.render(m, G.myId);
+    if (G.state === 'lobby') { lobby.render(m, G.myId); syncLobbyPick(m.mode); }
   }
 }
 
@@ -496,7 +643,7 @@ function sendLoadout() {
   if (!G.net) return;
   const los = {};
   for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee']) los[w] = G.loadouts[w];
-  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: level(), tracer: settings.tracer });
+  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: level(), tracer: settings.tracer, elite: !!rovexMe?.elite });
 }
 
 // ---------- iris ----------
@@ -551,6 +698,7 @@ async function startGame(net, name, mpArgs = null) {
   try { await net.connect(name); } catch (e) { G.state = 'menu'; await iris(150, 500); throw e; }
   $('menu').hidden = true;
   if (G.state === 'lobby') lobby.show();
+  lobbyPickMode = null;
   lobby.setRoom(mpArgs?.room || null, !!rovexMe);
   audio.music(true);
   iris(150, 800);
@@ -565,9 +713,14 @@ async function beginMatch(join) {
   if (G.state !== 'loading') return;
   hideLoading();
   G.state = 'game';
+  G.matchLog = newMatchLog(); G.matchXp = 0; G.countEnd = 0; G.spec = { i: 0, map: false };
+  input.mode = G.mode;
+  // avisa o servidor que carregou: quando o ultimo avisar, sai a contagem pra todo mundo
+  G.net?.send({ t: 'loaded' });
   document.body.classList.add('ingame');
   $('hud').hidden = false;
   input.enabled = true;
+  document.body.classList.toggle('bombmode', G.mode === 'bomb');
   if (isTouch) { buildTouch(input, $('touch')); try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); await screen.orientation?.lock?.('landscape'); } catch { /* sem tela cheia */ } }
   else canvas.requestPointerLock?.()?.catch?.(() => { /* sem gesto: a pausa pede o clique */ });
   iris(150, 500);
@@ -583,6 +736,8 @@ function backToLobby() {
   if (document.pointerLockElement) document.exitPointerLock();
   clearRemotes();
   lobby.show();
+  lobbyPickMode = null;
+  syncLobbyPick(G.mode);
 }
 
 // conexao caiu: tenta voltar pra mesma sala algumas vezes antes de desistir
@@ -626,12 +781,35 @@ async function quitGame() {
   iris(150, 700);
 }
 
+// lobby: escolher a principal antes de comecar (nao existe na escada de armas nem no infectado)
+let lobbyPickMode = null;
+function syncLobbyPick(mode) {
+  // escada de armas e infectado: a arma vem do jogo, ninguem escolhe
+  const off = mode === 'gungame' || mode === 'infect';
+  $('lbPick').hidden = off;
+  if (off || lobbyPickMode === mode) return;
+  lobbyPickMode = mode;
+  renderLobbyPick();
+}
+function renderLobbyPick() {
+  const list = PRIMARIES;
+  if (!list.includes(settings.primary)) { settings.primary = list[0]; saveSettings(); sendLoadout(); }
+  $('lbPickList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${wName(w)}</span></button>`).join('');
+  $('lbPickList').querySelectorAll('button').forEach(b => b.onclick = () => {
+    settings.primary = b.dataset.w; saveSettings(); sendLoadout();
+    audio.play('pickup', { ui: true, vol: 0.5 });
+    $('lbPickList').querySelectorAll('button').forEach(x => x.setAttribute('aria-checked', x === b));
+  });
+}
+
 // pausa: escolher a principal pro proximo renascimento (nao troca na hora)
 function renderPausePick() {
-  const gg = G.mode === 'gungame';
-  $('pausePick').hidden = gg;
-  if (gg) return;
-  $('pkList').innerHTML = PRIMARIES.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${wName(w)}</span></button>`).join('');
+  // escada de armas nao escolhe; infectado (vermelho) so tem a lamina; sobrevivente nao pega sniper
+  const off = G.mode === 'gungame' || G.mode === 'infect';
+  $('pausePick').hidden = off;
+  if (off) return;
+  const list = PRIMARIES;
+  $('pkList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${wName(w)}</span></button>`).join('');
   $('pkList').querySelectorAll('button').forEach(b => b.onclick = () => {
     settings.primary = b.dataset.w; saveSettings(); sendLoadout();
     audio.play('pickup', { ui: true, vol: 0.5 });
@@ -683,6 +861,7 @@ function frame() {
   const dt = realDt * G.timeScale;
   G.t += dt;
   camoTime.value += realDt;
+  updateCamoFx(realDt);
   film.uniforms.time.value = G.t;
 
   if (ui.screen === 'arsenal' && G.state === 'menu') {
@@ -707,6 +886,7 @@ function frame() {
     return;
   }
 
+  pad.poll(realDt, G.state === 'game' && !G.paused);
   G.net && G.net.update(dt);
   if (G.state === 'lobby') lobby.frame();
   world.update(G.t, dt);
@@ -746,16 +926,37 @@ function frame() {
     const zoom = p.zoomNow || W.zoom || 1;
     // luneta 3D: fora da lente so um zoom leve; dentro da lente, o zoom de verdade
     const outer = big ? 1.2 : zoom;
-    const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0) + (p.slideT > 0 ? 6 : 0)) / (1 + (outer - 1) * p.adsK);
+    const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0)) / (1 + (outer - 1) * p.adsK);
     camera.fov += (fovT - camera.fov) * (1 - Math.exp(-14 * realDt));
     camera.updateProjectionMatrix();
     vm.camera.fov = settings.vmFov - p.adsK * 12; vm.camera.updateProjectionMatrix();
     G.shakeAmt *= Math.exp(-7 * realDt);
     const sh = G.shakeAmt;
     if (p.alive) {
-      const bob = p.onGround && Math.hypot(p.vel[0], p.vel[2]) > 2 ? Math.abs(Math.sin(p.stepPhase)) * 0.045 * (1 - p.adsK) : 0;
+      // balanco de cabeca curto e so na vertical (o grosso do balanco e' da arma, como no COD)
+      const bob = p.onGround && Math.hypot(p.vel[0], p.vel[2]) > 2 ? Math.abs(Math.sin(p.stepPhase)) * (p.sprint ? 0.03 : 0.016) * (1 - p.adsK) : 0;
       camera.position.set(p.pos[0], p.pos[1] + p.eye - bob, p.pos[2]);
       camera.rotation.set(p.pitch + (Math.random() - 0.5) * sh * 0.05, p.yaw + (Math.random() - 0.5) * sh * 0.05, p.roll);
+    } else if (G.mode === 'bomb') {
+      // fora da rodada: assiste um colega em primeira pessoa ou o mapa de cima
+      const list = [...G.remotes.values()].filter(r => r.alive && !G.isEnemy(r));
+      const S = G.spec || (G.spec = { i: 0, map: false });
+      if (inp.firePressed || inp.jumpPressed) S.i++;
+      if (inp.mapPressed || inp.wheel) S.map = !S.map;
+      const r = list.length ? list[S.i % list.length] : null;
+      for (const o of G.remotes.values()) o.char.root.visible = true;
+      if (r && !S.map) {
+        r.char.root.visible = false;
+        camera.position.set(r.pos[0], r.pos[1] + 1.55, r.pos[2]);
+        camera.rotation.set(r.pitch || 0, r.yaw, 0);
+      } else {
+        const A = G.M.arena;
+        camera.position.lerp(tmpV.set(0, A * 1.35, A * 0.75), 1 - Math.exp(-3 * realDt));
+        camera.lookAt(0, 0, 0);
+      }
+      $('deadBy').textContent = r && !S.map ? t('specWatching', { n: r.name }) : t('specMap');
+      $('deadT').textContent = t('bombOutRound');
+      $('deadGo').hidden = true;
     } else if (G.deathPos) {
       const kp = G.killer && posOf(G.killer);
       const look = kp ? tmpV.set(kp[0], kp[1] + 1, kp[2]) : tmpV.set(G.deathPos[0], G.deathPos[1], G.deathPos[2]);
@@ -767,7 +968,7 @@ function frame() {
       $('deadGo').hidden = !canGo; $('dead').classList.toggle('can', !!canGo);
       if (canGo && (inp.jumpPressed || inp.firePressed)) G.net?.send({ t: 'respawn' });
     }
-    vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, slide: p.slideT > 0, air: !p.onGround, lookDX: inp.lookX, lookDY: inp.lookY, firing: p.firing });
+    vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: inp.lookX, lookDY: inp.lookY, firing: p.firing });
     vmPass.enabled = p.alive;
     const ru = vm.gun?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0;
     // ponto do laser no mundo: onde o centro da mira bate
@@ -780,6 +981,19 @@ function frame() {
       laserDot.visible = true;
     } else laserDot.visible = false;
     hud.frame(p, realDt, settings);
+    hud.countIn(G.snap);
+    hud.threat(G, settings.threatRing !== false && G.mode !== 'bomb'); // plantar a bomba: sem anel de passos e tiros (regra dele)
+    hud.bomb(G);
+    // bomba no chao ou plantada: aparece; plantada pisca e apita cada vez mais rapido
+    const BS = G.snap?.bomb;
+    bombMesh.visible = G.mode === 'bomb' && !!BS && (BS.state === 'dropped' || BS.state === 'planted');
+    if (bombMesh.visible) {
+      bombMesh.position.set(BS.pos[0], BS.pos[1] + 0.02, BS.pos[2]);
+      const planted = BS.state === 'planted', period = planted ? Math.max(0.12, Math.min(1, (G.snap.time || 0) / 30)) : 1.2;
+      bombBeep -= realDt;
+      if (bombBeep <= 0) { bombBeep = period; if (planted) audio.play('ui_click', { pos: [BS.pos[0], BS.pos[1] + 0.3, BS.pos[2]], vol: 0.7, rate: 1.8, jitter: 0 }); }
+      bombMesh.userData.light.visible = bombBeep > period * 0.5 || !planted;
+    }
     if (G.snap) { hud.objectives(G.snap, camera, G.me); hud.radar(G, camera); hud.nadeWarn(G, camera); }
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
     const low = p.alive ? Math.max(0, (40 - p.hp) / 40) * 0.5 : 0.4;
@@ -815,8 +1029,13 @@ function frame() {
 }
 
 $('deadGo').onclick = () => G.net?.send({ t: 'respawn' });
+$('specNext').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.i++; G.spec && (G.spec.map = false); };
+$('specMap').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.map = !G.spec.map; };
 // toque em qualquer lugar da tela de morte tambem renasce
-$('dead').addEventListener('pointerdown', (e) => { if (!$('deadGo').hidden) { e.preventDefault(); G.net?.send({ t: 'respawn' }); } });
+$('dead').addEventListener('pointerdown', (e) => {
+  if (G.mode === 'bomb' && G.spec) { G.spec.i++; G.spec.map = false; return; } // espectador: toque troca de colega
+  if (!$('deadGo').hidden) { e.preventDefault(); G.net?.send({ t: 'respawn' }); }
+});
 
 // ---------- editor do HUD de toque ----------
 let heLayout = null;
@@ -859,6 +1078,11 @@ $('touch').addEventListener('pointerdown', (e) => {
 // ---------- instalar como app (Android: abre em tela cheia, sem barra do navegador) ----------
 // fora da Rovex (site solto), a faixa discreta chamando pra plataforma
 $('rovexStrip').hidden = inRovex;
+// faixa do Elite Rovex: quem ja e Elite ve o beneficio ativo (o texto troca de chave e segue o idioma)
+if (rovexMe?.elite) {
+  $('elitePromo').classList.add('on');
+  for (const [id, k] of [['epSub', 'epOn'], ['epChip', 'epChipOn']]) { $(id).dataset.i18n = k; $(id).textContent = t(k); }
+}
 // dentro da Rovex (iframe) nao tem "instalar app": o service worker so existe no jogo solto
 if ('serviceWorker' in navigator && !inRovex) navigator.serviceWorker.register('./sw.js').catch(() => {});
 let installEvt = null;
@@ -873,8 +1097,10 @@ $('installApp').onclick = async () => {
 };
 
 // ---------- partida ----------
+const BOOT_T = performance.now();
 (async () => {
   setLang(getLang());
+  ui.markNewChallenges?.(); // a traducao reescreve o texto do botao e levava o selo de "novo" junto
   applySettings();
   await Promise.race([loadArsenal(), new Promise(r => setTimeout(r, 6000))]);
   await document.fonts.ready.catch(() => {});
@@ -883,7 +1109,14 @@ $('installApp').onclick = async () => {
   startAttract();
   irisEl.style.setProperty('--ir', '0vmax'); irisEl.dataset.r = 0;
   frame();
-  iris(150, 1200);
+  // abertura: a logo da Rovex fica um instante sozinha, some, a iris abre o jogo e so ai o cartaz entra
+  const minLogo = 1700 - (performance.now() - BOOT_T);
+  if (minLogo > 0) await new Promise(r => setTimeout(r, minLogo));
+  $('splash').classList.add('out');
+  await new Promise(r => setTimeout(r, 380));
+  $('splash').remove();
+  await iris(150, 1200);
+  $('menu').classList.remove('intro');
   const wake = () => { audio.init(); audio.music(true); removeEventListener('pointerdown', wake); removeEventListener('keydown', wake); };
   addEventListener('pointerdown', wake); addEventListener('keydown', wake);
 })();
