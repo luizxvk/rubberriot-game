@@ -17,9 +17,10 @@ const q = new URLSearchParams(location.search), only = q.get('cat'), onlyBody = 
 for (const [cat, C] of Object.entries(CATEGORY)) {
   if (only && only !== cat) continue;
   C.bodies.forEach((body, i) => {
-    if (onlyBody && onlyBody !== body) return;
+    if (onlyBody && !onlyBody.split(',').includes(body)) return;
     if (nat) { cases.push([cat, { body }]); return; }
     if (q.has('scopes')) { for (const scope of C.scopes) if (!q.get('scope') || q.get('scope') === scope) cases.push([cat, { body, scope }]); return; }
+    if (q.has('handles')) { for (const handle of C.handles) cases.push([cat, { body, handle, scope: q.get('scope') || null }]); return; }
     if (q.has('lasers')) { for (const laser of ['laser_1', 'laser_2']) cases.push([cat, { body, laser }]); return; }
     if (q.has('mags')) { for (const charger of chargerOptions(body, cat)) cases.push([cat, { body, charger }]); return; }
     const other = chargerOptions(body, cat).slice(1);

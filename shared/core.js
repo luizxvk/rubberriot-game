@@ -1,7 +1,7 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
-import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS } from './map.js';
+import { WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, matchRules } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
 
 const BOT_NAMES = ['Botao', 'Salsicha', 'Rolha', 'Bigorna', 'Carvao', 'Pipoca', 'Tamanco', 'Fuligem',
@@ -33,7 +33,10 @@ export class Core {
 
   reset() {
     const M = this.M;
-    this.time = this.cfg.time || MATCH_TIME;
+    // meta e tempo da partida pelo tamanho do mapa (mapa apertado = mais abates pra vencer)
+    const R = matchRules(this.mode, M.id, this.cfg, MATCH_TIME);
+    this.limit = R.limit;
+    this.time = R.time;
     this.over = false;
     // infectado: todo mundo comeca sobrevivente; o primeiro infectado sai em INFECT.firstIn s
     this.infT = INFECT.firstIn; this.infStarted = false; this.lastStand = null; this.surviveT = INFECT.surviveTick;
@@ -88,7 +91,7 @@ export class Core {
     for (const p of this.players.values()) if (p.team === team) p.score += 100;
     this.roundOver = BOMB.roundEnd;
     this.event({ k: 'roundEnd', winner: team, why, n: this.roundN });
-    if (this.teamScore[team] >= this.cfg.limit) this.end(team);
+    if (this.teamScore[team] >= this.limit) this.end(team);
   }
 
   tickBomb(dt) {
@@ -245,11 +248,32 @@ export class Core {
       for (const e of enemies) m = Math.min(m, Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]));
       // alguem ja olhando pra la? nascer na mira e' o pior que existe
       const seen = enemies.some(e => Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]) < 45 && hasLOS(this.M, [e.pos[0], e.pos[1] + 1.5, e.pos[2]], [s[0], y + 1.4, s[1]]));
+      // ponto ja ocupado: quase proibido (o freeSpot ainda afasta se nao tiver outro)
       const crowd = mates.some(o => Math.hypot(o.pos[0] - s[0], o.pos[2] - s[1]) < 2.2);
-      const sc = m - (seen ? 25 : 0) - (crowd ? 10 : 0) + rnd(0, 8);
+      const sc = m - (seen ? 25 : 0) - (crowd ? 40 : 0) + rnd(0, 8);
       if (!best || sc > best.sc) best = { s, y, sc };
     }
     return best;
+  }
+
+  // ninguem nasce dentro de ninguem: ponto ocupado (alguem vivo a menos de SPAWN_GAP) procura em
+  // espiral um lugar livre ao lado, no mesmo piso e sem parede no meio
+  freeSpot(p, x, z) {
+    const SPAWN_GAP = 1.5;
+    const others = [...this.players.values()].filter(o => o !== p && o.alive);
+    const clear = (cx, cz) => others.every(o => Math.hypot(o.pos[0] - cx, o.pos[2] - cz) >= SPAWN_GAP);
+    if (clear(x, z)) return [x, z];
+    const y = floorAt(this.M, x, z);
+    for (const r of [1.6, 3.2, 4.8, 6.4]) {
+      const off = rnd(0, Math.PI * 2);
+      for (let i = 0; i < 10; i++) {
+        const a = off + (i / 10) * Math.PI * 2, cx = x + Math.cos(a) * r, cz = z + Math.sin(a) * r;
+        if (!standable(this.M, cx, cz) || Math.abs(floorAt(this.M, cx, cz) - y) > 0.3) continue;
+        if (!clear(cx, cz) || !hasLOS(this.M, [x, y + 1, z], [cx, y + 1, cz])) continue;
+        return [cx, cz];
+      }
+    }
+    return [x, z];
   }
 
   spawn(p) {
@@ -266,13 +290,15 @@ export class Core {
     let x = s[0], z = s[1];
     const jx = x + rnd(-0.8, 0.8), jz = z + rnd(-0.8, 0.8);
     if (standable(this.M, jx, jz) && Math.abs(floorAt(this.M, jx, jz) - floorAt(this.M, x, z)) < 0.1) { x = jx; z = jz; }
+    [x, z] = this.freeSpot(p, x, z);
     const y = floorAt(this.M, x, z);
     p.pos = [x, y, z];
     p.vel = [0, 0, 0];
     p.yaw = this.openYaw(x, y, z);
     p.hp = p.bot ? BOT_HP : 100;
     p.alive = true;
-    p.nades = { frag: 1, flash: 1 };
+    const xn = hasSkill(p, 'bolso') ? SKILLS.bolso.nades : 0; // bolso fundo
+    p.nades = { frag: 1 + xn, flash: 1 + xn };
     p.owned = new Set(SPAWN_KIT);
     if (this.mode !== 'gungame') p.owned.add('melee');
     if (this.mode === 'gungame') p.wpn = GUN_LADDER[Math.min(p.gunLvl, GUN_LADDER.length - 1)].wpn;
@@ -346,6 +372,8 @@ export class Core {
         if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(99, Math.round(m.lvl)));
         if (typeof m.elite === 'boolean') p.elite = m.elite; // selo Elite da Rovex (so visual)
         if (PRIMARIES.includes(m.primary)) p.primary = m.primary;
+        // skills passivas: so ids conhecidos, sem repetir, ate SKILL_SLOTS e liberadas pro nivel informado
+        p.skills = Array.isArray(m.skills) ? [...new Set(m.skills.filter(s => SKILLS[s] && (p.lvl || 1) >= SKILLS[s].lvl))].slice(0, SKILL_SLOTS) : [];
         p.los = cleanLoadouts(m.los);
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
         this.event({ k: 'lo', id, los: p.los, tracer: p.tracer });
@@ -410,7 +438,11 @@ export class Core {
     return dmg;
   }
 
-  event(ev) { this.send(null, { t: 'ev', ...ev }); }
+  event(ev) {
+    // tiro de gente (nao do dirigivel) vira barulho: bot perto ouve e vai ver (some em 3 s)
+    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && !hasSkill(this.players.get(ev.id), 'pano')) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
+    this.send(null, { t: 'ev', ...ev });
+  }
 
   // ---------- combate ----------
   enemies(a, b) { return a !== b && (!this.cfg.teams || a.team !== b.team); }
@@ -418,7 +450,9 @@ export class Core {
   damage(v, a, dmg, wpn, head) {
     if (this.over || this.freezeT > 0 || !v.alive || !Number.isFinite(dmg)) return;
     if (a && a !== v && !this.enemies(a, v)) return;
-    if (head) dmg *= 1.6;
+    if (head) dmg *= hasSkill(v, 'cuca') ? SKILLS.cuca.head : 1.6; // cuca dura
+    if (BLAST.includes(wpn) && hasSkill(v, 'couro')) dmg *= SKILLS.couro.blast; // couro grosso
+    v.hurtAt = this.clock || 0;
     v.hp -= dmg;
     // quem ajudou: dano acumulado por atacante, com hora (assistencia vale por 6 s)
     if (a && a !== v) { v.dmgBy = v.dmgBy || {}; const r = v.dmgBy[a.id] || (v.dmgBy[a.id] = { dmg: 0, t: 0 }); r.dmg += dmg; r.t = this.clock || 0; }
@@ -440,7 +474,7 @@ export class Core {
         else { a.wpn = GUN_LADDER[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
       }
       if (this.mode !== 'infect' && this.mode !== 'bomb' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
-        if (a.streak === s.kills) {
+        if (a.streak === s.kills - (hasSkill(a, 'pavio') && s.kills > 3 ? SKILLS.pavio.streak : 0)) {
           a.ready.push(kind);
           this.event({ k: 'streakReady', id: a.id, kind });
           if (a.bot) this.useStreak(a, kind);
@@ -458,8 +492,8 @@ export class Core {
     this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, pos: v.pos });
     // sobrevivente que cai (de qualquer jeito) vira infectado
     if (this.mode === 'infect' && v.team === 'blue' && this.infStarted) this.infect(v, suicide ? null : a);
-    if (this.mode === 'ffa' && !suicide && a.kills >= this.cfg.limit) this.end(a.name);
-    if (this.mode === 'tdm' && !suicide && this.teamScore[a.team] >= this.cfg.limit) this.end(a.team);
+    if (this.mode === 'ffa' && !suicide && a.kills >= this.limit) this.end(a.name);
+    if (this.mode === 'tdm' && !suicide && this.teamScore[a.team] >= this.limit) this.end(a.team);
   }
 
   // ---------- infectado ----------
@@ -676,7 +710,7 @@ export class Core {
           c.score += 300;
           f.state = 'home'; f.carrier = null; f.pos = [...FB[team]];
           this.event({ k: 'flag', team, act: 'cap', who: c.name, by: enemyTeam });
-          if (this.teamScore[enemyTeam] >= this.cfg.limit) this.end(enemyTeam);
+          if (this.teamScore[enemyTeam] >= this.limit) this.end(enemyTeam);
         }
         continue;
       }
@@ -716,7 +750,7 @@ export class Core {
       if (z.owner !== prev && z.owner) this.event({ k: 'zone', id: z.id, team: z.owner });
       if (z.owner) this.teamScore[z.owner] += dt;
     }
-    for (const t of ['red', 'blue']) if (this.teamScore[t] >= this.cfg.limit) { this.teamScore[t] = this.cfg.limit; this.end(t); }
+    for (const t of ['red', 'blue']) if (this.teamScore[t] >= this.limit) { this.teamScore[t] = this.limit; this.end(t); }
   }
 
   end(winner) {
@@ -742,6 +776,11 @@ export class Core {
       }
       // alvo novo: demora pra reagir e a mira comeca fria (esquenta com o tempo nele)
       if (best && best !== ai.target) { ai.react = sk.react * rnd(0.8, 1.25); ai.onT = 0; }
+      // memoria: perdeu de vista, vai ate onde viu por ultimo (por uns segundos)
+      if (best) { ai.lastSeen = [...best.pos]; ai.lastSeenT = rnd(3, 5); }
+      else if (ai.lastSeenT > 0) { ai.lastSeenT -= 0.25; if (dist2(ai.lastSeen, p.pos) < 4) ai.lastSeenT = 0; }
+      // pouca vida e alvo na mira: procura um canto fora da linha de tiro pra respirar
+      ai.cover = best && p.hp < (p.maxHp || BOT_HP) * 0.35 ? this.coverSpot(p, best) : null;
       ai.target = best;
       ai.goal = this.botGoal(p);
     }
@@ -767,6 +806,11 @@ export class Core {
       moveDir = [fx * adv - fz * ai.strafe * 0.8, fz * adv + fx * ai.strafe * 0.8];
       // de lamina nao tem por que dancar de lado: vai reto ate encostar
       if (WEAPONS[p.wpn]?.melee) moveDir = d > 0.7 ? [fx, fz] : null;
+      // machucado: corre pra cobertura atirando de lado
+      else if (ai.cover && Math.hypot(ai.cover[0] - p.pos[0], ai.cover[2] - p.pos[2]) > 1) {
+        const g = this.botSteer(p, ai.cover, dt);
+        if (g) moveDir = [g[0] - fz * ai.strafe * 0.3, g[1] + fx * ai.strafe * 0.3];
+      }
       if (ai.goal && (this.mode === 'ctf' || this.mode === 'dom') && d > 5) {
         const gd = Math.hypot(ai.goal[0] - p.pos[0], ai.goal[2] - p.pos[2]);
         const g = this.botSteer(p, ai.goal, dt);
@@ -841,6 +885,13 @@ export class Core {
     if (!ai.path || moved > 3 || ai.pathT <= 0) {
       ai.path = navPath(this.M, p.pos, goal);
       if (!ai.path || !ai.path.length) ai.path = [[goal[0], goal[2]]];
+      // cada bot desvia um pouco de cada curva (o caminho mais curto e igual pra todo mundo)
+      const sway = ai.sway ??= rnd(-0.9, 0.9);
+      for (let i = 0; i < ai.path.length - 1; i++) {
+        const [x, z] = ai.path[i], [nx, nz] = ai.path[i + 1], len = Math.hypot(nx - x, nz - z) || 1;
+        const ox = x - (nz - z) / len * sway, oz = z + (nx - x) / len * sway;
+        if (standable(this.M, ox, oz)) ai.path[i] = [ox, oz];
+      }
       ai.pathGoal = [...goal]; ai.pathT = 2 + Math.random();
     }
     while (ai.path.length > 1 && Math.hypot(ai.path[0][0] - p.pos[0], ai.path[0][1] - p.pos[2]) < 1.2) ai.path.shift();
@@ -899,13 +950,99 @@ export class Core {
       }
       return best || this.zones[1].pos;
     }
-    if (!p.ai.goal || dist2(p.ai.goal, p.pos) < 9 || Math.random() < 0.1) {
-      const ens = [...this.players.values()].filter(o => o.alive && this.enemies(p, o));
-      if (ens.length && Math.random() < 0.6) return [...ens[Math.floor(Math.random() * ens.length)].pos];
-      const pk = this.pickups.filter(x => x.active && x.kind === 'wpn');
-      if (pk.length) return pk[Math.floor(Math.random() * pk.length)].pos;
+    return this.huntGoal(p);
+  }
+
+  // contra todos / mata-mata: caca com cabeca. Ordem: onde viu o inimigo por ultimo > tiro que ouviu
+  // perto > rota com desvio (flanco) ate um ponto do mapa que ainda nao visitou. Antes ia reto ate a
+  // posicao de um inimigo sorteado (via atraves da parede) e todo mundo usava o mesmo corredor.
+  huntGoal(p) {
+    const ai = p.ai;
+    if (ai.lastSeenT > 0 && ai.lastSeen) return ai.lastSeen;
+    let heard = null, hd = 40 * 40;
+    for (const [id, n] of this.noises || []) {
+      const o = this.players.get(id);
+      if (!o || !this.enemies(p, o)) continue;
+      const d = dist2(n.pos, p.pos);
+      if (d < hd && d > 9) { hd = d; heard = n.pos; }
     }
-    return p.ai.goal;
+    if (heard && (!ai.heardAt || dist2(heard, ai.heardAt) > 25)) { ai.heardAt = heard; ai.route = this.routeTo(p, heard); }
+    if (ai.route?.length) {
+      if (dist2(ai.route[0], p.pos) < 9) { ai.visited = [...(ai.visited || []).slice(-4), ai.route.shift()]; }
+      if (ai.route.length) return ai.route[0];
+      ai.heardAt = null;
+    }
+    // rota nova: de vez em quando na direcao de um inimigo (so a regiao, nao o lugar exato); senao patrulha
+    const ens = [...this.players.values()].filter(o => o.alive && this.enemies(p, o));
+    let target;
+    if (ens.length && Math.random() < 0.35) {
+      const e = ens[Math.floor(Math.random() * ens.length)];
+      target = this.nearPoi(e.pos, 12) || [...e.pos];
+    } else target = this.patrolPoi(p);
+    ai.route = this.routeTo(p, target);
+    return ai.route[0] || p.ai.goal;
+  }
+
+  // pontos do mapa pra patrulhar e flanquear: nascimentos, armas, objetivos + uma grade de pontos andaveis
+  poiList() {
+    if (this.pois) return this.pois;
+    const M = this.M, S = M.spawns, out = [];
+    const add = (x, z) => { if (standable(M, x, z) && !out.some(q => Math.hypot(q[0] - x, q[2] - z) < 5)) out.push([x, floorAt(M, x, z), z]); };
+    for (const k of ['ffa', 'red', 'blue']) for (const q of S[k] || []) add(q[0], q[1]);
+    for (const k of this.pickups) add(k.pos[0], k.pos[2]);
+    const A = M.arena, step = Math.max(7, A / 6);
+    for (let x = -A + 4; x <= A - 4; x += step) for (let z = -A + 4; z <= A - 4; z += step) add(x + rnd(-2, 2), z + rnd(-2, 2));
+    return (this.pois = out);
+  }
+  nearPoi(pos, r) {
+    const c = this.poiList().filter(q => Math.hypot(q[0] - pos[0], q[2] - pos[2]) < r);
+    return c.length ? c[Math.floor(Math.random() * c.length)] : null;
+  }
+  // ponto de patrulha: longe o bastante pra valer a viagem, fora dos ultimos visitados e longe de onde
+  // os colegas ja estao indo (mata-mata: o time se espalha em vez de andar em fila)
+  patrolPoi(p) {
+    const ai = p.ai, pts = this.poiList();
+    const mates = this.cfg.teams ? [...this.players.values()].filter(o => o !== p && o.bot && o.alive && o.team === p.team && o.ai?.route?.length) : [];
+    let best = null, bs = -Infinity;
+    for (const q of pts) {
+      const d = Math.hypot(q[0] - p.pos[0], q[2] - p.pos[2]);
+      if (d < 8) continue;
+      let sc = Math.min(d, 45) - Math.max(0, d - 45) * 0.5 + rnd(0, 25);
+      if ((ai.visited || []).some(v => Math.hypot(v[0] - q[0], v[2] - q[2]) < 6)) sc -= 30;
+      for (const o of mates) { const g = o.ai.route[o.ai.route.length - 1]; if (Math.hypot(g[0] - q[0], g[2] - q[2]) < 10) sc -= 18; }
+      if (sc > bs) { bs = sc; best = q; }
+    }
+    return best || pts[Math.floor(Math.random() * pts.length)] || [0, 0, 0];
+  }
+  // rota com desvio: um ponto de passagem de lado (30-80 graus fora da linha reta) quando o desvio
+  // nao alonga demais o caminho; assim os bots chegam por flancos diferentes
+  routeTo(p, target) {
+    const d0 = Math.hypot(target[0] - p.pos[0], target[2] - p.pos[2]);
+    if (d0 < 14 || Math.random() < 0.3) return [target];
+    const dir = Math.atan2(target[0] - p.pos[0], target[2] - p.pos[2]);
+    let via = null, bs = -Infinity;
+    for (const q of this.poiList()) {
+      const a = Math.hypot(q[0] - p.pos[0], q[2] - p.pos[2]), b = Math.hypot(target[0] - q[0], target[2] - q[2]);
+      if (a < 5 || b < 5 || a + b > d0 * 1.6) continue;
+      const off = Math.abs(angDiff(dir, Math.atan2(q[0] - p.pos[0], q[2] - p.pos[2])));
+      if (off < 0.5 || off > 1.4) continue;
+      const sc = rnd(0, 1) - Math.abs(a - b) / d0;
+      if (sc > bs) { bs = sc; via = q; }
+    }
+    return via ? [via, target] : [target];
+  }
+
+  // canto perto (3-7 m) fora da linha de tiro do alvo, no mesmo piso
+  coverSpot(p, t) {
+    const te = [t.pos[0], t.pos[1] + 1.5, t.pos[2]];
+    for (let i = 0; i < 12; i++) {
+      const a = rnd(0, Math.PI * 2), r = rnd(3, 7), x = p.pos[0] + Math.cos(a) * r, z = p.pos[2] + Math.sin(a) * r;
+      if (!standable(this.M, x, z)) continue;
+      const y = floorAt(this.M, x, z);
+      if (Math.abs(y - p.pos[1]) > 0.6 || hasLOS(this.M, te, [x, y + 1.2, z])) continue;
+      return [x, y, z];
+    }
+    return null;
   }
 
   botShoot(p, t, d) {
@@ -944,7 +1081,13 @@ export class Core {
 
   // ---------- loop ----------
   tick(dt) {
+    if (this.noises) for (const [id, n] of this.noises) if ((n.t -= dt) <= 0) this.noises.delete(id);
     this.clock = (this.clock || 0) + dt;
+    // folego: vida volta sozinha depois de um tempo sem levar dano
+    for (const p of this.players.values()) {
+      if (!p.alive || !hasSkill(p, 'folego') || p.hp >= (p.maxHp || 100)) continue;
+      if (this.clock - (p.hurtAt ?? -99) >= SKILLS.folego.after) p.hp = Math.min(p.maxHp || 100, p.hp + SKILLS.folego.regen * dt);
+    }
     if (this.phase !== 'play') { this.tickLobby(dt); return; }
     if (this.over) {
       this.overT -= dt;
@@ -1064,7 +1207,7 @@ export class Core {
       });
     }
     this.send(null, {
-      t: 'snap', mode: this.mode, map: this.M.id, time: r2(this.time), over: this.over, overT: this.overT,
+      t: 'snap', mode: this.mode, map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,

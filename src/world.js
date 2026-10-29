@@ -1,6 +1,6 @@
 // Vila Borracha: cena, cidade que danca, ceu, objetivos, pickups e efeitos.
 import * as THREE from 'three';
-import { ink, toon, outline, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture } from './toon.js';
+import { ink, toon, outline, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
 import { buildGun } from './arsenal.js';
 
 export const BEAT = 2.2; // batidas por segundo da danca da cidade
@@ -228,23 +228,25 @@ export function buildWorld(scene, M) {
     clouds.push(c);
   }
 
+  // arvores e nuvens: juntas, o balanco e o vento vao no shader (eram ~350 chamadas de desenho)
+  const moveT = { value: 0 };
+  const trees = swayers.filter(s => s.tree);
+  mergeMoving(root, [...trees.map(s => ({ obj: s.obj, phase: s.phase, amp: s.amp })), ...clouds.map(c => ({ obj: c, phase: 0, amp: -1 }))], moveT);
+  const chimneys = swayers.filter(s => !s.tree);
+  // o resto que fica parado vira poucas malhas (so chamine e sol continuam soltos)
+  const merged = mergeStatic(root, new Set([...chimneys.map(s => s.obj), sunSpr]));
+  if (typeof location !== 'undefined' && /[?&]perf/.test(location.search)) console.log('[mapa] malhas juntadas', merged);
+
   return {
     root,
     dispose() { scene.remove(root); },
-    update(t, dt) {
-      // predios e casas ficam parados (pulando atrapalhava a mira); so ceu, sol e arvores mexem
+    update(t) {
+      // predios e casas ficam parados (pulando atrapalhava a mira); so ceu, sol, arvores e chamines mexem
       const beat = t * BEAT * Math.PI;
-      for (const s of swayers) {
-        if (s.tree) s.obj.rotation.z = Math.sin(t * s.speed + s.phase) * s.amp;
-        else s.obj.rotation.z = Math.sin(t * s.speed + s.phase) * s.amp;
-      }
+      moveT.value = t % 3600;
+      for (const s of chimneys) s.obj.rotation.z = Math.sin(t * s.speed + s.phase) * s.amp;
       sunSpr.material.rotation = Math.sin(t * 1.4) * 0.12;
       sunSpr.position.y = 75 + Math.sin(beat) * 1.2;
-      for (const c of clouds) {
-        c.position.x += dt * 1.6;
-        if (c.position.x > 160) c.position.x = -160;
-        c.scale.y = 1 + Math.sin(beat + c.position.z) * 0.05;
-      }
     },
   };
 }

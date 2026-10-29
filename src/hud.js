@@ -4,10 +4,12 @@ import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
 import { STREAKS } from '../shared/weapons.js';
 import { t, wName, modeName, eliteTag } from './i18n.js';
 import { isTouch } from './input.js';
+import { audio } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const TEAM = { red: 'h_red', blue: 'h_blue' };
-const nextStreak = (n) => { for (const s of Object.values(STREAKS)) if (s.kills > n) return s.kills - n; return 0; };
+// pavio curto: as sequencias a partir da bigorna custam 1 abate a menos (igual ao servidor)
+const nextStreak = (n, pavio) => { for (const s of Object.values(STREAKS)) { const k = s.kills - (pavio && s.kills > 3 ? 1 : 0); if (k > n) return k - n; } return 0; };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Hud {
@@ -93,16 +95,16 @@ export class Hud {
       const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
       html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else if (cfg.teams) {
-      let mid = `<div><span class="lbl">${modeName(mode)}</span><span class="val">${cfg.limit}</span></div>`;
+      let mid = `<div><span class="lbl">${modeName(mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''}">${z.id}</span>`).join('')}</div>`;
-      if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${cfg.limit}</span></div>`;
+      if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       html = `<div class="red"><span class="lbl">${t('h_red')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('h_blue')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else {
       const sorted = [...players].sort((a, b) => mode === 'gungame' ? b.gunLvl - a.gunLvl || b.kills - a.kills : b.kills - a.kills);
       const lead = sorted[0];
       const mine = me ? (mode === 'gungame' ? `${me.gunLvl + 1}/${GUN_LADDER.length}` : me.kills) : 0;
       const leadV = lead ? (mode === 'gungame' ? `${lead.gunLvl + 1}/${GUN_LADDER.length}` : lead.kills) : 0;
-      html = `<div><span class="lbl">${t('h_you')}</span><span class="val">${mine}</span></div><div><span class="lbl">${lead ? esc(lead.name) : t('h_leader')}</span><span class="val">${leadV}</span></div>${mode === 'gungame' && me ? `<div><span class="lbl">${t('h_weapon')}</span><span class="val" style="font-size:15px">${wName(GUN_LADDER[Math.min(me.gunLvl, GUN_LADDER.length - 1)].wpn)}</span></div>` : `<div><span class="lbl">${t('h_goal')}</span><span class="val">${cfg.limit}</span></div>`}${clock}`;
+      html = `<div><span class="lbl">${t('h_you')}</span><span class="val">${mine}</span></div><div><span class="lbl">${lead ? esc(lead.name) : t('h_leader')}</span><span class="val">${leadV}</span></div>${mode === 'gungame' && me ? `<div><span class="lbl">${t('h_weapon')}</span><span class="val" style="font-size:15px">${wName(GUN_LADDER[Math.min(me.gunLvl, GUN_LADDER.length - 1)].wpn)}</span></div>` : `<div><span class="lbl">${t('h_goal')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`}${clock}`;
     }
     if (html !== this.lastPlaque) { this.el.plaque.innerHTML = html; this.lastPlaque = html; }
   }
@@ -123,6 +125,9 @@ export class Hud {
       el.num.textContent = num;
       el.num.classList.toggle('go', go);
       el.num.classList.remove('tick'); void el.num.offsetWidth; if (num) el.num.classList.add('tick');
+      // 3, 2, 1 = tique de relogio subindo o tom; Ja! = apito
+      if (go) audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 });
+      else if (num) audio.play('tick', { ui: true, vol: 0.45, rate: 0.9 + (3 - Number(num)) * 0.08, jitter: 0, key: 'count', max: 1 });
     }
     if (el.sub.textContent !== sub) el.sub.textContent = sub;
   }
@@ -277,10 +282,41 @@ export class Hud {
     });
   }
 
+  // desbloqueios: pilha na coluna da esquerda, logo abaixo do minimapa (no meio da tela tapava a mira).
+  // A posicao segue o minimapa, que muda de lugar no toque e em tela baixa. Tela baixa (celular
+  // deitado): um por vez, em fila, senao a pilha desce ate o analogico.
   unlockToast(text) {
+    const short = innerHeight <= 520;
+    if (short) {
+      (this.unlockQ ||= []).push(text);
+      if (this.unlockBusy) return;
+      const next = () => {
+        const s = this.unlockQ.shift();
+        if (s == null) { this.unlockBusy = false; return; }
+        this.unlockBusy = true; this.showUnlock(s, 1);
+        setTimeout(next, 2600);
+      };
+      next();
+      return;
+    }
+    this.showUnlock(text, 3);
+  }
+  showUnlock(text, max) {
+    const hud = document.getElementById('hud');
+    let list = hud.querySelector('.unlocks');
+    if (!list) { list = document.createElement('div'); list.className = 'unlocks'; hud.appendChild(list); }
+    // abaixo do que estiver mais embaixo na coluna: minimapa ou kit de granadas
+    let left = 14, top = 80;
+    for (const sel of ['.radar', '.kit']) {
+      const e = hud.querySelector(sel); if (!e?.offsetParent) continue;
+      const r = e.getBoundingClientRect(); if (r.left > innerWidth / 3) continue;
+      left = Math.min(left, r.left); top = Math.max(top, r.bottom + 8);
+    }
+    list.style.left = left + 'px'; list.style.top = top + 'px';
     const el = document.createElement('div');
     el.className = 'unlock-toast'; el.textContent = text;
-    document.getElementById('hud').appendChild(el);
+    list.appendChild(el);
+    while (list.children.length > max) list.firstChild.remove();
     setTimeout(() => el.remove(), 3600);
   }
 
@@ -374,7 +410,7 @@ export class Hud {
       let el = document.getElementById('kit');
       if (!el) { el = document.createElement('div'); el.id = 'kit'; el.className = 'kit'; document.getElementById('hud').appendChild(el); }
       el.innerHTML = `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
-        (ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0) })}</span>`);
+        (ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
     }
   }
 

@@ -2,7 +2,9 @@
 // micro-fade nas pontas; vozes da mesma chave saem com fade em vez de corte seco.
 const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload',
   'hit', 'hitmarker', 'death', 'jump', 'step', 'step2', 'land', 'pickup', 'slide', 'flag', 'capture', 'ui', 'ui_hover',
-  'ui_click', 'ui_back', 'iris', 'levelup', 'unlock', 'empty', 'swap', 'ads', 'whoosh', 'headshot', 'killstamp', 'music'];
+  'ui_click', 'ui_back', 'iris', 'levelup', 'unlock', 'empty', 'swap', 'ads', 'whoosh', 'headshot', 'killstamp', 'music',
+  'explosion', 'pan', // existiam mas nao carregavam: granada e bigorna tocavam ruido sintetico
+  'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt']; // momentos que eram mudos (contagem, rodada, fim, assist, renascer)
 
 class Audio {
   constructor() {

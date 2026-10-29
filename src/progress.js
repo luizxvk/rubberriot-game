@@ -7,7 +7,8 @@ export const DEBUG = !!import.meta.env.DEV;
 export const MAX_LEVEL = 55;
 export const MAX_WPN_LEVEL = 20;
 
-export const XP = { kill: 100, assist: 50, head: 40, streak: 150, flagCap: 300, flagReturn: 75, zone: 150, win: 500, match: 200, survive: 60, plant: 250, defuse: 300, roundWin: 100 };
+// 29/10: ganhos cortados ~45% (subia de nivel facil demais). A curva ficou igual: quem ja tem nivel nao perde.
+export const XP = { kill: 55, assist: 25, head: 20, streak: 80, flagCap: 170, flagReturn: 40, zone: 80, win: 250, match: 100, survive: 30, plant: 140, defuse: 170, roundWin: 55 };
 
 // xp acumulado pra chegar no nivel n
 export const levelXp = (n) => n <= 1 ? 0 : Math.round(600 * (n - 1) + 90 * (n - 1) ** 2);

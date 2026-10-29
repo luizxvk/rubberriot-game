@@ -293,6 +293,16 @@ export const BOMB_SITES = {
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
 const MINIGUN_AT = { vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+// mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
+// So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
+const MAP_PACE = { estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
+export function matchRules(mode, mapId, cfg, baseTime) {
+  const base = { limit: cfg.limit, time: cfg.time || baseTime };
+  const pace = (mode === 'ffa' || mode === 'tdm') && MAP_PACE[mapId];
+  if (!pace) return base;
+  return { limit: Math.round(base.limit * pace.goal / 5) * 5, time: Math.round(base.time * pace.time / 30) * 30 };
+}
+
 const cache = {};
 export function getMap(id) {
   if (!BUILDERS[id]) id = 'vila';

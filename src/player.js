@@ -2,7 +2,7 @@
 // e sem pulo duplo), tiro hitscan, recarga e troca de arma.
 import * as THREE from 'three';
 import { moveBody, raycast, rayPlayer, hasLOS } from '../shared/map.js';
-import { WEAPONS, PRIMARIES, NADES, INFECT, bodyTrait } from '../shared/weapons.js';
+import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, bodyTrait } from '../shared/weapons.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
@@ -10,7 +10,10 @@ import { audio } from './audio.js';
 import { isTouch } from './input.js';
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
-const SLOT_ORDER = ['pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'melee'];
+// slots (teclas 1, 2, 3...): arma principal primeiro, pistola em 2, faca por ultimo
+const SLOT_ORDER = ['smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'pistol', 'melee'];
+// pegou arma do chao: so troca sozinho se ela for "maior" que a da mao (faca < pistola < principais)
+const PICK_RANK = ['melee', 'pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper'];
 
 export class Player {
   constructor(game) {
@@ -90,17 +93,30 @@ export class Player {
       this.owned.push(id);
       this.owned.sort((a, b) => SLOT_ORDER.indexOf(a) - SLOT_ORDER.indexOf(b));
     }
-    this.ammo[id] = { mag, reserve: W.reserve ?? Infinity };
+    this.ammo[id] = { mag, reserve: Number.isFinite(W.reserve) ? Math.round(W.reserve * this.sk('bolso', 'reserve')) : Infinity };
     if (force) { this.owned = [id]; this.ammo = { [id]: this.ammo[id] }; this.equip(id); }
-    else if (announce && SLOT_ORDER.indexOf(id) > SLOT_ORDER.indexOf(this.wpn)) this.equip(id);
+    else if (announce && PICK_RANK.indexOf(id) > PICK_RANK.indexOf(this.wpn)) this.equip(id);
   }
+
+  // skill passiva equipada (G.skills vem do loadout enviado): devolve o campo dela ou 1
+  sk(id, key) { return this.g.skills?.includes(id) ? SKILLS[id][key] : 1; }
+  // catador: cada abate devolve um pente na reserva da arma na mao
+  scavenge() {
+    if (!this.g.skills?.includes('catador')) return;
+    const a = this.ammo[this.wpn];
+    if (!a || !Number.isFinite(a.reserve)) return;
+    a.reserve += this.stats(this.wpn).mag * SKILLS.catador.mags;
+    audio.play('pickup', { vol: 0.35, rate: 1.4 });
+  }
+  // sangue frio: so vale com pouca vida
+  cold(key) { return this.hp < SKILLS.sangue.below ? this.sk('sangue', key) : 1; }
 
   equip(id, instant = false) {
     if (!this.owned.includes(id)) return;
     if (id !== this.wpn) this.lastWpn = this.wpn;
     this.wpn = id;
     this.reloadT = 0;
-    this.switchT = instant ? 0 : 0.3;
+    this.switchT = instant ? 0 : 0.3 * this.sk('maos', 'swap');
     this.g.vm.setWeapon(id, this.lo(id), instant);
     if (!instant) audio.play('swap', { vol: 0.5 });
     this.g.hud.weapon(this);
@@ -117,7 +133,7 @@ export class Player {
     const { W, st, mag } = this.stats();
     if (!a || a.mag >= mag || a.reserve <= 0 || this.reloadT > 0) return;
     this.burstLeft = 0;
-    const dur = W.reload * st.reload;
+    const dur = W.reload * st.reload * this.sk('maos', 'reload') * this.cold('reload');
     this.reloadT = dur;
     this.g.vm.reload(dur);
     audio.play('reload', { vol: 0.7, rate: 1.6 / dur + 0.2 });
@@ -156,9 +172,11 @@ export class Player {
 
     const { W, st, mag } = this.stats();
     // celular e controle: mira assistida puxa pro inimigo perto do centro. Tiro automatico (so no
-    // toque) dispara com ele na mira: vale pra automatica, semi, rajada e ferrolho.
+    // toque) dispara com ele na mira: vale pra automatica, semi, rajada, ferrolho e a lamina.
     let autoShot = false;
     const pad = this.g.pad?.active;
+    // lamina: golpeia sozinha com inimigo no alcance e na frente (o botao de atirar some com o automatico)
+    if (isTouch && S.autoFire && W.melee && this.meleeCd <= 0) autoShot = !!this.meleeTarget();
     if ((isTouch || pad) && (S.aimAssist || (isTouch && S.autoFire)) && !W.melee) {
       const ads = this.adsK > 0.5;
       // controle: so puxa mirando ou atirando (no quadril parado ficaria grudento)
@@ -172,9 +190,17 @@ export class Player {
       }
       const am = this.ammo[this.wpn];
       if (isTouch && S.autoFire && am && (am.mag === Infinity || am.mag > 0) && this.reloadT <= 0) {
-        const cp = Math.cos(this.pitch);
-        const hit = this.traceTargets(this.eyePos(), [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp], 250);
-        autoShot = !!hit.player && hit.dist < (this.wpn === 'shotgun' ? 22 : 120);
+        // antes so o raio do centro valia: alvo andando quase nunca ficava exatamente nele, e arma de
+        // um tiro por puxada (pistola, 12) parecia nao disparar. Agora vale o corpo dentro de um cone
+        // pequeno em volta da mira (12 = cone do espalhamento); de longe continua o raio exato.
+        const shotgun = this.wpn === 'shotgun';
+        const near = this.assistTarget(shotgun ? 0.05 : 0.012);
+        if (near) autoShot = near.len < (shotgun ? 26 : 60);
+        else {
+          const cp = Math.cos(this.pitch);
+          const hit = this.traceTargets(this.eyePos(), [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp], 250);
+          autoShot = !!hit.player && hit.dist < (shotgun ? 26 : 120);
+        }
       }
     }
     const fire = inp.fire || autoShot;
@@ -202,7 +228,7 @@ export class Player {
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     let speed = this.tac ? 13.5 : this.sprint ? 10.8 : 7.4;
     if (this.crouch) speed = 4;
-    speed *= st.move ?? 1;
+    speed *= (st.move ?? 1) * this.sk('borracha', 'move');
     if (this.adsK > 0.3) speed *= 0.6;
     if (W.id === 'minigun' || this.wpn === 'minigun') speed *= this.firing ? 0.6 : 0.85;
     if (this.g.mode === 'infect' && this.g.myTeam === 'red') speed *= INFECT.speed;
@@ -214,7 +240,7 @@ export class Player {
     this.vel[0] = damp(this.vel[0], wx * speed, acc, dt);
     this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
     // pulo baixo e unico (~1 m), sem pulo no ar
-    if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4; this.onGround = false; audio.play('jump', { vol: 0.45 }); }
+    if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4 * Math.sqrt(this.sk('mola', 'jump')); this.onGround = false; audio.play('jump', { vol: 0.45 }); }
     this.vel[1] -= 24 * dt;
     const vy = this.vel[1];
     this.wasGround = this.onGround;
@@ -238,7 +264,7 @@ export class Player {
     }
 
     // mira
-    const adsTime = 0.16 * st.adsTime * (this.wpn === 'sniper' ? 1.5 : 1);
+    const adsTime = 0.16 * st.adsTime * (this.wpn === 'sniper' ? 1.5 : 1) * this.sk('lince', 'ads') * this.cold('ads');
     const canAds = !W.noAds && this.reloadT <= 0 && !this.sprint && !this.tac;
     this.adsK = damp(this.adsK, inp.ads && canAds ? 1 : 0, 1 / adsTime * 1.6, dt);
     if (inp.adsPressed && canAds) audio.play('ads', { vol: 0.35 });
@@ -281,6 +307,7 @@ export class Player {
     }
     this.switchT -= dt;
     this.fireT -= dt;
+    if (this.boltSfxT > 0 && (this.boltSfxT -= dt) <= 0) audio.play('bolt', { vol: 0.7 });
 
     // minigun gira antes
     if (W.spin) this.spinK = fire && !this.sprint ? Math.min(1, this.spinK + dt / W.spin) : Math.max(0, this.spinK - dt);
@@ -297,7 +324,7 @@ export class Player {
         if (this.meleeCd <= 0) this.melee();
       } else {
         this.shoot(W, st);
-        if (mode === 'bolt') this.g.vm.bolt(W.rate * st.rate);
+        if (mode === 'bolt') { this.g.vm.bolt(W.rate * st.rate); this.boltSfxT = 0.22; } // clack-clunk do ferrolho logo depois do tiro
         if (mode === 'burst') { this.burstLeft--; this.fireT = this.burstLeft > 0 ? W.rate * st.rate * 0.6 : W.rate * st.rate * 2.4; }
       }
     }
@@ -315,10 +342,25 @@ export class Player {
     }
   }
 
-  // golpe de lamina: acerta o inimigo mais perto na frente (cone de ~55 graus) dentro do alcance da lamina
+  // inimigo mais perto na frente (cone de ~55 graus) dentro do alcance da lamina; null se nao tem
+  meleeTarget() {
+    const g = this.g, tr = bodyTrait(this.lo('melee')?.body || 'melee_10');
+    const range = tr.range || WEAPONS.melee.range;
+    const eye = this.eyePos(), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    let best = null, bd = Infinity;
+    for (const r of g.remotes.values()) {
+      if (!r.alive || !g.isEnemy(r) || !r.pos) continue;
+      const dx = r.pos[0] - this.pos[0], dz = r.pos[2] - this.pos[2], d = Math.hypot(dx, dz);
+      if (d > range + 0.4 || Math.abs(r.pos[1] - this.pos[1]) > 1.8 || (dx * fx + dz * fz) / (d || 1) < 0.55) continue;
+      if (!hasLOS(g.M, eye, [r.pos[0], r.pos[1] + 1.1, r.pos[2]])) continue;
+      if (d < bd) { bd = d; best = r; }
+    }
+    return best;
+  }
+
+  // golpe de lamina: acerta o inimigo mais perto na frente dentro do alcance da lamina
   melee() {
     const g = this.g, body = this.lo('melee')?.body || 'melee_10', tr = bodyTrait(body);
-    const range = tr.range || WEAPONS.melee.range;
     this.meleeCd = WEAPONS.melee.rate * (tr.rate || 1);
     this.burstLeft = 0; this.reloadT = 0;
     g.vm.meleeSwing(this.meleeCd, this.lo('melee'));
@@ -326,15 +368,7 @@ export class Player {
     g.net.send({ t: 'swing' });
     setTimeout(() => {
       if (!this.alive || this.g !== g) return;
-      const eye = this.eyePos(), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
-      let best = null, bd = Infinity;
-      for (const r of g.remotes.values()) {
-        if (!r.alive || !g.isEnemy(r)) continue;
-        const dx = r.pos[0] - this.pos[0], dz = r.pos[2] - this.pos[2], d = Math.hypot(dx, dz);
-        if (d > range + 0.4 || Math.abs(r.pos[1] - this.pos[1]) > 1.8 || (dx * fx + dz * fz) / (d || 1) < 0.55) continue;
-        if (!hasLOS(g.M, eye, [r.pos[0], r.pos[1] + 1.1, r.pos[2]])) continue;
-        if (d < bd) { bd = d; best = r; }
-      }
+      const best = this.meleeTarget();
       if (!best) return;
       const pt = [best.pos[0], best.pos[1] + 1.2, best.pos[2]];
       g.net.send({ t: 'hit', v: best.id, dmg: WEAPONS.melee.dmg, head: false, wpn: 'melee' });
@@ -380,7 +414,7 @@ export class Player {
     const noScope = this.wpn === 'sniper' && !ads;
     if (noScope) spread = 0.11;
     if (this.crouch) spread *= 0.75;
-    const kick = (W.kick ?? 0.05) * (st.kick ?? 1);
+    const kick = (W.kick ?? 0.05) * (st.kick ?? 1) * this.sk('lince', 'kick');
     // recuo com padrao fixo por arma (aprende e compensa), volta ao inicio se soltar o gatilho
     if (performance.now() - this.patT > 320) this.patIdx = 0;
     this.patT = performance.now();

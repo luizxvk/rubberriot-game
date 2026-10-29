@@ -1,6 +1,6 @@
 // Materiais toon + contorno de tinta (casco invertido com normais suavizadas).
 import * as THREE from 'three';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const grad = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 165, 165, 165, 255, 255, 255, 255, 255]), 3, 1);
 grad.minFilter = grad.magFilter = THREE.NearestFilter;
@@ -61,6 +61,135 @@ export function outline(mesh, th = 0.04) {
   o.renderOrder = mesh.renderOrder;
   mesh.add(o);
   return mesh;
+}
+
+// Junta tudo que fica parado embaixo de `root` numa malha por material (os contornos tambem, pelo
+// material deles). O mapa tinha ~840 malhas = ~840 chamadas de desenho por quadro; no celular era o
+// que derrubava o FPS. O visual nao muda: a posicao de cada peca vai assada na geometria.
+// `skip` = objetos que mexem sozinhos (arvore, chamine, nuvem): ficam como estao, com os filhos.
+// Junta por material DENTRO de blocos de CELL metros: assim a camera ainda descarta o bloco que
+// esta fora da tela (uma malha so do mapa inteiro desenharia tudo sempre).
+const MERGE_ATTRS = ['position', 'normal', 'uv'];
+const CELL = 32;
+export function mergeStatic(root, skip = new Set()) {
+  root.updateMatrixWorld(true);
+  const inv = root.matrixWorld.clone().invert();
+  const groups = new Map(), wp = new THREE.Vector3();
+  const walk = (o) => {
+    if (skip.has(o)) return;
+    const m = o.material;
+    if (o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && m && !Array.isArray(m) && !m.transparent && o.visible && !o.userData.keep) {
+      wp.setFromMatrixPosition(o.matrixWorld);
+      const key = m.uuid + '|' + Math.floor(wp.x / CELL) + '|' + Math.floor(wp.z / CELL);
+      let g = groups.get(key); if (!g) groups.set(key, g = { mat: m, list: [] });
+      g.list.push(o);
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(root);
+  let before = 0, after = 0;
+  for (const { mat, list } of groups.values()) {
+    before += list.length;
+    if (list.length < 2) { after += list.length; continue; }
+    const hasUv = list.every(o => o.geometry.attributes.uv);
+    const geos = list.map(o => {
+      let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!MERGE_ATTRS.includes(k) || (k === 'uv' && !hasUv)) g.deleteAttribute(k);
+      for (const k of Object.keys(g.morphAttributes)) delete g.morphAttributes[k];
+      g.clearGroups();
+      const mx = inv.clone().multiply(o.matrixWorld);
+      g.applyMatrix4(mx);
+      // escala negativa vira o triangulo do avesso: desvira (o contorno e BackSide)
+      if (mx.determinant() < 0) {
+        for (const k of Object.keys(g.attributes)) {
+          const a = g.attributes[k], n = a.itemSize, arr = a.array;
+          for (let i = 0; i < arr.length; i += n * 3) for (let j = 0; j < n; j++) { const t = arr[i + n + j]; arr[i + n + j] = arr[i + 2 * n + j]; arr[i + 2 * n + j] = t; }
+        }
+      }
+      return g;
+    });
+    const merged = mergeGeometries(geos, false);
+    if (!merged) { after += list.length; continue; }
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.raycast = () => {};
+    mesh.renderOrder = list[0].renderOrder;
+    merged.computeBoundingSphere(); // a camera descarta o bloco fora da tela
+    // tira as originais; filho que nao foi junto (ex.: chamine dentro de uma casa) sobe pro root
+    const gone = new Set(list);
+    for (const o of list) {
+      for (const c of [...o.children]) if (!gone.has(c)) root.attach(c);
+      o.parent?.remove(o);
+    }
+    root.add(mesh);
+    after++;
+  }
+  return { before, after };
+}
+
+// Arvores (balancam) e nuvens (andam) juntas numa malha por material, com o movimento no shader.
+// Eram ~35 grupos x 10 malhas = ~350 chamadas de desenho so pra paisagem.
+// aMove = (base x, base y, fase, amplitude); amplitude < 0 = nuvem (anda em x e da a volta).
+const MOVE_GLSL = `
+attribute vec4 aMove;
+uniform float uMoveT;
+vec3 moveIt(vec3 p) {
+  if (aMove.w >= 0.0) {
+    float a = sin(uMoveT * 2.4 + aMove.z) * aMove.w, c = cos(a), s = sin(a);
+    vec2 r = p.xy - aMove.xy;
+    p.xy = aMove.xy + vec2(r.x * c - r.y * s, r.x * s + r.y * c);
+  } else {
+    p.x += mod(aMove.x + uMoveT * 1.6 + 160.0, 320.0) - 160.0 - aMove.x;
+  }
+  return p;
+}
+`;
+function movingMaterial(mat, uT) {
+  const m = mat.clone();
+  if (m.isShaderMaterial) {
+    m.uniforms.uMoveT = uT;
+    m.vertexShader = MOVE_GLSL + m.vertexShader.replace('vec4 mv = modelViewMatrix * vec4(position, 1.0);', 'vec4 mv = modelViewMatrix * vec4(moveIt(position), 1.0);');
+  } else {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uMoveT = uT;
+      sh.vertexShader = MOVE_GLSL + sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = moveIt(vec3(position));');
+    };
+    m.customProgramCacheKey = () => 'move';
+  }
+  return m;
+}
+// items: [{ obj, phase, amp }] (amp < 0 = nuvem). uT = { value: segundos } atualizado pelo mapa.
+export function mergeMoving(root, items, uT) {
+  root.updateMatrixWorld(true);
+  const inv = root.matrixWorld.clone().invert();
+  const groups = new Map();
+  for (const it of items) {
+    const base = new THREE.Vector3().setFromMatrixPosition(it.obj.matrixWorld).applyMatrix4(inv);
+    it.obj.traverse(o => {
+      if (!o.isMesh || Array.isArray(o.material)) return;
+      let g = groups.get(o.material); if (!g) groups.set(o.material, g = []);
+      g.push({ o, it, base });
+    });
+  }
+  for (const [mat, list] of groups) {
+    const hasUv = list.every(({ o }) => o.geometry.attributes.uv);
+    const geos = list.map(({ o, it, base }) => {
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!MERGE_ATTRS.includes(k) || (k === 'uv' && !hasUv)) g.deleteAttribute(k);
+      g.clearGroups();
+      g.applyMatrix4(inv.clone().multiply(o.matrixWorld));
+      const n = g.attributes.position.count, a = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) a.set([base.x, base.y, it.phase, it.amp], i * 4);
+      g.setAttribute('aMove', new THREE.BufferAttribute(a, 4));
+      return g;
+    });
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, movingMaterial(mat, uT));
+    mesh.raycast = () => {};
+    mesh.frustumCulled = false;
+    root.add(mesh);
+  }
+  for (const it of items) it.obj.parent?.remove(it.obj);
 }
 
 // atalho: malha toon com contorno

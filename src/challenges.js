@@ -5,58 +5,67 @@ import { BLUEPRINTS } from '../shared/weapons.js';
 const KEY = 'rr_challenges_v1';
 
 // tipo de evento: kill (wpn, head), assist, streak, win, match, flagCap
+// 29/10: XP dos desafios cortado pela metade junto com o resto (subia de nivel facil demais)
 export const DAILY = [
-  { id: 'kills', n: 25, xp: 1500, ok: (e) => e.type === 'kill' },
-  { id: 'head', n: 10, xp: 1500, ok: (e) => e.type === 'kill' && e.head },
-  { id: 'melee', n: 5, xp: 2000, ok: (e) => e.type === 'kill' && e.wpn === 'melee' },
-  { id: 'pistol', n: 8, xp: 1500, wpn: 'pistol', ok: (e) => e.type === 'kill' && e.wpn === 'pistol' },
-  { id: 'smg', n: 15, xp: 1500, wpn: 'smg', ok: (e) => e.type === 'kill' && e.wpn === 'smg' },
-  { id: 'rifle', n: 15, xp: 1500, wpn: 'rifle', ok: (e) => e.type === 'kill' && e.wpn === 'rifle' },
-  { id: 'shotgun', n: 10, xp: 1500, wpn: 'shotgun', ok: (e) => e.type === 'kill' && e.wpn === 'shotgun' },
-  { id: 'sniper', n: 8, xp: 1800, wpn: 'sniper', ok: (e) => e.type === 'kill' && e.wpn === 'sniper' },
-  { id: 'nade', n: 3, xp: 1800, ok: (e) => e.type === 'kill' && e.wpn === 'frag' },
-  { id: 'assist', n: 8, xp: 1200, ok: (e) => e.type === 'assist' },
-  { id: 'streak', n: 2, xp: 1800, ok: (e) => e.type === 'streak' },
-  { id: 'win', n: 2, xp: 2000, ok: (e) => e.type === 'win' },
-  { id: 'matches', n: 3, xp: 1000, ok: (e) => e.type === 'match' },
+  { id: 'kills', n: 25, xp: 750, ok: (e) => e.type === 'kill' },
+  { id: 'head', n: 10, xp: 750, ok: (e) => e.type === 'kill' && e.head },
+  { id: 'melee', n: 5, xp: 1000, ok: (e) => e.type === 'kill' && e.wpn === 'melee' },
+  { id: 'pistol', n: 8, xp: 750, wpn: 'pistol', ok: (e) => e.type === 'kill' && e.wpn === 'pistol' },
+  { id: 'smg', n: 15, xp: 750, wpn: 'smg', ok: (e) => e.type === 'kill' && e.wpn === 'smg' },
+  { id: 'rifle', n: 15, xp: 750, wpn: 'rifle', ok: (e) => e.type === 'kill' && e.wpn === 'rifle' },
+  { id: 'shotgun', n: 10, xp: 750, wpn: 'shotgun', ok: (e) => e.type === 'kill' && e.wpn === 'shotgun' },
+  { id: 'sniper', n: 8, xp: 900, wpn: 'sniper', ok: (e) => e.type === 'kill' && e.wpn === 'sniper' },
+  { id: 'nade', n: 3, xp: 900, ok: (e) => e.type === 'kill' && e.wpn === 'frag' },
+  { id: 'assist', n: 8, xp: 600, ok: (e) => e.type === 'assist' },
+  { id: 'streak', n: 2, xp: 900, ok: (e) => e.type === 'streak' },
+  { id: 'win', n: 2, xp: 1000, ok: (e) => e.type === 'win' },
+  { id: 'matches', n: 3, xp: 500, ok: (e) => e.type === 'match' },
 ];
 // Desbloqueios: cada desafio libera um item especial (camuflagem reativa, mira, arma apelona, faca).
 // O item fica trancado no arsenal ate o desafio fechar (nao abre por nivel).
 const K = (w) => (e) => e.type === 'kill' && (!w || e.wpn === w);
 export const UNLOCKS = [
-  { id: 'u_ember', n: 50, xp: 2000, ok: K(), reward: { slot: 'camo', id: 'ember' } },
-  { id: 'u_inkreact', n: 100, xp: 4000, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'camo', id: 'inkreact' } },
-  { id: 'u_sscope', n: 25, xp: 2500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper', reward: { slot: 'scope', id: 'sniper_scope_2', wpn: 'sniper' } },
-  { id: 'u_fscope', n: 60, xp: 2500, ok: K('rifle'), reward: { slot: 'scope', id: 'fusil_scope_4', wpn: 'rifle' } },
-  { id: 'u_handcannon', n: 40, xp: 3000, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_3', wpn: 'pistol' } },
-  { id: 'u_spitter', n: 75, xp: 3000, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_5', wpn: 'smg' } },
-  { id: 'u_heavy', n: 75, xp: 3000, ok: K('rifle'), reward: { slot: 'body', id: 'fusil_4', wpn: 'rifle' } },
-  { id: 'u_bolt', n: 30, xp: 3000, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_2', wpn: 'sniper' } },
-  { id: 'u_splitter', n: 15, xp: 2000, ok: K('melee'), reward: { slot: 'body', id: 'melee_4', wpn: 'melee' } },
-  { id: 'u_sword', n: 40, xp: 3500, ok: K('melee'), reward: { slot: 'body', id: 'melee_12', wpn: 'melee' } },
-  { id: 'u_fang', n: 10, xp: 3000, ok: (e) => e.type === 'streak', reward: { slot: 'body', id: 'melee_13', wpn: 'melee' } },
+  { id: 'u_ember', n: 50, xp: 1000, ok: K(), reward: { slot: 'camo', id: 'ember' } },
+  { id: 'u_inkreact', n: 100, xp: 2000, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'camo', id: 'inkreact' } },
+  { id: 'u_sscope', n: 25, xp: 1250, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper', reward: { slot: 'scope', id: 'sniper_scope_2', wpn: 'sniper' } },
+  { id: 'u_fscope', n: 60, xp: 1250, ok: K('rifle'), reward: { slot: 'scope', id: 'fusil_scope_4', wpn: 'rifle' } },
+  { id: 'u_handcannon', n: 40, xp: 1500, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_3', wpn: 'pistol' } },
+  { id: 'u_spitter', n: 75, xp: 1500, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_5', wpn: 'smg' } },
+  { id: 'u_heavy', n: 75, xp: 1500, ok: K('rifle'), reward: { slot: 'body', id: 'fusil_4', wpn: 'rifle' } },
+  { id: 'u_bolt', n: 30, xp: 1500, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_2', wpn: 'sniper' } },
+  { id: 'u_splitter', n: 15, xp: 1000, ok: K('melee'), reward: { slot: 'body', id: 'melee_4', wpn: 'melee' } },
+  { id: 'u_sword', n: 40, xp: 1750, ok: K('melee'), reward: { slot: 'body', id: 'melee_12', wpn: 'melee' } },
+  { id: 'u_fang', n: 10, xp: 1500, ok: (e) => e.type === 'streak', reward: { slot: 'body', id: 'melee_13', wpn: 'melee' } },
+  // pacote WW2: cada arma antiga sai de um desafio proprio
+  { id: 'u_ww_stg', n: 30, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'rifle', reward: { slot: 'body', id: 'fusil_9', wpn: 'rifle' } },
+  { id: 'u_ww_garand', n: 40, xp: 1750, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_3', wpn: 'sniper' } },
+  { id: 'u_ww_thompson', n: 3, xp: 1750, ok: (e) => e.type === 'multi', reward: { slot: 'body', id: 'subfusil_11', wpn: 'smg' } },
+  { id: 'u_ww_ppsh', n: 100, xp: 2000, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_12', wpn: 'smg' } },
+  { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
+  { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
+  { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
   // tracados do tiro (equipados por arma no Arsenal; Giz e Nenhum ja vem abertos)
-  { id: 'u_tr_fire', n: 20, xp: 1500, ok: K('shotgun'), reward: { slot: 'tracer', id: 'tr:fire' } },
-  { id: 'u_tr_ink', n: 15, xp: 1500, ok: (e) => e.type === 'assist', reward: { slot: 'tracer', id: 'tr:ink' } },
-  { id: 'u_tr_spark', n: 40, xp: 1500, ok: K('smg'), reward: { slot: 'tracer', id: 'tr:spark' } },
-  { id: 'u_tr_rainbow', n: 5, xp: 2500, ok: (e) => e.type === 'win', reward: { slot: 'tracer', id: 'tr:rainbow' } },
-  { id: 'u_tr_void', n: 50, xp: 2500, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'tracer', id: 'tr:void' } },
-  { id: 'u_tr_toxic', n: 5, xp: 2000, ok: K('frag'), reward: { slot: 'tracer', id: 'tr:toxic' } },
-  { id: 'u_tr_gold', n: 20, xp: 3000, ok: (e) => e.type === 'streak', reward: { slot: 'tracer', id: 'tr:gold' } },
-  { id: 'u_tr_ice', n: 25, xp: 2000, ok: K('sniper'), reward: { slot: 'tracer', id: 'tr:ice' } },
+  { id: 'u_tr_fire', n: 20, xp: 750, ok: K('shotgun'), reward: { slot: 'tracer', id: 'tr:fire' } },
+  { id: 'u_tr_ink', n: 15, xp: 750, ok: (e) => e.type === 'assist', reward: { slot: 'tracer', id: 'tr:ink' } },
+  { id: 'u_tr_spark', n: 40, xp: 750, ok: K('smg'), reward: { slot: 'tracer', id: 'tr:spark' } },
+  { id: 'u_tr_rainbow', n: 5, xp: 1250, ok: (e) => e.type === 'win', reward: { slot: 'tracer', id: 'tr:rainbow' } },
+  { id: 'u_tr_void', n: 50, xp: 1250, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'tracer', id: 'tr:void' } },
+  { id: 'u_tr_toxic', n: 5, xp: 1000, ok: K('frag'), reward: { slot: 'tracer', id: 'tr:toxic' } },
+  { id: 'u_tr_gold', n: 20, xp: 1500, ok: (e) => e.type === 'streak', reward: { slot: 'tracer', id: 'tr:gold' } },
+  { id: 'u_tr_ice', n: 25, xp: 1000, ok: K('sniper'), reward: { slot: 'tracer', id: 'tr:ice' } },
 ];
 // Desafio de ELITE: 1 por dia (sorteado pela data), dificil, vale muito XP e da a proxima variante de elite
 // que o jogador ainda nao tem (arma montada + camo lendaria). Com todas na mao, so o XP.
 // max: o progresso e o maior valor visto (ex.: sequencia sem cair), nao uma soma.
 export const ELITE = [
-  { id: 'e_head', n: 40, xp: 8000, ok: (e) => e.type === 'kill' && e.head },
-  { id: 'e_streak', n: 12, xp: 9000, max: (e) => (e.type === 'kill' ? e.streak || 0 : -1) },
-  { id: 'e_multi', n: 6, xp: 8500, ok: (e) => e.type === 'multi' },
-  { id: 'e_melee', n: 15, xp: 8000, ok: K('melee') },
-  { id: 'e_sniperhead', n: 15, xp: 9000, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper' },
-  { id: 'e_wins', n: 5, xp: 8500, ok: (e) => e.type === 'win' },
-  { id: 'e_nuke', n: 1, xp: 10000, ok: (e) => e.type === 'streak' && e.kind === 'nuke' },
-  { id: 'e_kills', n: 120, xp: 8000, ok: K() },
+  { id: 'e_head', n: 40, xp: 4000, ok: (e) => e.type === 'kill' && e.head },
+  { id: 'e_streak', n: 12, xp: 4500, max: (e) => (e.type === 'kill' ? e.streak || 0 : -1) },
+  { id: 'e_multi', n: 6, xp: 4250, ok: (e) => e.type === 'multi' },
+  { id: 'e_melee', n: 15, xp: 4000, ok: K('melee') },
+  { id: 'e_sniperhead', n: 15, xp: 4500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper' },
+  { id: 'e_wins', n: 5, xp: 4250, ok: (e) => e.type === 'win' },
+  { id: 'e_nuke', n: 1, xp: 5000, ok: (e) => e.type === 'streak' && e.kind === 'nuke' },
+  { id: 'e_kills', n: 120, xp: 4000, ok: K() },
 ];
 export const BP_ORDER = Object.keys(BLUEPRINTS);
 export const bpOwned = (id) => !!data.bps[id];
@@ -80,8 +89,9 @@ export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
 const ACTIVE = 4;
-const ORDER = ['u_ember', 'u_tr_fire', 'u_handcannon', 'u_splitter', 'u_tr_ink', 'u_sscope', 'u_spitter', 'u_tr_spark', 'u_inkreact', 'u_heavy',
-  'u_tr_void', 'u_fang', 'u_fscope', 'u_tr_toxic', 'u_bolt', 'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice'];
+const ORDER = ['u_ember', 'u_ww_1911', 'u_tr_fire', 'u_handcannon', 'u_ww_stg', 'u_splitter', 'u_tr_ink', 'u_ww_thompson', 'u_sscope', 'u_spitter',
+  'u_ww_garand', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_ww_ppsh', 'u_fang', 'u_fscope', 'u_ww_tt', 'u_tr_toxic', 'u_bolt',
+  'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice']; // WW2 (u_ww_*) intercaladas pra aparecer cedo
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];
 export function activeUnlocks() { return ordered().filter(u => (data.career[u.id] || 0) < u.n).slice(0, ACTIVE); }
 export const unlockActive = (id) => activeUnlocks().some(u => u.id === id);

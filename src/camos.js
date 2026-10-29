@@ -81,7 +81,10 @@ export const CAMO_SWATCH = {
 export const CAMO_GLSL = /* glsl */`
 uniform float uCamo; uniform float uTime; uniform float uReact;
 varying vec3 vCamoPos;
-float c_h(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+// o fract(sin(x) * 43758) quebra na GPU de celular com x grande (tempo + posicao): diamante/eletrica
+// (que sorteiam pelo tempo) ficavam apagadas no mobile. mod 289 deixa o x pequeno. (Hash sem sin
+// foi testado e deixou a compilacao no Direct3D 3,6x mais lenta: travava o Arsenal.)
+float c_h(vec3 p) { return fract(sin(dot(mod(p, 289.0), vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float c_n(vec3 p) {
   vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(c_h(i), c_h(i + vec3(1,0,0)), f.x), mix(c_h(i + vec3(0,1,0)), c_h(i + vec3(1,1,0)), f.x), f.y),
@@ -351,3 +354,26 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
   return vec3(1.0);
 }
 `;
+
+// Shader de UMA camuflagem so. O CAMO_GLSL inteiro (30 camos num shader) levava ~4 s pra compilar no
+// Direct3D e travava o jogo ao abrir o Arsenal; cada camo sozinha compila rapido e so uma vez.
+// Recorta do camoColor so o bloco `if (k == code)` (code 0 = nenhuma, so as funcoes de apoio).
+const camoCache = new Map();
+export function camoGlsl(code) {
+  if (camoCache.has(code)) return camoCache.get(code);
+  const lines = CAMO_GLSL.split('\n'), out = [];
+  let inFn = false, keep = true;
+  for (const ln of lines) {
+    if (/^vec3 camoColor\(/.test(ln)) inFn = true;
+    if (inFn) {
+      const m = ln.match(/^  if \(k == (\d+)\)/);
+      if (m) keep = Number(m[1]) === code;
+      else if (/^  return vec3\(1\.0\);/.test(ln) || /^}/.test(ln)) keep = true;
+      if (ln.startsWith('}')) inFn = false;
+    }
+    if (keep) out.push(ln);
+  }
+  const g = out.join('\n');
+  camoCache.set(code, g);
+  return g;
+}

@@ -38,6 +38,14 @@ const SFX = {
   headshot: ['cartoon bonk on head with bell ding', 0.6],
   killstamp: ['cartoon cymbal crash short with honk', 0.8],
   music: ['1930s ragtime jazz piano and brass loop, upbeat, old gramophone sound, instrumental', 20],
+  // 29/10: momentos que estavam mudos (contagem, inicio de rodada, fim, assistencia, renascer)
+  tick: ['single cartoon wooden clock tick, short and dry, toy clock', 0.5],
+  go: ['short cartoon referee whistle toot, playful, single blow', 0.6],
+  win: ['short 1930s vaudeville brass ta-da victory sting, cartoon', 1.8],
+  lose: ['cartoon sad trombone wah wah wah, short and funny', 1.8],
+  ding: ['tiny soft cartoon bell ding, light and bright', 0.5],
+  poof: ['soft cartoon pop poof appear, light puff', 0.5],
+  bolt: ['cartoon bolt action rifle cycling, exaggerated springy clack-clunk with a tiny boing, comedic, close, dry, no gunshot', 0.6],
 };
 for (const [name, [text, dur]] of Object.entries(SFX)) {
   const out = `public/sfx/${name}.mp3`;

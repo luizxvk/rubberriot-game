@@ -10,7 +10,7 @@ import { Input, isTouch, buildTouch, applyHudLayout, setFireButton } from './inp
 import { Pad } from './gamepad.js';
 import { LocalNet, WsNet } from './net.js';
 import { audio } from './audio.js';
-import { MODES, WEAPONS, STREAKS, GUN_LADDER, PRIMARIES, BLUEPRINTS } from '../shared/weapons.js';
+import { MODES, WEAPONS, STREAKS, GUN_LADDER, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS } from '../shared/weapons.js';
 import { updateCamoFx } from './camofx.js';
 import { getMap, hasLOS } from '../shared/map.js';
 import { loadArsenal, getLoadouts, scopeTarget } from './arsenal.js';
@@ -27,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------- ajustes ----------
-const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true };
+const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [] };
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -235,7 +235,7 @@ onProgress((e) => {
     audio.play('unlock', { vol: 0.8, ui: true, jitter: 0 });
   }, 1100 + i * 3400));
 });
-window.__G = G; // atalho de depuracao
+window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
 
@@ -325,6 +325,7 @@ function onEvent(e) {
   switch (e.k) {
     case 'spawn':
       if (e.id === G.myId && G.player) {
+        if (inGame) audio.play('poof', { ui: true, vol: 0.3, key: 'poof', max: 1 });
         // camo reativa: o estagio vem da sequencia do servidor. Quem morreu volta do 0; quem sobreviveu a
         // rodada da bomba (todo mundo renasce na rodada nova) mantem o estagio
         const meSnap = G.snap?.players?.find(o => o.id === G.myId);
@@ -362,7 +363,7 @@ function onEvent(e) {
       } else if (e.a !== G.myId) G.remotes.get(e.v)?.char.flinch(e.head);
       break;
     case 'assist':
-      if (e.id === G.myId) { gainXp('assist'); chEvent({ type: 'assist' }); }
+      if (e.id === G.myId) { gainXp('assist'); chEvent({ type: 'assist' }); audio.play('ding', { ui: true, vol: 0.35, key: 'ding', max: 1 }); }
       break;
     case 'kill': {
       if (e.v === G.myId && G.mode === 'bomb') { $('specBar').hidden = false; $('dead').classList.add('spec'); }
@@ -379,6 +380,7 @@ function onEvent(e) {
       if (inGame) hud.feed(html, e.a === G.myId || e.v === G.myId);
       if (e.a === G.myId && inGame) {
         chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head, streak: e.streak || 0 });
+        G.player?.scavenge?.(); // skill catador
         // multiabate: 3 derrubados em 4 s (desafio de elite)
         const now = performance.now() / 1000;
         G.multi = (G.multi || []).filter(x => now - x < 4); G.multi.push(now);
@@ -400,6 +402,8 @@ function onEvent(e) {
       if (e.v === G.myId && G.player) {
         G.player.alive = false;
         G.deathPos = [...G.player.pos];
+        // mira do toque e um botao liga/desliga: morreu mirando, renasce sem mira (gun game reclamava)
+        input.touch.ads = false; input.adsBtn?.classList.remove('on'); G.player.adsK = 0;
         $('dead').hidden = false;
         $('deadBy').textContent = e.a ? t('killedYou', { n: nameOf(e.a) }) : t('selfKill');
         G.killer = e.a;
@@ -512,7 +516,10 @@ function onEvent(e) {
     case 'end':
       if (inGame) {
         G.slowT = 1.4;
-        if (e.winner === G.myTeam || e.winner === G.myName) { gainXp('win'); chEvent({ type: 'win' }); }
+        const iWon = e.winner === G.myTeam || e.winner === G.myName;
+        if (iWon) { gainXp('win'); chEvent({ type: 'win' }); }
+        // ta-da ou trombone triste, por cima da musica abaixada
+        audio.duck(0.3, 2.2); setTimeout(() => audio.play(iWon ? 'win' : 'lose', { ui: true, vol: 0.6, jitter: 0, key: 'end', max: 1 }), 350);
         chEvent({ type: 'match' });
         gainXp('match');
         setTimeout(() => showEnd(e.winner), 900);
@@ -545,7 +552,7 @@ function onEvent(e) {
       else hud.alert(t('inf_last', { n: nameOf(e.id) }), '', G.myTeam === 'red' ? 'red' : 'blue');
       break;
     case 'survive':
-      if (e.id === G.myId) gainXp('survive');
+      if (e.id === G.myId) { gainXp('survive'); audio.play('ding', { ui: true, vol: 0.3, rate: 1.2, key: 'ding', max: 1 }); }
       break;
     // ---------- plantar a bomba ----------
     case 'round':
@@ -553,6 +560,7 @@ function onEvent(e) {
       G.spec = { i: 0, map: false };
       for (const r of G.remotes.values()) r.char.root.visible = true;
       hud.alert(t('roundN', { n: e.n }), t(G.myTeam === 'red' ? (e.carrier === G.myId ? 'bombYouCarry' : 'bombAtkGoal') : 'bombDefGoal'), G.myTeam === 'red' ? 'red' : 'blue');
+      audio.play('go', { ui: true, vol: 0.5, key: 'count', max: 1 });
       break;
     case 'roundEnd': {
       if (!inGame) break;
@@ -563,7 +571,7 @@ function onEvent(e) {
       break;
     }
     case 'halftime':
-      if (inGame) hud.message(t('bombHalf'), 3);
+      if (inGame) { hud.message(t('bombHalf'), 3); audio.play('capture', { ui: true, vol: 0.55 }); }
       break;
     case 'bomb':
       if (!inGame) break;
@@ -643,7 +651,9 @@ function sendLoadout() {
   if (!G.net) return;
   const los = {};
   for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee']) los[w] = G.loadouts[w];
-  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: level(), tracer: settings.tracer, elite: !!rovexMe?.elite });
+  // skills passivas equipadas (so as que o nivel ja abriu); o jogador aplica as de mao, o servidor as de regra
+  G.skills = (settings.skills || []).filter(s => SKILLS[s] && level() >= SKILLS[s].lvl).slice(0, SKILL_SLOTS);
+  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: level(), tracer: settings.tracer, elite: !!rovexMe?.elite, skills: G.skills });
 }
 
 // ---------- iris ----------
@@ -860,7 +870,7 @@ function frame() {
   G.timeScale += ((G.slowT > 0 ? 0.25 : 1) - G.timeScale) * Math.min(1, realDt * 8);
   const dt = realDt * G.timeScale;
   G.t += dt;
-  camoTime.value += realDt;
+  camoTime.value = (camoTime.value + realDt) % 600; // tempo curto: numero grande perde precisao no shader do celular
   updateCamoFx(realDt);
   film.uniforms.time.value = G.t;
 
@@ -910,7 +920,9 @@ function frame() {
     while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
     r.char.root.rotation.y += dy * k;
     r.char.update(dt, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1] });
-    r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || camera.position.distanceTo(tmpV.fromArray(r.pos)) < 30);
+    const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
+    r.char.lod(camD);
+    r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || camD < 30);
   }
 
   let scopeOn = false;
@@ -1085,16 +1097,53 @@ if (rovexMe?.elite) {
 }
 // dentro da Rovex (iframe) nao tem "instalar app": o service worker so existe no jogo solto
 if ('serviceWorker' in navigator && !inRovex) navigator.serviceWorker.register('./sw.js').catch(() => {});
+// instalar: o botao fica sempre no menu (some so com o app ja instalado). Com o atalho do Chrome
+// instala direto; sem ele (iPhone, Chrome que ainda nao ofereceu, dentro da Rovex) abre o guia.
 let installEvt = null;
-addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('installApp').hidden = false; $('gateInstall').hidden = false; });
+const installed = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const syncInstall = () => { $('installApp').hidden = installed(); };
+syncInstall();
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('gateInstall').hidden = false; syncInstall(); });
 addEventListener('appinstalled', () => { installEvt = null; $('installApp').hidden = true; $('gateInstall').hidden = true; });
 $('gateInstall').onclick = () => $('installApp').click();
 $('installApp').onclick = async () => {
-  if (!installEvt) return;
-  installEvt.prompt();
-  await installEvt.userChoice.catch(() => {});
-  installEvt = null; $('installApp').hidden = true;
+  audio.play('ui_click', { ui: true });
+  if (installEvt && !inRovex) {
+    installEvt.prompt();
+    const r = await installEvt.userChoice.catch(() => null);
+    installEvt = null;
+    if (r?.outcome === 'accepted') $('installApp').hidden = true;
+    return;
+  }
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const steps = inRovex ? 'igRovex' : ios ? 'igIos' : /Android/.test(ua) ? 'igAndroid' : 'igPc';
+  $('igSteps').innerHTML = t(steps).map(s => `<li>${s}</li>`).join('');
+  $('igOpen').hidden = !inRovex;
+  $('installGuide').hidden = false;
 };
+$('igOk').onclick = () => { audio.play('ui_back', { ui: true }); $('installGuide').hidden = true; };
+$('installGuide').onclick = (e) => { if (e.target === $('installGuide')) $('installGuide').hidden = true; };
+
+// tela cheia: no menu inicial e na pausa (iPhone nao deixa pagina ir pra tela cheia: o botao some)
+const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+const syncFs = () => {
+  const on = !!document.fullscreenElement;
+  $('fsMenu').hidden = !fsOk; $('pauseFs').hidden = !fsOk;
+  $('fsMenu').classList.toggle('on', on);
+  $('fsMenu').setAttribute('aria-label', t(on ? 'fsOff' : 'fsOn'));
+  $('pauseFs').textContent = t(on ? 'fsOff' : 'fsOn');
+};
+const toggleFs = async () => {
+  audio.play('ui_click', { ui: true });
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); if (G.state === 'game' && isTouch) await screen.orientation?.lock?.('landscape').catch(() => {}); }
+  } catch { /* navegador recusou */ }
+};
+$('fsMenu').onclick = toggleFs;
+$('pauseFs').onclick = toggleFs;
+document.addEventListener('fullscreenchange', syncFs);
+syncFs();
 
 // ---------- partida ----------
 const BOOT_T = performance.now();

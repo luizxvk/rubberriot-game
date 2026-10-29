@@ -174,7 +174,7 @@ export function buildTouch(input, root) {
   let fireId = null, fx = 0, fy = 0;
   const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; fx = e.clientX; fy = e.clientY; }, () => { input.touch.fire = false; fireId = null; });
   fire.addEventListener('pointermove', (e) => { if (e.pointerId !== fireId) return; input.lookX += (e.clientX - fx) * 1.4; input.lookY += (e.clientY - fy) * 1.4; fx = e.clientX; fy = e.clientY; });
-  btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); });
+  input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); });
   btn(t('t_jump'), 'jump', at(0, 12, 66), () => input.edges.add('JUMP'));
   btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
   btn(t('t_reload'), 'reload', at(94, 96, 58), () => input.edges.add('RELOAD'));

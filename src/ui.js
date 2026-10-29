@@ -1,5 +1,6 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
-import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait } from '../shared/weapons.js';
+import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS } from '../shared/weapons.js';
+import { SKILL_ICONS } from './skillicons.js';
 import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
@@ -9,7 +10,7 @@ import { CAMOS, CAMO_SWATCH } from './camos.js';
 import { DEBUG, progressInfo, wpnInfo, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked } from './progress.js';
 import { MAP_IDS } from '../shared/map.js';
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
-import { CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout } from './arsenal.js';
+import { CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 // mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
@@ -25,7 +26,7 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'solo', 'mp', 'arsenal', 'settings', 'controls', 'challenges'];
+  const screens = ['home', 'solo', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges'];
   let settingsFromGame = false;
 
   ui.go = (name, fromGame = false) => {
@@ -35,6 +36,7 @@ export function initMenus(o) {
     $('menu').classList.toggle('smithing', name === 'arsenal');
     $('menu').classList.toggle('home', name === 'home');
     if (name === 'arsenal') { picking = false; renderSmith(); }
+    if (name === 'skills') renderSkills();
     if (name === 'mp') ui.refreshRooms && ui.refreshRooms();
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
     if (name === 'controls') renderKeys();
@@ -328,6 +330,37 @@ export function initMenus(o) {
     o.onSmith(buildGun(cat, view));
   }
 
+  // ---------- skills passivas: 2 medalhoes + cartas ----------
+  let skTarget = 0; // slot que a proxima skill tocada vai ocupar
+  const skIcon = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[SKILLS[id].icon] || ''}</svg>`;
+  function renderSkills() {
+    const lv = progressInfo(), open = (id) => lv.unlockAll || lv.level >= SKILLS[id].lvl;
+    const eq = (S.skills || []).filter(id => SKILLS[id] && open(id)).slice(0, SKILL_SLOTS);
+    while (eq.length < SKILL_SLOTS) eq.push(null);
+    if (skTarget >= SKILL_SLOTS) skTarget = 0;
+    const medal = (id, i) => `<button class="sk-medal ${id ? 'set' : 'free'} ${i === skTarget ? 'target' : ''}" data-slot="${i}" aria-pressed="${i === skTarget}">
+      <span class="sk-ring">${id ? skIcon(id) : '<i>+</i>'}</span><small>${t('skSlot', { n: i + 1 })}</small><b>${id ? t('sk_' + id) : t('skFree')}</b></button>`;
+    const card = (id) => {
+      const k = eq.indexOf(id), ok = open(id);
+      return `<button class="sk-card ${k >= 0 ? 'on' : ''} ${ok ? '' : 'locked'}" data-sk="${id}" ${ok ? '' : 'aria-disabled="true"'} ${k >= 0 ? `title="${t('skOff')}"` : ''}>
+        <span class="sk-ico">${skIcon(id)}</span>${ok ? '' : `<span class="sk-lock"><svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS.lock}</svg></span>`}${k >= 0 ? `<em class="sk-n">${k + 1}</em>` : ''}
+        <b>${t('sk_' + id)}</b><small>${ok ? t('skd_' + id) : t('skLvl', { n: SKILLS[id].lvl })}</small></button>`;
+    };
+    $('skillPane').innerHTML = `<div class="sk-medals">${eq.map(medal).join('')}</div><div class="sk-grid">${Object.keys(SKILLS).map(card).join('')}</div>`;
+    const save = (list) => { S.skills = list.filter(Boolean); o.saveSettings(); };
+    $('skillPane').querySelectorAll('[data-slot]').forEach(b => b.onclick = () => { skTarget = +b.dataset.slot; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSkills(); });
+    $('skillPane').querySelectorAll('[data-sk]').forEach(b => b.onclick = () => {
+      if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; }
+      const id = b.dataset.sk, k = eq.indexOf(id);
+      if (k >= 0) { eq[k] = null; skTarget = k; audio.play('ui_back', { ui: true, vol: 0.6 }); } // tocou na equipada: tira
+      else {
+        eq[skTarget] = id; audio.play('unlock', { ui: true, vol: 0.5 });
+        const free = eq.indexOf(null); skTarget = free >= 0 ? free : (skTarget + 1) % SKILL_SLOTS; // proximo toque vai pro outro slot
+      }
+      save(eq); renderSkills();
+    });
+  }
+
   function setPart(k, v) {
     preview = null;
     const lo = loadouts[cat];
@@ -427,6 +460,7 @@ export function initMenus(o) {
     else opts = [null, ...C.handles];
     const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[slot];
     p.innerHTML = opts.map((id, i) => {
+      if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
       const open = partUnlocked(cat, i, id);
       const lockCh = !open && id && LOCKED_BY[id];
       // pros e contras da peca (estilo COD), so em pente e empunhadura

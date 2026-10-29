@@ -79,6 +79,9 @@ function eyeTexture() {
 }
 let EYE = null;
 
+// a partir daqui (m) o boneco perde os detalhes pequenos
+const LOD_FAR = 18;
+
 export class Character {
   constructor(team, name) {
     EYE ||= eyeTexture();
@@ -95,7 +98,7 @@ export class Character {
     this.body.add(shorts);
     for (const s of [-1, 1]) {
       const btn = ink(new THREE.SphereGeometry(0.06, 8, 6), PAL.white, 0.015);
-      btn.position.set(s * 0.15, 0.82, -0.36);
+      btn.position.set(s * 0.15, 0.82, -0.36); btn.userData.detail = true;
       this.body.add(btn);
     }
     this.head = new THREE.Group();
@@ -110,22 +113,23 @@ export class Character {
     eyes.position.set(0, 0.04, -0.37); eyes.rotation.y = Math.PI;
     this.head.add(eyes);
     const nose = ink(new THREE.SphereGeometry(0.075, 10, 8), PAL.ink, 0.012);
-    nose.position.set(0, -0.08, -0.38); nose.scale.set(1.3, 1, 1);
+    nose.position.set(0, -0.08, -0.38); nose.scale.set(1.3, 1, 1); nose.userData.detail = true;
     this.head.add(nose);
     const mouth = ink(new THREE.TorusGeometry(0.11, 0.022, 6, 12, Math.PI), PAL.ink, 0);
-    mouth.position.set(0, -0.17, -0.33); mouth.rotation.set(0, 0, Math.PI);
+    mouth.position.set(0, -0.17, -0.33); mouth.rotation.set(0, 0, Math.PI); mouth.userData.detail = true;
     this.head.add(mouth);
     // topete de tinta enrolado (nada de orelha de rato)
     const curl = [];
     for (let i = 0; i <= 10; i++) { const a = i * 0.55; curl.push(new THREE.Vector3(Math.cos(a) * 0.12 * (1 - i / 14), 0.3 + i * 0.03, Math.sin(a) * 0.12 * (1 - i / 14) + 0.05)); }
-    this.head.add(ink(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curl), 20, 0.045, 6), PAL.ink, 0.015));
+    const curlM = ink(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curl), 20, 0.045, 6), PAL.ink, 0.015); curlM.userData.detail = true;
+    this.head.add(curlM);
     // chapeu-coco com a fita do time
     const hat = ink(new THREE.CylinderGeometry(0.2, 0.24, 0.18, 14), PAL.ink, 0.02);
     hat.position.set(0.1, 0.36, 0.05); hat.rotation.z = -0.35;
     const brim = ink(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 16), PAL.ink, 0.02);
     brim.position.y = -0.09; hat.add(brim);
     const band = ink(new THREE.CylinderGeometry(0.245, 0.245, 0.06, 14), teamCol, 0);
-    band.position.y = -0.04; hat.add(band);
+    band.position.y = -0.04; band.userData.detail = true; hat.add(band);
     this.head.add(hat);
 
     this.armR = new Hose(0.065, PAL.ink); this.armL = new Hose(0.065, PAL.ink);
@@ -134,7 +138,7 @@ export class Character {
     const glove = () => {
       const g = ink(new THREE.SphereGeometry(0.12, 12, 10), PAL.white, 0.025);
       const cuff = ink(new THREE.CylinderGeometry(0.1, 0.13, 0.08, 10), PAL.white, 0.02);
-      cuff.position.y = 0.12; g.add(cuff);
+      cuff.position.y = 0.12; cuff.userData.detail = true; g.add(cuff);
       return g;
     };
     this.handR = glove(); this.handL = glove();
@@ -160,6 +164,9 @@ export class Character {
 
     this.phase = Math.random() * 10;
     this.deadT = 0;
+    // detalhe que de longe nem aparece (botao, nariz, boca, topete, fita, punho): some a partir de LOD_FAR
+    this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
+    this.far = false;
     this.v = new THREE.Vector3();
   }
 
@@ -168,6 +175,21 @@ export class Character {
     this.gunHolder.clear();
     this.gun = buildGun(id, lo);
     this.gunHolder.add(this.gun);
+    // pecas da arma (mira, pente, punho, laser) e os contornos dela: de longe so o corpo da arma
+    this.gunDetails = [];
+    let body = null, big = 0;
+    this.gun.traverse(o => { if (o.isMesh && !o.material?.isShaderMaterial) { o.geometry.computeBoundingSphere?.(); const r = o.geometry.boundingSphere?.radius || 0; if (r > big) { big = r; body = o; } } });
+    this.gun.traverse(o => { if (o.isMesh && o !== body && o.parent !== body && !o.userData.noFx && !o.material?.transparent && (o.material?.blending ?? 1) === 1) this.gunDetails.push(o); });
+    if (this.far) for (const o of this.gunDetails) o.visible = false;
+  }
+
+  // nivel de detalhe pela distancia da camera: 16 bonecos x 48 malhas pesavam no celular
+  lod(dist) {
+    const far = dist > LOD_FAR;
+    if (far === this.far) return;
+    this.far = far;
+    for (const o of this.details) o.visible = !far;
+    for (const o of this.gunDetails || []) o.visible = !far;
   }
 
   // tranco de quem leva tiro: inclina pra tras e amassa (cabeca = mais forte)

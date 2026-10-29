@@ -36,6 +36,28 @@ export const NADES = {
 
 // sequencias de abates (cartoon): radar espiao, chuva de bigornas, dirigivel atirador e,
 // com 15 sem cair, a Torta Atomica: avisa o outro time e depois de `delay` s derruba todo inimigo vivo
+// Skills passivas: ate SKILL_SLOTS equipadas, cada uma abre num nivel do jogador (lvl).
+// O servidor aplica as que mexem em dano e regra (couro, folego, bolso, pavio, cuca, pano); as de mao
+// (maos, borracha, lince, mola, catador, sangue) o jogo aplica no proprio jogador.
+// icon = Material Icons (desenho real, tingido no Arsenal).
+export const SKILLS = {
+  maos: { lvl: 3, reload: 0.75, swap: 0.7, icon: 'pan_tool' },             // recarrega e troca de arma mais rapido
+  mola: { lvl: 4, jump: 1.3, icon: 'height' },                              // pula mais alto
+  borracha: { lvl: 6, move: 1.08, icon: 'directions_run' },                 // anda e corre mais rapido
+  catador: { lvl: 8, mags: 1, icon: 'backpack' },                           // cada abate devolve um pente na reserva
+  lince: { lvl: 10, ads: 0.75, kick: 0.85, icon: 'visibility' },            // mira mais rapido, menos recuo
+  sangue: { lvl: 12, below: 35, reload: 0.7, ads: 0.7, icon: 'ac_unit' },  // com pouca vida: recarrega e mira mais rapido
+  bolso: { lvl: 14, nades: 1, reserve: 1.3, icon: 'inventory_2' },          // +1 granada de cada e mais municao reserva
+  cuca: { lvl: 16, head: 1.25, icon: 'sports_motorsports' },               // cabecada em voce doi menos (1,6 -> 1,25)
+  couro: { lvl: 18, blast: 0.7, icon: 'shield' },                           // menos dano de explosao
+  pano: { lvl: 20, icon: 'do_not_step' },                                   // seus tiros nao chamam os bots
+  folego: { lvl: 22, after: 4, regen: 8, icon: 'favorite' },                // vida volta sozinha depois de 4 s sem dano
+  pavio: { lvl: 26, streak: 1, icon: 'local_fire_department' },             // sequencias custam 1 abate a menos
+};
+export const SKILL_SLOTS = 2;
+export const BLAST = ['frag', 'anvil', 'blimp', 'bomb'];
+export const hasSkill = (p, id) => !!p?.skills?.includes(id);
+
 export const STREAKS = {
   uav: { kills: 3, time: 25 },
   anvil: { kills: 5 },
@@ -100,9 +122,17 @@ export const BODY_TRAITS = {
   fusil_7: { mode: 'semi', rate: 1.7, dmg: 1.45, spread: 0.65, hip: 1.25 },
   shotgun_1: { mode: 'semi' },                                                     // bomba
   shotgun_2: { mode: 'semi', rate: 0.55, dmg: 0.82, kick: 0.85 },                  // semiautomatica
+  // pacote WW2
+  fusil_9: { mode: 'auto', rate: 1.12, dmg: 1.1, kick: 1.15, hip: 1.05 },             // trovao de lata
+  subfusil_11: { mode: 'auto', rate: 0.92, dmg: 1.05, kick: 1.1, hip: 0.95 },         // maquina de escrever
+  subfusil_12: { mode: 'auto', rate: 0.7, dmg: 0.82, kick: 1.25, spread: 1.1 },       // tamborzao: cospe bala
+  pistol_7: { mode: 'semi', rate: 1.25, dmg: 1.3, kick: 1.3 },                        // quarenta e cinco
+  pistol_8: { mode: 'semi', rate: 1.1, dmg: 1.15, spread: 0.8, hip: 1.15 },           // cabo de vassoura
+  pistol_9: { mode: 'semi', rate: 0.95, dmg: 1.05 },                                  // estrelinha
   sniper_0: { mode: 'bolt' },                                                     // ferrolho
   sniper_1: { mode: 'semi', rate: 0.5, dmg: 0.62, kick: 0.7 },                    // semiauto, nao mata de 1
   sniper_2: { mode: 'bolt', rate: 1.3, dmg: 1.25, kick: 1.3 },                   // ferrolho pesado
+  sniper_3: { mode: 'bolt', rate: 0.88, dmg: 0.95, kick: 1.1 },                  // ping velho (WW2): ferrolho mais agil que o padrao
 };
 // laminas: faca rapida e curta, machado/espada lento e com mais alcance (1 golpe sempre derruba)
 const ML = [[0.6, 2.4], [1.0, 3.0], [0.55, 2.3], [1.15, 3.3], [1.05, 3.0], [0.62, 2.5], [0.95, 2.9], [0.85, 3.0], [0.55, 2.3], [1.0, 2.9], [0.5, 2.2], [1.0, 3.0], [0.9, 3.2], [0.95, 2.9], [1.0, 3.0]];
