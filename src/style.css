@@ -1009,6 +1009,8 @@ body.touchrange input[type=range].grab::-webkit-slider-thumb { box-shadow: inset
 @media (max-height: 400px) {
   body.touchmode .hud-bl { top: max(10px, env(safe-area-inset-top)); left: calc(max(18px, env(safe-area-inset-left)) + 54px); }
   body.touchmode .radar { top: calc(max(10px, env(safe-area-inset-top)) + 56px); bottom: auto; width: 104px; height: 104px; }
+  /* battle royale: a linha do colete embaixo da vida empurra o minimapa uma linha pra baixo */
+  body.touchmode.mode-br .radar { top: calc(max(10px, env(safe-area-inset-top)) + 80px); width: 100px; height: 100px; }
 }
 /* icone proporcional ao botao (os botoes agora tem 3 tamanhos: canto, volta e aro de fora) */
 #touch .tbtn svg { width: 46%; height: 46%; }
@@ -1240,3 +1242,95 @@ body.touchmode .elite-track { top: calc(max(10px, env(safe-area-inset-top)) + 56
   #scr-skills .skills { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 10px 4px 2px; }
   #scr-skills .sk-hint { font-size: 11px; }
 }
+
+/* municao (Arsenal): icone da bala no bloco e nas opcoes */
+.am-ico { width: 15px; height: 15px; fill: currentColor; vertical-align: -3px; }
+.opt.am { display: grid; justify-items: start; text-align: left; gap: 2px; }
+.opt.am .am-ico { width: 26px; height: 26px; margin-bottom: 2px; }
+.picker:has(.opt.am) { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+/* battle royale: colete embaixo da vida e a pelicula queimando quando sai da iris */
+.armor { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.armor svg { width: 18px; height: 18px; fill: var(--paper); stroke: var(--ink); stroke-width: 1.5px; flex: none; }
+.armor-bar { flex: 1; height: 8px; border: 2px solid var(--ink); border-radius: 6px; background: rgba(20,18,16,.35); overflow: hidden; }
+.armor-bar i { display: block; height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--paper) 0 10px, #bdb7ac 10px 12px); transition: width .2s; }
+.iris-out { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; z-index: 4;
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(20,18,16,.55) 70%, rgba(255,140,40,.45) 92%, rgba(20,18,16,.9) 100%); }
+.iris-out.on { opacity: 1; animation: iris-flicker .18s steps(2) infinite; }
+@keyframes iris-flicker { 50% { filter: brightness(1.25); } }
+@media (prefers-reduced-motion: reduce) { .iris-out.on { animation: none; } }
+
+/* equipamento de campo: no kit (teclado/controle) e o botao de toque com o aro de recarga */
+.kit span.ready-f { background: var(--paper); border-color: var(--red); }
+#touch .tbtn.field.cooling { background: conic-gradient(rgba(236,233,225,.88) var(--cd, 0%), rgba(20,18,16,.45) 0); }
+
+/* secao do equipamento de campo (embaixo das skills, separada por linha dupla) */
+.sk-field { grid-column: 1 / -1; border-top: 3px double var(--ink); padding-top: 10px; margin-top: 4px; display: grid; gap: 6px; }
+.sk-field h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 18px; }
+
+/* kill cam em quadrinhos: tira de jornal, foto em meio-tom, quadros caindo um a um */
+.comic { display: flex; gap: 10px; margin-top: 14px; width: min(760px, 92vw); }
+.kc-p { position: relative; flex: 1; margin: 0; background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); aspect-ratio: 3 / 2; overflow: hidden; }
+.kc-p:nth-child(1) { transform: rotate(-1.5deg); } .kc-p:nth-child(2) { transform: rotate(1deg); } .kc-p:nth-child(3) { transform: rotate(-0.5deg); }
+.kc-p img, .kc-blank { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.45) brightness(1.08); }
+.kc-blank { background: radial-gradient(circle, #d9d4c8 1.2px, transparent 1.4px) 0 0 / 6px 6px, #ece9e1; }
+/* meio-tom de jornal por cima da foto */
+.kc-p::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, rgba(20,18,16,.28) 1px, transparent 1.3px) 0 0 / 4px 4px; mix-blend-mode: multiply; pointer-events: none; }
+.kc-p figcaption { position: absolute; left: 6px; top: 6px; max-width: calc(100% - 12px); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 0 6px; font-family: var(--body); font-weight: 800; font-size: 12px; text-align: left; z-index: 1; }
+.kc-sfx { position: absolute; right: 8px; bottom: 6px; z-index: 1; font-family: var(--display); font-weight: 400; font-size: clamp(18px, 3vw, 30px); color: var(--paper); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; transform: rotate(-8deg); }
+.kc-sfx.kc-big { left: 0; right: 0; bottom: 50%; transform: translateY(50%) rotate(-6deg); font-size: clamp(26px, 5vw, 48px); color: var(--red); }
+.comic.in .kc-p { animation: kc-drop .32s cubic-bezier(.2, 1.4, .4, 1) both; }
+.comic.in .kc-p:nth-child(2) { animation-delay: .45s; } .comic.in .kc-p:nth-child(3) { animation-delay: .9s; }
+@keyframes kc-drop { from { opacity: 0; translate: 0 -30px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .comic.in .kc-p { animation: none; } }
+@media (max-height: 520px) { .comic { width: min(560px, 70vw); margin-top: 8px; gap: 6px; } .kc-p figcaption { font-size: 10px; } }
+.dead.spec .comic { display: none; }
+/* caido: os botoes de toque nao servem pra nada (so o pause) e tampavam a tira da kill cam */
+body.touchmode.is-dead #touch .tbtn:not(.pause), body.touchmode.is-dead #touch .stick { visibility: hidden; }
+@media (max-height: 520px) { body.touchmode .dead:not(.spec) { padding-top: 48px; } body.touchmode .dead:not(.spec) .dead-title { font-size: clamp(28px, 6vw, 44px); } }
+body.touchmode.is-dead #feed { visibility: hidden; } /* repetia o "te nocauteou" e encostava no titulo */
+
+/* prestigio: estrela dourada do lado do nivel, botao no cartaz e o carimbo da comemoracao */
+.prest { font-style: normal; font-family: var(--display); color: #c9962b; -webkit-text-stroke: 1px var(--ink); paint-order: stroke fill; margin-left: 2px; }
+.lvl-badge .prest { font-size: 18px; align-self: flex-start; }
+.prest-go { grid-column: 1 / -1; margin-top: 6px; border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; background: linear-gradient(135deg, #16130f, #3a2f1c); color: #ffd36b; font-family: var(--body); font-weight: 800; font-size: 13px; }
+.prest-stamp { position: absolute; left: 50%; top: 42%; z-index: 5; transform: translate(-50%, -50%) rotate(-6deg); display: grid; gap: 4px; justify-items: center; padding: 14px 22px; background: #16130f; color: #ffd36b; border: 4px solid #ffd36b; box-shadow: 0 0 0 4px var(--ink), 8px 8px 0 var(--ink); border-radius: 14px; animation: prest-in .5s cubic-bezier(.2, 1.6, .4, 1) both; pointer-events: none; }
+.prest-stamp b { font-family: var(--display); font-weight: 400; font-size: clamp(26px, 5vw, 44px); }
+.prest-stamp small { font-family: var(--body); font-weight: 800; font-size: 13px; color: var(--paper); }
+@keyframes prest-in { from { opacity: 0; transform: translate(-50%, -50%) rotate(-6deg) scale(1.8); } }
+@media (prefers-reduced-motion: reduce) { .prest-stamp { animation: none; } }
+.lvl-badge { flex-wrap: wrap; } .lvl-badge .prest-go { flex-basis: 100%; }
+
+/* aviso de troca de arma (battle royale): pilula embaixo da mira */
+.use-prompt { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 12px; padding: 3px 12px; font-family: var(--body); font-weight: 800; font-size: 14px; white-space: nowrap; box-shadow: 3px 3px 0 var(--ink); }
+@media (max-height: 520px) { .use-prompt { font-size: 12px; top: calc(50% + 34px); } }
+.use-prompt { max-width: min(420px, 44vw); white-space: normal; text-align: center; line-height: 1.2; }
+
+/* dica de primeira vez: balao de gibi com rabinho, embaixo do placar do topo */
+.tip { position: fixed; z-index: 7; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 74px); transform: translateX(-50%); width: min(380px, 88vw); display: grid; gap: 3px; padding: 10px 14px 8px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); font-family: var(--body); cursor: pointer; pointer-events: auto; }
+.tip::before { content: ''; position: absolute; left: 26px; top: -14px; border: 7px solid transparent; border-bottom-color: var(--ink); border-width: 0 9px 14px; }
+.tip b { font-family: var(--display); font-weight: 400; font-size: 17px; line-height: 1.1; }
+.tip span { font-weight: 700; font-size: 13px; line-height: 1.3; }
+.tip small { font-weight: 800; font-size: 10.5px; opacity: .6; justify-self: end; }
+.tip.in { animation: tip-pop .3s cubic-bezier(.2, 1.5, .4, 1) both; }
+@keyframes tip-pop { from { opacity: 0; transform: translateX(-50%) scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .tip.in { animation: none; } }
+@media (max-height: 520px) { .tip { top: calc(max(8px, env(safe-area-inset-top)) + 58px); width: min(340px, 52vw); padding: 7px 11px 6px; } .tip b { font-size: 14px; } .tip span { font-size: 11.5px; } }
+@media (max-height: 400px) { .tip { top: calc(max(6px, env(safe-area-inset-top)) + 54px); left: calc(50% + 12px); width: min(270px, 36vw); padding: 5px 9px 4px; gap: 1px; border-radius: 14px; } .tip b { font-size: 13px; } .tip span { font-size: 10.5px; line-height: 1.25; } .tip small { display: none; } }
+
+/* dupla: caido. Caixa de gibi embaixo da mira: titulo, quanto falta e a barra (sangrando ou bomba enchendo) */
+.down-box { position: absolute; left: 50%; top: calc(50% + 54px); transform: translateX(-50%) rotate(-1.5deg); width: min(300px, 72vw); background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 12px 8px; box-shadow: 4px 4px 0 var(--ink); text-align: center; display: grid; gap: 3px; pointer-events: none; }
+.down-box[hidden] { display: none; }
+.down-box b { font-family: var(--display); font-weight: 400; font-size: 26px; line-height: 1; color: var(--red); letter-spacing: .04em; }
+.down-box small { font-family: var(--body); font-weight: 800; font-size: 13px; line-height: 1.2; }
+.down-box i { display: block; height: 10px; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; background: rgba(20,18,16,.12); }
+.down-box i span { display: block; height: 100%; width: 100%; background: var(--red); transition: width .2s linear; }
+.down-box.pump b { color: var(--ink); }
+.down-box.pump i span { background: var(--blue, #3d6fa8); }
+body.is-down #hud::after { content: ''; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 35%, rgba(120,20,12,.35) 100%); }
+@media (max-height: 520px) { .down-box { top: calc(50% + 34px); width: min(240px, 60vw); padding: 4px 10px 6px; } .down-box b { font-size: 20px; } .down-box small { font-size: 11px; } }
+/* caido no toque: so analogico, pausa e usar (o resto nao funciona caido e cobria a caixa) */
+body.is-down #touch .tbtn:not([data-hid="use"]):not([data-hid="pause"]) { visibility: hidden; }
+/* celular deitado pequeno: embaixo da mira, a direita, ficam os botoes do polegar e em cima a dica; o aviso vai
+   pra esquerda da mira (entre o analogico e os botoes), quebrando em 2 linhas */
+@media (max-height: 420px) and (max-width: 800px) { .use-prompt { top: calc(50% + 20px); left: auto; right: 50%; transform: none; max-width: 22vw; font-size: 11px; padding: 3px 8px; } }

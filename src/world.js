@@ -13,6 +13,11 @@ const THEME = {
   estaleiro: { sky: 0xcfd3d2, ground: ['#b9b6ae', '#6a675f'], hazard: true, hazardStrips: [[40, 1, 0, -15], [40, 1, 0, 15]], trees: [] },
   // refinaria: areia do deserto, ceu quente
   refinaria: { sky: 0xe6d9bf, ground: ['#dccaa0', '#9c8662'], trees: [] },
+  // ilha do battle royale: grama rabiscada, neblina perto (esconde o longe e alivia o celular), muita arvore
+  ilha: { sky: 0xd9d6c8, ground: ['#cdd0b4', '#7f8467'], paths: true, fog: [55, 165], trees: (() => {
+    let s = 3; const r = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const out = []; for (let i = 0; i < 70; i++) out.push([(r() * 2 - 1) * 104, (r() * 2 - 1) * 104]); return out;
+  })() },
 };
 // conteineres: cores de carga desbotadas, uma por semente
 const CONT_COLS = [0x9c4a36, 0x3f6a8a, 0x5f7f3e, 0xb08a3a, 0x7a4f7a, 0x4f7f7a, 0xa8653a, 0x5a5f8f];
@@ -26,7 +31,7 @@ export function buildWorld(scene, M) {
   const TH = THEME[M.theme] || THEME.vila;
   const ARENA = M.arena;
   scene.background = new THREE.Color(TH.sky);
-  scene.fog = new THREE.Fog(TH.sky, ARENA * 1.2, ARENA * 4);
+  scene.fog = new THREE.Fog(TH.sky, TH.fog ? TH.fog[0] : ARENA * 1.2, TH.fog ? TH.fog[1] : ARENA * 4);
 
   root.add(new THREE.HemisphereLight(0xffffff, 0x6e6a63, 1.4));
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -147,6 +152,20 @@ export function buildWorld(scene, M) {
       const stripe = ink(new THREE.BoxGeometry(w + 0.04, h * 0.4, d + 0.04), 0xffffff, 0, { map: hazardTex });
       stripe.position.set(cx, b.min[1] + h / 2, cz); root.add(stripe);
     }
+    else if (b.kind === 'ringfloor') { // lona do ringue: base escura e lona clara com o logo-estrela no meio
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const base = ink(new THREE.BoxGeometry(w, h * 0.85, d), PAL.dark, 0.05); base.position.y = h * 0.425; g.add(base);
+      const mat = ink(new THREE.BoxGeometry(w - 0.3, h * 0.15, d - 0.3), PAL.paper, 0.03); mat.position.y = h * 0.925; g.add(mat);
+      const star = new THREE.Mesh(new THREE.CircleGeometry(1.6, 5), new THREE.MeshBasicMaterial({ color: PAL.red })); star.rotation.x = -Math.PI / 2; star.position.y = h + 0.01; g.add(star);
+      root.add(g); continue;
+    }
+    else if (b.kind === 'rope') { // tres cordas (vermelha, branca, vermelha); a caixa invisivel segura o corpo
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const len = Math.max(w, d), along = w > d;
+      [0.35, 0.8, 1.25].forEach((y, i) => { const r = ink(new THREE.CylinderGeometry(0.06, 0.06, len, 8), i === 1 ? PAL.white : PAL.red, 0.015); r.rotation[along ? 'z' : 'x'] = Math.PI / 2; r.position.y = y; g.add(r); });
+      root.add(g); continue;
+    }
+    else if (b.kind === 'post') mesh = ink(new THREE.CylinderGeometry(w / 2, w / 2, h, 10), PAL.red, 0.04);
     else if (b.kind === 'pillar') mesh = ink(new THREE.CylinderGeometry(w / 2, w / 2 * 1.3, h, 8), PAL.dark, 0.04);
     else if (b.kind === 'tank') { addTank(root, cx, b.min[1], cz, w, h, dancers); continue; }
     else if (b.kind === 'vat') {
@@ -209,6 +228,7 @@ export function buildWorld(scene, M) {
     swayers.push({ obj: t, base: 0, amp: 0.12, speed: 2.4, phase: i, tree: true });
   }
   for (const [x, z] of TH.trees) {
+    if (M.boxes.some(b => x > b.min[0] - 2 && x < b.max[0] + 2 && z > b.min[2] - 2 && z < b.max[2] + 2)) continue; // arvore nunca dentro de casa/pedra
     const t = makeTree(0.8);
     t.position.set(x, 0, z);
     root.add(t);
@@ -429,7 +449,7 @@ function anvilMesh() {
   return g;
 }
 
-function milkBottle() {
+export function milkBottle() {
   const g = new THREE.Group();
   const b = ink(new THREE.CylinderGeometry(0.22, 0.26, 0.6, 14), PAL.white, 0.03);
   g.add(b);

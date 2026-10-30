@@ -44,6 +44,11 @@ export const UNLOCKS = [
   { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
   { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
   { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
+  // tipos de bala (peca Municao, equipada por arma; a normal ja vem aberta)
+  { id: 'u_am_fire', n: 40, xp: 1500, ok: K(), reward: { slot: 'ammo', id: 'am:fire' } },
+  { id: 'u_am_trace', n: 15, xp: 1250, ok: (e) => e.type === 'assist', reward: { slot: 'ammo', id: 'am:trace' } },
+  { id: 'u_am_boom', n: 8, xp: 1750, ok: K('frag'), reward: { slot: 'ammo', id: 'am:boom' } },
+  { id: 'u_am_ap', n: 35, xp: 1750, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'ammo', id: 'am:ap' } },
   // tracados do tiro (equipados por arma no Arsenal; Giz e Nenhum ja vem abertos)
   { id: 'u_tr_fire', n: 20, xp: 750, ok: K('shotgun'), reward: { slot: 'tracer', id: 'tr:fire' } },
   { id: 'u_tr_ink', n: 15, xp: 750, ok: (e) => e.type === 'assist', reward: { slot: 'tracer', id: 'tr:ink' } },
@@ -89,8 +94,8 @@ export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
 const ACTIVE = 4;
-const ORDER = ['u_ember', 'u_ww_1911', 'u_tr_fire', 'u_handcannon', 'u_ww_stg', 'u_splitter', 'u_tr_ink', 'u_ww_thompson', 'u_sscope', 'u_spitter',
-  'u_ww_garand', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_ww_ppsh', 'u_fang', 'u_fscope', 'u_ww_tt', 'u_tr_toxic', 'u_bolt',
+const ORDER = ['u_am_fire', 'u_ember', 'u_ww_1911', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_ww_stg', 'u_splitter', 'u_tr_ink', 'u_ww_thompson', 'u_sscope', 'u_spitter',
+  'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_ww_ppsh', 'u_am_ap', 'u_fang', 'u_fscope', 'u_ww_tt', 'u_tr_toxic', 'u_bolt',
   'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice']; // WW2 (u_ww_*) intercaladas pra aparecer cedo
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];
 export function activeUnlocks() { return ordered().filter(u => (data.career[u.id] || 0) < u.n).slice(0, ACTIVE); }

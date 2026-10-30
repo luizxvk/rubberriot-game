@@ -226,8 +226,12 @@
   <div class="stamp" id="stamp"></div>
   <div class="objectives" id="objMarkers"></div>
   <div class="hurt-dir" id="hurtDir"></div>
+  <!-- fora da iris: a pelicula escurece e queima pelas bordas -->
+  <div class="iris-out" id="irisOut" aria-hidden="true"></div>
   <div class="hud-bl">
     <div class="hp"><span class="hp-num" id="hpNum">100</span><span class="hp-bar"><i id="hpBar"></i></span></div>
+    <!-- colete (battle royale): fica embaixo da vida -->
+    <div class="armor" id="armorBox" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><span class="armor-bar"><i id="armorBar"></i></span></div>
     <div class="tac" id="tacBar" aria-label="Folego da disparada"><i></i></div>
   </div>
   <div class="hud-br">
@@ -249,6 +253,8 @@
   <p class="dead-title" data-i18n="pancake">Virou panqueca!</p>
   <p class="dead-by" id="deadBy"></p>
   <p class="dead-t" id="deadT"></p>
+  <!-- kill cam em quadrinhos: tira de 3 quadros (quem foi, o tiro, voce) -->
+  <div class="comic" id="comic" hidden></div>
   <button class="big dead-go" id="deadGo" hidden data-i18n="respawn">Renascer</button>
   <div class="spec-bar" id="specBar" hidden><button id="specNext" data-i18n="specNext">Proximo</button><button id="specMap" data-i18n="specMapBtn">Mapa</button></div>
 </div>

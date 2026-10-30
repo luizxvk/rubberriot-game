@@ -68,7 +68,7 @@ wss.on('connection', (ws) => {
         room = target;
         room.clients.set(id, ws);
         room.core.join(id, name);
-        ws.send(JSON.stringify({ t: 'room', code, mode: room.core.mode }));
+        ws.send(JSON.stringify({ t: 'room', code, mode: room.core.duo ? 'duo' : room.core.mode }));
       });
       return;
     }

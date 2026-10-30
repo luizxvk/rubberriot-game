@@ -1,8 +1,10 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
-import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, matchRules } from './map.js';
+import { AMMO, FIELD, WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
+import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField } from './field.js';
+import { brInit, brSpawn, brSpawnPoint, brArmor, brKill, brTick, brSnap, brGoal, lootList, brDown, brNear } from './br.js';
 
 const BOT_NAMES = ['Botao', 'Salsicha', 'Rolha', 'Bigorna', 'Carvao', 'Pipoca', 'Tamanco', 'Fuligem',
   'Manivela', 'Gaita', 'Biscoito', 'Trombone', 'Pavio', 'Sabugo', 'Mola', 'Tinteiro'];
@@ -14,9 +16,12 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 
 export class Core {
   constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true }) {
-    this.mode = MODES[mode] ? mode : 'ffa';
-    this.cfg = MODES[this.mode];
-    this.M = getMap(map && map !== 'auto' ? map : MODE_MAP[this.mode]);
+    // dupla: roda as regras do battle royale ('br') com times de 2 (cfg.teams liga o fogo amigo desligado)
+    this.duo = mode === 'duo';
+    this.mode = this.duo ? 'br' : MODES[mode] ? mode : 'ffa';
+    this.cfg = MODES[this.duo ? 'duo' : this.mode];
+    // battle royale so na ilha (e a ilha so no battle royale)
+    this.M = getMap(this.mode === 'br' ? 'ilha' : map && map !== 'auto' && map !== 'ilha' ? map : MODE_MAP[this.mode]);
     this.wantBots = Math.max(0, Math.min(MAX_PLAYERS - 1, bots | 0));
     this.difficulty = difficulty;
     this.skill = botSkill(difficulty);
@@ -52,7 +57,8 @@ export class Core {
     };
     this.zones = M.zones.map(z => ({ id: z.id, pos: z.pos, r: z.r, owner: null, prog: 0 }));
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = [];
+    if (this.mode === 'br') brInit(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; fieldReset(this);
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {};
       this.spawn(p);
@@ -80,7 +86,7 @@ export class Core {
     const atk = [...this.players.values()].filter(p => p.team === 'red');
     const carrier = atk.length ? atk[Math.floor(Math.random() * atk.length)] : null;
     this.bomb = { state: carrier ? 'carried' : 'dropped', carrier: carrier ? carrier.id : null, pos: carrier ? [...carrier.pos] : [0, 0, 0], site: null, t: 0, prog: 0, actor: null, goal: Math.random() < 0.5 ? 'A' : 'B' };
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = [];
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; fieldReset(this);
     if (this.roundN > 1) this.freezeT = COUNT_IN;
     this.event({ k: 'round', n: this.roundN, carrier: this.bomb.carrier });
   }
@@ -153,7 +159,7 @@ export class Core {
 
   // ---------- jogadores ----------
   pickTeam(bot = false) {
-    if (!this.cfg.teams) return null;
+    if (!this.cfg.teams || this.duo) return null; // dupla: pairDuo monta os pares
     // infectado: antes do primeiro infectado todo mundo e sobrevivente; depois, quem chega entra infectado
     if (this.mode === 'infect') return this.infStarted ? 'red' : 'blue';
     // bomba: gente vai pro lado com menos gente (bots nao contam: eles trocam de lado pra completar)
@@ -188,8 +194,25 @@ export class Core {
     this.players.set(id, p);
     // humano nasce no proximo tick, depois do 'welcome' chegar
     if (this.mode === 'bomb' && this.phase === 'play' && this.bomb) { p.alive = false; p.respawnT = 0; }
+    else if (this.mode === 'br' && this.phase === 'play' && this.zone && this.zone.phase + (this.zone.state === 'shrink' ? 1 : 0) > 0) { p.alive = false; p.respawnT = Infinity; } // chegou tarde: assiste
     else if (bot) this.spawn(p); else p.respawnT = 0.05;
+    this.pairDuo();
     return p;
+  }
+
+  // dupla: humanos juntos primeiro (amigos da sala), bots completam. So no comeco (iris ainda esperando
+  // a 1a fase): o bot que vira parceiro de alguem vai pro lado dele
+  pairDuo() {
+    if (!this.duo || (this.zone && (this.zone.phase > 0 || this.zone.state !== 'wait'))) return;
+    const ps = [...this.players.values()].sort((a, b) => a.bot - b.bot);
+    ps.forEach((p, i) => { p.team = 'd' + (1 + (i >> 1)); });
+    for (let i = 1; i < ps.length; i += 2) {
+      const a = ps[i - 1], b = ps[i];
+      if (!b.bot || !a.alive || !b.alive || Math.hypot(a.pos[0] - b.pos[0], a.pos[2] - b.pos[2]) < 12) continue;
+      b.pos = brNear(this, a.pos); b.vel = [0, 0, 0];
+      if (b.ai) b.ai.path = null;
+      this.event({ k: 'spawn', id: b.id, pos: b.pos, yaw: b.yaw, wpn: b.wpn, owned: [...b.owned], team: b.team });
+    }
   }
 
   // sala cheia (16 pessoas): recusa (o servidor manda 'full' antes de chegar aqui)
@@ -198,7 +221,7 @@ export class Core {
   join(id, name) {
     const p = this.addPlayer(id, (name || 'Player').slice(0, 14));
     this.balanceBots();
-    this.send(id, { t: 'welcome', id, mode: this.mode, map: this.M.id, team: p.team, phase: this.phase });
+    this.send(id, { t: 'welcome', id, mode: this.mode, duo: this.duo, map: this.M.id, team: p.team, phase: this.phase });
     this.lobbyT = 0;
     // pecas das armas de quem ja estava na sala
     for (const o of this.players.values()) if (o.los && o.id !== id) this.send(id, { t: 'ev', k: 'lo', id: o.id, los: o.los, tracer: o.tracer });
@@ -220,6 +243,7 @@ export class Core {
   bodyOf(p, wpn) { return this.ggBody(p) || p.los?.[wpn]?.body; }
   // variante de elite equipada (escada de armas usa o modelo do degrau, sem variante)
   bpOf(p, wpn) { return this.ggBody(p) ? {} : bpMods(p.los?.[wpn]?.bp); }
+  ammoOf(p, wpn) { const a = this.ggBody(p) || wpn === 'melee' ? null : p.los?.[wpn]?.ammo; return AMMO[a] ? a : null; }
 
   // host = humano mais antigo na sala (Map guarda a ordem de entrada); saiu, passa pro proximo
   hostId() { for (const p of this.players.values()) if (!p.bot) return p.id; return null; }
@@ -236,6 +260,7 @@ export class Core {
     }
     while (bots.length > want) this.players.delete(bots.pop().id);
     this.spreadBots();
+    this.pairDuo();
   }
 
   // melhor ponto da lista: longe de inimigo, fora da visao dele e sem colar em colega
@@ -277,6 +302,7 @@ export class Core {
   }
 
   spawn(p) {
+    p.down = 0; p.reviveT = 0;
     const S = this.M.spawns;
     const infect = this.mode === 'infect';
     let list = S.ffa;
@@ -286,7 +312,7 @@ export class Core {
     let pick = this.bestSpawn(list, enemies, mates);
     // base do time "quente" (inimigo em cima): nasce num ponto neutro
     if (list !== S.ffa && (!pick || pick.sc < 6)) { const alt = this.bestSpawn(S.ffa, enemies, mates); if (alt && (!pick || alt.sc > pick.sc)) pick = alt; }
-    const s = pick ? pick.s : list[0];
+    const s = this.mode === 'br' ? brSpawnPoint(this, p) : pick ? pick.s : list[0];
     let x = s[0], z = s[1];
     const jx = x + rnd(-0.8, 0.8), jz = z + rnd(-0.8, 0.8);
     if (standable(this.M, jx, jz) && Math.abs(floorAt(this.M, jx, jz) - floorAt(this.M, x, z)) < 0.1) { x = jx; z = jz; }
@@ -296,11 +322,11 @@ export class Core {
     p.vel = [0, 0, 0];
     p.yaw = this.openYaw(x, y, z);
     p.hp = p.bot ? BOT_HP : 100;
-    p.alive = true;
+    p.alive = true; p.shieldT = 0; p.fieldCd = Math.min(p.fieldCd || 0, 10); // renasce com o equipamento quase pronto
     const xn = hasSkill(p, 'bolso') ? SKILLS.bolso.nades : 0; // bolso fundo
     p.nades = { frag: 1 + xn, flash: 1 + xn };
     p.owned = new Set(SPAWN_KIT);
-    if (this.mode !== 'gungame') p.owned.add('melee');
+    if (this.mode !== 'gungame' && this.mode !== 'br') p.owned.add('melee');
     if (this.mode === 'gungame') p.wpn = GUN_LADDER[Math.min(p.gunLvl, GUN_LADDER.length - 1)].wpn;
     else if (infect && p.team === 'red') { p.owned = new Set(['melee']); p.wpn = 'melee'; p.hp = INFECT.hp; p.nades = { frag: 0, flash: 1 }; }
     else if (infect) {
@@ -308,11 +334,12 @@ export class Core {
       const prim = this.infKit.wpn;
       p.owned = new Set([prim, 'pistol', 'melee']); p.wpn = prim;
     }
+    else if (this.mode === 'br') brSpawn(this, p);
     else if (p.bot) p.wpn = ['smg', 'rifle', 'shotgun', 'pistol', 'smg', 'rifle'][Math.floor(Math.random() * 6)];
     else p.wpn = PRIMARIES.includes(p.primary) ? p.primary : 'smg';
     p.maxHp = p.hp;
     p.owned.add(p.wpn);
-    if (p.bot) { this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; }
+    if (p.bot) { p.field ||= botPickField(); this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; }
     this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team });
   }
 
@@ -364,6 +391,7 @@ export class Core {
         if (this.waitLoad?.delete(id) && !this.waitLoad.size) this.startCountdown();
         break;
       }
+      case 'field': fieldUse(this, p, m); break;
       case 'respawn': {
         if (!p.alive && p.respawnT <= 0) p.wantSpawn = true;
         break;
@@ -371,10 +399,12 @@ export class Core {
       case 'loadout': {
         if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(99, Math.round(m.lvl)));
         if (typeof m.elite === 'boolean') p.elite = m.elite; // selo Elite da Rovex (so visual)
+        p.prest = Math.max(0, Math.min(10, m.prest | 0)); // estrelas de prestigio (so visual)
         if (PRIMARIES.includes(m.primary)) p.primary = m.primary;
         // skills passivas: so ids conhecidos, sem repetir, ate SKILL_SLOTS e liberadas pro nivel informado
         p.skills = Array.isArray(m.skills) ? [...new Set(m.skills.filter(s => SKILLS[s] && (p.lvl || 1) >= SKILLS[s].lvl))].slice(0, SKILL_SLOTS) : [];
         p.los = cleanLoadouts(m.los);
+        p.field = FIELD[m.field] && (p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null; // equipamento de campo
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
         this.event({ k: 'lo', id, los: p.los, tracer: p.tracer });
         break;
@@ -395,13 +425,26 @@ export class Core {
         break;
       case 'hit': {
         const v = this.players.get(m.v);
-        if (!v || !p.alive || !v.alive) return;
+        if (!v || !p.alive || !v.alive || p.down > 0) return; // caido nao atira
         const dmg = this.validHit(p, v, m);
-        if (dmg > 0) this.damage(v, p, dmg, m.wpn, !!m.head);
+        if (dmg > 0) {
+          const am = this.ammoOf(p, m.wpn), vpos = [...v.pos];
+          this.damage(v, p, dmg, m.wpn, !!m.head);
+          if (am === 'fire' && v.alive) v.burn = { n: 4, a: p.id, wpn: m.wpn, acc: 0 }; // queima (tick no update)
+          if (am === 'boom') { // respinga em quem esta perto do alvo
+            const A = AMMO.boom;
+            this.event({ k: 'boom', at: [vpos[0], vpos[1] + 1, vpos[2]] });
+            for (const o of this.players.values()) {
+              if (o === v || o === p || !o.alive || !this.enemies(p, o)) continue;
+              const d = Math.sqrt(dist2(vpos, o.pos));
+              if (d < A.splash) this.damage(o, p, dmg * A.splashK * (1 - d / A.splash * 0.5), m.wpn, false);
+            }
+          }
+        }
         break;
       }
       case 'nade':
-        if (p.alive && NADES[m.kind] && p.nades[m.kind] > 0 && Array.isArray(m.d) && m.d.every(Number.isFinite)) {
+        if (p.alive && !(p.down > 0) && NADES[m.kind] && p.nades[m.kind] > 0 && Array.isArray(m.d) && m.d.every(Number.isFinite)) {
           p.nades[m.kind]--;
           this.throwNade(p, m.kind, norm(m.d));
         }
@@ -425,13 +468,19 @@ export class Core {
     if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return 0;
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     const d = Math.sqrt(dist2(eye, v.pos));
-    const range = w.melee ? (bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260);
+    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260);
     if (d > range) return 0;
     if (w.melee) { const now = this.clock || 0; if (now - (p.meleeAt || -9) < 0.3) return 0; p.meleeAt = now; return Math.min(m.dmg, w.dmg); }
     const chest = [v.pos[0], v.pos[1] + 1.1, v.pos[2]], head = [v.pos[0], v.pos[1] + 1.6, v.pos[2]];
-    if (!hasLOS(this.M, eye, chest) && !hasLOS(this.M, eye, head)) return 0;
+    const am = this.ammoOf(p, m.wpn), A = am ? AMMO[am] : {};
+    let wallK = 1;
+    if (!hasLOS(this.M, eye, chest) && !hasLOS(this.M, eye, head)) {
+      // perfurante: passa por parede fina, com menos dano
+      if (am !== 'ap' || Math.min(wallThickness(this.M, eye, chest), wallThickness(this.M, eye, head)) > A.pierce) return 0;
+      wallK = A.wallK;
+    }
     const tr = bodyTrait(this.bodyOf(p, m.wpn));
-    const maxShot = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (this.bpOf(p, m.wpn).dmg || 1) * 1.25;
+    const maxShot = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (this.bpOf(p, m.wpn).dmg || 1) * (A.dmg || 1) * wallK * 1.25;
     const dmg = Math.min(m.dmg, maxShot);
     if (p.budget < dmg) return Math.max(0, p.budget);
     p.budget -= dmg;
@@ -447,21 +496,23 @@ export class Core {
   // ---------- combate ----------
   enemies(a, b) { return a !== b && (!this.cfg.teams || a.team !== b.team); }
 
-  damage(v, a, dmg, wpn, head) {
+  damage(v, a, dmg, wpn, head, burn = false) {
     if (this.over || this.freezeT > 0 || !v.alive || !Number.isFinite(dmg)) return;
     if (a && a !== v && !this.enemies(a, v)) return;
+    if (fieldBlocks(this, v, a, wpn)) return; // guarda-chuva aberto de frente pro tiro
     if (head) dmg *= hasSkill(v, 'cuca') ? SKILLS.cuca.head : 1.6; // cuca dura
     if (BLAST.includes(wpn) && hasSkill(v, 'couro')) dmg *= SKILLS.couro.blast; // couro grosso
+    if (this.mode === 'br' && wpn !== 'iris') dmg = brArmor(v, dmg); // colete (a iris passa direto)
     v.hurtAt = this.clock || 0;
     v.hp -= dmg;
     // quem ajudou: dano acumulado por atacante, com hora (assistencia vale por 6 s)
     if (a && a !== v) { v.dmgBy = v.dmgBy || {}; const r = v.dmgBy[a.id] || (v.dmgBy[a.id] = { dmg: 0, t: 0 }); r.dmg += dmg; r.t = this.clock || 0; }
-    this.event({ k: 'hurt', v: v.id, a: a ? a.id : null, dmg: Math.round(dmg), from: a ? a.pos : null, head });
-    if (v.hp <= 0) this.kill(v, a, wpn, head);
+    this.event({ k: 'hurt', v: v.id, a: a ? a.id : null, dmg: Math.round(dmg), from: a ? a.pos : null, head, ...(burn ? { burn: 1 } : {}) });
+    if (v.hp <= 0 && !(this.duo && brDown(this, v, a, wpn, head))) this.kill(v, a, wpn, head); // dupla: cai antes de sair
   }
 
   kill(v, a, wpn, head) {
-    v.alive = false; v.hp = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : RESPAWN; v.deaths++; v.streak = 0;
+    v.alive = false; v.hp = 0; v.down = 0; v.reviveT = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : RESPAWN; v.deaths++; v.streak = 0;
     this.dropFlag(v);
     const suicide = !a || a === v;
     if (!suicide) {
@@ -473,7 +524,7 @@ export class Core {
         if (a.gunLvl >= GUN_LADDER.length) { a.gunLvl = GUN_LADDER.length - 1; this.end(a.name); }
         else { a.wpn = GUN_LADDER[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
       }
-      if (this.mode !== 'infect' && this.mode !== 'bomb' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
+      if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
         if (a.streak === s.kills - (hasSkill(a, 'pavio') && s.kills > 3 ? SKILLS.pavio.streak : 0)) {
           a.ready.push(kind);
           this.event({ k: 'streakReady', id: a.id, kind });
@@ -489,6 +540,7 @@ export class Core {
       this.event({ k: 'assist', id, v: v.id, dmg: Math.round(r.dmg) });
     }
     v.dmgBy = {};
+    if (this.mode === 'br') brKill(this, v);
     this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, pos: v.pos });
     // sobrevivente que cai (de qualquer jeito) vira infectado
     if (this.mode === 'infect' && v.team === 'blue' && this.infStarted) this.infect(v, suicide ? null : a);
@@ -621,7 +673,7 @@ export class Core {
     const A = this.M.arena;
     if (kind === 'uav') this.uavs.push({ owner: p.id, team: p.team, t: STREAKS.uav.time });
     if (kind === 'anvil') {
-      const targets = [...this.players.values()].filter(o => o.alive && this.enemies(p, o)).slice(0, 7);
+      const targets = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o)).slice(0, 7);
       const list = targets.map(o => [o.pos[0] + rnd(-1.2, 1.2), 0, o.pos[2] + rnd(-1.2, 1.2)]);
       if (!list.length) list.push([rnd(-A / 2, A / 2), 0, rnd(-A / 2, A / 2)]);
       for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5) });
@@ -762,13 +814,16 @@ export class Core {
   // ---------- bots ----------
   tickBot(p, dt) {
     const ai = p.ai, M = this.M;
+    // dupla: caido fica no chao esperando o parceiro com a bomba de bicicleta
+    if (p.down > 0) { p.vel[0] *= 0.8; p.vel[2] *= 0.8; p.vel[1] -= 24 * dt; p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7); p.anim = 'down'; return; }
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     if (ai.blind > 0) ai.blind -= dt;
     ai.think -= dt;
     if (ai.think <= 0) {
       ai.think = 0.25;
       const sk = this.skill;
-      let best = null, bd = sk.sight * sk.sight;
+      const sight = this.mode === 'br' ? Math.min(sk.sight, 30) : sk.sight; // battle royale: neblina de filme velho
+      let best = null, bd = sight * sight;
       if (ai.blind <= 0) for (const o of this.players.values()) {
         if (!o.alive || !this.enemies(p, o)) continue;
         const d = dist2(o.pos, p.pos);
@@ -782,6 +837,7 @@ export class Core {
       // pouca vida e alvo na mira: procura um canto fora da linha de tiro pra respirar
       ai.cover = best && p.hp < (p.maxHp || BOT_HP) * 0.35 ? this.coverSpot(p, best) : null;
       ai.target = best;
+      if (p.field && !(p.fieldCd > 0) && !(this.freezeT > 0)) botField(this, p, best);
       ai.goal = this.botGoal(p);
     }
     const w = WEAPONS[p.wpn];
@@ -811,10 +867,11 @@ export class Core {
         const g = this.botSteer(p, ai.cover, dt);
         if (g) moveDir = [g[0] - fz * ai.strafe * 0.3, g[1] + fx * ai.strafe * 0.3];
       }
-      if (ai.goal && (this.mode === 'ctf' || this.mode === 'dom') && d > 5) {
+      if (ai.goal && (this.mode === 'ctf' || this.mode === 'dom' || ai.rescue) && d > 5) {
         const gd = Math.hypot(ai.goal[0] - p.pos[0], ai.goal[2] - p.pos[2]);
         const g = this.botSteer(p, ai.goal, dt);
         if (g && (gd > 3.5 || this.carrying(p))) moveDir = [g[0] - fz * ai.strafe * 0.5, g[1] + fx * ai.strafe * 0.5];
+        else if (g && ai.rescue) moveDir = gd > 1.4 ? g : null; // chegando no parceiro caido: vai reto e para em cima
       }
       ai.react -= dt;
       ai.fireT -= dt;
@@ -921,6 +978,7 @@ export class Core {
       if (B.state === 'planted' || B.state === 'dropped') return B.pos;
       return ring(site(p.id.charCodeAt(p.id.length - 1) % 2 ? 'A' : 'B').pos, 3);
     }
+    if (this.mode === 'br') { const g = brGoal(this, p); if (g) { p.ai.route = null; return g; } }
     if (this.mode === 'infect') {
       const surv = [...this.players.values()].filter(o => o.alive && o.team === 'blue' && o !== p);
       const inf = [...this.players.values()].filter(o => o.alive && o.team === 'red' && o !== p);
@@ -1049,9 +1107,9 @@ export class Core {
     const w = WEAPONS[p.wpn];
     // lamina: so acerta colado
     if (w.melee) {
-      if (d > (bodyTrait(this.bodyOf(p, 'melee')).range || w.range)) return;
+      if (d > (p.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range)) return;
       this.event({ k: 'swing', id: p.id });
-      this.damage(t, p, w.dmg, 'melee', false);
+      this.damage(t, p, w.dmg, p.wpn, false);
       return;
     }
     const o = [p.pos[0], p.pos[1] + 1.45, p.pos[2]];
@@ -1083,6 +1141,15 @@ export class Core {
   tick(dt) {
     if (this.noises) for (const [id, n] of this.noises) if ((n.t -= dt) <= 0) this.noises.delete(id);
     this.clock = (this.clock || 0) + dt;
+    // bala flamejante: o dano do fogo entra em 4 pedacos (cada um vira 1 evento de dano)
+    for (const p of this.players.values()) {
+      if (!p.burn) continue;
+      if (!p.alive || this.phase !== 'play') { p.burn = null; continue; }
+      const F = AMMO.fire, step = F.burnT / 4;
+      p.burn.acc += dt;
+      if (p.burn.acc >= step) { p.burn.acc -= step; p.burn.n = (p.burn.n ?? 4) - 1; this.damage(p, this.players.get(p.burn.a) || null, F.burn / 4, p.burn.wpn, false, true); }
+      if (p.burn && p.burn.n <= 0) p.burn = null;
+    }
     // folego: vida volta sozinha depois de um tempo sem levar dano
     for (const p of this.players.values()) {
       if (!p.alive || !hasSkill(p, 'folego') || p.hp >= (p.maxHp || 100)) continue;
@@ -1127,7 +1194,7 @@ export class Core {
         p.respawnT -= dt;
         // humano: depois do minimo, renasce quando pedir (botao/toque) ou sozinho 5 s depois
         // plantar a bomba: quem cai so volta na proxima rodada
-        if (this.mode !== 'bomb' && p.respawnT <= 0 && (p.bot || p.wantSpawn || p.respawnT <= -AUTO_SPAWN || p.deaths === 0)) { p.wantSpawn = false; this.spawn(p); }
+        if (this.mode !== 'bomb' && this.mode !== 'br' && p.respawnT <= 0 && (p.bot || p.wantSpawn || p.respawnT <= -AUTO_SPAWN || p.deaths === 0)) { p.wantSpawn = false; this.spawn(p); }
         continue;
       }
       if (p.bot && !(this.freezeT > 0)) this.tickBot(p, dt);
@@ -1136,13 +1203,15 @@ export class Core {
 
     this.tickNades(dt);
     this.tickStreaks(dt);
+    fieldTick(this, dt);
 
     if (this.mode === 'infect' && !(this.freezeT > 0)) this.tickInfect(dt);
 
     if (this.mode === 'bomb' && !(this.freezeT > 0)) this.tickBomb(dt);
+    if (this.mode === 'br' && !(this.freezeT > 0)) brTick(this, dt);
 
     for (const k of this.pickups) {
-      if (this.mode === 'bomb') break; // so as armas de cada um, nada no chao
+      if (this.mode === 'bomb' || this.mode === 'br') break; // bomba: so as armas de cada um; br: loot proprio
       if (this.mode === 'gungame' && k.kind === 'wpn') continue;
       if (!k.active) { k.t -= dt; if (k.t <= 0) { k.active = true; this.event({ k: 'pickup', id: k.id, active: true }); } continue; }
       for (const p of this.players.values()) {
@@ -1183,7 +1252,7 @@ export class Core {
     if (this.lobbyT > 0) return;
     this.lobbyT = 0.25;
     this.send(null, {
-      t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, map: this.M.id, host: this.hostId(),
+      t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, map: this.M.id, host: this.hostId(),
       players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), elite: !!p.elite })),
     });
   }
@@ -1203,11 +1272,11 @@ export class Core {
         id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: p.score, gunLvl: p.gunLvl, respawnT: r2(p.respawnT),
-        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite,
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pr: p.prest || 0,
       });
     }
     this.send(null, {
-      t: 'snap', mode: this.mode, map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
+      t: 'snap', mode: this.mode, duo: this.duo, map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,
@@ -1217,12 +1286,14 @@ export class Core {
       nades: this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos.map(r2) })),
       blimps: this.blimps.map(b => ({ pos: b.pos.map(r2), team: b.team, owner: b.owner })),
       uavs: this.uavs.map(u => ({ owner: u.owner, team: u.team })),
+      br: this.mode === 'br' && this.zone ? brSnap(this) : null,
+      field: fieldSnap(this),
       players,
     });
   }
 
   info() {
-    return { mode: this.mode, map: this.M.id, humans: this.humans(), players: this.players.size, time: Math.round(this.time), phase: this.phase };
+    return { mode: this.duo ? 'duo' : this.mode, map: this.M.id, humans: this.humans(), players: this.players.size, time: Math.round(this.time), phase: this.phase };
   }
 }
 
@@ -1234,11 +1305,12 @@ function cleanLoadouts(los) {
     const l = los[w];
     if (!l || typeof l !== 'object') continue;
     const o = {};
-    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo', 'bp']) {
+    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo', 'bp', 'ammo']) {
       const v = l[k];
       o[k] = typeof v === 'string' && v.length <= 24 && /^[#\w-]+$/.test(v) ? v : null;
     }
     if (o.bp && BLUEPRINTS[o.bp]?.wpn !== w) o.bp = null;
+    if (o.ammo && (!AMMO[o.ammo] || w === 'melee')) o.ammo = null;
     out[w] = o;
   }
   return out;

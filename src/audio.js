@@ -4,7 +4,9 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'hit', 'hitmarker', 'death', 'jump', 'step', 'step2', 'land', 'pickup', 'slide', 'flag', 'capture', 'ui', 'ui_hover',
   'ui_click', 'ui_back', 'iris', 'levelup', 'unlock', 'empty', 'swap', 'ads', 'whoosh', 'headshot', 'killstamp', 'music',
   'explosion', 'pan', // existiam mas nao carregavam: granada e bigorna tocavam ruido sintetico
-  'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt']; // momentos que eram mudos (contagem, rodada, fim, assist, renascer)
+  'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt', // momentos que eram mudos (contagem, rodada, fim, assist, renascer) e o ferrolho
+  'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
+  'ringbell', 'crowd', 'pump', 'balloon']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 class Audio {
   constructor() {

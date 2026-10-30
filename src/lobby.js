@@ -107,7 +107,7 @@ export class Lobby {
     this.lastMsg = m; this.myId = myId;
     this.renderSide(m, myId);
     $('lbMap').textContent = t('map_' + m.map);
-    $('lbMode').textContent = modeName(m.mode);
+    $('lbMode').textContent = modeName(m.duo ? 'duo' : m.mode);
     const host = m.host === myId;
     this.counting = m.phase === 'count';
     if (host !== this.isHost) { this.isHost = host; this.setReady(this.ready); }

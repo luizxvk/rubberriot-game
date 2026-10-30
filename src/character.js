@@ -229,6 +229,9 @@ export class Character {
     this.body.position.y = moving ? bounce * 0.12 : 0;
     this.body.rotation.x = (anim === 'sprint' || anim === 'tac' ? -0.25 : anim === 'slide' ? 0.35 : 0) + fl * 0.35;
     if (fl) this.body.scale.multiplyScalar(1 - fl * 0.06);
+    // dupla: caido de barriga no chao, se arrastando (balanca de leve pra ler de longe)
+    if (anim === 'down') { this.body.rotation.x = 1.35 + Math.sin(t * 3 + this.phase) * 0.06; this.body.position.y = 0.32; this.body.rotation.z = Math.sin(t * 2.2) * 0.08; }
+    else this.body.rotation.z = 0;
     this.head.rotation.z = fl * 0.3;
     this.head.rotation.x = -pitch * 0.6;
 

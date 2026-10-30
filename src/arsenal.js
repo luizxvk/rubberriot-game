@@ -11,7 +11,7 @@ import { makeGun } from './guns.js';
 import { t, wName } from './i18n.js';
 import { camoGlsl, camoTime, camoById } from './camos.js';
 import { attachCamoFx } from './camofx.js';
-import { bodyTrait, bpMods, BLUEPRINTS } from '../shared/weapons.js';
+import { bodyTrait, bpMods, BLUEPRINTS, AMMO } from '../shared/weapons.js';
 import { bpUnlocked } from './progress.js';
 
 const S = 0.32; // unidade do glb -> metros
@@ -715,6 +715,7 @@ export function buildGun(wpn, lo) {
 function buildGunParts(wpn, lo) {
   if (wpn === 'minigun' && parts.__minigun) return buildMinigun();
   if (wpn === 'melee') return buildMelee(lo);
+  if (wpn === 'fists') return buildFists();
   const cat = CATEGORY[wpn];
   if (!cat || !arsenalReady()) return makeGun(wpn);
   lo = { ...defaultLoadout(wpn), ...(lo || {}) };
@@ -902,6 +903,17 @@ function meleeMaterial(map, camo) {
   m.customProgramCacheKey = () => 'melee' + glslCode;
   return m;
 }
+// Punhos (battle royale): nada na mao; as luvas dos bracos ficam em guarda de boxe (direita na frente)
+function buildFists() {
+  const holder = new THREE.Group();
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.3);
+  const gripR = new THREE.Object3D(); gripR.position.set(0, 0, 0);
+  const gripL = new THREE.Object3D(); gripL.position.set(-0.24, 0.05, 0.1);
+  holder.add(muzzle, gripR, gripL);
+  holder.userData = { id: 'fists', muzzle, gripR, gripL, spin: null, scope: null, iron: new THREE.Vector3(0, 0.08, -0.1), melee: true, fists: true, stats: loadoutStats('fists', null) };
+  return holder;
+}
+
 function buildMelee(lo) {
   const id = lo && parts[lo.body]?.melee ? lo.body : 'melee_10';
   const p = parts[id], holder = new THREE.Group();
@@ -974,6 +986,8 @@ export function loadoutStats(wpn, lo) {
     else { st.adsTime *= 1 - (1 - m) * 0.3; st.reload *= 1 - (1 - m) * 0.5; st.move *= 1 + (1 - m) * 0.05; }
   }
   if (lo.laser && LASER_DEF[lo.laser]) for (const [k, v] of Object.entries(LASER_DEF[lo.laser].traits)) st[k] *= v;
+  // tipo de bala: so os status que ela mexe (fogo, marca, respingo e parede ficam nas regras do jogo)
+  if (lo.ammo && AMMO[lo.ammo] && wpn !== 'melee') for (const k of ['dmg', 'mag', 'kick', 'rate']) if (AMMO[lo.ammo][k]) st[k] *= AMMO[lo.ammo][k];
   if (lo.handle) {
     const g = GRIP_TRAITS[lo.handle] || { spread: 0.8, kick: 0.72, adsTime: 1.08 };
     for (const k in g) st[k] *= g[k];
@@ -1043,6 +1057,7 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   if (out.handle && !ok([null, ...C.handles], out.handle)) out.handle = null;
   if (out.laser && !ok([null, ...LASERS], out.laser)) out.laser = null;
   if (out.tracer && !partOpen(cat, 1, 'tr:' + out.tracer)) out.tracer = null;
+  if (out.ammo && (!AMMO[out.ammo] || !partOpen(cat, 1, 'am:' + out.ammo))) out.ammo = null; // bala trancada volta pra normal
   const cm = camoList.find(c => c.id === out.camo);
   if (cm && !camoOpen(cat, cm)) out.camo = null;
   return out;

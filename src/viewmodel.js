@@ -2,6 +2,7 @@
 // Estados: quadril, mira (ADS), corrida (arma cruzada pra baixo), disparada (arma
 // erguida no ombro com o braco bombeando), recarga e troca.
 import * as THREE from 'three';
+import { umbrellaMesh } from './fieldview.js';
 import { ink, PAL, wordTexture } from './toon.js';
 import { Hose } from './character.js';
 import { buildGun } from './arsenal.js';
@@ -157,19 +158,37 @@ export class ViewModel {
     this.armR = new Hose(0.042, PAL.ink, 0.012);
     this.armL = new Hose(0.042, PAL.ink, 0.012);
     this.scene.add(this.armR.mesh, this.armL.mesh);
+    // luva com duas maos: aberta (segurando arma de fogo) e fechada (punho: soco e cabo da faca)
     const glove = () => {
-      const g = new THREE.Group();
+      const g = new THREE.Group(), open = new THREE.Group(), fist = new THREE.Group();
       const palm = ink(new THREE.SphereGeometry(0.05, 12, 10), PAL.white, 0.008);
-      palm.scale.set(1, 0.85, 1.25); g.add(palm);
+      palm.scale.set(1, 0.85, 1.25); open.add(palm);
       for (let i = 0; i < 3; i++) {
         const f = ink(new THREE.CapsuleGeometry(0.016, 0.04, 3, 6), PAL.white, 0.006);
         f.position.set(-0.03 + i * 0.03, 0.02, -0.05); f.rotation.x = -1.2;
-        g.add(f);
+        open.add(f);
       }
       const th = ink(new THREE.CapsuleGeometry(0.016, 0.03, 3, 6), PAL.white, 0.006);
-      th.position.set(0.045, 0.03, -0.01); th.rotation.z = -0.8; g.add(th);
+      th.position.set(0.045, 0.03, -0.01); th.rotation.z = -0.8; open.add(th);
+      // punho: bola fechada, 4 nos dos dedos dobrados na frente e o polegar cruzando por baixo
+      const ball = ink(new THREE.SphereGeometry(0.052, 12, 10), PAL.white, 0.008);
+      ball.scale.set(1.05, 0.95, 1.1); fist.add(ball);
+      for (let i = 0; i < 4; i++) {
+        const k = ink(new THREE.CapsuleGeometry(0.018, 0.026, 3, 6), PAL.white, 0.007);
+        k.position.set(-0.036 + i * 0.024, 0.03, -0.042); k.rotation.x = 0.9; // crista dos nos em cima (a camera ve o punho por tras)
+        fist.add(k);
+      }
+      const tf = ink(new THREE.CapsuleGeometry(0.015, 0.04, 3, 6), PAL.white, 0.006);
+      tf.position.set(-0.035, -0.005, -0.035); tf.rotation.z = Math.PI / 2; tf.rotation.y = 0.5; fist.add(tf); // polegar por dentro, dobrado sobre os dedos
+      // linhas dos dedos (riscos de tinta entre os nos)
+      for (let i = 0; i < 3; i++) {
+        const l = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.03, 0.006), new THREE.MeshBasicMaterial({ color: PAL.ink }));
+        l.position.set(-0.024 + i * 0.024, 0.045, -0.05); l.rotation.x = 0.9; fist.add(l);
+      }
       const cuff = ink(new THREE.CylinderGeometry(0.045, 0.06, 0.05, 10), PAL.white, 0.008);
       cuff.position.set(0, -0.01, 0.06); cuff.rotation.x = Math.PI / 2; g.add(cuff);
+      fist.visible = false;
+      g.add(open, fist); g.userData = { open, fist };
       return g;
     };
     this.gloveR = glove(); this.gloveL = glove();
@@ -212,12 +231,13 @@ export class ViewModel {
   // com a lamina na mao = ela mesma corta
   meleeSwing(dur, lo) {
     this.swingDur = Math.max(0.32, Math.min(0.5, dur * 0.6)); this.swingT = this.swingDur; this.inspectT = 0;
-    this.swingQuick = this.wpn !== 'melee';
+    this.swingQuick = this.wpn !== 'melee' && this.wpn !== 'fists';
+    if (this.wpn === 'fists') this.punchLeft = !this.punchLeft; // jab alternado
     if (!this.swingQuick) return;
     const key = JSON.stringify(lo || {});
     if (this.knifeKey !== key) {
       if (this.knife) this.scene.remove(this.knife);
-      this.knife = buildGun('melee', lo); this.knife.scale.setScalar(VM_SCALE); this.knife.visible = false;
+      this.knife = buildGun(lo?.fists ? 'fists' : 'melee', lo?.fists ? null : lo); // battle royale: soco rapido sem faca this.knife.scale.setScalar(VM_SCALE); this.knife.visible = false;
       this.scene.add(this.knife); this.knifeKey = key;
     }
   }
@@ -338,7 +358,7 @@ export class ViewModel {
     // faca rapida: a arma sai rapido (15% do tempo), fica fora e so volta nos 20% finais
     const out = this.swingT > 0 ? Math.min(1, sp / 0.15, (1 - sp) / 0.2) : 0;
     const dipQ = this.swingQuick ? out : 0;
-    const cut = this.swingT > 0 && !this.swingQuick ? inspectPose(SLASH, sp) : null;
+    const cut = this.swingT > 0 && !this.swingQuick && this.wpn !== 'fists' ? inspectPose(SLASH, sp) : null;
     let sk = 0, skp = 0;
     if (this.streakT > 0) { this.streakT -= dt; skp = 1 - Math.max(0, this.streakT) / STREAK_DUR; sk = Math.min(1, skp / 0.18, (1 - skp) / 0.18); }
     const kickAds = st.ads > 0.5 ? 0.45 : 1;
@@ -375,6 +395,37 @@ export class ViewModel {
     if (th > 0) pL.lerp(new THREE.Vector3(-0.12, -0.05 + th * 0.1, -0.5), th);
     // faca na mao: a esquerda fica fora da tela (baixa, de lado)
     if (this.wpn === 'melee') pL.set(-0.34, -0.62, -0.25);
+    // punhos: guarda de boxe balancando no ritmo; cada soco e um jab da mao da vez (alterna)
+    const fists = this.wpn === 'fists';
+    if (fists) {
+      // punhos: guarda (respira) > andando (sobe e desce alternado no passo) > correndo (bombeia como no COD).
+      // Os pesos misturam suave: nada de tranco ao comecar/parar de correr.
+      this.fT = (this.fT || 0) + dt;
+      this.fWalk = damp(this.fWalk || 0, st.moving && !st.air ? 1 : 0, 8, dt);
+      this.fRun = damp(this.fRun || 0, st.sprint && !st.air ? 1 : 0, 7, dt);
+      this.fAir = damp(this.fAir || 0, st.air ? 1 : 0, 10, dt);
+      const ph = this.bobT, w = this.fWalk * (1 - this.fRun), r = this.fRun;
+      const breath = Math.sin(this.fT * 3.2) * 0.01 * (1 - this.fWalk);
+      const sw = Math.sin(ph), cw = Math.cos(ph);
+      // guarda -> braco baixo e aberto da corrida
+      pR.set(0.12 + 0.05 * r, -0.12 - 0.05 * r, -0.34 - 0.02 * r);
+      pL.set(-0.12 - 0.05 * r, -0.10 - 0.07 * r, -0.31 - 0.05 * r);
+      // andando: maos alternadas, leve vai-e-vem
+      pR.y += breath + sw * 0.02 * w; pL.y += breath - sw * 0.02 * w;
+      pR.z += cw * 0.018 * w; pL.z -= cw * 0.018 * w;
+      pR.x += Math.abs(sw) * 0.006 * w; pL.x -= Math.abs(sw) * 0.006 * w;
+      // correndo: bombeia em arco (frente e cima / tras e baixo), alternado
+      pR.z -= sw * 0.1 * r; pR.y += sw * 0.045 * r - Math.abs(cw) * 0.015 * r;
+      pL.z += sw * 0.1 * r; pL.y -= sw * 0.045 * r + Math.abs(cw) * 0.015 * r;
+      // no ar: maos sobem um pouco (equilibrio)
+      pR.y += 0.05 * this.fAir; pL.y += 0.06 * this.fAir;
+      this.fPump = sw * r;
+      if (this.swingT > 0) {
+        const j = Math.sin(Math.min(1, sp / 0.45) * Math.PI / 2) * (sp < 0.45 ? 1 : Math.max(0, 1 - (sp - 0.45) / 0.55));
+        const hand = this.punchLeft ? pL : pR;
+        hand.x += (this.punchLeft ? 0.08 : -0.08) * j; hand.y += 0.03 * j; hand.z -= 0.2 * j;
+      }
+    }
     if (this.prop) {
       this.prop.visible = this.streakT > 0;
       if (this.prop.visible) {
@@ -407,7 +458,22 @@ export class ViewModel {
     this.gloveL.position.copy(pL);
     this.gloveR.quaternion.copy(this.rig.quaternion);
     this.gloveL.quaternion.copy(this.rig.quaternion);
-    this.gloveL.rotateZ(-0.9);
+    // punho fechado: no soco e segurando a faca (na mao ou no golpe rapido); aberta segurando arma
+    const fistR = fists || this.wpn === 'melee' || (this.knife?.visible ?? false), fistL = fists;
+    this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR;
+    this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL;
+    if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); } // punho gira com a passada
+    else this.gloveL.rotateZ(-0.9);
+    // guarda-chuva aberto: a mao esquerda segura o cabo, cupula na frente-esquerda tampando o tronco
+    if (this.umbOn) {
+      if (!this.umb) { this.umb = umbrellaMesh(); this.umb.scale.setScalar(0.3); this.scene.add(this.umb); }
+      this.umb.visible = true;
+      // cupula virada pra frente (ponta no -z), um pouco a esquerda: protege sem tampar a mira
+      this.umb.position.set(-0.2, -0.06, -0.62); this.umb.rotation.set(-Math.PI / 2 + 0.12, 0.18, 0);
+      this.umb.updateMatrixWorld(true);
+      pL.set(-0.2, -0.13, -0.42);
+      this.gloveL.position.copy(pL);
+    } else if (this.umb) this.umb.visible = false;
     const hideHands = false;
     if (g.scope?.lens) {
       g.scope.lens.material.uniforms.uOn.value = g.scope.big ? THREE.MathUtils.smoothstep(st.ads, 0.55, 0.9) : 1;

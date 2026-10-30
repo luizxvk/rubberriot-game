@@ -1,14 +1,15 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
-import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS } from '../shared/weapons.js';
+import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS } from '../shared/weapons.js';
 import { SKILL_ICONS } from './skillicons.js';
+import { tip } from './tips.js';
 import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
-import { DEBUG, progressInfo, wpnInfo, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked } from './progress.js';
-import { MAP_IDS } from '../shared/map.js';
+import { DEBUG, progressInfo, wpnInfo, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
+import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
 import { CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
 
@@ -36,7 +37,7 @@ export function initMenus(o) {
     $('menu').classList.toggle('smithing', name === 'arsenal');
     $('menu').classList.toggle('home', name === 'home');
     if (name === 'arsenal') { picking = false; renderSmith(); }
-    if (name === 'skills') renderSkills();
+    if (name === 'skills') { renderSkills(); tip('skills'); }
     if (name === 'mp') ui.refreshRooms && ui.refreshRooms();
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
     if (name === 'controls') renderKeys();
@@ -75,8 +76,10 @@ export function initMenus(o) {
     if (withDesc) $('modeDesc').textContent = modeDesc(cur);
     return () => cur;
   }
-  let curSolo = modeList($('modeList'), 'ffa', () => {}, true);
-  let curMp = modeList($('mpModeList'), 'tdm', () => {}, false);
+  // battle royale tem mapa proprio (Ilha Rebobina): a escolha de mapa some quando ele e o modo
+  const mapFor = (id) => (m) => { const f = $(id)?.closest('.field'); if (f) f.hidden = m === 'br' || m === 'duo'; };
+  let curSolo = modeList($('modeList'), 'ffa', mapFor('mapSel'), true);
+  let curMp = modeList($('mpModeList'), 'tdm', mapFor('mpMapSel'), false);
   const soloMode = () => curSolo(), mpMode = () => curMp();
   // escolha de mapa (automatico = o mapa que combina com o modo)
   const mapSeg = (el) => {
@@ -200,8 +203,8 @@ export function initMenus(o) {
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee'];
-  const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'laser', 'tracer', 'camo', 'paint', 'accent'];
-  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', laser: 'slot_laser', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
+  const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
+  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   function renderChallenges() {
@@ -269,7 +272,7 @@ export function initMenus(o) {
 
   // texto do desafio de desbloqueio e o nome do premio
   function chName(u) { return t('ch_' + u.id, { n: u.n }); }
-  function rewardName(r) { if (r.slot === 'tracer') return t('s_tracer') + ' ' + t('tr_' + r.id.slice(3)); return r.slot === 'camo' ? t('camo_' + r.id) : `${partName(r.slot, r.id)} (${wName(r.wpn)})`; }
+  function rewardName(r) { if (r.slot === 'tracer') return t('s_tracer') + ' ' + t('tr_' + r.id.slice(3)); if (r.slot === 'ammo') return t('slot_ammo') + ' ' + t('am_' + r.id.slice(3)); return r.slot === 'camo' ? t('camo_' + r.id) : `${partName(r.slot, r.id)} (${wName(r.wpn)})`; }
 
   // previa de item bloqueado: aparece no modelo e nos status, mas nao vai pro loadout
   let preview = null;
@@ -310,6 +313,7 @@ export function initMenus(o) {
       let val;
       if (s === 'bp') val = lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
       else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')); val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
+      else if (s === 'ammo') val = `<svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[AMMO[lo.ammo]?.icon || 'radio_button_unchecked']}</svg> ${t('am_' + (lo.ammo || 'none'))}`;
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
       else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s]}` : t('original');
@@ -334,7 +338,7 @@ export function initMenus(o) {
   let skTarget = 0; // slot que a proxima skill tocada vai ocupar
   const skIcon = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[SKILLS[id].icon] || ''}</svg>`;
   function renderSkills() {
-    const lv = progressInfo(), open = (id) => lv.unlockAll || lv.level >= SKILLS[id].lvl;
+    const lv = progressInfo(), open = (id) => lv.unlockAll || lv.unlockLevel >= SKILLS[id].lvl;
     const eq = (S.skills || []).filter(id => SKILLS[id] && open(id)).slice(0, SKILL_SLOTS);
     while (eq.length < SKILL_SLOTS) eq.push(null);
     if (skTarget >= SKILL_SLOTS) skTarget = 0;
@@ -346,7 +350,18 @@ export function initMenus(o) {
         <span class="sk-ico">${skIcon(id)}</span>${ok ? '' : `<span class="sk-lock"><svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS.lock}</svg></span>`}${k >= 0 ? `<em class="sk-n">${k + 1}</em>` : ''}
         <b>${t('sk_' + id)}</b><small>${ok ? t('skd_' + id) : t('skLvl', { n: SKILLS[id].lvl })}</small></button>`;
     };
-    $('skillPane').innerHTML = `<div class="sk-medals">${eq.map(medal).join('')}</div><div class="sk-grid">${Object.keys(SKILLS).map(card).join('')}</div>`;
+    // equipamento de campo: um so, escolhido nas cartas de baixo (mesmo visual, trava por nivel)
+    const fOpen = (id) => lv.unlockAll || lv.unlockLevel >= FIELD[id].lvl, fCur = FIELD[S.field] && fOpen(S.field) ? S.field : null;
+    const fIcon = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[id].icon] || ''}</svg>`;
+    const fcard = (id) => { const ok = fOpen(id), on = fCur === id;
+      return `<button class="sk-card fd ${on ? 'on' : ''} ${ok ? '' : 'locked'}" data-fd="${id}" ${ok ? '' : 'aria-disabled="true"'} ${on ? `title="${t('skOff')}"` : ''}><span class="sk-ico">${fIcon(id)}</span>${ok ? '' : `<span class="sk-lock"><svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS.lock}</svg></span>`}<b>${t('fd_' + id)}</b><small>${ok ? t('fdd_' + id) + ' ' + t('fdCd', { n: FIELD[id].cd }) : t('skLvl', { n: FIELD[id].lvl })}</small></button>`; };
+    $('skillPane').innerHTML = `<div class="sk-medals">${eq.map(medal).join('')}</div><div class="sk-grid">${Object.keys(SKILLS).map(card).join('')}</div>` +
+      `<div class="sk-field"><h3>${t('skField')}</h3><p class="sk-hint">${t('skFieldHint')}</p><div class="sk-grid">${FIELD_IDS.map(fcard).join('')}</div></div>`;
+    $('skillPane').querySelectorAll('[data-fd]').forEach(b => b.onclick = () => {
+      if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; }
+      const id = b.dataset.fd; S.field = fCur === id ? null : id; o.saveSettings();
+      audio.play(S.field ? 'unlock' : 'ui_back', { ui: true, vol: 0.5 }); renderSkills();
+    });
     const save = (list) => { S.skills = list.filter(Boolean); o.saveSettings(); };
     $('skillPane').querySelectorAll('[data-slot]').forEach(b => b.onclick = () => { skTarget = +b.dataset.slot; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSkills(); });
     $('skillPane').querySelectorAll('[data-sk]').forEach(b => b.onclick = () => {
@@ -425,6 +440,20 @@ export function initMenus(o) {
         if (b.classList.contains('locked')) { peek('camo', b.dataset.camo === 'none' ? null : b.dataset.camo); return; }
         setPart('camo', b.dataset.camo === 'none' ? null : b.dataset.camo);
       });
+      return;
+    }
+    if (slot === 'ammo') {
+      // balas: ganho e perda de cada uma (status em verde/vermelho como nas variantes); trancadas mostram o desafio
+      const UP = { fire: 'am_up_burn', trace: 'am_up_mark', boom: 'am_up_splash', ap: 'am_up_pierce' };
+      const MOD_TXT = { dmg: 'st_dmg', rate: 'st_rate', kick: 'st_ctrl', mag: 'st_mag' };
+      const good = (k, v) => (k === 'dmg' || k === 'mag') ? v > 1 : v < 1;
+      p.innerHTML = [null, ...AMMO_IDS].map(id => {
+        const A = id ? AMMO[id] : null, lk = id && LOCKED_BY['am:' + id], open = !id || partUnlocked(cat, 1, 'am:' + id), cur = (lo.ammo || null) === id;
+        const mods = !A ? '' : `<b class="up">+ ${t(UP[id])}</b>` + Object.entries(A).filter(([k]) => MOD_TXT[k]).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
+        const lock = open || !lk ? '' : `<small class="req-ch">${unlockActive(lk.id) ? t('reqCh') + ': ' + chName(lk) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lk.id) * 100)}%"></i></span>`;
+        return `<button class="opt am ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'ammo' && preview.v === id ? 'peek' : ''}" data-am="${id || ''}" ${open ? '' : 'aria-disabled="true"'}><svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[A?.icon || 'radio_button_unchecked']}</svg><span class="bp-name">${t('am_' + (id || 'none'))}</span><small>${t('amd_' + (id || 'none'))}</small><span class="fx">${mods}</span>${lock}</button>`;
+      }).join('');
+      p.querySelectorAll('[data-am]').forEach(b => b.onclick = () => { const v = b.dataset.am || null; if (b.classList.contains('locked')) { peek('ammo', v); return; } setPart('ammo', v); });
       return;
     }
     if (slot === 'tracer') {
@@ -513,7 +542,22 @@ export function initMenus(o) {
     const pi = progressInfo();
     let el = document.getElementById('lvlBadge');
     if (!el) { el = document.createElement('div'); el.id = 'lvlBadge'; el.className = 'lvl-badge'; document.querySelector('.poster-frame').appendChild(el); }
-    el.innerHTML = `<b>${pi.level}</b><span><small>${t('playerLevel')}</small><span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span><small>${pi.max ? t('maxed') : pi.into + ' / ' + pi.need + ' XP'}</small></span>`;
+    // estrelas de prestigio do lado do numero; no nivel maximo, o botao de prestigio (pede confirmacao)
+    const stars = pi.prestige ? `<em class="prest" title="${t('prestN', { n: pi.prestige })}">★${pi.prestige > 1 ? pi.prestige : ''}</em>` : '';
+    el.innerHTML = `<b>${pi.level}</b>${stars}<span><small>${t('playerLevel')}</small><span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span><small>${pi.max ? t('maxed') : pi.into + ' / ' + pi.need + ' XP'}</small></span>` +
+      (pi.canPrestige ? `<button class="prest-go" id="prestGo">${t('prestGo')}</button>` : '');
+    const go = document.getElementById('prestGo');
+    if (go) go.onclick = () => {
+      if (go.dataset.sure !== '1') { go.dataset.sure = '1'; go.textContent = t('prestSure'); audio.play('ui_click', { ui: true }); return; }
+      if (doPrestige()) {
+        const n = progressInfo().prestige;
+        audio.play('prestige', { ui: true, vol: 0.8 });
+        // carimbo no cartaz: estrela nova (e a camo exclusiva no 1o prestigio)
+        const st = document.createElement('div'); st.className = 'prest-stamp';
+        st.innerHTML = `<b>${t('prestStamp', { n })}</b>${n === 1 ? `<small>${t('prestCamo')}</small>` : ''}`;
+        document.querySelector('.poster-frame').appendChild(st); setTimeout(() => st.remove(), 4200);
+      }
+    };
   };
   drawLevel();
   onProgress(() => { drawLevel(); if (ui.screen === 'arsenal') renderSmith(); });

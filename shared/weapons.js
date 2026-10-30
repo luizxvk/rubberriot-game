@@ -7,6 +7,8 @@ export const WEAPONS = {
   minigun: { name: 'Moedor',     slot: 5, dmg: 16, rate: 0.045, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.012, spin: 0.35, noAds: true, range: 200, recoil: [[0.6, 0.6], [0.6, -0.6], [0.7, 0.4], [0.6, -0.5]] },
   melee:   { name: 'Lamina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
   sniper:  { name: 'Luneta',     slot: 6, dmg: 150, rate: 1.05, mag: 5, reserve: 25, reload: 2.1, spread: 0.04, adsSpread: 0, auto: false, zoom: 4, kick: 0.16, range: 400, recoil: [[1, 0.15]] },
+  // punhos (battle royale): 3 socos derrubam quem esta sem colete (34 x 3 = 102)
+  fists:   { name: 'Punhos', slot: 8, dmg: 34, rate: 0.42, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.015, range: 2.3, melee: true, noAds: true, recoil: [[0, 0]] },
 };
 
 // Escada de armas: modelos especificos, comeca na pistola, encurtada (estilo COD).
@@ -55,6 +57,35 @@ export const SKILLS = {
   pavio: { lvl: 26, streak: 1, icon: 'local_fire_department' },             // sequencias custam 1 abate a menos
 };
 export const SKILL_SLOTS = 2;
+// Battle royale: colete absorve parte do dano; iris (zona) fecha em fases; o dirigivel solta caixotes.
+// phases: espera (s), fecha (s), raio final (fracao do raio inicial), dano fora (vida/s)
+export const BR = {
+  armorMax: 100, armorPiece: 50, armorAbsorb: 0.7,
+  r0: 1.5, phases: [[45, 35, 0.62, 2], [35, 30, 0.38, 4], [30, 25, 0.2, 7], [25, 20, 0.08, 11], [20, 20, 0, 16]],
+  ring: { lastPhase: 3, wait: 25, fight: 45 }, // ringue: vale ate a fase 3 da iris; espera e luta (s)
+  // dupla: caido sangra `down` s (com `downHp` de vida pra quem quiser terminar); parceiro segura usar a
+  // `reviveR` m por `revive` s e ele levanta com `reviveHp`. Caido rasteja a `crawl` da velocidade.
+  duo: { down: 30, downHp: 100, revive: 4, reviveR: 2.6, reviveHp: 30, crawl: 0.3 },
+  dropEvery: 55, dropFall: 6, lootWpn: ['pistol', 'pistol', 'smg', 'smg', 'rifle', 'rifle', 'shotgun', 'sniper'],
+};
+// Tipos de bala (peca "Municao" do Arsenal, por arma; liberadas por desafio). Mods multiplicam os status
+// (mesma regra do arsenal). O servidor aplica fogo, respingo e parede; a marca no minimapa e do cliente.
+export const AMMO = {
+  fire: { dmg: 0.85, burn: 14, burnT: 2, icon: 'local_fire_department' },   // alvo queima: +14 de dano em 2 s
+  trace: { mark: 3, icon: 'my_location' },                                   // alvo no seu minimapa por 3 s
+  boom: { mag: 0.7, kick: 1.25, splash: 2.2, splashK: 0.35, icon: 'flare' }, // respinga em quem esta perto
+  ap: { rate: 1.12, pierce: 0.7, wallK: 0.75, icon: 'double_arrow' },        // atravessa parede fina (ate 0,7 m)
+};
+export const AMMO_IDS = Object.keys(AMMO);
+// Equipamento de campo: um por jogador (escolhido na secao Skills), tecla Z / direcional direita / botao
+// de toque. cd = recarga (s); lvl = nivel que libera.
+export const FIELD = {
+  umbrella: { lvl: 2, cd: 30, dur: 5, icon: 'beach_access' },            // escudo na frente: bloqueia tiro e soco que vem de frente
+  spring: { lvl: 5, cd: 25, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
+  hole: { lvl: 9, cd: 35, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
+  anvil: { lvl: 13, cd: 40, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
+};
+export const FIELD_IDS = Object.keys(FIELD);
 export const BLAST = ['frag', 'anvil', 'blimp', 'bomb'];
 export const hasSkill = (p, id) => !!p?.skills?.includes(id);
 
@@ -75,6 +106,10 @@ export const MODES = {
   bomb:     { name: 'Plantar a Bomba',   teams: true,  limit: 4,   desc: 'Ataque planta a bomba no ponto A ou B, defesa desarma. Sem renascer na rodada.' },
   // azul = sobreviventes, vermelho = infectados (quem cai vira infectado)
   infect:   { name: 'Infectado',         teams: true,  limit: 0,   time: 300, desc: 'Um vira infectado. Quem ele pegar vira tambem. Sobreviva ate o fim do tempo.' },
+  // battle royale: todo mundo nasce no soco, pega arma/colete no chao e a iris fecha o mapa. Ultimo de pe vence.
+  br:       { name: 'Ultimo de Pe',      teams: false, limit: 0,   time: 900, desc: 'Nasce no soco, pega arma e colete no chao e foge da iris que fecha. Ultimo de pe vence.' },
+  // mesmo battle royale em duplas: zerou a vida com o parceiro de pe = fica caido ate ele reerguer
+  duo:      { name: 'Ultimo de Pe: Dupla', teams: true,  limit: 0,   time: 900, desc: 'Battle royale em dupla. Caiu, o parceiro te reergue com a bomba de bicicleta. Ultima dupla de pe vence.' },
 };
 
 // Infectado: sobrevivente sai com escopeta + pistola; infectado so com a lamina, mais rapido.

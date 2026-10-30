@@ -6,9 +6,10 @@ const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
 export const MAX_LEVEL = 55;
 export const MAX_WPN_LEVEL = 20;
+export const MAX_PRESTIGE = 10;
 
 // 29/10: ganhos cortados ~45% (subia de nivel facil demais). A curva ficou igual: quem ja tem nivel nao perde.
-export const XP = { kill: 55, assist: 25, head: 20, streak: 80, flagCap: 170, flagReturn: 40, zone: 80, win: 250, match: 100, survive: 30, plant: 140, defuse: 170, roundWin: 55 };
+export const XP = { kill: 55, assist: 25, head: 20, streak: 80, flagCap: 170, flagReturn: 40, zone: 80, win: 250, match: 100, survive: 30, plant: 140, defuse: 170, roundWin: 55, revive: 60 };
 
 // xp acumulado pra chegar no nivel n
 export const levelXp = (n) => n <= 1 ? 0 : Math.round(600 * (n - 1) + 90 * (n - 1) ** 2);
@@ -21,7 +22,7 @@ function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
-  return { xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0 };
+  return { xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)) };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
@@ -29,7 +30,17 @@ export function level(xp = data.xp) { let n = 1; while (n < MAX_LEVEL && xp >= l
 export function wpnLevel(w) { const xp = data.wpn[w] || 0; let n = 1; while (n < MAX_WPN_LEVEL && xp >= wpnLevelXp(n + 1)) n++; return n; }
 export function progressInfo() {
   const lv = level(), cur = levelXp(lv), next = levelXp(Math.min(MAX_LEVEL, lv + 1));
-  return { level: lv, xp: data.xp, into: data.xp - cur, need: Math.max(1, next - cur), max: lv >= MAX_LEVEL, unlockAll: data.unlockAll };
+  return { level: lv, xp: data.xp, into: data.xp - cur, need: Math.max(1, next - cur), max: lv >= MAX_LEVEL, unlockAll: data.unlockAll,
+    prestige: data.prestige, unlockLevel: unlockLevel(), canPrestige: lv >= MAX_LEVEL && data.prestige < MAX_PRESTIGE };
+}
+// Prestigio: no nivel maximo volta pro 1 e ganha uma estrela (ate 10). Nada que ja abriu fecha de novo:
+// desbloqueio por nivel do jogador olha o "nivel de desbloqueio" (prestigiado = maximo).
+export const unlockLevel = () => data.prestige > 0 ? MAX_LEVEL : level();
+export function doPrestige() {
+  if (level() < MAX_LEVEL || data.prestige >= MAX_PRESTIGE) return false;
+  data.prestige++; data.xp = 0; save();
+  emit({ kind: 'prestige', prestige: data.prestige });
+  return true;
 }
 export function wpnInfo(w) {
   const lv = wpnLevel(w), xp = data.wpn[w] || 0, cur = wpnLevelXp(lv), next = wpnLevelXp(Math.min(MAX_WPN_LEVEL, lv + 1));
@@ -61,6 +72,7 @@ export function partUnlocked(wpn, i, id) {
   if (data.unlockAll) return true;
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
+  if (id && id.startsWith('am:')) return true;  // bala normal
   return wpnLevel(wpn) >= partReq(i);
 }
 // quanto falta pra um requisito (0..1): nivel da arma e/ou do jogador
@@ -75,10 +87,11 @@ export function camoUnlocked(wpn, camo) {
   if (data.unlockAll) return true;
   if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite
   if (camo.elite) return !!rovexMe?.elite;     // exclusiva do Elite da Rovex
+  if (camo.prestige) return data.prestige >= camo.prestige; // exclusiva de quem prestigiou
 
   if (LOCKED_BY[camo.id]) return unlockDone(LOCKED_BY[camo.id].id);
   if (!camo.req) return true;
   if (camo.req.wpn && wpnLevel(wpn) < camo.req.wpn) return false;
-  if (camo.req.player && level() < camo.req.player) return false;
+  if (camo.req.player && unlockLevel() < camo.req.player) return false;
   return true;
 }

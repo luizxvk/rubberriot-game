@@ -117,6 +117,7 @@ export class Input {
       use: has('KeyE') || t.use || !!pd.use,
       mapPressed: edge('KeyM') || edge('MAP'),
       meleePressed: edge('KeyV') || edge('MELEE'),
+      fieldPressed: edge('KeyZ') || edge('FIELD'), // equipamento de campo
       lastPressed: edge('KeyQ'),
       slot: this.slotReq,
       wheel: this.wheelAcc + (edge('NEXT') ? 1 : 0),
@@ -131,6 +132,7 @@ export class Input {
 
 // Material Icons (Google, Apache 2.0): caminhos SVG oficiais
 const ICON = {
+  field: 'm13.127 14.56 1.43-1.43 6.44 6.443L19.57 21zm4.293-5.73 2.86-2.86c-3.95-3.95-10.35-3.96-14.3-.02 3.93-1.3 8.31-.25 11.44 2.88zM5.95 5.98c-3.94 3.95-3.93 10.35.02 14.3l2.86-2.86C5.7 14.29 4.65 9.91 5.95 5.98zm.02-.02-.01.01c-.38 3.01 1.17 6.88 4.3 10.02l5.73-5.73c-3.13-3.13-7.01-4.68-10.02-4.3z',
   fire: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   ads: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z',
   jump: 'M6 17.59 7.41 19 12 14.42 16.59 19 18 17.59l-6-6zM6 11l1.41 1.41L12 7.83l4.59 4.58L18 11l-6-6z',
@@ -183,6 +185,8 @@ export function buildTouch(input, root) {
   btn(t('t_flash'), 'flash', at(206, 12, 50), () => input.edges.add('FLASH'));
   btn(t('t_streak'), 'streak', at(156, 176, 48), () => input.edges.add('STREAK'));
   btn(t('t_melee'), 'melee', at(162, 84, 50), () => input.edges.add('MELEE'));
+  // equipamento de campo: o icone troca pelo equipado e o aro mostra a recarga
+  input.fieldBtn = btn(t('t_field'), 'field', at(214, 150, 48), () => input.edges.add('FIELD'));
   // usar (plantar / desarmar a bomba): segurar; so aparece no modo bomba
   input.useBtn = btn(t('t_use'), 'use', at(4, 92, 80), () => { input.touch.use = true; }, () => { input.touch.use = false; });
   btn(t('t_inspect'), 'inspect', at(220, 84, 44), () => input.edges.add('INSPECT'));
@@ -227,7 +231,7 @@ export function buildTouch(input, root) {
 export function setFireButton(input) {
   if (input.fireBtn) input.fireBtn.hidden = !!input.settings?.autoFire;
   if (input.useBtn) {
-    input.useBtn.hidden = input.mode !== 'bomb';
+    input.useBtn.hidden = input.mode !== 'bomb' && input.mode !== 'br'; // br: trocar arma no chao
     // a mao (plantar/desarmar) vai pro lugar do botao de atirar quando ele some: e onde o polegar ja esta.
     // Com tiro manual, fica acima do recarregar, fora do meio da tela. Posicao salva no editor de HUD manda.
     if (!input.settings?.hudLayout?.pos?.use) {

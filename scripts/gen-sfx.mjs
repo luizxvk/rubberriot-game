@@ -46,6 +46,17 @@ const SFX = {
   ding: ['tiny soft cartoon bell ding, light and bright', 0.5],
   poof: ['soft cartoon pop poof appear, light puff', 0.5],
   bolt: ['cartoon bolt action rifle cycling, exaggerated springy clack-clunk with a tiny boing, comedic, close, dry, no gunshot', 0.6],
+  umbrella: ['cartoon umbrella popping open, quick whoosh and springy fwump, comedic, close, dry', 0.6],
+  spring: ['big cartoon spring boing, wobbly bouncy doing-g-g sound, comedic, dry', 0.8],
+  hole: ['cartoon portable hole slurp, quick suction pop and slide whistle down then up, comedic', 1.0],
+  anvilfall: ['cartoon falling whistle descending pitch then heavy metal clank thud, comedic', 1.6],
+  fieldready: ['tiny cartoon toy bell ding with a soft wooden click, light and bright', 0.5],
+  comic: ['quick comic book page flip with paper swish and a cartoon stamp thump', 0.8],
+  prestige: ['short 1930s vaudeville brass fanfare with drum roll and cymbal, triumphant, cartoon', 2.5],
+  ringbell: ['boxing ring bell, two quick loud dings, old 1930s arena, slight echo', 1.2],
+  crowd: ['1930s cartoon boxing crowd cheering and whistling, short burst, comedic', 2.0],
+  pump: ['cartoon bicycle pump pumping three times, squeaky tchu tchu tchu with air hiss, comedic', 1.4],
+  balloon: ['cartoon balloon inflating then floating away with a whistle, comedic, light', 1.2],
 };
 for (const [name, [text, dur]] of Object.entries(SFX)) {
   const out = `public/sfx/${name}.mp3`;

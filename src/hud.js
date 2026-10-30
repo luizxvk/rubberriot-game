@@ -1,7 +1,7 @@
 // HUD em DOM: placa de placar, vida, municao, feed, marcadores, placar (Tab).
 import * as THREE from 'three';
 import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
-import { STREAKS } from '../shared/weapons.js';
+import { STREAKS, BR } from '../shared/weapons.js';
 import { t, wName, modeName, eliteTag } from './i18n.js';
 import { isTouch } from './input.js';
 import { audio } from './audio.js';
@@ -31,6 +31,13 @@ export class Hud {
     this.el.res.textContent = '/ ' + (a && a.reserve !== Infinity ? a.reserve : '∞');
     this.el.ammo.classList.toggle('empty', mag === 0);
     this.el.slots.innerHTML = p.owned.map((w, i) => `<span class="${w === p.wpn ? 'on' : ''}">${i + 1}</span>`).join('');
+  }
+
+  // colete do battle royale (some fora do modo)
+  armor(v, on) {
+    const box = $('armorBox');
+    box.hidden = !on;
+    if (on) $('armorBar').style.width = Math.max(0, Math.min(100, v)) + '%';
   }
 
   hp(v) {
@@ -85,7 +92,13 @@ export class Hud {
     const sec = Math.max(0, Math.ceil(snap.time));
     const clock = `<div><span class="lbl">${t('h_time')}</span><span class="val">${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}</span></div>`;
     let html;
-    if (mode === 'bomb') {
+    if (mode === 'br' && snap.br) {
+      // battle royale: quantos restam + a iris (esperando = quanto falta pra fechar; fechando = aviso)
+      const Z = snap.br, zs = Z.t;
+      const iris = Z.state === 'closed' ? `<div class="fuse"><span class="lbl">${t('br_iris')}</span><span class="val">${t('br_closed')}</span></div>`
+        : `<div class="${Z.state === 'shrink' ? 'fuse' : ''}"><span class="lbl">${Z.state === 'shrink' ? t('br_closing') : t('br_closeIn')}</span><span class="val">${Math.floor(zs / 60)}:${String(zs % 60).padStart(2, '0')}</span></div>`;
+      html = `<div><span class="lbl">${t('br_left')}</span><span class="val">${Z.left}</span></div>${iris}<div><span class="lbl">${t('h_you')}</span><span class="val">${me ? me.kills : 0}</span></div>`;
+    } else if (mode === 'bomb') {
       // rodadas de cada lado + relogio da rodada (ou o pavio da bomba plantada)
       const B = snap.bomb, planted = B?.state === 'planted';
       const mid = `<div class="${planted ? 'fuse' : ''}"><span class="lbl">${planted ? t('bombLbl') : t('roundN', { n: snap.round?.n || 1 })}</span><span class="val">${planted ? Math.ceil(snap.time) + 's' : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`}</span></div>`;
@@ -95,7 +108,7 @@ export class Hud {
       const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
       html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else if (cfg.teams) {
-      let mid = `<div><span class="lbl">${modeName(mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
+      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''}">${z.id}</span>`).join('')}</div>`;
       if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       html = `<div class="red"><span class="lbl">${t('h_red')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('h_blue')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
@@ -341,6 +354,23 @@ export class Hud {
     s.classList.add('on');
   }
 
+  // aviso fixo embaixo da mira enquanto vale (trocar arma no chao); null esconde
+  prompt(text) {
+    let el = this.promptEl;
+    if (!el) { el = this.promptEl = document.createElement('div'); el.className = 'use-prompt'; document.getElementById('hud').appendChild(el); }
+    if (text !== this.promptTxt) { this.promptTxt = text; el.textContent = text || ''; el.hidden = !text; }
+  }
+  // dupla: caido. Caixa embaixo da mira: sangra em N s (barra esvaziando) ou a bomba enchendo; null esconde
+  down(s) {
+    let el = this.downEl;
+    if (!el) { el = this.downEl = document.createElement('div'); el.className = 'down-box'; el.setAttribute('role', 'status'); el.innerHTML = '<b></b><small></small><i><span></span></i>'; document.getElementById('hud').appendChild(el); }
+    el.hidden = !s;
+    if (!s) return;
+    el.querySelector('b').textContent = t('duo_downTitle');
+    el.querySelector('small').textContent = s.rv > 0 ? t('duo_beingPumped') : t('duo_bleed', { n: s.t });
+    el.querySelector('span').style.width = Math.round(Math.min(1, s.rv > 0 ? s.rv : s.t / BR.duo.down) * 100) + '%';
+    el.classList.toggle('pump', s.rv > 0);
+  }
   message(text, t = 2.4) { this.el.msg.textContent = text; this.el.msg.classList.add('on'); this.msgT = t; }
 
   hurtFrom(angle) {
@@ -384,10 +414,18 @@ export class Hud {
     const bs = 256 / wk * k;
     g.drawImage(this.radarBg, -p.pos[0] * k - bs / 2, -p.pos[2] * k - bs / 2, bs, bs);
     const dot = (x, z, col, r = 5) => { g.fillStyle = col; g.beginPath(); g.arc((x - p.pos[0]) * k, (z - p.pos[2]) * k, r, 0, Math.PI * 2); g.fill(); g.lineWidth = 2; g.strokeStyle = '#141210'; g.stroke(); };
+    if (snap.br) {
+      // iris: circulo atual em tinta grossa, proximo tracejado claro; caixotes do dirigivel em vermelho
+      const Z = snap.br, at = (x, z) => [(x - p.pos[0]) * k, (z - p.pos[2]) * k];
+      g.lineWidth = 3; g.strokeStyle = '#141210'; g.beginPath(); g.arc(...at(Z.c[0], Z.c[1]), Z.r * k, 0, Math.PI * 2); g.stroke();
+      if (Z.to && Z.state !== 'closed') { g.setLineDash([5, 4]); g.lineWidth = 2; g.strokeStyle = '#faf8f2'; g.beginPath(); g.arc(...at(Z.to.c[0], Z.to.c[1]), Z.to.r * k, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
+      for (const c of G.brCrates || []) { g.fillStyle = '#a83a2c'; g.strokeStyle = '#141210'; g.lineWidth = 2; const [x, y] = at(c[0], c[1]); g.fillRect(x - 4, y - 4, 8, 8); g.strokeRect(x - 4, y - 4, 8, 8); }
+    }
     for (const o of snap.players) {
       if (o.id === G.myId || !o.alive) continue;
       if (!G.isEnemy(o)) { dot(o.pos[0], o.pos[2], o.team === 'red' ? '#a83a2c' : '#2f5b8a', 4.5); continue; }
       if (uav || (G.seen.get(o.id) || 0) > G.t) dot(o.pos[0], o.pos[2], '#e0301e', 5.5);
+      else if ((G.marked?.get(o.id) || 0) > G.t) { dot(o.pos[0], o.pos[2], '#ffb21a', 5.5); } // bala tracante
     }
     if (snap.mode === 'dom') for (const z of M.zones) { const s = snap.zones.find(q => q.id === z.id); dot(z.pos[0], z.pos[2], s?.owner === 'red' ? '#a83a2c' : s?.owner === 'blue' ? '#2f5b8a' : '#ece9e1', 6); }
     if (snap.mode === 'ctf') for (const tm of ['red', 'blue']) dot(snap.flags[tm].pos[0], snap.flags[tm].pos[2], tm === 'red' ? '#a83a2c' : '#2f5b8a', 6);
@@ -403,13 +441,16 @@ export class Hud {
     const ready = me?.ready || [];
     // tecla de cada aparelho: teclado G/F/X, controle LB/RB/direcional pra cima, toque = icone do botao
     const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb';
-    const [kf, kl, ks] = dev === 'pad' ? ['LB ', 'RB ', '▲ '] : dev === 'touch' ? ['', '', '★ '] : ['G ', 'F ', 'X '];
-    const key = (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev;
+    const [kf, kl, ks, kz] = dev === 'pad' ? ['LB ', 'RB ', '▲ ', '► '] : dev === 'touch' ? ['', '', '★ ', ''] : ['G ', 'F ', 'X ', 'Z '];
+    const fld = p.g?.field, fcd = Math.ceil(p.g?.fieldCd || 0);
+    const key = (fld || '') + fcd + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev;
     if (key !== this.kitKey) {
       this.kitKey = key;
       let el = document.getElementById('kit');
       if (!el) { el = document.createElement('div'); el.id = 'kit'; el.className = 'kit'; document.getElementById('hud').appendChild(el); }
+      el.hidden = p.g?.mode === 'br' && !p.nades.frag && !p.nades.flash && !fld; // battle royale: so aparece quando tiver granada ou equipamento
       el.innerHTML = `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
+        (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fcd + 's' : ''}</span>` : '') +
         (ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
     }
   }
@@ -456,10 +497,10 @@ export class Hud {
     if (!show || !snap) return;
     const cfg = MODES[snap.mode];
     const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
-    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}"><td>${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
+    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}"><td>${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
-    let html = `<h3>${modeName(snap.mode)}</h3>`;
+    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.mode)}</h3>`;
     if (cfg.teams) {
       for (const tm of ['red', 'blue']) html += `<table><caption style="text-align:left;font-family:var(--display);padding:6px 0 2px;color:var(--${tm})">${t(TEAM[tm])} · ${snap.teamScore[tm]}</caption>${head}${rows(sort(players.filter(p => p.team === tm)))}</table>`;
     } else html += `<table>${head}${rows(sort(players))}</table>`;

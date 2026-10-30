@@ -34,6 +34,8 @@ export const CAMOS = [
   { id: 'inkreact', code: 25, anim: true, react: true, req: { player: 42, wpn: 20 } },
   // Elite da Rovex: reativa exclusiva de quem assina (gratis enquanto a assinatura estiver ativa)
   { id: 'hexelite', code: 30, anim: true, react: true, elite: true },
+  // prestigio: laca preta com estrelas douradas (so de quem fez o 1o prestigio)
+  { id: 'prestigio', code: 31, anim: true, prestige: 1 },
   // lendarias: shader proprio + efeito FORA da arma (fx, ver camofx.js). So vem com a variante de elite.
   { id: 'hellfire', code: 26, anim: true, legend: true, fx: 'flame' },
   { id: 'tesla', code: 27, anim: true, legend: true, fx: 'storm' },
@@ -69,6 +71,7 @@ export const CAMO_SWATCH = {
   phantom: 'radial-gradient(circle at 50% 40%,#e9f7ff 20%,#9fc4dd 50%,#56708a)',
   ember: 'linear-gradient(135deg,#5a5652 30%,#ff6a1a 48%,#ffd23a 52%,#3a3633 70%)',
   inkreact: 'radial-gradient(circle at 35% 45%,#141210 22%,transparent 24%),radial-gradient(circle at 70% 65%,#a83a2c 14%,transparent 16%),#ece9e1',
+  prestigio: 'radial-gradient(circle at 30% 35%,#ffd36b 6%,transparent 8%) 0 0/14px 14px,radial-gradient(circle at 70% 70%,#ffd36b 5%,transparent 7%) 0 0/11px 11px,#16130f',
   hexelite: 'radial-gradient(circle at 50% 50%,#b48cff 8%,transparent 10%) 0 0/12px 12px,linear-gradient(135deg,#2a1150,#6d3fd6 55%,#e3c14a)',
   hellfire: 'repeating-radial-gradient(circle at 50% 110%,#120806 0 5px,#ff6a1a 5px 6px,#120806 6px 9px),#120806',
   tesla: 'repeating-linear-gradient(90deg,#c9783f 0 4px,#7a3a18 4px 5px,#7fe6ff 5px 6px,#7a3a18 6px 7px)',
@@ -331,6 +334,15 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     c = mix(c, lamp, bulb);
     glow = vec3(1.0, 0.75, 0.3) * bulb * on * 2.0 + gold * trim * smoothstep(0.95, 1.0, sin(p.z * 1.4 - t * 2.0)) * 0.8;
     return c;
+  }
+  if (k == 31) { // prestigio: laca preta, estrelas douradas piscando e um filete de ouro correndo
+    vec3 q = p * 5.0, id = floor(q), f = fract(q) - 0.5;
+    float h = c_h(id);
+    float star = smoothstep(0.2, 0.0, length(f.xy + (vec2(h, c_h(id + 3.1)) - 0.5) * 0.4)) * step(0.55, h);
+    float tw = 0.55 + 0.45 * sin(t * 3.0 + h * 20.0);
+    float band = smoothstep(0.95, 1.0, sin((p.x + p.y) * 3.0 - t * 1.8));
+    glow = vec3(1.0, 0.82, 0.35) * (star * tw * 0.9 + band * 0.6);
+    return mix(vec3(0.05, 0.045, 0.04), vec3(1.0, 0.8, 0.3), star * tw) + band * vec3(0.5, 0.38, 0.1);
   }
   if (k == 30) { // favo elite (reativa, assinante Elite da Rovex): favo violeta; bordas acendem, pulsam e douram
     vec2 q = vec2(p.z, p.y) * 4.0, rr = vec2(1.0, 1.732), hh = rr * 0.5;

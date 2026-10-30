@@ -279,10 +279,127 @@ function refinaria() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria };
+// ---------- Ilha Rebobina (battle royale, 220 x 220 m) ----------
+// Sete areas com nome proprio espalhadas pela ilha, cobertura solta entre elas e pontos de loot em volta
+// de cada construcao. Montagem com semente fixa: todo mundo (servidor e clientes) gera a MESMA ilha.
+function ilha() {
+  const A = 110, { boxes, box, stairs, walls } = builder(A);
+  walls(6);
+  // Ringue de Boxe (fora do muro sul): quem cai a 1a vez luta 1 contra 1 no soco pra voltar
+  const RZ = A + 22;
+  box(0, RZ, 12, 12, 1, 0, 'ringfloor');
+  for (const [x, z, w, d] of [[0, RZ - 6, 12, 0.4], [0, RZ + 6, 12, 0.4], [-6, RZ, 0.4, 12], [6, RZ, 0.4, 12]]) box(x, z, w, d, 1.4, 1, 'rope');
+  for (const [x, z] of [[-6, RZ - 6], [6, RZ - 6], [-6, RZ + 6], [6, RZ + 6]]) box(x, z, 0.6, 0.6, 1.8, 1, 'post');
+  let seed = 7;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  const r = (a, b) => a + rand() * (b - a);
+  const loot = [];
+  const lootRing = (x, z, r0, r1, n) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + r(-0.3, 0.3), d = r(r0, r1); loot.push([x + Math.cos(a) * d, z + Math.sin(a) * d]); } };
+  const areas = [];
+  const area = (name, x, z, rad) => areas.push({ name, pos: [x, 0, z], r: rad });
+
+  // Coreto das Moscas (centro): praca com coreto alto e muretas
+  area('coreto', 0, 0, 20);
+  box(0, 0, 10, 10, 1.2, 0, 'platform');
+  box(0, 0, 4, 4, 7, 1.2, 'tower');
+  stairs(5.5, -3, 1, 0, 3, 3, 0.4, 0.6);
+  for (const [x, z] of [[-14, -6], [14, 6], [-6, 14], [6, -14]]) box(x, z, x === 6 || x === -6 ? 9 : 1.2, x === 6 || x === -6 ? 1.2 : 9, 1.6, 0, 'wall');
+  for (const [x, z] of [[-12, 12], [12, -12], [12, 12], [-12, -12]]) box(x, z, 2.4, 2.4, 1.4, 0, 'crate');
+  lootRing(0, 0, 7, 16, 10);
+
+  // Vila Manivela (nordeste): casas coladas em ruas
+  area('manivela', 62, -62, 28);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    if (i === 1 && j === 1) continue;
+    const x = 44 + i * 18, z = -80 + j * 18;
+    box(x, z, r(8, 10), r(8, 10), r(6, 8), 0, 'house', { roof: rand() < 0.5 ? 'peak' : 'flat', seed: i * 3 + j });
+    lootRing(x, z, 6.5, 8.5, 2);
+  }
+  box(62, -62, 6, 6, 1.4, 0, 'crate'); lootRing(62, -62, 4, 6, 3);
+
+  // Porto Remendado (noroeste): conteineres empilhados e guindaste
+  area('porto', -66, -66, 28);
+  for (let i = 0; i < 6; i++) {
+    const x = -84 + (i % 3) * 14, z = -82 + Math.floor(i / 3) * 16;
+    box(x, z, 6, 12, 2.6, 0, 'container', { seed: i });
+    if (i % 2 === 0) box(x, z, 6, 12, 2.6, 2.6, 'container', { seed: i + 3 });
+    lootRing(x, z, 5, 7, 2);
+  }
+  box(-50, -50, 3, 3, 12, 0, 'gantry');
+  for (let i = 0; i < 5; i++) box(-60 + i * 4, -40, 2.2, 2.2, 1.4, 0, 'crate');
+  lootRing(-55, -45, 3, 8, 3);
+
+  // Fazenda Tinteiro (sudoeste): casarao, silos, cercas de mureta e pedras
+  area('fazenda', -64, 60, 30);
+  box(-70, 52, 14, 10, 8, 0, 'house', { roof: 'peak', seed: 11 });
+  box(-50, 70, 8, 8, 6, 0, 'house', { roof: 'peak', seed: 12 });
+  box(-84, 76, 5, 5, 11, 0, 'silo'); box(-76, 82, 5, 5, 9, 0, 'silo');
+  for (const z of [40, 90]) box(-64, z, 40, 1, 1.4, 0, 'wall');
+  for (let i = 0; i < 6; i++) box(r(-90, -40), r(44, 94), r(3, 5), r(3, 5), r(1.6, 3), 0, 'rock');
+  lootRing(-70, 52, 8.5, 11, 4); lootRing(-50, 70, 6, 8, 2); lootRing(-80, 80, 4, 7, 2);
+
+  // Refinaria Soluco (sudeste): tanques, canos e torre de oleo
+  area('soluco', 64, 62, 28);
+  for (const [x, z] of [[50, 50], [62, 50], [74, 50]]) { box(x, z, 7, 7, 6, 0, 'tank'); lootRing(x, z, 5, 7, 1); }
+  box(62, 66, 30, 1.2, 1.2, 1.8, 'pipe');
+  box(80, 74, 4, 4, 14, 0, 'derrick');
+  for (const [x, z] of [[48, 76], [58, 80], [70, 82]]) { box(x, z, 4, 4, 2.4, 0, 'vat'); lootRing(x, z, 3.5, 5, 2); }
+  box(56, 62, 6, 4, 2.6, 0, 'machine'); lootRing(56, 62, 4, 6, 2);
+
+  // Morro do Projetor (norte): plataformas em degraus ate a torre do projetor
+  area('projetor', 0, -76, 22);
+  box(0, -78, 22, 16, 1.5, 0, 'platform');
+  box(0, -80, 12, 9, 1.5, 1.5, 'platform');
+  box(0, -82, 4, 4, 9, 3, 'tower');
+  stairs(-11, -70, 1, 0, 3, 3, 0.5, 0.7);
+  stairs(-6, -73, 0, -1, 3, 3, 1, 0.8);
+  for (const x of [-16, 16]) box(x, -64, 1.2, 8, 1.6, 0, 'wall');
+  lootRing(0, -76, 10, 15, 6);
+
+  // Serraria Ziguezague (sul): pilhas de tabua em ziguezague e maquinas
+  area('serraria', 0, 78, 24);
+  for (let i = 0; i < 7; i++) box(-24 + i * 8, 70 + (i % 2) * 10, 6, 2, 2.2, 0, 'crate');
+  box(-14, 88, 6, 5, 3, 0, 'machine'); box(14, 88, 6, 5, 3, 0, 'machine');
+  box(0, 92, 18, 8, 6, 0, 'house', { roof: 'flat', seed: 21 });
+  lootRing(0, 80, 6, 16, 8);
+
+  // Pedreira Engasgada (leste): pedras grandes e uma passarela
+  area('pedreira', 88, 0, 18);
+  for (let i = 0; i < 7; i++) box(88 + r(-14, 14), r(-16, 16), r(4, 7), r(4, 7), r(2.4, 5), 0, 'rock');
+  box(80, 0, 2, 16, 0.4, 4, 'platform');
+  lootRing(88, 0, 4, 14, 5);
+
+  // Brejo do Rolo (oeste): pilares velhos e muretas no meio do mato
+  area('brejo', -88, 0, 18);
+  for (let i = 0; i < 6; i++) box(-88 + r(-12, 12), r(-14, 14), 1.4, 1.4, r(3, 6), 0, 'pillar');
+  for (let i = 0; i < 4; i++) box(-88 + r(-12, 12), r(-14, 14), r(5, 9), 1.2, 1.5, 0, 'wall');
+  lootRing(-88, 0, 4, 14, 5);
+
+  // cobertura solta pelo caminho entre as areas (pedras e caixotes)
+  for (let i = 0; i < 110; i++) {
+    const x = r(-A + 8, A - 8), z = r(-A + 8, A - 8);
+    if (areas.some(q => Math.hypot(q.pos[0] - x, q.pos[2] - z) < q.r)) continue;
+    if (rand() < 0.6) box(x, z, r(2.5, 5), r(2.5, 5), r(1.4, 3), 0, 'rock'); else box(x, z, 2.2, 2.2, 1.4, 0, 'crate');
+    if (rand() < 0.4) loot.push([x + 2.5, z + 2.5]);
+  }
+  const ffa = [];
+  for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; ffa.push([Math.cos(a) * r(30, 96), Math.sin(a) * r(30, 96)]); }
+  return {
+    id: 'ilha', arena: A, boxes, theme: 'ilha', areas, loot,
+    ring: { c: [0, 1, RZ], a: [-3.5, 1, RZ - 3.5], b: [3.5, 1, RZ + 3.5] },
+    spawns: { red: ffa, blue: ffa, ffa },
+    flagBase: { red: [0, 0, -40], blue: [0, 0, 40] },
+    zones: [{ id: 'A', pos: [-40, 0, 0], r: 6 }, { id: 'B', pos: [0, 1.2, 0], r: 5 }, { id: 'C', pos: [40, 0, 0], r: 6 }],
+    pickups: [],
+  };
+}
+
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha };
+// mapas que aparecem na escolha do lobby (a ilha e so do battle royale)
+export const PICK_MAPS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria'];
 export const MAP_IDS = Object.keys(BUILDERS);
 // mapa sugerido por modo
-export const MODE_MAP = { ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
+export const MODE_MAP = { br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
 // pontos de bomba (x, z) perto do lado da defesa (azul nasce em +z); a altura sai da grade
 export const BOMB_SITES = {
   vila: { A: [-20, 27], B: [20, 27] },
@@ -308,7 +425,7 @@ export function getMap(id) {
   if (!BUILDERS[id]) id = 'vila';
   if (cache[id]) return cache[id];
   const M = BUILDERS[id]();
-  M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
+  if (id !== 'ilha') M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
   return (cache[id] = M);
 }
 
@@ -388,6 +505,29 @@ export function hasLOS(M, a, b) {
   if (len < 1e-3) return true;
   d[0] /= len; d[1] /= len; d[2] /= len;
   return raycast(M, a, d, len).dist === Infinity;
+}
+
+// Linha de visao pra bala perfurante: soma quanto da linha passa por dentro de caixas (paredes).
+// Devolve a espessura total (Infinity se o chao corta a linha).
+export function wallThickness(M, a, b) {
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(d[0], d[1], d[2]);
+  if (len < 1e-3) return 0;
+  if (Math.min(a[1], b[1]) < 0) return Infinity;
+  let sum = 0;
+  for (const bx of M.boxes) {
+    let t0 = 0, t1 = len, miss = false;
+    for (let k = 0; k < 3; k++) {
+      const dk = d[k] / len;
+      if (Math.abs(dk) < 1e-9) { if (a[k] < bx.min[k] || a[k] > bx.max[k]) { miss = true; break; } continue; }
+      let u = (bx.min[k] - a[k]) / dk, v = (bx.max[k] - a[k]) / dk;
+      if (u > v) { const tt = u; u = v; v = tt; }
+      t0 = Math.max(t0, u); t1 = Math.min(t1, v);
+      if (t0 > t1) { miss = true; break; }
+    }
+    if (!miss) sum += t1 - t0;
+  }
+  return sum;
 }
 
 // Hitbox de personagem: corpo (AABB) + cabeca (esfera)

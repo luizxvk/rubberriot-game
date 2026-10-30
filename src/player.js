@@ -1,8 +1,9 @@
 // Jogador local: movimento firme estilo COD (anda, corre, agacha, pula baixo; sem carrinho
 // e sem pulo duplo), tiro hitscan, recarga e troca de arma.
 import * as THREE from 'three';
-import { moveBody, raycast, rayPlayer, hasLOS } from '../shared/map.js';
-import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, bodyTrait } from '../shared/weapons.js';
+import { moveBody, raycast, rayPlayer, hasLOS, wallThickness } from '../shared/map.js';
+import { standable } from '../shared/nav.js';
+import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, bodyTrait } from '../shared/weapons.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
@@ -11,9 +12,9 @@ import { isTouch } from './input.js';
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 // slots (teclas 1, 2, 3...): arma principal primeiro, pistola em 2, faca por ultimo
-const SLOT_ORDER = ['smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'pistol', 'melee'];
+const SLOT_ORDER = ['smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'pistol', 'melee', 'fists'];
 // pegou arma do chao: so troca sozinho se ela for "maior" que a da mao (faca < pistola < principais)
-const PICK_RANK = ['melee', 'pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper'];
+const PICK_RANK = ['fists', 'melee', 'pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper'];
 
 export class Player {
   constructor(game) {
@@ -70,11 +71,11 @@ export class Player {
     this.pos = [...ev.pos]; this.vel = [0, 0, 0]; this.recoilP = 0; this.recoilY = 0;
     this.yaw = ev.yaw; this.pitch = 0;
     this.alive = true; this.hp = 100;
-    this.nades = { frag: 1, flash: 1 }; this.patIdx = 0;
+    this.nades = this.g.mode === 'br' ? { frag: 0, flash: 0 } : { frag: 1, flash: 1 }; this.patIdx = 0;
     this.owned = []; this.ammo = {};
     // escada de armas e infectado: o servidor decide o kit (infectado = so a lamina)
     if (this.g.mode === 'gungame') { this.give(ev.wpn, false); this.equip(ev.wpn, true); }
-    else if (this.g.mode === 'infect' && ev.owned?.length) {
+    else if ((this.g.mode === 'infect' || this.g.mode === 'br') && ev.owned?.length) { // infectado e battle royale: o servidor decide o kit
       for (const w of ev.owned) this.give(w, false);
       this.equip(ev.wpn, true);
     }
@@ -146,9 +147,11 @@ export class Player {
     if (!this.alive) { this.firing = false; return; }
     // contagem de inicio (todo mundo carregando / 3, 2, 1): da pra olhar em volta, nao da pra se mexer
     // plantando / desarmando: parado no lugar, segurando o botao
-    const B = this.g.snap?.bomb, acting = B && B.actor === this.g.myId && B.prog > 0;
-    if (this.g.mode === 'bomb') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
+    const B = this.g.snap?.bomb, acting = (B && B.actor === this.g.myId && B.prog > 0) || this.g.pumping; // dupla: enchendo a bomba no parceiro = parado
+    if (this.g.mode === 'bomb' || this.g.mode === 'br') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
     if (this.g.snap?.freeze > 0 || acting) inp = { ...inp, moveX: 0, moveZ: 0, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false };
+    // dupla: caido so rasteja (nada de tiro, pulo, corrida, granada, faca ou equipamento)
+    if (this.g.down) inp = { ...inp, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false, fieldPressed: false, ads: false, adsPressed: false, tacPressed: false, lastPressed: false };
     const safe = { pos: [...this.pos], vel: [...this.vel], yaw: this.yaw, pitch: this.pitch };
     this.step(dt, inp, S);
     // trava: numero invalido nunca chega na camera (congelava a tela e o audio)
@@ -203,8 +206,8 @@ export class Player {
         }
       }
     }
-    const fire = inp.fire || autoShot;
-    const firePressed = inp.firePressed || (autoShot && this.fireT <= 0 && !(this.burstLeft > 0));
+    const fire = (inp.fire || autoShot) && !this.g.down; // caido: tiro automatico do toque tambem para
+    const firePressed = inp.firePressed || (autoShot && !this.g.down && this.fireT <= 0 && !(this.burstLeft > 0));
     const mx = inp.moveX, mz = inp.moveZ;
     const moving = Math.hypot(mx, mz) > 0.1;
 
@@ -232,6 +235,7 @@ export class Player {
     if (this.adsK > 0.3) speed *= 0.6;
     if (W.id === 'minigun' || this.wpn === 'minigun') speed *= this.firing ? 0.6 : 0.85;
     if (this.g.mode === 'infect' && this.g.myTeam === 'red') speed *= INFECT.speed;
+    if (this.g.down) speed *= BR.duo.crawl;
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
@@ -248,7 +252,7 @@ export class Player {
     if (this.onGround) {
       if (!this.wasGround && vy < -6) { this.g.vm.landed(-vy); audio.play('land', { vol: Math.min(0.8, -vy / 20) }); }
     }
-    const eyeT = this.crouch ? 1.05 : 1.6;
+    const eyeT = this.g.down ? 0.5 : this.crouch ? 1.05 : 1.6;
     this.eye = damp(this.eye, eyeT, 12, dt);
 
     // passos no ritmo do balanco: fluido, alternando pe e variando um tiquinho
@@ -282,6 +286,8 @@ export class Player {
     // faca rapida (V / botao): golpe com a lamina equipada, sem largar a arma
     this.meleeCd = (this.meleeCd || 0) - dt;
     if (inp.meleePressed && this.meleeCd <= 0 && this.switchT <= 0 && this.throwT <= 0) this.melee();
+    if (inp.fieldPressed) this.useField();
+    this.fieldPhysics(dt);
     if (inp.inspectPressed && this.reloadT <= 0 && this.adsK < 0.1 && !this.sprint) this.g.vm.inspect();
     // granadas (G frag, F flash) e sequencia de abates (X)
     this.throwT -= dt;
@@ -337,15 +343,15 @@ export class Player {
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / 20;
-      const anim = !this.onGround ? 'jump' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
+      const anim = this.g.down ? 'down' : !this.onGround ? 'jump' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
       this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn });
     }
   }
 
   // inimigo mais perto na frente (cone de ~55 graus) dentro do alcance da lamina; null se nao tem
   meleeTarget() {
-    const g = this.g, tr = bodyTrait(this.lo('melee')?.body || 'melee_10');
-    const range = tr.range || WEAPONS.melee.range;
+    const g = this.g, fists = this.meleeWpn() === 'fists', tr = fists ? {} : bodyTrait(this.lo('melee')?.body || 'melee_10');
+    const range = tr.range || WEAPONS[fists ? 'fists' : 'melee'].range;
     const eye = this.eyePos(), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     let best = null, bd = Infinity;
     for (const r of g.remotes.values()) {
@@ -359,11 +365,52 @@ export class Player {
   }
 
   // golpe de lamina: acerta o inimigo mais perto na frente dentro do alcance da lamina
+  // equipamento de campo: manda o ponto mirado (chao ou topo de caixa ate o alcance); o servidor confere
+  useField() {
+    const g = this.g, F = FIELD[g.field];
+    if (!F || !this.alive || g.inRing || g.down) return; // ringue = so soco; caido nao usa
+    if ((g.fieldCd || 0) > 0) { audio.play('empty', { vol: 0.4 }); return; }
+    const o = this.eyePos(), cp = Math.cos(this.pitch);
+    const d = [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp];
+    const range = F.range || 4, hit = raycast(g.M, o, d, range);
+    // ponto mirado; se cair colado em parede/caixa, volta pelo raio ate um chao onde da pra pisar
+    let dist = Math.min(range, hit.dist) - 0.4;
+    for (let k = 0; k < 16 && dist > 1 && !standable(g.M, o[0] + d[0] * dist, o[2] + d[2] * dist); k++) dist -= 0.7;
+    const at = [o[0] + d[0] * dist, 0, o[2] + d[2] * dist];
+    g.net.send({ t: 'field', kind: g.field, at });
+  }
+  // mola e buraco do proprio jogador (a posicao e do cliente): pisou na mola voa, entrou no buraco sai no outro
+  fieldPhysics(dt) {
+    const g = this.g, F = g.snap?.field;
+    if (!F || !this.alive) return;
+    for (const s of F.springs) {
+      if (!this.onGround || (this.pos[0] - s[1]) ** 2 + (this.pos[2] - s[3]) ** 2 > 1.2 || Math.abs(this.pos[1] - s[2]) > 0.5) continue;
+      this.vel[1] = FIELD.spring.power; this.onGround = false;
+      audio.play('spring', { vol: 0.7 }); g.fieldView?.bounce(s[0]); g.shake(0.1);
+    }
+    if ((this.holeCd = (this.holeCd || 0) - dt) > 0) return;
+    for (const h of F.holes) {
+      const A = [h[1], h[2], h[3]], B = [h[4], h[5], h[6]];
+      const inA = (this.pos[0] - A[0]) ** 2 + (this.pos[2] - A[2]) ** 2 < 0.8 && Math.abs(this.pos[1] - A[1]) < 0.6;
+      const inB = !inA && (this.pos[0] - B[0]) ** 2 + (this.pos[2] - B[2]) ** 2 < 0.8 && Math.abs(this.pos[1] - B[1]) < 0.6;
+      if (!inA && !inB) continue;
+      const to = inA ? B : A, fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      g.fx.puff([this.pos[0], this.pos[1] + 0.5, this.pos[2]], 6, 0.6, 0x141210, 0.5);
+      this.pos = [to[0] + fx * 1.3, to[1] + 0.05, to[2] + fz * 1.3]; this.vel = [fx * 3, 4, fz * 3];
+      g.fx.puff([to[0], to[1] + 0.5, to[2]], 6, 0.6, 0x141210, 0.5);
+      g.fx.word('SLURP!', [to[0], to[1] + 1.6, to[2]], 1.4, 0.6);
+      audio.play('hole', { vol: 0.7 }); this.holeCd = 1.5;
+      break;
+    }
+  }
+
+  // golpe: lamina (classe) ou punhos (battle royale, quem nao tem faca)
+  meleeWpn() { return this.owned.includes('melee') ? 'melee' : this.owned.includes('fists') ? 'fists' : 'melee'; }
   melee() {
-    const g = this.g, body = this.lo('melee')?.body || 'melee_10', tr = bodyTrait(body);
-    this.meleeCd = WEAPONS.melee.rate * (tr.rate || 1);
+    const g = this.g, mw = this.meleeWpn(), MW = WEAPONS[mw], body = this.lo('melee')?.body || 'melee_10', tr = mw === 'melee' ? bodyTrait(body) : {};
+    this.meleeCd = MW.rate * (tr.rate || 1);
     this.burstLeft = 0; this.reloadT = 0;
-    g.vm.meleeSwing(this.meleeCd, this.lo('melee'));
+    g.vm.meleeSwing(this.meleeCd, mw === 'fists' ? { fists: true } : this.lo('melee'));
     audio.play('whoosh', { vol: 0.6, rate: 1.3 });
     g.net.send({ t: 'swing' });
     setTimeout(() => {
@@ -371,9 +418,9 @@ export class Player {
       const best = this.meleeTarget();
       if (!best) return;
       const pt = [best.pos[0], best.pos[1] + 1.2, best.pos[2]];
-      g.net.send({ t: 'hit', v: best.id, dmg: WEAPONS.melee.dmg, head: false, wpn: 'melee' });
-      g.onHitConfirm(pt, false, WEAPONS.melee.dmg, best);
-      g.fx.word(['TCHAC!', 'BONC!', 'ZAPT!'][Math.floor(Math.random() * 3)], pt, 1.6);
+      g.net.send({ t: 'hit', v: best.id, dmg: MW.dmg, head: false, wpn: mw });
+      g.onHitConfirm(pt, false, MW.dmg, best);
+      g.fx.word((mw === 'fists' ? ['POW!', 'SOC!', 'PAFT!'] : ['TCHAC!', 'BONC!', 'ZAPT!'])[Math.floor(Math.random() * 3)], pt, 1.6);
       audio.play('headshot', { vol: 0.7, ui: true, jitter: 0.1 });
     }, 110);
   }
@@ -433,7 +480,7 @@ export class Player {
     const mz = g.vm.muzzleCam();
     const muzzleWorld = mz.clone().applyMatrix4(cam.matrixWorld);
 
-    const pellets = W.pellets || 1;
+    const pellets = W.pellets || 1, ammo = this.ammoNow();
     let total = 0, head = false, victim = null, hitPoint = null, firstEnd = null;
     const dmgK = st.dmg;
     for (let i = 0; i < pellets; i++) {
@@ -444,30 +491,47 @@ export class Player {
         const rt = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
         d.addScaledVector(rt, Math.cos(th) * r).addScaledVector(up, Math.sin(th) * r).normalize();
       }
-      const hit = this.traceTargets(o, d.toArray(), 250);
+      const hit = this.traceTargets(o, d.toArray(), 250, ammo === 'ap');
       if (i === 0 || hit.player) firstEnd = hit.point;
       if (hit.player) {
         const fall = this.wpn === 'shotgun' ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
-        if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK; head ||= hit.head; hitPoint = hit.point; }
+        if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
       if (i < 3) g.fx.tracer(muzzleWorld.toArray(), hit.point, this.lo(this.wpn)?.tracer || 'chalk');
     }
     if (victim) {
       g.net.send({ t: 'hit', v: victim.id, dmg: Math.round(total), head, wpn: this.wpn });
       g.onHitConfirm(hitPoint, head, Math.round(total * (head ? 1.6 : 1)), victim);
+      // efeito da bala no alvo (o dano extra e o respingo quem aplica e o servidor)
+      if (ammo === 'fire') { g.fx.puff(hitPoint, 5, 0.45, 0xff7a1a, 0.5); g.fx.word('FSSS!', hitPoint, 1.1, 0.5); }
+      if (ammo === 'trace') (g.marked ||= new Map()).set(victim.id, g.t + AMMO.trace.mark);
     }
     g.net.send({ t: 'shot', o: muzzleWorld.toArray(), e: firstEnd, wpn: this.wpn });
   }
 
-  traceTargets(o, d, max) {
+  // battle royale: arma trocada no chao sai da mao (o servidor larga ela no chao)
+  take(w) {
+    this.owned = this.owned.filter(x => x !== w); delete this.ammo[w];
+    if (this.wpn === w) this.wpn = null;
+  }
+
+  // tipo de bala da arma na mao (gun game e lamina nao tem)
+  ammoNow() { const a = this.g.mode === 'gungame' || this.wpn === 'melee' ? null : this.lo(this.wpn)?.ammo; return AMMO[a] ? a : null; }
+
+  traceTargets(o, d, max, pierce = false) {
     const wall = raycast(this.g.M, o, d, max);
-    let best = wall.dist, player = null, head = false;
+    let best = wall.dist, player = null, head = false, through = false;
     for (const r of this.g.remotes.values()) {
       if (!r.alive || !this.g.isEnemy(r)) continue;
-      const h = rayPlayer(o, d, r, best);
-      if (h && h.dist < best) { best = h.dist; player = r; head = h.head; }
+      // perfurante: procura alvo alem da parede, se a parede no caminho for fina
+      let h = rayPlayer(o, d, r, best), w = false;
+      if (!h && pierce) {
+        const far = rayPlayer(o, d, r, max);
+        if (far && wallThickness(this.g.M, o, far.point || [o[0] + d[0] * far.dist, o[1] + d[1] * far.dist, o[2] + d[2] * far.dist]) <= AMMO.ap.pierce) { h = far; w = true; }
+      }
+      if (h && (w ? !player || through && h.dist < best : h.dist < best)) { best = h.dist; player = r; head = h.head; through = w; }
     }
     const dist = best === Infinity ? max : best;
-    return { dist, player, head, normal: player ? null : wall.normal, point: [o[0] + d[0] * dist, o[1] + d[1] * dist, o[2] + d[2] * dist] };
+    return { dist, player, head, wall: through, normal: player ? null : wall.normal, point: [o[0] + d[0] * dist, o[1] + d[1] * dist, o[2] + d[2] * dist] };
   }
 }
