@@ -55,6 +55,8 @@ export function floorAt(M, x, z) {
 }
 // ponto onde da pra ficar de pe (nao encostado em parede)
 export function standable(M, x, z) {
+  // topo do muro de borda conta como "andavel" na grade: nascer/cair ali jogava o bot pra fora da arena
+  if (Math.abs(x) > M.arena - 0.6 || Math.abs(z) > M.arena - 0.6) return false;
   const g = grid(M), [cx, cz] = cellOf(g, x, z);
   return walk(g, cx, cz);
 }
@@ -92,13 +94,26 @@ function clear(g, a, b) {
   return true;
 }
 
-// heap minimo de [f, x, z]
-function push(h, n) { h.push(n); let i = h.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (h[p][0] <= h[i][0]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } }
-function pop(h) {
-  const top = h[0], last = h.pop();
-  if (h.length) {
-    h[0] = last; let i = 0;
-    for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < h.length && h[l][0] < h[m][0]) m = l; if (r < h.length && h[r][0] < h[m][0]) m = r; if (m === i) break; [h[m], h[i]] = [h[i], h[m]]; i = m; }
+// memoria da busca, presa na grade e reaproveitada: antes cada rota criava Map/Set novos de ate 60 mil
+// entradas (90% do tempo do servidor na ilha era isso + coleta de lixo). "epoca" marca o que vale nesta busca.
+function scratch(g) {
+  if (g.sc) return g.sc;
+  const n = g.N * g.N;
+  return (g.sc = { cost: new Float32Array(n), came: new Int32Array(n), seen: new Uint32Array(n), done: new Uint32Array(n), ep: 0, hf: new Float64Array(4096), hk: new Int32Array(4096), hn: 0 });
+}
+// heap minimo em dois arrays paralelos (f, celula)
+function hpush(S, f, k) {
+  if (S.hn >= S.hf.length) { const nf = new Float64Array(S.hf.length * 2), nk = new Int32Array(S.hk.length * 2); nf.set(S.hf); nk.set(S.hk); S.hf = nf; S.hk = nk; }
+  const F = S.hf, K = S.hk; let i = S.hn++;
+  while (i > 0) { const p = (i - 1) >> 1; if (F[p] <= f) break; F[i] = F[p]; K[i] = K[p]; i = p; }
+  F[i] = f; K[i] = k;
+}
+function hpop(S) {
+  const F = S.hf, K = S.hk, top = K[0], n = --S.hn;
+  if (n > 0) {
+    const f = F[n], k = K[n]; let i = 0;
+    for (;;) { const l = i * 2 + 1; if (l >= n) break; const r = l + 1, m = r < n && F[r] < F[l] ? r : l; if (F[m] >= f) break; F[i] = F[m]; K[i] = K[m]; i = m; }
+    F[i] = f; K[i] = k;
   }
   return top;
 }
@@ -108,32 +123,37 @@ export function navPath(M, from, to, maxNodes = 60000) {
   const g = grid(M);
   const s = nearestWalk(g, ...cellOf(g, from[0], from[2]), from[1]), e = nearestWalk(g, ...cellOf(g, to[0], to[2]), to[1]);
   if (!s || !e) return null;
-  const N = g.N, key = (x, z) => z * N + x;
-  const gS = new Map([[key(...s), 0]]), came = new Map();
-  const h = (x, z) => { const dx = Math.abs(x - e[0]), dz = Math.abs(z - e[1]); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
-  const open = [[h(...s), s[0], s[1]]];
-  const closed = new Set();
+  // enxerga o destino num corredor andavel: nem precisa de busca (o caso comum em campo aberto)
+  if (clear(g, s, e)) return [center(g, ...e)];
+  const N = g.N, S = scratch(g);
+  if (++S.ep >= 0xffffffff) { S.seen.fill(0); S.done.fill(0); S.ep = 1; }
+  const ep = S.ep, cost = S.cost, came = S.came, seen = S.seen, done = S.done;
+  const ex = e[0], ez = e[1];
+  const h = (x, z) => { const dx = Math.abs(x - ex), dz = Math.abs(z - ez); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
+  const sk = s[1] * N + s[0];
+  S.hn = 0; seen[sk] = ep; cost[sk] = 0; came[sk] = -1; hpush(S, h(s[0], s[1]), sk);
   let n = 0, found = false;
-  while (open.length && n++ < maxNodes) {
-    const [, x, z] = pop(open);
-    const k = key(x, z);
-    if (closed.has(k)) continue;
-    closed.add(k);
-    if (x === e[0] && z === e[1]) { found = true; break; }
+  while (S.hn && n++ < maxNodes) {
+    const k = hpop(S);
+    if (done[k] === ep) continue;
+    done[k] = ep;
+    const x = k % N, z = (k - x) / N;
+    if (x === ex && z === ez) { found = true; break; }
+    const ck = cost[k];
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dz) continue;
       const nx = x + dx, nz = z + dz;
       if (!pass(g, x, z, nx, nz)) continue;
       if (dx && dz && (!pass(g, x, z, x + dx, z) || !pass(g, x, z, x, z + dz))) continue; // nao corta quina
-      const nk = key(nx, nz), cost = gS.get(k) + (dx && dz ? 1.414 : 1);
-      if (cost >= (gS.get(nk) ?? Infinity)) continue;
-      gS.set(nk, cost); came.set(nk, k);
-      push(open, [cost + h(nx, nz), nx, nz]);
+      const nk = nz * N + nx, c = ck + (dx && dz ? 1.414 : 1);
+      if (seen[nk] === ep && c >= cost[nk]) continue;
+      seen[nk] = ep; cost[nk] = c; came[nk] = k;
+      hpush(S, c + h(nx, nz), nk);
     }
   }
   if (!found) return null;
   const cells = [];
-  for (let k = key(...e); k !== undefined; k = came.get(k)) cells.push([k % N, Math.floor(k / N)]);
+  for (let k = ez * N + ex; k !== -1; k = came[k]) cells.push([k % N, Math.floor(k / N)]);
   cells.reverse();
   // estica: pula pontos que se enxergam em linha reta (e o caminho entre eles e andavel)
   const out = [];

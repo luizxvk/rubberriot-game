@@ -58,6 +58,15 @@ export async function friends() {
   const list = await call('/social/friends');
   return (Array.isArray(list) ? list : []).map(f => ({ id: f.id, name: f.displayName || f.name || '?', avatar: f.avatarUrl || '', online: !!f.isOnline }));
 }
+// salas de amigos: so' a maquina do multiplayer sabe quais estao abertas, entao a chamada vai direto pra ela
+const MP_HTTP = MP_URL.replace(/^ws/, 'http').replace(/\/rubber-riot\/ws$/, '');
+export async function friendRooms() {
+  if (!token()) return [];
+  const r = await fetch(MP_HTTP + '/api/games/rubber-riot/salas-amigos', { headers: { Authorization: 'Bearer ' + token() } });
+  if (!r.ok) return [];
+  const j = await r.json();
+  return Array.isArray(j?.salas) ? j.salas : [];
+}
 export const invite = (friendId, room) => call('/games/rubber-riot/invite', { method: 'POST', body: { friendId, room } });
 
 // ---------- save na conta ----------

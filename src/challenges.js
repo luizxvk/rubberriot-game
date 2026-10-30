@@ -109,9 +109,20 @@ let data = load();
 function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
-  return { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {} };
+  return { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {}, tut: d.tut || null };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
+
+// Treino com o Seu Tinteiro: concluir da UMA vez um modelo de arma e uma camuflagem sorteados entre o que o
+// jogador ainda nao tem. O presente vale como liberado (a camuflagem em todas as armas).
+export const tutorialState = () => data.tut;
+export const gifted = (id) => !!id && !!data.tut && (data.tut.body === id || data.tut.camo === id);
+export function grantTutorial(pick) {
+  if (data.tut) return data.tut;
+  data.tut = { ...(pick() || {}), at: Date.now() };
+  save();
+  return data.tut;
+}
 
 // os 3 do dia (mesma data = mesmos desafios)
 export function dailyToday() {

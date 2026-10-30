@@ -53,7 +53,9 @@ export function fieldTick(c, dt) {
       const from = near(p.pos, h.a, 0.9) ? h.a : near(p.pos, h.b, 0.9) ? h.b : null;
       if (!from) continue;
       const to = from === h.a ? h.b : h.a;
-      p.pos = [to[0] + 1.2, to[1], to[2]]; p.holeCd = 1.5; p.ai.path = null;
+      // sai ao lado do buraco, pro lado livre (sempre +x jogava pra tras do muro quando a saida ficava na borda)
+      const off = [[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]].find(([ox, oz]) => standable(c.M, to[0] + ox, to[2] + oz)) || [0, 0];
+      p.pos = [to[0] + off[0], floorAt(c.M, to[0] + off[0], to[2] + off[1]), to[2] + off[1]]; p.holeCd = 1.5; p.ai.path = null;
       c.event({ k: 'slurp', id: p.id, from, to });
       break;
     }

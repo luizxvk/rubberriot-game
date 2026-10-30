@@ -8,6 +8,15 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
   'ringbell', 'crowd', 'pump', 'balloon']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
+// primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
+function soundEdges(b) {
+  const d = b.getChannelData(0), th = 0.003;
+  let i = 0, j = d.length - 1;
+  while (i < j && Math.abs(d[i]) < th) i++;
+  while (j > i && Math.abs(d[j]) < th) j--;
+  return [i / b.sampleRate, (j + 1) / b.sampleRate];
+}
+
 class Audio {
   constructor() {
     this.ctx = null;
@@ -37,15 +46,18 @@ class Audio {
   }
 
   async load(name) {
+    if (this.loading?.has(name)) return;
+    (this.loading ||= new Set()).add(name);
     try {
       const r = await fetch(`./sfx/${name}.mp3`);
       if (!r.ok) return;
       const raw = await this.ctx.decodeAudioData(await r.arrayBuffer());
-      const pol = name === 'music' ? raw : this.polish(raw);
+      const pol = name.startsWith('music') ? raw : this.polish(raw);
       // arquivo mudo (veio vazio do gerador) = usa o sintetizado
       if (pol) this.buf[name] = pol;
-      if (name === 'music' && this.wantMusic) this.music(true);
+      if (name === (this.track || 'music') && this.wantMusic) this.music(true);
     } catch { /* sem o arquivo, cai no sintetizador */ }
+    this.loading.delete(name);
   }
 
   polish(b) {
@@ -216,19 +228,28 @@ class Audio {
     return s;
   }
 
-  music(on) {
+  // track: 'music' (menu/lobby), 'music_m1..4' (partida), 'music_br' (battle royale/dupla).
+  // As da partida baixam so quando vao tocar; trocar de faixa faz uma ponte curta entre as duas.
+  music(on, track) {
+    if (track) this.track = track;
     this.wantMusic = on;
     if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    if (on && !this.musicSrc && this.buf.music) {
+    const t = this.ctx.currentTime, want = this.track || 'music';
+    if (on) {
+      if (this.musicSrc?.name === want) return;
+      const b = this.buf[want];
+      if (!b) { this.load(want); return; } // o load chama de novo quando terminar
+      if (this.musicSrc) { const { s, g } = this.musicSrc; g.gain.setTargetAtTime(0, t, 0.25); s.stop(t + 1.5); }
       const s = this.ctx.createBufferSource();
-      s.buffer = this.buf.music; s.loop = true;
-      s.loopStart = 0.05; s.loopEnd = this.buf.music.duration - 0.05;
+      s.buffer = b; s.loop = true;
+      // loop pelo som de verdade: o mp3 traz uns milissegundos mudos nas pontas
+      const [a, z] = soundEdges(b);
+      s.loopStart = a; s.loopEnd = z;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + 1.5);
-      s.connect(g).connect(this.musicBus); s.start();
-      this.musicSrc = { s, g };
-    } else if (!on && this.musicSrc) {
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + (this.musicSrc ? 0.8 : 1.5));
+      s.connect(g).connect(this.musicBus); s.start(t, a);
+      this.musicSrc = { s, g, name: want };
+    } else if (this.musicSrc) {
       const { s, g } = this.musicSrc;
       g.gain.setTargetAtTime(0, t, 0.4); s.stop(t + 2.5);
       this.musicSrc = null;

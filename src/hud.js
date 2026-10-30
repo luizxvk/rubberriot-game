@@ -443,7 +443,7 @@ export class Hud {
     const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb';
     const [kf, kl, ks, kz] = dev === 'pad' ? ['LB ', 'RB ', '▲ ', '► '] : dev === 'touch' ? ['', '', '★ ', ''] : ['G ', 'F ', 'X ', 'Z '];
     const fld = p.g?.field, fcd = Math.ceil(p.g?.fieldCd || 0);
-    const key = (fld || '') + fcd + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev;
+    const key = (fld || '') + fcd + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev + '/' + (ready.length && snap.sLock ? snap.sLock.kind + snap.sLock.t : '');
     if (key !== this.kitKey) {
       this.kitKey = key;
       let el = document.getElementById('kit');
@@ -451,7 +451,8 @@ export class Hud {
       el.hidden = p.g?.mode === 'br' && !p.nades.frag && !p.nades.flash && !fld; // battle royale: so aparece quando tiver granada ou equipamento
       el.innerHTML = `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
         (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fcd + 's' : ''}</span>` : '') +
-        (ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
+        // sequencia pronta mas outra no ar: fica apagada com a contagem ate liberar
+        (ready.length && snap.sLock && ready[0] !== 'uav' ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
     }
   }
 

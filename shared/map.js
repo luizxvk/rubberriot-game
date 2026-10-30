@@ -436,15 +436,18 @@ export function moveBody(M, pos, vel, dt, rad, height) {
   const boxes = M.boxes;
   let onGround = false;
   const stepAxis = (ax) => {
+    const prev = pos[ax];
     pos[ax] += vel[ax] * dt;
     for (const b of boxes) {
       if (!overlap(pos, rad, height, b)) continue;
       const climb = b.max[1] - pos[1];
       if (climb > 0 && climb <= STEP && !blockedAbove(boxes, pos, rad, height, b.max[1])) { pos[1] = b.max[1]; continue; }
-      const o = ax === 0 ? 0 : 2;
-      if (vel[ax] > 0) pos[ax] = b.min[o] - rad - 1e-4;
-      else if (vel[ax] < 0) pos[ax] = b.max[o] + rad + 1e-4;
-      else { const c = (b.min[o] + b.max[o]) / 2; pos[ax] = pos[ax] < c ? b.min[o] - rad - 1e-4 : b.max[o] + rad + 1e-4; }
+      // sai pelo lado de onde veio; se ja estava dentro (degrau, pulo), pelo lado mais perto. Antes saia pelo
+      // sentido da velocidade e, ja dentro, atravessava a caixa inteira num tick (bot "teletransportando")
+      const o = ax === 0 ? 0 : 2, lo = b.min[o] - rad - 1e-4, hi = b.max[o] + rad + 1e-4;
+      if (prev <= lo + 1e-3) pos[ax] = lo;
+      else if (prev >= hi - 1e-3) pos[ax] = hi;
+      else pos[ax] = pos[ax] - lo < hi - pos[ax] ? lo : hi;
     }
   };
   stepAxis(0);
@@ -461,7 +464,22 @@ export function moveBody(M, pos, vel, dt, rad, height) {
     const probe = [pos[0], pos[1] - 0.05, pos[2]];
     for (const b of boxes) if (overlap(probe, rad, 0.06, b)) { onGround = true; break; }
   }
+  // muro de borda tem altura finita: mola, pulo de cima de caixa ou empurrao pra fora da parede nao tiram ninguem da arena
+  const [lo0, hi0, lo2, hi2] = bounds(M, pos, rad);
+  if (pos[0] < lo0 || pos[0] > hi0) { pos[0] = Math.max(lo0, Math.min(hi0, pos[0])); vel[0] = 0; }
+  if (pos[2] < lo2 || pos[2] > hi2) { pos[2] = Math.max(lo2, Math.min(hi2, pos[2])); vel[2] = 0; }
   return onGround;
+}
+
+// Limite andavel: a arena, ou o ringue de boxe (fica fora do muro de proposito) pra quem esta nele
+function bounds(M, pos, rad) {
+  const R = M.ring;
+  if (R && Math.abs(pos[0] - R.c[0]) < 9 && Math.abs(pos[2] - R.c[2]) < 9) {
+    const h = 5.8 - rad;
+    return [R.c[0] - h, R.c[0] + h, R.c[2] - h, R.c[2] + h];
+  }
+  const lim = M.arena - rad;
+  return [-lim, lim, -lim, lim];
 }
 
 function blockedAbove(boxes, pos, rad, height, newY) {
@@ -474,6 +492,12 @@ function overlap(pos, rad, height, b) {
   return pos[0] + rad > b.min[0] && pos[0] - rad < b.max[0] &&
     pos[2] + rad > b.min[2] && pos[2] - rad < b.max[2] &&
     pos[1] + height > b.min[1] + 1e-3 && pos[1] < b.max[1] - 1e-3;
+}
+
+// Posicao dentro da arena (o servidor confere o que o jogador manda)
+export function clampArena(M, pos, rad = 0.4) {
+  const [lo0, hi0, lo2, hi2] = bounds(M, pos, rad);
+  return [Math.max(lo0, Math.min(hi0, pos[0])), pos[1], Math.max(lo2, Math.min(hi2, pos[2]))];
 }
 
 // Raio contra o mapa. Devolve distancia (Infinity se nada) e normal.

@@ -266,6 +266,27 @@ Object.assign(D.en, { map_ilha: 'Rewind Island', br_left: 'Left', br_swap: 'Hold
   area_coreto: 'Fly Bandstand', area_manivela: 'Crank Village', area_porto: 'Patched Harbor', area_fazenda: 'Inkwell Farm', area_soluco: 'Hiccup Refinery',
   area_projetor: 'Projector Hill', area_serraria: 'Zigzag Sawmill', area_pedreira: 'Choking Quarry', area_brejo: 'Reel Swamp' });
 
+Object.assign(D.pt, { prestOnly: 'So com prestigio' }); Object.assign(D.en, { prestOnly: 'Prestige only' });
+// lobby: configuracao da partida (host) e troca de host
+Object.assign(D.pt, { lbCfg: 'Partida', cfg_mode: 'Modo', cfg_map: 'Mapa', cfg_players: 'Jogadores', cfg_limit: 'Meta', cfg_time: 'Tempo', cfg_difficulty: 'Pontaria',
+  cfgAutoTag: '(auto)', cfgDef: 'Padrao ({n})', cfgMin: '{n} min', cfgPrev: 'Anterior:', cfgNext: 'Proximo:', cfgHostOnly: 'So o host muda', cfgYouHost: 'Voce e o host',
+  newHost: '{n} agora e o host', newHostYou: 'Voce agora e o host da sala' });
+Object.assign(D.en, { lbCfg: 'Match', cfg_mode: 'Mode', cfg_map: 'Map', cfg_players: 'Players', cfg_limit: 'Score limit', cfg_time: 'Time', cfg_difficulty: 'Bot aim',
+  cfgAutoTag: '(auto)', cfgDef: 'Default ({n})', cfgMin: '{n} min', cfgPrev: 'Previous:', cfgNext: 'Next:', cfgHostOnly: 'Only the host can change this', cfgYouHost: 'You are the host',
+  newHost: '{n} is now the host', newHostYou: 'You are now the room host' });
+Object.assign(D.pt, { streakWait: '{s} no ar: espere {n} s', streakGap: 'Sequencia liberada em {n} s' });
+Object.assign(D.en, { streakWait: '{s} in the air: wait {n} s', streakGap: 'Streaks open again in {n} s' });
+Object.assign(D.pt, { mpOr: 'ou', createRoomSub: 'Voce vira o host e escolhe modo, mapa e bots no lobby' });
+Object.assign(D.en, { mpOr: 'or', createRoomSub: 'You become the host and pick mode, map and bots in the lobby' });
+Object.assign(D.pt, { frTitle: 'Amigos jogando', frPlayers: '{n} na sala' });
+Object.assign(D.en, { frTitle: 'Friends playing', frPlayers: '{n} in room' });
+Object.assign(D.pt, { quickPlay: 'Jogo rapido', quickPlaySub: 'Cai numa partida rolando agora ou abre uma com bots' });
+Object.assign(D.en, { quickPlay: 'Quick play', quickPlaySub: 'Jump into a match in progress or start one with bots' });
+Object.assign(D.pt, { bodyLevel: '{m}: nivel {n}' }); Object.assign(D.en, { bodyLevel: '{m}: level {n}' });
+Object.assign(D.pt, { cfgPickMode: 'Escolha o modo' }); Object.assign(D.en, { cfgPickMode: 'Pick a mode' });
+Object.assign(D.pt, { tutorial: 'Treino' }); Object.assign(D.en, { tutorial: 'Training' });
+Object.assign(D.pt, { ch_tutorial: 'Treino com o Seu Tinteiro', ch_tutorialRw: 'um modelo de arma e uma camuflagem, sorteados', ch_tutorialGo: 'Fazer o treino' });
+Object.assign(D.en, { ch_tutorial: 'Training with Mr. Inkwell', ch_tutorialRw: 'a random weapon model and a random camo', ch_tutorialGo: 'Start training' });
 // Ultimo de Pe em dupla: caido, bomba de bicicleta, reerguer
 Object.assign(D.pt.m, { duo: 'Ultimo de Pe: Dupla' }); Object.assign(D.en.m, { duo: 'Last Duo Standing' });
 Object.assign(D.pt.md, { duo: 'Battle royale em dupla. Zerou a vida, voce fica caido e o parceiro te reergue com a bomba de bicicleta. Ultima dupla de pe vence.' });

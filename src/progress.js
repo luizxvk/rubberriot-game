@@ -1,6 +1,6 @@
-// Progressao: XP do jogador (nivel 1..55) e de cada arma (nivel 1..20).
+// Progressao: XP do jogador (nivel 1..55) e de cada CORPO de arma (modelo, nivel 1..20; cada um o seu).
 // Pecas do Arsenal e camuflagens desbloqueiam por nivel. Fica salvo neste aparelho.
-import { LOCKED_BY, unlockDone, bpOwned, legendOwned } from './challenges.js';
+import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted } from './challenges.js';
 import { pushSoon, me as rovexMe } from './rovex.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
@@ -27,7 +27,25 @@ function load() {
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
 export function level(xp = data.xp) { let n = 1; while (n < MAX_LEVEL && xp >= levelXp(n + 1)) n++; return n; }
-export function wpnLevel(w) { const xp = data.wpn[w] || 0; let n = 1; while (n < MAX_WPN_LEVEL && xp >= wpnLevelXp(n + 1)) n++; return n; }
+// Nivel por corpo: o XP vai pro modelo equipado da categoria (data.wpn[idDoCorpo]). Pecas e camos abrem pelo
+// nivel desse corpo; um corpo novo da lista abre pelo MELHOR corpo da categoria (senao ninguem saia do modelo 1).
+let bodyOf = () => null, bodiesOf = () => [];
+export function setBodyResolver(cur, all) {
+  bodyOf = cur; bodiesOf = all;
+  // migracao: XP antigo guardado por categoria vai pro corpo que esta equipado nela
+  let moved = false;
+  for (const k of Object.keys(data.wpn)) {
+    const list = bodiesOf(k);
+    if (!list.length || list.includes(k)) continue;
+    const b = bodyOf(k) || list[0];
+    data.wpn[b] = (data.wpn[b] || 0) + data.wpn[k]; delete data.wpn[k]; moved = true;
+  }
+  if (moved) save();
+}
+const keyOf = (w, body) => body || (w && bodyOf(w)) || w;
+const lvOf = (xp) => { let n = 1; while (n < MAX_WPN_LEVEL && xp >= wpnLevelXp(n + 1)) n++; return n; };
+export function wpnLevel(w, body) { return lvOf(data.wpn[keyOf(w, body)] || 0); }
+export const catLevel = (w) => Math.max(wpnLevel(w), ...bodiesOf(w).map(b => lvOf(data.wpn[b] || 0)));
 export function progressInfo() {
   const lv = level(), cur = levelXp(lv), next = levelXp(Math.min(MAX_LEVEL, lv + 1));
   return { level: lv, xp: data.xp, into: data.xp - cur, need: Math.max(1, next - cur), max: lv >= MAX_LEVEL, unlockAll: data.unlockAll,
@@ -42,8 +60,8 @@ export function doPrestige() {
   emit({ kind: 'prestige', prestige: data.prestige });
   return true;
 }
-export function wpnInfo(w) {
-  const lv = wpnLevel(w), xp = data.wpn[w] || 0, cur = wpnLevelXp(lv), next = wpnLevelXp(Math.min(MAX_WPN_LEVEL, lv + 1));
+export function wpnInfo(w, body) {
+  const lv = wpnLevel(w, body), xp = data.wpn[keyOf(w, body)] || 0, cur = wpnLevelXp(lv), next = wpnLevelXp(Math.min(MAX_WPN_LEVEL, lv + 1));
   return { level: lv, into: xp - cur, need: Math.max(1, next - cur), max: lv >= MAX_WPN_LEVEL };
 }
 
@@ -54,14 +72,15 @@ function emit(ev) { for (const fn of listeners) fn(ev); }
 // ganha XP; devolve o que subiu de nivel pra mostrar na tela
 export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
   if (!amount) return;
+  const key = wpn ? keyOf(wpn) : null, cBefore = wpn ? catLevel(wpn) : 0;
   const before = level(), wBefore = wpn ? wpnLevel(wpn) : 0;
   data.xp += amount;
-  if (wpn) data.wpn[wpn] = (data.wpn[wpn] || 0) + amount;
+  if (key) data.wpn[key] = (data.wpn[key] || 0) + amount;
   if (kind === 'kill') data.kills++;
   if (kind === 'match') data.matches++;
   save();
-  const after = level(), wAfter = wpn ? wpnLevel(wpn) : 0;
-  emit({ kind, amount, wpn, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore });
+  const after = level(), wAfter = wpn ? wpnLevel(wpn) : 0, cAfter = wpn ? catLevel(wpn) : 0;
+  emit({ kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
 }
 
 // ---------- desbloqueios ----------
@@ -69,22 +88,23 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
 export function partReq(i) { return i <= 0 ? 1 : Math.min(MAX_WPN_LEVEL, 1 + Math.ceil(i * 1.5)); }
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 export function partUnlocked(wpn, i, id) {
-  if (data.unlockAll) return true;
+  if (data.unlockAll || gifted(id)) return true; // presente do treino
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
   if (id && id.startsWith('am:')) return true;  // bala normal
+  if (id && bodiesOf(wpn).includes(id)) return catLevel(wpn) >= partReq(i); // corpo novo: pelo melhor corpo
   return wpnLevel(wpn) >= partReq(i);
 }
 // quanto falta pra um requisito (0..1): nivel da arma e/ou do jogador
 export function reqProgress(wpn, req) {
   const fr = [];
-  if (req.wpn) fr.push(Math.min(1, (data.wpn[wpn] || 0) / Math.max(1, wpnLevelXp(req.wpn))));
+  if (req.wpn) fr.push(Math.min(1, (data.wpn[keyOf(wpn)] || 0) / Math.max(1, wpnLevelXp(req.wpn))));
   if (req.player) fr.push(Math.min(1, data.xp / Math.max(1, levelXp(req.player))));
   return fr.length ? Math.min(...fr) : 1;
 }
 
 export function camoUnlocked(wpn, camo) {
-  if (data.unlockAll) return true;
+  if (data.unlockAll || gifted(camo.id)) return true; // presente do treino vale em todas as armas
   if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite
   if (camo.elite) return !!rovexMe?.elite;     // exclusiva do Elite da Rovex
   if (camo.prestige) return data.prestige >= camo.prestige; // exclusiva de quem prestigiou

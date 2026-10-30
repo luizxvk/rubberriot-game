@@ -3,10 +3,11 @@ import { buildWorld, buildObjectives, FX } from './world.js';
 import { Character } from './character.js';
 import { ViewModel } from './viewmodel.js';
 import { makePipeline } from './post.js';
+import { Tutorial } from './tutorial.js';
 import { Player } from './player.js';
 import { pushSoon, me as rovexMe, inRovex } from './rovex.js';
 import { Hud } from './hud.js';
-import { Input, isTouch, buildTouch, applyHudLayout, setFireButton } from './input.js';
+import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer } from './input.js';
 import { Pad } from './gamepad.js';
 import { LocalNet, WsNet } from './net.js';
 import { audio } from './audio.js';
@@ -17,9 +18,9 @@ import { loadArsenal, getLoadouts, scopeTarget } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
-import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel } from './progress.js';
+import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
-import { track } from './challenges.js';
+import { track, grantTutorial } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
 import { BrView } from './brview.js';
 import { tip } from './tips.js';
@@ -55,7 +56,7 @@ scopeRT.texture.colorSpace = THREE.SRGBColorSpace;
 scopeTarget.texture = scopeRT.texture;
 const scopeCam = new THREE.PerspectiveCamera(20, 1, 0.05, 500);
 const vm = new ViewModel();
-const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onLeave: () => quitGame() });
+const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onCfg: (cfg) => { try { localStorage.setItem('rr_lastcfg', JSON.stringify(cfg)); } catch { /* */ } G.net && G.net.send({ t: 'cfg', ...cfg }); }, onLeave: () => quitGame() });
 const laserDot = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -134,6 +135,8 @@ const G = {
     if (Math.random() < 0.25) fx.word(head ? 'TOING!' : ['POW!', 'BAM!', 'PAF!', 'TUM!'][Math.floor(Math.random() * 4)], point, head ? 1.6 : 1.1);
   },
 };
+// nivel por corpo: o corpo equipado de cada categoria decide de quem e o XP e o nivel que abre pecas
+setBodyResolver((cat) => (G.loadouts?.[cat]?.body) || CATEGORY[cat]?.bodies?.[0] || null, (cat) => CATEGORY[cat]?.bodies || []);
 G.fx = null;
 G.pad = pad;
 // o que o jogador levou da partida (tela de fim): XP por tipo, desbloqueios e nivel de partida
@@ -146,7 +149,7 @@ function logUnlock(kind, name, img) { const L = G.matchLog; if (L && !L.unlocks.
 const xpMult = () => (rovexMe?.elite ? 2 : 1);
 
 function chEvent(e) {
-  if (G.state !== 'game') return;
+  if (G.state !== 'game' || G.tutorial) return; // treino nao conta desafio
   for (const c of track(e)) {
     // elite rastreado: cada avanco aparece na tela (sem XP ainda)
     if (c.kind === 'eliteProg') { hud.eliteTrack(t('el_' + c.id, { n: c.n }), c.prog, c.n); continue; }
@@ -171,8 +174,21 @@ function chEvent(e) {
   }
 }
 
+// premio do treino: um modelo de arma e uma camuflagem que o jogador ainda nao tem (sorteados uma vez so)
+function tutorialReward() {
+  const r = grantTutorial(() => {
+    const bodies = [];
+    for (const [cat, C] of Object.entries(CATEGORY)) C.bodies.forEach((id, i) => { if (i > 0 && !partUnlocked(cat, i, id)) bodies.push({ wpn: cat, body: id }); });
+    const b = bodies[Math.floor(Math.random() * bodies.length)] || {};
+    const camos = CAMOS.filter(c => c.req && !c.legend && !c.elite && !c.prestige && !camoUnlocked(b.wpn || 'smg', c));
+    const c = camos[Math.floor(Math.random() * camos.length)];
+    return { wpn: b.wpn || null, body: b.body || null, camo: c ? c.id : null };
+  });
+  return [r.body && `${partName('body', r.body)}`, r.camo && `${t('slot_camo')}: ${t('camo_' + r.camo)}`].filter(Boolean);
+}
+
 function gainXp(kind, wpn = null, mult = 1) {
-  if (G.state !== 'game') return;
+  if (G.state !== 'game' || G.tutorial) return; // treino nao da XP
   const amount = Math.round((XP[kind] || 0) * mult * xpMult());
   if (!amount) return;
   G.matchXp = (G.matchXp || 0) + amount;
@@ -182,13 +198,15 @@ function gainXp(kind, wpn = null, mult = 1) {
 }
 // o que abre exatamente neste nivel (pra avisar na hora)
 // o que abriu nesse nivel: [{ slot, id, wpn, name }] (camo de nivel de jogador vale pra arma em uso)
-function unlocksAt(wpn, wLevel, pLevel) {
+// only: 'body' = so corpos novos (nivel da categoria), 'parts' = pecas e camos (nivel do corpo equipado)
+function unlocksAt(wpn, wLevel, pLevel, only = null) {
   const out = [];
   const C = wpn && CATEGORY[wpn];
   if (C && wLevel) {
-    const lists = { body: C.bodies, scope: [null, ...C.scopes], charger: C.chargers, handle: [null, ...C.handles], laser: [null, ...LASERS] };
+    const all = { body: C.bodies, scope: [null, ...C.scopes], charger: C.chargers, handle: [null, ...C.handles], laser: [null, ...LASERS] };
+    const lists = only === 'body' ? { body: all.body } : only === 'parts' ? (({ body, ...rest }) => rest)(all) : all;
     for (const [slot, list] of Object.entries(lists)) list.forEach((id, i) => { if (id && i > 0 && partReq(i) === wLevel) out.push({ slot, id, wpn, name: partName(slot, id) }); });
-    for (const c of CAMOS) if (c.req && c.req.wpn === wLevel && !c.req.player) out.push({ slot: 'camo', id: c.id, wpn, name: t('camo_' + c.id) });
+    if (only !== 'body') for (const c of CAMOS) if (c.req && c.req.wpn === wLevel && !c.req.player) out.push({ slot: 'camo', id: c.id, wpn, name: t('camo_' + c.id) });
   }
   const cur = wpn || G.player?.wpn || 'smg';
   if (pLevel) for (const c of CAMOS) if (c.req && c.req.player === pLevel) out.push({ slot: 'camo', id: c.id, wpn: CATEGORY[cur] ? cur : 'smg', name: t('camo_' + c.id) });
@@ -221,16 +239,17 @@ function unlockShot(u) {
   return shotR.domElement.toDataURL();
 }
 onProgress((e) => {
-  if (G.state !== 'game' || (!e.levelUp && !e.wpnUp)) return;
+  if (G.state !== 'game' || (!e.levelUp && !e.wpnUp && !e.catUp)) return;
   G.loadouts = matchLoadouts(); sendLoadout();
   // som de subir de nivel + o que desbloqueou
   audio.play('levelup', { vol: 0.85, ui: true, jitter: 0 });
   audio.duck(0.3, 1.6);
   if (e.levelUp) hud.stampText(t('levelUp', { n: e.levelUp }));
-  if (e.wpnUp) hud.message(t('wpnUp', { w: wName(e.wpn), n: e.wpnUp }), 2.6);
+  if (e.wpnUp) hud.message(t('wpnUp', { w: e.body && CATEGORY[e.wpn]?.bodies.includes(e.body) ? partName('body', e.body) : wName(e.wpn), n: e.wpnUp }), 2.6);
   // todos os niveis ganhos de uma vez (subir 2 niveis num abate tambem anuncia o do meio)
   const got = [];
-  for (let n = (e.wpnFrom || 0) + 1; e.wpnUp && n <= e.wpnUp; n++) got.push(...unlocksAt(e.wpn, n, 0));
+  for (let n = (e.wpnFrom || 0) + 1; e.wpnUp && n <= e.wpnUp; n++) got.push(...unlocksAt(e.wpn, n, 0, 'parts'));
+  for (let n = (e.catFrom || 0) + 1; e.catUp && n <= e.catUp; n++) got.push(...unlocksAt(e.wpn, n, 0, 'body'));
   for (let n = (e.levelFrom || 0) + 1; e.levelUp && n <= e.levelUp; n++) got.push(...unlocksAt(e.wpn, 0, n));
   // tudo vai pra tela de fim; na hora, banner estilo COD um por vez (ate 3)
   const shots = got.map(u => unlockShot(u));
@@ -335,6 +354,7 @@ function posOf(id) {
 
 function onEvent(e) {
   const inGame = G.state === 'game';
+  G.tutorial?.onEvent(e);
   switch (e.k) {
     case 'spawn':
       if (e.id === G.myId && G.player) {
@@ -364,7 +384,7 @@ function onEvent(e) {
       if (e.e) {
         const mz = r?.char.gun?.userData.muzzle;
         const o = mz ? mz.getWorldPosition(new THREE.Vector3()).toArray() : e.o;
-        fx.tracer(o, e.e, G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk');
+        fx.bullet(o, e.e, G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk', e.wpn);
         if (Math.random() < 0.5) fx.impact(e.e, null);
       }
       break;
@@ -494,6 +514,9 @@ function onEvent(e) {
         audio.play('explosion', { ui: true, vol: 1, rate: 0.55 }); audio.play('pan', { ui: true, vol: 0.9, rate: 0.6 });
         if (e.id === G.myId) hud.alert(t('nukeHit'), t('nukeHitSub', { n: e.n }), 'blue');
       }
+      break;
+    case 'streakWait': // o servidor recusou (outra sequencia no ar)
+      if (inGame) { hud.message(t(e.kind === 'gap' ? 'streakGap' : 'streakWait', { s: t('s_' + e.kind), n: e.n }), 1.8); audio.play('empty', { ui: true, vol: 0.5 }); }
       break;
     case 'streakReady':
       if (e.id === G.myId && inGame) { hud.message(t('streakReady', { s: t('s_' + e.kind), k: t(pad.active ? 'how_pad' : isTouch ? 'how_touch' : 'how_kb') }), 2.4); audio.play('pickup', { vol: 0.7, ui: true, rate: 0.8 }); }
@@ -742,6 +765,7 @@ function onMsg(m) {
     if (m.phase === 'play' && G.state === 'lobby') beginMatch(true);
   } else if (m.t === 'lobby') {
     if (m.map) setMap(m.map);
+    if (m.mode) { G.mode = m.mode; G.duo = !!m.duo; } // o host pode ter trocado o modo
     if (G.state === 'lobby') { lobby.render(m, G.myId); syncLobbyPick(m.duo ? 'duo' : m.mode); }
   }
 }
@@ -760,9 +784,10 @@ function sendLoadout() {
   // skills passivas equipadas (so as que o nivel ja abriu); o jogador aplica as de mao, o servidor as de regra
   G.skills = (settings.skills || []).filter(s => SKILLS[s] && unlockLevel() >= SKILLS[s].lvl).slice(0, SKILL_SLOTS);
   // equipamento de campo (um so; o nivel tem que ter liberado). O botao de toque mostra o icone dele.
-  G.field = FIELD[settings.field] && unlockLevel() >= FIELD[settings.field].lvl ? settings.field : null;
+  G.field = G.tutorial?.fieldOverride || (FIELD[settings.field] && unlockLevel() >= FIELD[settings.field].lvl ? settings.field : null); // treino: a Mola emprestada vale
   if (input.fieldBtn) { input.fieldBtn.hidden = !G.field; if (G.field) input.fieldBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[G.field].icon]}</svg>`; }
   G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, skills: G.skills, field: G.field });
+  if (G.tutorial?.fieldOverride) { const me = G.net.core?.players.get(G.myId); if (me) me.field = G.tutorial.fieldOverride; } // o servidor local checa o nivel; no treino passa
 }
 
 // ---------- iris ----------
@@ -815,11 +840,13 @@ async function startGame(net, name, mpArgs = null) {
   net.onclose = () => reconnect(name, mpArgs);
   G.state = 'lobby';
   try { await net.connect(name); } catch (e) { G.state = 'menu'; await iris(150, 500); throw e; }
+  // jogo rapido: o servidor escolheu a sala; reconectar volta pra ela pelo codigo
+  if (mpArgs?.quick && net.room) Object.assign(mpArgs, { room: net.room, quick: false, join: true });
   $('menu').hidden = true;
   if (G.state === 'lobby') lobby.show();
   lobbyPickMode = null;
   lobby.setRoom(mpArgs?.room || null, !!rovexMe);
-  audio.music(true);
+  audio.music(true, 'music');
   iris(150, 800);
 }
 
@@ -848,6 +875,7 @@ async function beginMatch(join) {
   await warmGuns();
   hideLoading();
   G.state = 'game';
+  audio.music(true, G.mode === 'br' || G.duo ? 'music_br' : 'music_m' + (1 + Math.floor(Math.random() * 4)));
   G.matchLog = newMatchLog(); G.matchXp = 0; G.countEnd = 0; G.spec = { i: 0, map: false };
   input.mode = G.mode;
   // avisa o servidor que carregou: quando o ultimo avisar, sai a contagem pra todo mundo
@@ -864,13 +892,14 @@ async function beginMatch(join) {
   input.enabled = true;
   document.body.classList.toggle('bombmode', G.mode === 'bomb');
   if (isTouch) { buildTouch(input, $('touch')); try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); await screen.orientation?.lock?.('landscape'); } catch { /* sem tela cheia */ } }
-  else canvas.requestPointerLock?.()?.catch?.(() => { /* sem gesto: a pausa pede o clique */ });
+  else lockPointer(canvas); // sem gesto: a pausa pede o clique
   iris(150, 500);
 }
 
 // fim de partida: volta pro lobby da mesma sala
 function backToLobby() {
   G.state = 'lobby';
+  audio.music(true, 'music');
   G.paused = false;
   input.enabled = false;
   document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead');
@@ -904,6 +933,7 @@ async function reconnect(name, mpArgs) {
 
 async function quitGame() {
   await iris(0, 450);
+  if (G.tutorial) { if (G.tutorial.finished) try { localStorage.setItem('rr_tutorial_done', '1'); } catch { /* */ } G.tutorial.dispose(); G.tutorial = null; }
   G.state = 'menu';
   G.paused = false;
   const n = G.net; G.net = null;
@@ -917,7 +947,7 @@ async function quitGame() {
   input.enabled = false;
   if (document.pointerLockElement) document.exitPointerLock();
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  audio.music(true);
+  audio.music(true, 'music');
   startAttract();
   ui.go('home');
   iris(150, 700);
@@ -968,7 +998,7 @@ function setPaused(p) {
   $('pause').hidden = !p;
   input.enabled = !p;
   if (p) { input.keys.clear(); input.mouse.fire = input.mouse.ads = false; input.touch.fire = false; }
-  if (!p && !isTouch) canvas.requestPointerLock?.();
+  if (!p && !isTouch) lockPointer(canvas);
 }
 document.addEventListener('pointerlockchange', () => {
   if (G.state === 'game' && !isTouch && !document.pointerLockElement && !G.paused && $('theend').hidden) setPaused(true);
@@ -980,7 +1010,18 @@ $('pauseSettings').onclick = () => { $('pause').hidden = true; $('menu').hidden 
 // ---------- menus ----------
 const ui = initMenus({
   settings, saveSettings,
-  onSolo: ({ mode, map, bots, difficulty }) => startGame(new LocalNet({ mode, map, bots, difficulty }), settings.name || t('youCap')),
+  // treino guiado na Vila: partida solo sem lobby, sem bots (os bonecos entram no passo de tiro)
+  onTutorial: () => {
+    try { localStorage.setItem('rr_tutorial_seen', '1'); } catch { /* */ } // primeira vez so abre sozinho uma vez
+    G.tutorial = new Tutorial(G, { quit: () => quitGame(), reward: tutorialReward, setField: (f) => {
+      const me = G.net?.core?.players.get(G.myId); if (me) me.field = f;
+      if (G.tutorial) G.tutorial.fieldOverride = f;
+      G.field = f; G.fieldCd = 0;
+      if (input.fieldBtn) { input.fieldBtn.hidden = false; input.fieldBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[f].icon]}</svg>`; }
+    } });
+    startGame(new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 500, time: 1800 }), settings.name || t('youCap')).catch(() => { G.tutorial?.dispose(); G.tutorial = null; });
+  },
+  onSolo: ({ mode, map, bots, difficulty, limit, time }) => startGame(new LocalNet({ mode, map, bots, difficulty, limit, time }), settings.name || t('youCap')),
   onMp: (args) => startGame(new WsNet(args), args.name, args),
   onSmith: (gun) => { smithHolder.clear(); if (gun) smithHolder.add(gun); },
   onBackFromSettingsInGame: () => { $('menu').hidden = true; $('pause').hidden = false; },
@@ -1102,6 +1143,7 @@ function frame() {
     const p = G.player;
     G.pumping = !!(G.pumpMate && inp.use); // enchendo a bomba: fica parado em cima do parceiro
     if (!G.paused) p.update(dt, inp);
+    if (G.tutorial && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) G.tutorial.begin(); G.tutorial.update(dt, inp); }
     hud.board(inp.board, G.snap, G.snap?.players || [], G.myId);
     const W = WEAPONS[p.wpn];
     const g = vm.gun?.userData;
@@ -1158,6 +1200,8 @@ function frame() {
     }
     vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: inp.lookX, lookDY: inp.lookY, firing: p.firing });
     vmPass.enabled = p.alive && !G.down; // caido: sem arma na mao
+    // camera de cinema (so gravacao de video, definida pelo console/gravador): comanda a camera e tira a arma da mao
+    if (G.cineCam) { G.cineCam(camera, realDt, G); vmPass.enabled = false; }
     const ru = vm.gun?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0;
     // ponto do laser no mundo: onde o centro da mira bate
     if (g?.laser && p.alive && !p.sprint && !p.tac) {
@@ -1342,6 +1386,6 @@ const BOOT_T = performance.now();
   $('splash').remove();
   await iris(150, 1200);
   $('menu').classList.remove('intro');
-  const wake = () => { audio.init(); audio.music(true); removeEventListener('pointerdown', wake); removeEventListener('keydown', wake); };
+  const wake = () => { audio.init(); audio.music(true, 'music'); removeEventListener('pointerdown', wake); removeEventListener('keydown', wake); };
   addEventListener('pointerdown', wake); addEventListener('keydown', wake);
 })();

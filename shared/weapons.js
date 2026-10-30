@@ -62,7 +62,7 @@ export const SKILL_SLOTS = 2;
 export const BR = {
   armorMax: 100, armorPiece: 50, armorAbsorb: 0.7,
   r0: 1.5, phases: [[45, 35, 0.62, 2], [35, 30, 0.38, 4], [30, 25, 0.2, 7], [25, 20, 0.08, 11], [20, 20, 0, 16]],
-  ring: { lastPhase: 3, wait: 25, fight: 45 }, // ringue: vale ate a fase 3 da iris; espera e luta (s)
+  ring: { lastPhase: 3, wait: 25, fight: 45, spar: 6 }, // ringue: vale ate a fase 3 da iris; espera e luta (s); spar = sozinho na fila chama sparring
   // dupla: caido sangra `down` s (com `downHp` de vida pra quem quiser terminar); parceiro segura usar a
   // `reviveR` m por `revive` s e ele levanta com `reviveHp`. Caido rasteja a `crawl` da velocidade.
   duo: { down: 30, downHp: 100, revive: 4, reviveR: 2.6, reviveHp: 30, crawl: 0.3 },

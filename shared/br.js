@@ -213,8 +213,18 @@ function ringTick(c, dt) {
   for (const id of [...c.ringQ]) {
     const p = c.players.get(id);
     if (!p) { c.ringQ = c.ringQ.filter(x => x !== id); continue; }
-    p.ringWaitT += dt;
+    // a espera so corre com o ringue vazio: antes contava durante a luta dos outros (45 s) e quem caiu
+    // nessa hora saia direto pro espectador quando a luta acabava, sem nunca lutar
+    if (!c.ringFight) p.ringWaitT += dt;
     if (late || (c.ringQ.length < 2 && !c.ringFight && p.ringWaitT > BR.ring.wait)) ringOut(c, p);
+  }
+  // humano sozinho na fila: um bot ja eliminado sobe de sparring (so no solo: na dupla mexeria nos times)
+  if (!late && !c.ringFight && !c.duo && c.ringQ.length === 1) {
+    const h = c.players.get(c.ringQ[0]);
+    if (h && !h.bot && h.ringWaitT > BR.ring.spar) {
+      const sp = [...c.players.values()].find(o => o.bot && !o.alive && !o.inRing && !(o.down > 0));
+      if (sp) { sp.inRing = 'wait'; sp.ringWaitT = 0; c.ringQ.push(sp.id); }
+    }
   }
   if (!c.ringFight && c.ringQ.length >= 2) ringStart(c);
   const F = c.ringFight;

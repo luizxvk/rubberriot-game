@@ -306,7 +306,7 @@ export class ViewModel {
         tx += insp[0]; ty += insp[1]; tz += insp[2]; trx += insp[3]; tryy += insp[4]; trz += insp[5];
       }
     }
-    if (st.crouch) ty -= 0.01;
+    if (st.crouch) ty -= 0.01 * (1 - st.ads); // agachado a arma desce um pouco, mas mirando fica no centro (a mira da arma batia abaixo da cruz)
 
     // depois de uma volta inteira, a rotacao volta pra faixa normal sem desenrolar
     if (!insp && Math.abs(s.ry) > Math.PI) s.ry -= Math.sign(s.ry) * Math.PI * 2;

@@ -475,6 +475,12 @@ const TRACERS = {
   gold: { w: 1.3, life: 0.2, grow: 0.2 },      // ouro: brilho que corre e purpurina
   ice: { w: 1.5, life: 0.22, grow: 0.1 },      // gelo: azul cristalino em facetas
 };
+// bala visivel: risco curto que voa da boca ate o impacto. seg = comprimento do risco (m), speed = m/s na
+// tela (bem abaixo da real, pra dar pra ver; cada tiro da rajada vira uma bala, a cadencia vira um fio)
+const BULLET = {
+  pistol: { seg: 0.35, speed: 120 }, smg: { seg: 0.35, speed: 115 }, rifle: { seg: 0.5, speed: 150 },
+  shotgun: { seg: 0.25, speed: 100 }, sniper: { seg: 0.9, speed: 240 }, minigun: { seg: 0.4, speed: 130 },
+};
 function tracerMaterial(style, len) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, // mistura normal: em cenario claro, somar luz deixava tudo branco
@@ -550,6 +556,33 @@ export class FX {
     m.scale.set(T.w, T.w, len);
     m.renderOrder = 3;
     this.add(m, T.life, (f, k) => { mat.uniforms.uK.value = k; f.obj.scale.x = f.obj.scale.y = T.w * (1 + k * T.grow); });
+  }
+
+  // uma bala do tiro: sai da boca, percorre ate o impacto e some ali (skin do tracado no risco)
+  bullet(o, e, style = 'chalk', wpn = 'rifle') {
+    if (style === 'none') return;
+    const a = new THREE.Vector3().fromArray(o), b = new THREE.Vector3().fromArray(e);
+    const len = a.distanceTo(b);
+    if (len < 0.5) return;
+    // bala do tamanho de bala (pedido dele: fina e curta); o contorno de tinta e o que faz ela aparecer
+    const B = BULLET[wpn] || BULLET.rifle, seg = Math.min(len, B.seg), fly = len / B.speed, tail = 0.06;
+    const dir = b.clone().sub(a).normalize();
+    const T = TRACERS[style], w = (T ? T.w : 1) * 0.6;
+    const mat = T ? tracerMaterial(style, seg) : this.tracerMat.clone();
+    const m = new THREE.Mesh(this.tracerGeo, mat);
+    m.position.copy(a); m.lookAt(b); m.scale.set(w, w, 0.01);
+    m.renderOrder = 3;
+    // contorno de tinta (como os bonecos): sem ele o giz claro sumia no ceu e no chao de papel
+    const ink = new THREE.Mesh(this.tracerGeo, this.bulletInk ??= new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.BackSide, transparent: true, opacity: 0.85, depthWrite: false }));
+    ink.scale.set(1.6, 1.6, 1); m.add(ink);
+    const life = fly + tail;
+    this.add(m, life, (f, k) => {
+      const t = k * life, d = Math.min(len, t * B.speed), s = Math.max(0, d - seg);
+      f.obj.position.copy(a).addScaledVector(dir, s);
+      f.obj.scale.z = Math.max(0.01, d - s);
+      const fade = t > fly ? (t - fly) / tail : 0; // chegou: o risco some no alvo
+      if (T) mat.uniforms.uK.value = 0.15 + fade * 0.85; else mat.opacity = 1 - fade;
+    });
   }
 
   word(text, pos, size = 1.4, life = 0.55) {

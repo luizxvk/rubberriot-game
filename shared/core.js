@@ -1,7 +1,7 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
 import { AMMO, FIELD, WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
-import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules } from './map.js';
+import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
 import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField } from './field.js';
 import { brInit, brSpawn, brSpawnPoint, brArmor, brKill, brTick, brSnap, brGoal, lootList, brDown, brNear } from './br.js';
@@ -13,15 +13,25 @@ const RESPAWN = 2.6;
 
 const dist2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
+// opcoes do host no lobby: em que modos a meta e o tempo valem (o resto tem regra propria)
+const PATHS_PER_TICK = 3;
+const STREAK_GAP = 4; // s de folga entre uma sequencia acabar e a proxima poder entrar
+export const LIMIT_MODES = ['ffa', 'tdm', 'ctf', 'dom', 'bomb'];
+export const TIME_MODES = ['ffa', 'tdm', 'gungame', 'ctf', 'dom', 'infect'];
+export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha'];
 
 export class Core {
-  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true }) {
+  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false }) {
+    this.autoNext = autoNext; // jogo rapido: acabou a partida, a proxima ja comeca (sem lobby)
+    this.limitPick = Number.isFinite(limit) ? Math.max(0, Math.min(500, limit | 0)) : 0; // meta/tempo do host (0 = padrao)
+    this.timePick = Number.isFinite(time) ? Math.max(0, Math.min(1800, time | 0)) : 0;
     // dupla: roda as regras do battle royale ('br') com times de 2 (cfg.teams liga o fogo amigo desligado)
     this.duo = mode === 'duo';
     this.mode = this.duo ? 'br' : MODES[mode] ? mode : 'ffa';
     this.cfg = MODES[this.duo ? 'duo' : this.mode];
     // battle royale so na ilha (e a ilha so no battle royale)
     this.M = getMap(this.mode === 'br' ? 'ilha' : map && map !== 'auto' && map !== 'ilha' ? map : MODE_MAP[this.mode]);
+    this.mapPick = this.mode === 'br' ? 'ilha' : map && MAP_IDS.includes(map) && map !== 'ilha' ? map : 'auto';
     this.wantBots = Math.max(0, Math.min(MAX_PLAYERS - 1, bots | 0));
     this.difficulty = difficulty;
     this.skill = botSkill(difficulty);
@@ -40,8 +50,9 @@ export class Core {
     const M = this.M;
     // meta e tempo da partida pelo tamanho do mapa (mapa apertado = mais abates pra vencer)
     const R = matchRules(this.mode, M.id, this.cfg, MATCH_TIME);
-    this.limit = R.limit;
-    this.time = R.time;
+    // o host pode trocar meta e tempo no lobby (0 = o padrao do modo/mapa)
+    this.limit = this.limitPick && LIMIT_MODES.includes(this.mode) ? this.limitPick : R.limit;
+    this.time = this.timePick && TIME_MODES.includes(this.mode) ? this.timePick : R.time;
     this.over = false;
     // infectado: todo mundo comeca sobrevivente; o primeiro infectado sai em INFECT.firstIn s
     this.infT = INFECT.firstIn; this.infStarted = false; this.lastStand = null; this.surviveT = INFECT.surviveTick;
@@ -58,7 +69,7 @@ export class Core {
     this.zones = M.zones.map(z => ({ id: z.id, pos: z.pos, r: z.r, owner: null, prog: 0 }));
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
     if (this.mode === 'br') brInit(this);
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; fieldReset(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; fieldReset(this);
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {};
       this.spawn(p);
@@ -86,7 +97,7 @@ export class Core {
     const atk = [...this.players.values()].filter(p => p.team === 'red');
     const carrier = atk.length ? atk[Math.floor(Math.random() * atk.length)] : null;
     this.bomb = { state: carrier ? 'carried' : 'dropped', carrier: carrier ? carrier.id : null, pos: carrier ? [...carrier.pos] : [0, 0, 0], site: null, t: 0, prog: 0, actor: null, goal: Math.random() < 0.5 ? 'A' : 'B' };
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; fieldReset(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; fieldReset(this);
     if (this.roundN > 1) this.freezeT = COUNT_IN;
     this.event({ k: 'round', n: this.roundN, carrier: this.bomb.carrier });
   }
@@ -215,6 +226,39 @@ export class Core {
     }
   }
 
+  // configuracao da sala (host no lobby). Refaz modo/mapa/times e a partida do zero; os humanos ficam.
+  configure(m) {
+    const mode = MODES[m.mode] ? m.mode : (this.duo ? 'duo' : this.mode);
+    this.duo = mode === 'duo';
+    this.mode = this.duo ? 'br' : mode;
+    this.cfg = MODES[mode];
+    const map = typeof m.map === 'string' && MAP_IDS.includes(m.map) && m.map !== 'ilha' ? m.map : 'auto';
+    this.mapPick = this.mode === 'br' ? 'ilha' : map;
+    this.M = getMap(this.mode === 'br' ? 'ilha' : map !== 'auto' ? map : MODE_MAP[this.mode]);
+    if (Number.isFinite(m.bots)) this.wantBots = Math.max(0, Math.min(MAX_PLAYERS - 1, m.bots | 0));
+    if ([0.7, 1, 1.35].includes(m.difficulty)) { this.difficulty = m.difficulty; this.skill = botSkill(m.difficulty); }
+    this.limitPick = Number.isFinite(m.limit) ? Math.max(0, Math.min(500, m.limit | 0)) : 0;
+    this.timePick = Number.isFinite(m.time) ? Math.max(0, Math.min(1800, m.time | 0)) : 0;
+    // times do zero no modo novo (bomba/infectado/dupla tem regra propria de lado)
+    this.infStarted = false;
+    for (const p of this.players.values()) p.team = null;
+    for (const p of this.players.values()) p.team = this.pickTeam(p.bot);
+    this.reset();
+    this.balanceBots();
+    this.pairDuo();
+    for (const p of this.players.values()) if (!p.bot) p.lobbyReady = false; // mudou a partida: todo mundo confirma de novo
+    this.lobbyT = 0;
+    this.event({ k: 'cfg' });
+  }
+
+  // Jogo Rapido: da pra cair nesta sala agora? Partida rolando, sem fim a vista, com vaga, sem dupla;
+  // battle royale so antes da iris comecar a fechar (depois disso quem chega so assiste)
+  quickOpen() {
+    if (this.phase !== 'play' || this.over || this.full() || this.duo) return false;
+    if (this.mode === 'br') return !!this.zone && this.zone.phase === 0 && this.zone.state === 'wait';
+    return true;
+  }
+
   // sala cheia (16 pessoas): recusa (o servidor manda 'full' antes de chegar aqui)
   full() { return this.humans() >= MAX_PLAYERS; }
 
@@ -231,8 +275,12 @@ export class Core {
   leave(id) {
     const p = this.players.get(id);
     if (!p) return;
+    const wasHost = id === this.hostId();
     this.dropFlag(p);
     this.players.delete(id);
+    // host saiu: o cargo passa pro proximo humano da sala (o mais antigo); todo mundo fica sabendo
+    const nh = wasHost && this.hostId();
+    if (nh) { this.event({ k: 'msg', key: 'newHost', name: this.players.get(nh).name }); this.lobbyT = 0; }
     if (this.waitLoad?.delete(id) && !this.waitLoad.size) this.startCountdown();
     this.balanceBots();
     if (this.mode === 'infect') this.checkInfect();
@@ -376,6 +424,12 @@ export class Core {
         this.lobbyT = 0;
         break;
       }
+      // host muda a partida no lobby (modo, mapa, bots, meta, tempo, pontaria): vale pra sala toda na hora
+      case 'cfg': {
+        if (id !== this.hostId() || this.phase !== 'lobby') break;
+        this.configure(m);
+        break;
+      }
       // so o host (primeiro humano da sala) solta a contagem; quem nao deu pronto entra igual
       case 'start': {
         if (id !== this.hostId() || this.phase !== 'lobby') break;
@@ -413,7 +467,7 @@ export class Core {
         if (!p.alive) return;
         if (!Array.isArray(m.pos) || m.pos.length !== 3 || !m.pos.every(Number.isFinite)) return;
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
-        p.pos = m.pos; p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
+        p.pos = clampArena(this.M, m.pos); p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
         if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn && (this.mode !== 'infect' || p.owned.has(m.wpn))) { p.lastWpn = p.wpn; p.wpn = m.wpn; }
         break;
       case 'swing':
@@ -666,17 +720,39 @@ export class Core {
   }
 
   // ---------- sequencias de abates ----------
+  // uma sequencia no ar por vez na sala: enquanto dirigivel/radar/bigornas/torta estiverem ativos (e mais
+  // STREAK_GAP s depois), ninguem chama outra. A sequencia fica guardada e o jogador ve o que esta no ar.
+  streakLock() {
+    // radar fica fora da fila (regra dele 30/10): nao trava nem e travado; chamar de novo so estende
+    const kind = this.nukes.length ? 'nuke' : this.blimps.length ? 'blimp' : this.anvils.some(a => a.streak) ? 'anvil' : null;
+    if (kind) {
+      const t = kind === 'nuke' ? Math.max(...this.nukes.map(n => n.t)) : kind === 'blimp' ? Math.max(...this.blimps.map(b => b.t)) : Math.max(...this.anvils.filter(a => a.streak).map(a => a.t));
+      return { kind, t: t + STREAK_GAP };
+    }
+    return this.streakGap > 0 ? { kind: 'gap', t: this.streakGap } : null;
+  }
+
   useStreak(p, kind) {
     const i = p.ready.indexOf(kind);
     if (i < 0) return;
+    if (kind === 'uav') {
+      p.ready.splice(i, 1);
+      const mine = this.uavs.find(u => (this.cfg.teams ? u.team === p.team : u.owner === p.id) && this.players.has(u.owner));
+      if (mine) mine.t += STREAKS.uav.time; // ja tem radar no ar: soma o tempo
+      else this.uavs.push({ owner: p.id, team: p.team, t: STREAKS.uav.time });
+      this.event({ k: 'streak', id: p.id, kind, team: p.team });
+      return;
+    }
+    const lock = this.streakLock();
+    if (lock) { if (!p.bot) this.send(p.id, { t: 'ev', k: 'streakWait', kind: lock.kind, n: Math.ceil(lock.t) }); return; }
     p.ready.splice(i, 1);
+    this.streakGap = STREAK_GAP;
     const A = this.M.arena;
-    if (kind === 'uav') this.uavs.push({ owner: p.id, team: p.team, t: STREAKS.uav.time });
     if (kind === 'anvil') {
       const targets = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o)).slice(0, 7);
       const list = targets.map(o => [o.pos[0] + rnd(-1.2, 1.2), 0, o.pos[2] + rnd(-1.2, 1.2)]);
       if (!list.length) list.push([rnd(-A / 2, A / 2), 0, rnd(-A / 2, A / 2)]);
-      for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5) });
+      for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5), streak: true });
       this.event({ k: 'anvilWarn', list });
     }
     if (kind === 'blimp') this.blimps.push({ owner: p.id, team: p.team, t: STREAKS.blimp.time, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
@@ -685,6 +761,15 @@ export class Core {
   }
 
   tickStreaks(dt) {
+    // intervalo entre sequencias: so comeca a contar quando a do ar acaba
+    if (this.nukes.length || this.blimps.length || this.anvils.some(a => a.streak)) this.streakGap = STREAK_GAP;
+    else if (this.streakGap > 0) this.streakGap -= dt;
+    // bot com sequencia guardada chama assim que a sala libera (um por vez)
+    if (!this.over) {
+      const livre = !this.streakLock();
+      const b = [...this.players.values()].find(o => o.bot && o.alive && (o.ready.includes('uav') || (livre && o.ready.length)));
+      if (b) this.useStreak(b, b.ready.includes('uav') ? 'uav' : b.ready[0]);
+    }
     // Torta Atomica: quando o pavio acaba, todo inimigo vivo cai; a partida segue (quem chamou saiu = cancela)
     for (const n of this.nukes) {
       n.t -= dt;
@@ -873,6 +958,8 @@ export class Core {
         if (g && (gd > 3.5 || this.carrying(p))) moveDir = [g[0] - fz * ai.strafe * 0.5, g[1] + fx * ai.strafe * 0.5];
         else if (g && ai.rescue) moveDir = gd > 1.4 ? g : null; // chegando no parceiro caido: vai reto e para em cima
       }
+      // em cima do parceiro caido: fica parado enchendo a bomba (atira de onde esta, nao sai dancando)
+      if (ai.rescue && ai.goal && Math.hypot(ai.goal[0] - p.pos[0], ai.goal[2] - p.pos[2]) < 1.8) moveDir = null;
       ai.react -= dt;
       ai.fireT -= dt;
       ai.nadeT -= dt;
@@ -939,8 +1026,20 @@ export class Core {
     const ai = p.ai;
     ai.pathT = (ai.pathT || 0) - dt;
     const moved = ai.pathGoal ? Math.hypot(goal[0] - ai.pathGoal[0], goal[2] - ai.pathGoal[2]) : Infinity;
-    if (!ai.path || moved > 3 || ai.pathT <= 0) {
-      ai.path = navPath(this.M, p.pos, goal);
+    // sem rota = calcula ja; rota velha so e refeita se ainda tem orcamento neste tick (senao segue a velha)
+    if (!ai.path || ((moved > 3 || ai.pathT <= 0) && this.pathBudget > 0)) {
+      this.pathBudget--;
+      // destino longe (atravessar a ilha): rota so ate um ponto andavel ~35 m na direcao dele; a rota e
+      // refeita no caminho. A* de 200 m numa grade de 0,5 m custava 10-40 ms por bot.
+      let to = goal;
+      const gd = Math.hypot(goal[0] - p.pos[0], goal[2] - p.pos[2]);
+      if (gd > 40) {
+        for (let r = 35; r >= 15; r -= 5) {
+          const x = p.pos[0] + (goal[0] - p.pos[0]) / gd * r, z = p.pos[2] + (goal[2] - p.pos[2]) / gd * r;
+          if (standable(this.M, x, z)) { to = [x, floorAt(this.M, x, z), z]; break; }
+        }
+      }
+      ai.path = navPath(this.M, p.pos, to, 8000); // busca curta: rota que nao fecha em 8 mil celulas vira linha reta ate a proxima
       if (!ai.path || !ai.path.length) ai.path = [[goal[0], goal[2]]];
       // cada bot desvia um pouco de cada curva (o caminho mais curto e igual pra todo mundo)
       const sway = ai.sway ??= rnd(-0.9, 0.9);
@@ -1139,6 +1238,7 @@ export class Core {
 
   // ---------- loop ----------
   tick(dt) {
+    this.pathBudget = PATHS_PER_TICK; // rotas novas por tick (espalha o custo: 15 bots refazendo juntos travava a sala)
     if (this.noises) for (const [id, n] of this.noises) if ((n.t -= dt) <= 0) this.noises.delete(id);
     this.clock = (this.clock || 0) + dt;
     // bala flamejante: o dano do fogo entra em 4 pedacos (cada um vira 1 evento de dano)
@@ -1164,6 +1264,7 @@ export class Core {
         this.over = false;
         for (const p of this.players.values()) p.lobbyReady = false;
         this.event({ k: 'restart' }); this.lobbyT = 0;
+        if (this.autoNext && !this.useLobby) this.event({ k: 'start' }); // cliente sai do lobby direto pra proxima
       }
       this.snapshot(dt);
       return;
@@ -1253,6 +1354,7 @@ export class Core {
     this.lobbyT = 0.25;
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, map: this.M.id, host: this.hostId(),
+      cfg: { mode: this.duo ? 'duo' : this.mode, map: this.mapPick || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
       players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), elite: !!p.elite })),
     });
   }
@@ -1286,6 +1388,7 @@ export class Core {
       nades: this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos.map(r2) })),
       blimps: this.blimps.map(b => ({ pos: b.pos.map(r2), team: b.team, owner: b.owner })),
       uavs: this.uavs.map(u => ({ owner: u.owner, team: u.team })),
+      sLock: (() => { const l = this.streakLock(); return l ? { kind: l.kind, t: Math.ceil(l.t) } : null; })(),
       br: this.mode === 'br' && this.zone ? brSnap(this) : null,
       field: fieldSnap(this),
       players,
@@ -1326,3 +1429,7 @@ function botLevel(id) { let h = 2166136261; for (const c of String(id)) h = Math
 function angDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
 function clampA(v, m) { return Math.max(-m, Math.min(m, v)); }
 function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
+
+// Jogo Rapido: modo sorteado quando nao tem partida aberta (dupla fica de fora: precisa de parceiro)
+export const QUICK_MODES = ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect', 'bomb', 'br'];
+export const QUICK_BOTS = 11;

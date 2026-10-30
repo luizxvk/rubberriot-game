@@ -1,15 +1,19 @@
 // Lobby antes da partida (o mapa gira atras) e a tela de carregamento com dicas.
-import { t, modeName, eliteTag } from './i18n.js';
+import { t, modeName, modeDesc, eliteTag } from './i18n.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
-import { TEAM_MAX } from '../shared/weapons.js';
+import { TEAM_MAX, MODES } from '../shared/weapons.js';
+import { LIMIT_MODES, TIME_MODES, MAP_IDS } from '../shared/core.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const TIPS = 12;
 
 export class Lobby {
-  constructor({ onReady, onLeave, onStart, onTeam }) {
+  constructor({ onReady, onLeave, onStart, onTeam, onCfg }) {
+    this.onCfg = onCfg; this.cfgPrev = null;
+    $('lbModesClose').onclick = () => this.closeModes();
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('lbModes').hidden) this.closeModes(); });
     this.ready = false;
     this.isHost = false;
     this.lastCount = -1;
@@ -72,11 +76,12 @@ export class Lobby {
     this.setReady(false);
     this.lastCount = -1;
     this.okIds.clear();
+    this.cfgPrev = null; this.cfgSig = null; this.hostSeen = null; this.hostNote = null;
     this.sideOpen = true; // bomba: o popup do lado abre toda vez que o lobby aparece
     $('lbLeader').hidden = true;
     $('lobby').hidden = false;
   }
-  hide() { this.closeFriends(); $('lbSide').hidden = true; $('lobby').hidden = true; }
+  hide() { this.closeFriends(); this.closeModes(); $('lbSide').hidden = true; $('lobby').hidden = true; }
   get open() { return !$('lobby').hidden; }
 
   setReady(v) {
@@ -103,9 +108,81 @@ export class Lobby {
     }
   }
 
+  // popup de modos (so o host): tocar num cartao troca o modo da sala
+  openModes(c) {
+    const g = $('lbModesGrid');
+    g.innerHTML = Object.keys(MODES).map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}"><b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em><small>${esc(modeDesc(k))}</small></button>`).join('');
+    for (const b of g.querySelectorAll('[data-m]')) b.onclick = () => {
+      const v = b.dataset.m; this.closeModes();
+      if (v === c.mode) return;
+      audio.play('ui_click', { ui: true });
+      this.onCfg?.({ mode: v, map: v === 'br' || v === 'duo' ? 'auto' : c.map, bots: c.bots, difficulty: c.difficulty, limit: 0, time: 0 }); // meta e tempo de outro modo nao servem
+    };
+    $('lbModes').hidden = false;
+    audio.play('ui_click', { ui: true, vol: 0.6 });
+    g.querySelector('[aria-checked="true"]')?.focus();
+  }
+  closeModes() { $('lbModes').hidden = true; }
+
+  // painel da partida (estilo lista de opcoes com setas): host muda, a sala toda ve na hora
+  renderCfg(m, host) {
+    const c = m.cfg, el = $('lbCfg');
+    el.hidden = !c || m.phase !== 'lobby';
+    if (el.hidden) return;
+    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br';
+    const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
+    const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
+    const rows = [
+      ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
+      ['map', br ? ['ilha'] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha')], br ? 'ilha' : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['players', Array.from({ length: 15 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)],
+      ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
+      ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
+      ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
+    ];
+    // so redesenha quando muda alguma coisa (o lobby chega 4x/s; redesenhar sempre cortava o carimbo)
+    const sig = JSON.stringify(c) + host + m.map;
+    if (sig === this.cfgSig) return;
+    this.cfgSig = sig;
+    const prev = this.cfgPrev; this.cfgPrev = { ...c };
+    // virou Plantar a Bomba: o popup de escolher o lado abre pra todo mundo da sala
+    if (prev && prev.mode !== c.mode && c.mode === 'bomb') { this.sideOpen = true; queueMicrotask(() => this.lastMsg && this.renderSide(this.lastMsg, this.myId)); }
+    if (!host) this.closeModes();
+    $('lbCfgWho').textContent = host ? t('cfgYouHost') : t('cfgHostOnly');
+    el.classList.toggle('host', host);
+    $('lbCfgList').innerHTML = rows.map(([k, list, cur, fmt, html]) => {
+      const i = Math.max(0, list.indexOf(cur)), lock = !host || list.length < 2;
+      const chg = prev && !host && (k === 'players' ? prev.bots !== c.bots : prev[k] !== c[k]);
+      const val = html ? fmt(list[i]) : esc(fmt(list[i]));
+      // modo: o valor e um botao que abre o popup com todos (sem setas)
+      if (k === 'mode' && host) return `<li class="${chg ? 'chg' : ''} wide" data-k="mode"><span class="k">${t('cfg_mode')}</span><button class="v pick" id="lbModeBtn" aria-haspopup="dialog">${val}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg></button></li>`;
+      // travado (sem setas): o valor ocupa a linha toda (antes caia na coluna da seta e quebrava letra por letra)
+      if (lock) return `<li class="${chg ? 'chg' : ''} wide" data-k="${k}"><span class="k">${t('cfg_' + k)}</span><b class="v" aria-live="polite">${val}</b></li>`;
+      return `<li class="${chg ? 'chg' : ''}" data-k="${k}"><span class="k">${t('cfg_' + k)}</span>`
+        + `<button class="ar" data-d="-1" aria-label="${t('cfgPrev')} ${t('cfg_' + k)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg></button>`
+        + `<b class="v" aria-live="polite">${val}</b>`
+        + `<button class="ar" data-d="1" aria-label="${t('cfgNext')} ${t('cfg_' + k)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg></button></li>`;
+    }).join('');
+    if (!host) return;
+    $('lbModeBtn').onclick = () => this.openModes(c);
+    for (const b of $('lbCfgList').querySelectorAll('.ar')) b.onclick = () => {
+      const k = b.closest('li').dataset.k, row = rows.find(r => r[0] === k), list = row[1];
+      const v = list[(Math.max(0, list.indexOf(row[2])) + Number(b.dataset.d) + list.length) % list.length];
+      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0 };
+      if (k === 'players') next.bots = v - 1; else next[k] = v;
+      if (k === 'mode') { next.limit = 0; next.time = 0; if (v === 'br' || v === 'duo') next.map = 'auto'; } // meta e tempo de outro modo nao servem
+      audio.play('ui_click', { ui: true, vol: 0.6 });
+      this.onCfg?.(next);
+    };
+  }
+
   render(m, myId) {
     this.lastMsg = m; this.myId = myId;
+    // host saiu: o cargo foi pro proximo
+    if (this.hostSeen && m.host && m.host !== this.hostSeen) { const h = m.players.find(p => p.id === m.host); if (h) this.hostNote = t(m.host === myId ? 'newHostYou' : 'newHost', { n: h.name }); }
+    this.hostSeen = m.host;
     this.renderSide(m, myId);
+    this.renderCfg(m, m.host === myId);
     $('lbMap').textContent = t('map_' + m.map);
     $('lbMode').textContent = modeName(m.duo ? 'duo' : m.mode);
     const host = m.host === myId;
@@ -135,7 +212,7 @@ export class Lobby {
       this.countEnd = performance.now() + m.countT * 1000;
     } else {
       this.lastCount = -1;
-      $('lbStatus').textContent = host ? t('lbHostHint') : t('lbWaitHost', { n: waiting });
+      $('lbStatus').textContent = this.hostNote || (host ? t('lbHostHint') : t('lbWaitHost', { n: waiting }));
     }
   }
 

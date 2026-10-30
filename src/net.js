@@ -3,11 +3,11 @@ import { Core } from '../shared/core.js';
 import { token } from './rovex.js';
 
 export class LocalNet {
-  constructor({ mode, map, bots, difficulty, lobby = true }) {
+  constructor({ mode, map, bots, difficulty, lobby = true, limit = 0, time = 0 }) {
     this.queue = [];
     this.onmsg = () => {};
     this.onclose = () => {};
-    this.core = new Core({ mode, map, bots, difficulty, lobby, send: (to, m) => { if (to == null || to === 'me') this.queue.push(m); } });
+    this.core = new Core({ mode, map, bots, difficulty, lobby, limit, time, send: (to, m) => { if (to == null || to === 'me') this.queue.push(m); } });
   }
   connect(name) { this.core.join('me', name); return Promise.resolve(); }
   send(m) { this.core.handle('me', m); }
@@ -20,8 +20,8 @@ export class LocalNet {
 }
 
 export class WsNet {
-  constructor({ url, room, mode, map, bots, join = false }) {
-    Object.assign(this, { url, room, mode, map, bots, join });
+  constructor({ url, room, mode, map, bots, join = false, quick = false }) {
+    Object.assign(this, { url, room, mode, map, bots, join, quick });
     this.onmsg = () => {};
     this.onclose = () => {};
   }
@@ -35,13 +35,14 @@ export class WsNet {
       // so resolve quando o servidor confirma a sala; codigo que nao existe volta como erro
       let inRoom = false;
       const fail = (code, msg) => { clearTimeout(to); const e = new Error(msg); e.code = code; rej(e); };
-      ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, token: token() })); };
+      ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, quick: this.quick, token: token() })); };
       ws.onerror = () => { if (!opened) fail('down', 'Nao deu pra conectar em ' + this.url); };
       ws.onmessage = (e) => {
         let m; try { m = JSON.parse(e.data); } catch { return; }
         if (!inRoom) {
           if (m.t === 'err') { fail(m.code, m.code); ws.close(); return; }
-          if (m.t === 'room') { inRoom = true; clearTimeout(to); this.join = true; res(); }
+          // jogo rapido: daqui pra frente e' uma sala comum (reconectar volta pra ela pelo codigo)
+          if (m.t === 'room') { inRoom = true; clearTimeout(to); this.join = true; if (this.quick) { this.room = m.code; this.quick = false; } res(); }
         }
         this.onmsg(m);
       };

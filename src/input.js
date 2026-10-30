@@ -47,6 +47,12 @@ function touchRanges() {
 }
 if (isTouch) touchRanges();
 
+// trava o mouse pedindo o movimento cru (sem aceleracao do sistema; no Chrome tambem some o salto falso)
+export function lockPointer(el) {
+  try { const r = el.requestPointerLock?.({ unadjustedMovement: true }); if (r?.catch) r.catch(() => el.requestPointerLock?.()); }
+  catch { el.requestPointerLock?.(); }
+}
+
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -76,13 +82,19 @@ export class Input {
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => { this.keys.clear(); this.mouse.fire = this.mouse.ads = false; });
+    // mouse travado: o Chrome no Windows as vezes manda um salto falso enorme (mais no 1o evento depois de
+    // travar) e a mira "puxava pro chao do nada". Pula o 1o evento e qualquer salto impossivel num evento so.
+    let skipNext = false;
+    document.addEventListener('pointerlockchange', () => { skipNext = true; });
     addEventListener('mousemove', (e) => {
       if (!this.enabled || document.pointerLockElement !== canvas) return;
+      if (skipNext) { skipNext = false; return; }
+      if (Math.abs(e.movementX) > 600 || Math.abs(e.movementY) > 300) return;
       this.lookX += e.movementX; this.lookY += e.movementY;
     });
     canvas.addEventListener('mousedown', (e) => {
       if (!this.enabled) return;
-      if (document.pointerLockElement !== canvas) { if (!isTouch) canvas.requestPointerLock?.(); return; }
+      if (document.pointerLockElement !== canvas) { if (!isTouch) lockPointer(canvas); return; }
       if (e.button === 0) { this.mouse.fire = true; this.edges.add('FIRE'); }
       if (e.button === 2) { this.mouse.ads = true; this.edges.add('ADS'); }
     });

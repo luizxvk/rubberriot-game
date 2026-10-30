@@ -100,12 +100,19 @@ export function scopeFits(body, cat, id) {
   return len >= r[0] && len <= r[1];
 }
 
+// A primeira mira que cabe no corpo: sempre liberada e ja vem equipada (regra dele 30/10); o jogador troca ou tira
+export function freeScope(cat, body) {
+  const C = CATEGORY[cat];
+  if (!C || cat === 'sniper' || cat === 'melee' || !C.scopes.length) return null;
+  return C.scopes.find(id => scopeFits(body, cat, id)) || null;
+}
+
 export function defaultLoadout(cat) {
   const c = CATEGORY[cat];
   if (!c) return null;
   const body = c.bodies[0];
   if (cat === 'melee') return { body: 'melee_10', camo: null };
-  return { body, scope: cat === 'sniper' ? nativePart(body, 'scope') : null, charger: nativePart(body, 'charger'), handle: null, paint: null, accent: null, camo: null };
+  return { body, scope: cat === 'sniper' ? nativePart(body, 'scope') : freeScope(cat, body), charger: nativePart(body, 'charger'), handle: null, paint: null, accent: null, camo: null, m1: 1 };
 }
 
 // peca original de um corpo (fusil_4 -> fusil_charguer_4)
@@ -1030,7 +1037,12 @@ const KEY = 'rr_loadouts_v1';
 export function getLoadouts() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
-  for (const c of Object.keys(CATEGORY)) s[c] = { ...defaultLoadout(c), ...(s[c] || {}) };
+  for (const c of Object.keys(CATEGORY)) {
+    const lo = { ...defaultLoadout(c), ...(s[c] || {}) };
+    // save antigo (sem m1): equipa a mira gratis uma vez so; depois vale a escolha do jogador
+    if (s[c] && !s[c].m1) { if (!lo.scope && !lo.bp) lo.scope = freeScope(c, lo.body); lo.m1 = 1; }
+    s[c] = lo;
+  }
   return s;
 }
 export function saveLoadouts(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ } }
@@ -1040,6 +1052,9 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   const C = CATEGORY[cat];
   if (!C || !lo) return lo;
   const out = { ...lo };
+  // valor que nao existe mais (ou gravado no slot errado pela lista travada do arsenal): volta pro padrao
+  if (out.camo && !camoList.some(c => c.id === out.camo)) out.camo = null;
+  if (out.bp && !BLUEPRINTS[out.bp]) delete out.bp;
   // variante de elite liberada: a montagem dela vale mesmo com peca que o nivel ainda nao abriu
   const B = out.bp && BLUEPRINTS[out.bp];
   if (B && B.wpn === cat && bpUnlocked(out.bp)) {
@@ -1049,7 +1064,7 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   delete out.bp;
   const ok = (list, id) => { const i = list.indexOf(id ?? null); return i < 0 || partOpen(cat, i, id); };
   if (!ok(C.bodies, out.body)) { out.body = C.bodies[0]; out.charger = null; }
-  if (out.scope && !ok([null, ...C.scopes], out.scope)) out.scope = cat === 'sniper' ? nativePart(out.body, 'scope') : null;
+  if (out.scope && out.scope !== freeScope(cat, out.body) && !ok([null, ...C.scopes], out.scope)) out.scope = cat === 'sniper' ? nativePart(out.body, 'scope') : null;
   if (out.scope && !scopeFits(out.body, cat, out.scope)) out.scope = null; // mira que nao cabe nessa arma
   if (cat === 'sniper' && !out.scope) out.scope = nativePart(out.body, 'scope') || C.scopes[0]; // sniper sempre de luneta
   const mags = chargerOptions(out.body, cat);

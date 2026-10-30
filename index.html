@@ -6,7 +6,43 @@
 <meta name="theme-color" content="#141210">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rubber Riot</title>
+<title>Rubber Riot - Free Rubber-Hose FPS in Your Browser</title>
+<meta name="description" content="Rubber Riot is a free multiplayer FPS with 1930s cartoon style that runs right in your browser. Anvil killstreaks, a boxing ring to fight your way back, duo revives with a bicycle pump, battle royale and custom guns. No download.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://rubberriot.tryrovex.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rubber Riot">
+<meta property="og:url" content="https://rubberriot.tryrovex.com/">
+<meta property="og:title" content="Rubber Riot - Free Rubber-Hose FPS in Your Browser">
+<meta property="og:description" content="1930s cartoon chaos: anvil killstreaks, boxing ring respawns, bicycle pump revives and battle royale. Free, no download.">
+<meta property="og:image" content="https://rubberriot.tryrovex.com/brand/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Rubber Riot - Free Rubber-Hose FPS in Your Browser">
+<meta name="twitter:description" content="1930s cartoon chaos: anvil killstreaks, boxing ring respawns, bicycle pump revives and battle royale. Free, no download.">
+<meta name="twitter:image" content="https://rubberriot.tryrovex.com/brand/og.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Rubber Riot",
+  "url": "https://rubberriot.tryrovex.com/",
+  "image": "https://rubberriot.tryrovex.com/brand/og.jpg",
+  "description": "Free multiplayer first-person shooter in 1930s rubber-hose cartoon style, played in the browser. Team modes, battle royale, duos, killstreaks and weapon customization.",
+  "genre": ["First-person shooter", "Battle royale", "Multiplayer"],
+  "gamePlatform": ["Web browser", "PC", "Mobile"],
+  "applicationCategory": "Game",
+  "operatingSystem": "Any",
+  "playMode": ["MultiPlayer", "SinglePlayer"],
+  "inLanguage": ["en", "pt-BR"],
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "publisher": { "@type": "Organization", "name": "Rovex", "url": "https://tryrovex.com/" }
+}
+</script>
 <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="./icons/icon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="./icons/icon-180.png">
@@ -18,6 +54,12 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
+<noscript>
+  <h1>Rubber Riot</h1>
+  <p>Free multiplayer FPS in 1930s rubber-hose cartoon style, played right in your browser. Call in anvil rain, a blimp or the atomic pie, fight your way back in the boxing ring, revive your duo with a bicycle pump and build your gun in the Arsenal.</p>
+  <p>FPS multiplayer gratis com visual de desenho dos anos 30, direto no navegador. Chuva de bigornas, ringue de boxe pra voltar pro jogo, dupla reerguida na bomba de bicicleta e battle royale.</p>
+  <p>Turn on JavaScript to play. / Ative o JavaScript pra jogar.</p>
+</noscript>
 
 <!-- luva que aponta (usada nos menus) -->
 <svg width="0" height="0" style="position:absolute">
@@ -66,8 +108,9 @@
       </a>
       <nav class="bill" aria-label="Menu principal">
         <!-- icones: Material Icons (Apache 2.0) -->
-        <button data-go="solo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
+        <button id="goSolo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
         <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span></button>
+        <button id="goTutorial" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg><span data-i18n="tutorial">Treino</span></button>
         <button data-go="arsenal" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><span data-i18n="arsenal">Arsenal</span></button>
         <button data-go="skills" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 8.57a1.43 1.43 0 1 0 0 2.86 1.43 1.43 0 0 0 0-2.86z"/><path d="M13 3C9.25 3 6.2 5.94 6.02 9.64L4.1 12.2a.5.5 0 0 0 .4.8H6v3c0 1.1.9 2 2 2h1v3h7v-4.68A6.999 6.999 0 0 0 13 3zm3 7c0 .13-.01.26-.02.39l.83.66c.08.06.1.16.05.25l-.8 1.39c-.05.09-.16.12-.24.09l-.99-.4c-.21.16-.43.29-.67.39L14 13.83c-.01.1-.1.17-.2.17h-1.6c-.1 0-.18-.07-.2-.17l-.15-1.06c-.25-.1-.47-.23-.68-.39l-.99.4c-.09.03-.2 0-.25-.09l-.8-1.39a.19.19 0 0 1 .05-.25l.84-.66c-.01-.13-.02-.26-.02-.39s.02-.27.04-.39l-.85-.66c-.08-.06-.1-.16-.05-.26l.8-1.38c.05-.09.15-.12.24-.09l1 .4c.2-.15.43-.29.67-.39L12 6.17c.02-.1.1-.17.2-.17h1.6c.1 0 .18.07.2.17l.15 1.06c.24.1.46.23.67.39l1-.4c.09-.03.2 0 .24.09l.8 1.38a.2.2 0 0 1-.05.26l-.85.66c.03.12.04.25.04.39z"/></svg><span data-i18n="skTab">Skills</span></button>
         <button data-go="challenges" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg><span data-i18n="challenges">Desafios</span></button>
@@ -77,42 +120,26 @@
     </div>
   </section>
 
-  <aside class="news" id="news" aria-labelledby="newsTitle">
-    <header><h2 id="newsTitle" data-i18n="newsTitle">Novidades da temporada</h2><button class="news-x" id="newsClose" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></header>
-    <ul id="newsList"></ul>
+  <!-- salas de amigos abertas agora (so com conta Rovex; some sem nenhuma) -->
+  <aside class="news friends" id="friendRooms" aria-labelledby="frTitle" hidden>
+    <header><h2 id="frTitle" data-i18n="frTitle">Amigos jogando</h2><span class="fr-n" id="frCount"></span></header>
+    <ul id="frList"></ul>
   </aside>
 
-  <section class="card" id="scr-solo" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="pickShow">Escolha o espetaculo</h2></header>
-    <div class="modes" id="modeList" role="radiogroup" aria-label="Modo de jogo"></div>
-    <p class="mode-desc" id="modeDesc"></p>
-    <div class="field"><span data-i18n="mapLabel">Mapa</span><div class="seg" id="mapSel"></div></div>
-    <div class="row">
-      <label class="field"><span><i data-i18n="botsIn">Bots na vila</i> <b id="botsVal">7</b></span><input type="range" id="bots" min="1" max="15" value="7"></label>
-      <div class="field"><span data-i18n="botAim">Pontaria dos bots</span>
-        <div class="seg" id="diff" role="radiogroup">
-          <button data-v="0.7" data-i18n="easy">Molenga</button><button data-v="1" class="on" data-i18n="mid">Esperto</button><button data-v="1.35" data-i18n="hard">Afiado</button>
-        </div>
-      </div>
-    </div>
-    <button class="big" id="playSolo" data-i18n="curtains">Abrir as cortinas</button>
-  </section>
 
   <section class="card" id="scr-mp" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="multiplayer">Multiplayer</h2></header>
     <p class="mp-who" id="mpWho"></p>
     <label class="field" id="mpNameField" hidden><span data-i18n="yourName">Seu nome</span><input id="mpName" maxlength="14" placeholder="Borrao"></label>
+    <button class="mp-host mp-quick" id="playQuick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg><b data-i18n="quickPlay">Jogo rapido</b><small data-i18n="quickPlaySub">Cai numa partida rolando agora ou abre uma com bots</small></button>
     <form class="ticket" id="mpJoin" autocomplete="off">
       <label class="ticket-stub" for="mpRoom" data-i18n="haveCode">Tem um codigo?</label>
       <input class="ticket-code" id="mpRoom" maxlength="8" placeholder="ABC123" spellcheck="false" autocapitalize="characters" inputmode="text" aria-describedby="mpErr">
       <button class="ticket-go" id="joinCode" type="submit" data-i18n="joinCode">Entrar</button>
     </form>
-    <h3 class="mp-sub" data-i18n="newRoom">Ou monte a sua sala</h3>
-    <div class="modes compact" id="mpModeList" role="radiogroup" aria-label="Modo da sala"></div>
-    <div class="field"><span data-i18n="mapLabel">Mapa</span><div class="seg" id="mpMapSel"></div></div>
-    <label class="field"><span><i data-i18n="botsFill">Bots completando a sala</i> <b id="mpBotsVal">5</b></span><input type="range" id="mpBots" min="0" max="11" value="5"></label>
+    <div class="mp-or" aria-hidden="true"><span data-i18n="mpOr">ou</span></div>
+    <button class="mp-host" id="playMp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg><b data-i18n="createRoom">Criar sala</b><small data-i18n="createRoomSub">Voce vira o host e escolhe modo, mapa e bots no lobby</small></button>
     <p class="err" id="mpErr" role="alert"></p>
-    <button class="big" id="playMp" data-i18n="createRoom">Criar sala</button>
   </section>
 
   <section class="card" id="scr-challenges" hidden>
@@ -193,6 +220,16 @@
       <button class="blue" data-side="blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><b data-i18n="sideDef">Defesa</b><small data-i18n="sideDefTip">Segura o A e o B e desarma a bomba</small><em class="n"></em></button>
     </div>
     <p class="lb-side-note" data-i18n="sideNote">No intervalo os lados trocam</p>
+  </div>
+  <!-- host escolhe o modo num cartaz com todos (nome, times/solo e o que e) -->
+  <div class="lb-modes" id="lbModes" hidden role="dialog" aria-labelledby="lbModesTitle">
+    <header><h3 id="lbModesTitle" data-i18n="cfgPickMode">Escolha o modo</h3><button class="lb-x" id="lbModesClose" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></header>
+    <div class="lb-modes-grid" id="lbModesGrid" role="radiogroup" aria-labelledby="lbModesTitle"></div>
+  </div>
+  <!-- configuracao da partida: o host mexe nas setas, a sala toda ve mudar na hora -->
+  <div class="lb-cfg" id="lbCfg" hidden>
+    <header class="lb-slate"><h3 data-i18n="lbCfg">Partida</h3><small id="lbCfgWho"></small></header>
+    <ul id="lbCfgList"></ul>
   </div>
   <div class="lb-pick" id="lbPick" hidden>
     <h3 data-i18n="lbPickTitle">Sua arma</h3>

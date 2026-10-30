@@ -8,6 +8,7 @@ import { loadoutStats, nativePart, CATEGORY, infectLoadout } from './arsenal.js'
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
+import { t } from './i18n.js';
 import { isTouch } from './input.js';
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
@@ -299,7 +300,12 @@ export class Player {
       this.g.vm.throwNade();
       audio.play('whoosh', { vol: 0.5, rate: 0.9 });
     }
-    if (inp.streakPressed && this.g.me?.ready?.length) this.g.net.send({ t: 'streak', kind: this.g.me.ready[0] });
+    if (inp.streakPressed && this.g.me?.ready?.length) {
+      // outra sequencia no ar (ou o intervalo depois dela): avisa na hora, sem ir ao servidor
+      const L = this.g.me.ready[0] === 'uav' ? null : this.g.snap?.sLock; // radar nao espera fila
+      if (L) { this.g.hud.message(t(L.kind === 'gap' ? 'streakGap' : 'streakWait', { s: t('s_' + L.kind), n: L.t }), 1.8); audio.play('empty', { ui: true, vol: 0.5 }); }
+      else this.g.net.send({ t: 'streak', kind: this.g.me.ready[0] });
+    }
 
     // recarga
     const a = this.ammo[this.wpn];
@@ -431,9 +437,9 @@ export class Player {
     const f = [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp];
     let best = null, bs = Infinity;
     for (const r of g.remotes.values()) {
-      if (!r.alive || !g.isEnemy(r) || !r.pos) continue;
+      if (!r.alive || !g.isEnemy(r) || !r.pos || r.pos[1] < -0.5) continue; // abaixo do chao nunca puxa a mira
       const crouch = r.anim === 'crouch' || r.anim === 'slide';
-      const p = [r.pos[0], r.pos[1] + (crouch ? 0.7 : 1.05), r.pos[2]];
+      const p = [r.pos[0], r.pos[1] + (r.dn > 0 ? 0.35 : crouch ? 0.7 : 1.05), r.pos[2]];
       const d = [p[0] - o[0], p[1] - o[1], p[2] - o[2]], len = Math.hypot(d[0], d[1], d[2]);
       if (len < 0.8 || len > 60) continue;
       const ang = Math.acos(Math.max(-1, Math.min(1, (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len)));
@@ -479,6 +485,10 @@ export class Player {
     // boca do cano no mundo (pra o tracer sair da arma)
     const mz = g.vm.muzzleCam();
     const muzzleWorld = mz.clone().applyMatrix4(cam.matrixWorld);
+    // a arma da mao tem camera propria (outro FOV): a bala visivel sai do ponto do mundo que cai em cima da boca
+    // do cano NA TELA (a ~1 m da camera); antes nascia colada na mira e de longe virava um ponto
+    const ndc = mz.clone().project(g.vm.camera);
+    const muzzleScreen = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(cam).sub(cam.position).normalize().multiplyScalar(1.1).add(cam.position);
 
     const pellets = W.pellets || 1, ammo = this.ammoNow();
     let total = 0, head = false, victim = null, hitPoint = null, firstEnd = null;
@@ -497,7 +507,7 @@ export class Player {
         const fall = this.wpn === 'shotgun' ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
         if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
-      if (i < 3) g.fx.tracer(muzzleWorld.toArray(), hit.point, this.lo(this.wpn)?.tracer || 'chalk');
+      if (i < (this.wpn === 'shotgun' ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)
     }
     if (victim) {
       g.net.send({ t: 'hit', v: victim.id, dmg: Math.round(total), head, wpn: this.wpn });

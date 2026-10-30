@@ -2,16 +2,16 @@
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS } from '../shared/weapons.js';
 import { SKILL_ICONS } from './skillicons.js';
 import { tip } from './tips.js';
-import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER } from './challenges.js';
+import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
-import { DEBUG, progressInfo, wpnInfo, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
+import { DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
-import { CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
+import { freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 // mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
@@ -27,7 +27,7 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'solo', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges'];
   let settingsFromGame = false;
 
   ui.go = (name, fromGame = false) => {
@@ -61,37 +61,9 @@ export function initMenus(o) {
     if (e.key === 'Escape' && settingsFromGame && o.inGame() && ui.screen === 'settings') { o.onBackFromSettingsInGame(); settingsFromGame = false; }
   });
 
-  // ---------- modos ----------
-  const modeKeys = Object.keys(MODES);
-  function modeList(el, initial, onPick, withDesc) {
-    let cur = initial;
-    el.innerHTML = modeKeys.map(k => `<button class="mode" role="radio" data-m="${k}" aria-checked="${k === cur}"><b>${modeName(k)}</b><small>${MODES[k].teams ? t('teams') : t('solo')}</small></button>`).join('');
-    el.querySelectorAll('.mode').forEach(b => b.onclick = () => {
-      cur = b.dataset.m;
-      el.querySelectorAll('.mode').forEach(x => x.setAttribute('aria-checked', x === b));
-      audio.play('ui_click', { ui: true, vol: 0.6 });
-      onPick(cur);
-      if (withDesc) $('modeDesc').textContent = modeDesc(cur);
-    });
-    if (withDesc) $('modeDesc').textContent = modeDesc(cur);
-    return () => cur;
-  }
-  // battle royale tem mapa proprio (Ilha Rebobina): a escolha de mapa some quando ele e o modo
-  const mapFor = (id) => (m) => { const f = $(id)?.closest('.field'); if (f) f.hidden = m === 'br' || m === 'duo'; };
-  let curSolo = modeList($('modeList'), 'ffa', mapFor('mapSel'), true);
-  let curMp = modeList($('mpModeList'), 'tdm', mapFor('mpMapSel'), false);
-  const soloMode = () => curSolo(), mpMode = () => curMp();
-  // escolha de mapa (automatico = o mapa que combina com o modo)
-  const mapSeg = (el) => {
-    let cur = 'auto';
-    const draw = () => {
-      el.innerHTML = ['auto', ...MAP_IDS].map(m => `<button data-v="${m}" class="${m === cur ? 'on' : ''}">${t('map_' + m)}</button>`).join('');
-      el.querySelectorAll('button').forEach(b => b.onclick = () => { cur = b.dataset.v; audio.play('ui_click', { ui: true, vol: 0.6 }); draw(); });
-    };
-    draw();
-    return { get: () => cur, set: (v) => { cur = v; draw(); }, draw };
-  };
-  const soloMap = mapSeg($('mapSel')), mpMap = mapSeg($('mpMapSel'));
+  // modo, mapa, bots e pontaria agora sao escolhidos no lobby (painel do host); aqui so sai com a ultima
+  // configuracao que o host usou (guardada pelo lobby)
+  const lastCfg = () => { try { return JSON.parse(localStorage.getItem('rr_lastcfg')) || {}; } catch { return {}; } };
   // ---------- multiplayer: entrar por codigo ou criar sala (servidor na Fly) ----------
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const newCode = () => Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
@@ -103,13 +75,15 @@ export function initMenus(o) {
   };
   async function goMp(args) {
     $('mpErr').textContent = '';
-    $('playMp').disabled = $('joinCode').disabled = true;
+    $('playMp').disabled = $('joinCode').disabled = $('playQuick').disabled = true;
     const name = mpName();
     if (!rovex.me) { o.settings.name = name; o.saveSettings(); }
     try { await o.onMp({ url: rovex.MP_URL, name, ...args }); }
     catch (e) { $('mpErr').textContent = e.code === 'noroom' ? t('noRoom', { c: args.room }) : e.code === 'full' ? t('roomFull', { c: args.room }) : e.code === 'busy' ? t('mpBusy') : t('mpDown'); }
-    $('playMp').disabled = $('joinCode').disabled = false;
+    $('playMp').disabled = $('joinCode').disabled = $('playQuick').disabled = false;
   }
+  // jogo rapido: o servidor escolhe a sala (partida rolando com gente, ou uma nova com bots em modo sorteado)
+  $('playQuick').onclick = () => { audio.play('ui_click', { ui: true }); goMp({ quick: true }); };
   $('mpRoom').oninput = () => { const c = cleanCode($('mpRoom').value); if (c !== $('mpRoom').value) $('mpRoom').value = c; };
   $('mpJoin').onsubmit = (e) => {
     e.preventDefault();
@@ -118,22 +92,20 @@ export function initMenus(o) {
     audio.play('ui_click', { ui: true });
     goMp({ room, join: true });
   };
-  $('bots').oninput = () => { $('botsVal').textContent = $('bots').value; };
-  $('mpBots').oninput = () => { $('mpBotsVal').textContent = $('mpBots').value; };
-  let diff = 1;
-  $('diff').querySelectorAll('button').forEach(b => b.onclick = () => {
-    diff = Number(b.dataset.v);
-    $('diff').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-    audio.play('ui_click', { ui: true, vol: 0.6 });
-  });
-  $('playSolo').onclick = async () => {
+  $('goTutorial').onclick = () => { audio.play('ui_click', { ui: true }); o.onTutorial(); };
+  $('goSolo').onclick = () => {
     audio.play('ui_click', { ui: true });
-    o.onSolo({ mode: soloMode(), map: soloMap.get(), bots: Number($('bots').value), difficulty: diff });
+    // primeira vez que o jogador comeca: o treino abre no lugar (so uma vez; depois fica em Treino e Desafios)
+    let seen = true; try { seen = !!localStorage.getItem('rr_tutorial_seen') || !!localStorage.getItem('rr_tutorial_done'); } catch { /* */ }
+    if (!seen) { o.onTutorial(); return; }
+    const c = lastCfg();
+    o.onSolo({ mode: c.mode || 'ffa', map: c.map || 'auto', bots: Number.isFinite(c.bots) ? c.bots : 7, difficulty: c.difficulty || 1, limit: c.limit || 0, time: c.time || 0 });
   };
   $('mpName').value = o.settings.name || '';
   $('playMp').onclick = () => {
     audio.play('ui_click', { ui: true });
-    goMp({ room: newCode(), mode: mpMode(), map: mpMap.get(), bots: Number($('mpBots').value) });
+    const c = lastCfg();
+    goMp({ room: newCode(), mode: c.mode || 'tdm', map: c.map || 'auto', bots: Number.isFinite(c.bots) ? Math.min(11, c.bots) : 5 });
   };
   // convite da Rovex (?sala=): ja abre a aba e entra na sala
   if (rovex.inviteRoom) setTimeout(() => { ui.go('mp'); $('mpRoom').value = rovex.inviteRoom; $('mpJoin').requestSubmit(); }, 300);
@@ -221,8 +193,13 @@ export function initMenus(o) {
       + `<div class="el-side"><em>${Math.min(el.prog, el.n)}/${el.n}</em><small>+${el.xp} XP</small></div>${el.done ? `<span class="ch-stamp">${t('chDoneStamp')}</span>` : ''}`;
     $('chDaily').innerHTML = dailyToday().map(c => row(t('ch_' + c.id, { n: c.n, w: c.wpn ? wName(c.wpn) : '' }) + nw(dailyKey(c)), c.prog, c.n, c.xp, c.done)).join('');
     const us = unlockState();
-    $('chCareer').innerHTML = us.active.map(u => row(chName(u) + nw('u:' + u.id), u.prog, u.n, u.xp, false, `<small class="ch-reward">${t('chReward')}: ${rewardName(u.reward)}</small>`)).join('')
+    // treino: premio fixo no topo da carreira (modelo + camuflagem sorteados, uma vez so)
+    const tu = tutorialState();
+    const tutLi = `<li class="ch-tut ${tu ? 'done' : ''}"><div class="ch-txt"><b>${t('ch_tutorial')}</b><small class="ch-reward">${t('chReward')}: ${tu ? [tu.body && partName('body', tu.body), tu.camo && t('camo_' + tu.camo)].filter(Boolean).join(' + ') : t('ch_tutorialRw')}</small></div>`
+      + (tu ? `<span class="ch-stamp">${t('chDoneStamp')}</span>` : `<button class="ch-go" id="chTutGo">${t('ch_tutorialGo')}</button>`) + '</li>';
+    $('chCareer').innerHTML = tutLi + us.active.map(u => row(chName(u) + nw('u:' + u.id), u.prog, u.n, u.xp, false, `<small class="ch-reward">${t('chReward')}: ${rewardName(u.reward)}</small>`)).join('')
       + `<li class="ch-queue">${us.queued ? t('chQueue', { n: us.queued, d: us.done, t: us.total }) : us.done >= us.total ? t('chAllDone') : ''}</li>`;
+    const go = $('chTutGo'); if (go) go.onclick = () => { audio.play('ui_click', { ui: true }); o.onTutorial(); };
   }
   // desafio "novo" = ainda nao aparecia na lista da ultima vez que o jogador abriu a tela
   const SEEN_KEY = 'rr_ch_seen';
@@ -259,15 +236,30 @@ export function initMenus(o) {
   }
   document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
 
-  // ---------- novidades: fechar guarda a versao; novidade nova reabre ----------
-  const NEWS_V = 3;
-  function renderNews() {
-    let closed = 0; try { closed = Number(localStorage.getItem('rr_news')) || 0; } catch { /* */ }
-    $('news').hidden = closed >= NEWS_V;
-    $('newsList').innerHTML = t('news').map(([b, sp]) => `<li><b>${b}</b><span>${sp}</span></li>`).join('');
+  // ---------- amigos jogando: salas abertas de amigos, no canto (no lugar das novidades) ----------
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  let frBusy = false;
+  async function refreshFriendRooms() {
+    if (frBusy || !rovex.me || o.inGame() || document.hidden) return;
+    frBusy = true;
+    let list = [];
+    try { list = await rovex.friendRooms(); } catch { list = []; }
+    frBusy = false;
+    $('friendRooms').hidden = !list.length;
+    $('frCount').textContent = list.length > 1 ? String(list.length) : '';
+    $('frList').innerHTML = list.map((s) => `<li class="fr-row">
+      <span class="fr-av" aria-hidden="true">${esc((s.amigo || '?').trim().charAt(0).toUpperCase())}</span>
+      <span class="fr-txt"><b>${esc(s.amigo)}</b><small>${esc(modeName(s.modo))} · ${t('lbRoomLbl')} ${esc(s.code)} · ${t('frPlayers', { n: s.humanos })}</small></span>
+      <button class="fr-go" data-room="${esc(s.code)}">${t('joinCode')}</button></li>`).join('');
+    $('frList').querySelectorAll('.fr-go').forEach((b) => b.onclick = () => {
+      audio.play('ui_click', { ui: true });
+      ui.go('mp'); $('mpRoom').value = b.dataset.room; $('mpJoin').requestSubmit();
+    });
   }
-  $('newsClose').onclick = () => { try { localStorage.setItem('rr_news', NEWS_V); } catch { /* */ } audio.play('ui_back', { ui: true }); $('news').hidden = true; };
-  renderNews();
+  ui.refreshFriendRooms = refreshFriendRooms;
+  setInterval(refreshFriendRooms, 15000);
+  setTimeout(refreshFriendRooms, 1500);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFriendRooms(); });
   markNewChallenges();
 
   // texto do desafio de desbloqueio e o nome do premio
@@ -300,9 +292,10 @@ export function initMenus(o) {
     if (eb) eb.onclick = () => { S.primary = cat; o.saveSettings(); audio.play('pickup', { ui: true, vol: 0.6 }); renderSmith(); };
     // mostra o que vale de verdade: peca salva que ainda esta bloqueada aparece como padrao
     const lo = unlockedLoadout(cat, loadouts[cat], partUnlocked, camoUnlocked, CAMOS);
+    if (lo.tracer && !TRACER_STYLES.includes(lo.tracer)) lo.tracer = null; // tracado que nao existe (salvo errado)
     const C = CATEGORY[cat];
-    const wi = wpnInfo(cat);
-    $('equipBar').insertAdjacentHTML('beforeend', `<div class="wlevel"><b>${t('wpnLevel', { n: wi.level })}</b><span class="xpbar"><i style="width:${wi.max ? 100 : Math.round(wi.into / wi.need * 100)}%"></i></span><small>${wi.max ? t('maxed') : wi.into + ' / ' + wi.need + ' XP'}</small></div>`);
+    const wi = wpnInfo(cat, lo.body); // nivel e do corpo (modelo) equipado: cada um tem o seu
+    $('equipBar').insertAdjacentHTML('beforeend', `<div class="wlevel"><b>${t('bodyLevel', { m: partName('body', lo.body), n: wi.level })}</b><span class="xpbar"><i style="width:${wi.max ? 100 : Math.round(wi.into / wi.need * 100)}%"></i></span><small>${wi.max ? t('maxed') : wi.into + ' / ' + wi.need + ' XP'}</small></div>`);
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
@@ -312,7 +305,7 @@ export function initMenus(o) {
       const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && !lo.scope);
       let val;
       if (s === 'bp') val = lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
-      else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')); val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
+      else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')) || CAMOS[0]; val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
       else if (s === 'ammo') val = `<svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[AMMO[lo.ammo]?.icon || 'radio_button_unchecked']}</svg> ${t('am_' + (lo.ammo || 'none'))}`;
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
@@ -403,6 +396,7 @@ export function initMenus(o) {
 
   function renderPicker(lo, C) {
     const p = $('picker');
+    p.innerHTML = ''; // se algo quebrar daqui pra baixo, nunca sobra a lista do slot anterior (botao velho gravava no slot errado)
     if (slot === 'bp') {
       const MOD_TXT = { dmg: 'st_dmg', rate: 'st_rate', spread: 'st_acc', hip: 'st_hip', kick: 'st_ctrl', adsTime: 'st_ads', reload: 'st_reload', move: 'st_move', mag: 'st_mag' };
       // "bom" quando o numero sobe (dano, passo, pente) ou desce (o resto: cadencia lenta, recuo, abertura...)
@@ -432,8 +426,9 @@ export function initMenus(o) {
       function camoOpt(c) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
-        const req = c.elite && !open ? t('eliteOnly') : c.legend && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
-        const bar = open || c.legend || c.elite ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
+        // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
+        const req = c.elite && !open ? t('eliteOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const bar = open || c.legend || c.elite || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {
@@ -490,12 +485,12 @@ export function initMenus(o) {
     const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[slot];
     p.innerHTML = opts.map((id, i) => {
       if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
-      const open = partUnlocked(cat, i, id);
+      const open = partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
       const lockCh = !open && id && LOCKED_BY[id];
       // pros e contras da peca (estilo COD), so em pente e empunhadura
       const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser') && id ? partEffects(cat, lo, slot, id) : [];
       const fxHtml = fx.length ? `<span class="fx">${fx.slice(0, 4).map(([k, v]) => `<b class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '+' : '−'} ${t(k)}</b>`).join('')}</span>` : '';
-      const pill = slot === 'body' ? modePill(id) : '';
+      const pill = slot === 'body' ? modePill(id) + (open ? `<small class="blv">${t('lvlShort', { n: wpnLevel(cat, id) })}</small>` : '') : '';
       return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : `<small>${t('reqWpn', { n: partReq(i) })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: partReq(i) }) * 100)}%"></i></span>`}</button>`;
     }).join('');
     p.querySelectorAll('.opt').forEach(b => {
@@ -563,13 +558,9 @@ export function initMenus(o) {
   onProgress(() => { drawLevel(); if (ui.screen === 'arsenal') renderSmith(); });
   ui.relang = () => {
     drawLevel();
-    renderNews(); markNewChallenges();
+    refreshFriendRooms(); markNewChallenges();
     if (ui.screen === 'controls') renderKeys();
     markLang();
-    soloMap.draw(); mpMap.draw();
-    $('modeList').innerHTML = ''; $('mpModeList').innerHTML = '';
-    curSolo = modeList($('modeList'), curSolo(), () => {}, true);
-    curMp = modeList($('mpModeList'), curMp(), () => {}, false);
     if (ui.screen === 'arsenal') renderSmith();
   };
   return ui;
