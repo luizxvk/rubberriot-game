@@ -128,6 +128,16 @@ export function brArmor(v, dmg) {
 }
 
 export function brKill(c, v) {
+  // bate-volta: enquanto a iris nao fechar duas vezes, quem cai larga o que tinha e volta do ceu
+  if (c.bounceOpen?.() && v.inRing !== 'fight') {
+    const g0 = bestGun(v.owned || []), at0 = [v.pos[0], floorAt(c.M, v.pos[0], v.pos[2]), v.pos[2]];
+    if (g0) addLoot(c, 'wpn', [at0[0] + 0.6, at0[1], at0[2]], g0);
+    if (v.armor >= 10) addLoot(c, 'armor', [at0[0] - 0.6, at0[1], at0[2]], null, { amt: Math.round(v.armor) });
+    v.armor = 0; v.air = false; v.chute = false;
+    v.respawnT = BR.bounce.wait; v.bounceBack = true;
+    c.event({ k: 'bounceWait', id: v.id, s: BR.bounce.wait }); // 's': o 't' da mensagem e' o tipo
+    return;
+  }
   // ringue: quem luta e perde sai de vez; o outro volta pra ilha. 1a queda (iris no comeco) vai pra fila do ringue
   if (v.inRing === 'fight' && c.ringFight) {
     const w = c.players.get(c.ringFight.a === v.id ? c.ringFight.b : c.ringFight.a);

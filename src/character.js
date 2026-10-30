@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 import { ink, toon, PAL, wordTexture } from './toon.js';
 import { buildGun } from './arsenal.js';
+import { cleanLook } from '../shared/looks.js';
+import { eyeTex, buildEyewear, buildHat, styleGlove, patternTex, buildFx } from './looks3d.js';
 
 const SEG = 10, RAD = 6;
 
@@ -78,24 +80,41 @@ function eyeTexture() {
   return t;
 }
 let EYE = null;
+// material do olho por estilo (um so por estilo pra todos os bonecos)
+const EYEMAT = new Map();
+function eyeMat(style) {
+  if (!EYEMAT.has(style)) EYEMAT.set(style, new THREE.MeshBasicMaterial({ map: style === 'classic' ? (EYE ||= eyeTexture()) : eyeTex(style), transparent: true }));
+  return EYEMAT.get(style);
+}
+// listras da lona do paraquedas
+let STRIPE = null;
+function stripeTex() {
+  if (STRIPE) return STRIPE;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 16;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#ece9e1' : '#a83a2c'; g.fillRect(i * 32, 0, 32, 16); }
+  STRIPE = new THREE.CanvasTexture(c); STRIPE.colorSpace = THREE.SRGBColorSpace;
+  return STRIPE;
+}
 
 // a partir daqui (m) o boneco perde os detalhes pequenos
 const LOD_FAR = 18;
 
 export class Character {
-  constructor(team, name) {
+  constructor(team, name, look = null) {
     EYE ||= eyeTexture();
     this.root = new THREE.Group();
     this.body = new THREE.Group(); // tudo que faz squash
     this.root.add(this.body);
     const teamCol = team === 'red' ? PAL.red : team === 'blue' ? PAL.blue : PAL.mid;
+    this.teamCol = teamCol;
 
     const torso = ink(new THREE.SphereGeometry(0.42, 16, 12), PAL.ink, 0.03);
     torso.scale.set(1, 1.15, 0.9); torso.position.y = 1.05;
-    this.body.add(torso);
+    this.body.add(torso); this.torso = torso;
     const shorts = ink(new THREE.SphereGeometry(0.44, 16, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45), teamCol, 0.03);
     shorts.scale.set(1, 1.15, 0.92); shorts.position.y = 1.05;
-    this.body.add(shorts);
+    this.body.add(shorts); this.shorts = shorts;
     for (const s of [-1, 1]) {
       const btn = ink(new THREE.SphereGeometry(0.06, 8, 6), PAL.white, 0.015);
       btn.position.set(s * 0.15, 0.82, -0.36); btn.userData.detail = true;
@@ -111,7 +130,7 @@ export class Character {
     this.head.add(mask);
     const eyes = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.21), new THREE.MeshBasicMaterial({ map: EYE, transparent: true }));
     eyes.position.set(0, 0.04, -0.37); eyes.rotation.y = Math.PI;
-    this.head.add(eyes);
+    this.head.add(eyes); this.eyes = eyes;
     const nose = ink(new THREE.SphereGeometry(0.075, 10, 8), PAL.ink, 0.012);
     nose.position.set(0, -0.08, -0.38); nose.scale.set(1.3, 1, 1); nose.userData.detail = true;
     this.head.add(nose);
@@ -123,14 +142,8 @@ export class Character {
     for (let i = 0; i <= 10; i++) { const a = i * 0.55; curl.push(new THREE.Vector3(Math.cos(a) * 0.12 * (1 - i / 14), 0.3 + i * 0.03, Math.sin(a) * 0.12 * (1 - i / 14) + 0.05)); }
     const curlM = ink(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curl), 20, 0.045, 6), PAL.ink, 0.015); curlM.userData.detail = true;
     this.head.add(curlM);
-    // chapeu-coco com a fita do time
-    const hat = ink(new THREE.CylinderGeometry(0.2, 0.24, 0.18, 14), PAL.ink, 0.02);
-    hat.position.set(0.1, 0.36, 0.05); hat.rotation.z = -0.35;
-    const brim = ink(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 16), PAL.ink, 0.02);
-    brim.position.y = -0.09; hat.add(brim);
-    const band = ink(new THREE.CylinderGeometry(0.245, 0.245, 0.06, 14), teamCol, 0);
-    band.position.y = -0.04; band.userData.detail = true; hat.add(band);
-    this.head.add(hat);
+    // chapeu, oculos, luvas, camisa, estampa e efeito: setLook (no fim do construtor)
+    this.hat = null; this.eyewear = null; this.fx = null;
 
     this.armR = new Hose(0.065, PAL.ink); this.armL = new Hose(0.065, PAL.ink);
     this.legR = new Hose(0.075, PAL.ink); this.legL = new Hose(0.075, PAL.ink);
@@ -146,6 +159,18 @@ export class Character {
     const shoe = () => { const s = ink(new THREE.SphereGeometry(0.17, 12, 10), 0x4a4540, 0.03); s.scale.set(1, 0.6, 1.6); return s; };
     this.shoeR = shoe(); this.shoeL = shoe();
     this.body.add(this.shoeR, this.shoeL);
+
+    // paraquedas (bate-volta): lona listrada vermelho/papel com 4 cordas; so aparece com anim 'chute'
+    this.chute = new THREE.Group();
+    const can = new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 6, 0, Math.PI * 2, 0, Math.PI * 0.42), new THREE.MeshBasicMaterial({ map: stripeTex(), side: THREE.DoubleSide }));
+    can.scale.set(1, 0.55, 1); can.position.y = 2.6; this.chute.add(can);
+    const ln = new THREE.MeshBasicMaterial({ color: 0x141210 });
+    for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 2.05, 4), ln);
+      cord.position.set(x * 0.55, 2.35, z * 0.55); cord.rotation.set(z * 0.42, 0, -x * 0.42); this.chute.add(cord);
+    }
+    this.chute.position.y = 0.9; this.chute.visible = false;
+    this.body.add(this.chute);
 
     this.gunHolder = new THREE.Group();
     this.body.add(this.gunHolder);
@@ -168,6 +193,27 @@ export class Character {
     this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
     this.far = false;
     this.v = new THREE.Vector3();
+    this.setLook(look);
+  }
+
+  // visual do jogador (shared/looks.js). Troca na hora, inclusive no meio da partida.
+  setLook(look) {
+    const L = cleanLook(look);
+    this.look = L;
+    const tc = this.teamCol, hx = (c) => parseInt(c.slice(1), 16);
+    this.torso.material = toon(hx(L.shirt));
+    const pt = patternTex(L.pattern);
+    this.shorts.material = pt ? toon(tc, { map: pt }) : toon(tc);
+    this.eyes.material = eyeMat(L.eyes);
+    if (this.eyewear) this.head.remove(this.eyewear);
+    this.eyewear = buildEyewear(L.eyes); if (this.eyewear) this.head.add(this.eyewear);
+    if (this.hat) this.head.remove(this.hat);
+    this.hat = buildHat(L.hat, tc); if (this.hat) this.head.add(this.hat);
+    styleGlove(this.handR, L.glove, L.gloveCol); styleGlove(this.handL, L.glove, L.gloveCol);
+    if (this.fx) this.root.remove(this.fx.group);
+    this.fx = buildFx(L.fx); if (this.fx) this.root.add(this.fx.group);
+    this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
+    if (this.far) for (const o of this.details) o.visible = false;
   }
 
   setWeapon(id, lo = null) {
@@ -197,6 +243,13 @@ export class Character {
 
   update(dt, s) {
     const { anim, pitch = 0, alive, speed = 0, t } = s;
+    this.chute.visible = alive && anim === 'chute';
+    // visual: efeito em volta (some de longe e morto), helice gira, enfeite balanca
+    if (this.fx) { this.fx.group.visible = alive && !this.far; if (this.fx.group.visible) this.fx.tick(dt, t); }
+    const hu = this.hat?.userData;
+    if (hu?.spin) hu.spin.rotation.y += dt * (anim === 'sprint' || anim === 'run' ? 22 : 9);
+    if (hu?.bob) hu.bob.position.y = (hu.bobY ??= hu.bob.position.y) + Math.sin(t * 4 + this.phase) * 0.03;
+    if (this.chute.visible) this.chute.rotation.z = Math.sin(t * 1.6 + this.phase) * 0.06;
     // laser dos outros: o feixe longo aparece (e entrega a posicao), correndo desliga
     const lz = this.gun?.userData.laser;
     if (lz) lz.beam.material.uniforms.uOn.value = alive && anim !== 'sprint' && anim !== 'tac' ? 1 : 0;

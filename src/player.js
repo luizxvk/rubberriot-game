@@ -2,7 +2,7 @@
 // e sem pulo duplo), tiro hitscan, recarga e troca de arma.
 import * as THREE from 'three';
 import { moveBody, raycast, rayPlayer, hasLOS, wallThickness } from '../shared/map.js';
-import { standable } from '../shared/nav.js';
+import { standable, floorAt } from '../shared/nav.js';
 import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, bodyTrait } from '../shared/weapons.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
@@ -70,6 +70,8 @@ export class Player {
   spawn(ev) {
     this.ggBody = ev.body || null;
     this.pos = [...ev.pos]; this.vel = [0, 0, 0]; this.recoilP = 0; this.recoilY = 0;
+    // bate-volta: nasce caindo; o paraquedas abre no pulo (no celular abre sozinho, ajuste)
+    this.air = !!ev.air; this.chute = false; this.cutChute = false;
     this.yaw = ev.yaw; this.pitch = 0;
     this.alive = true; this.hp = 100;
     this.nades = this.g.mode === 'br' ? { frag: 0, flash: 0 } : { frag: 1, flash: 1 }; this.patIdx = 0;
@@ -240,16 +242,41 @@ export class Player {
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
+    // bate-volta no ar: paraquedas abre/fecha no pulo; queda livre desce rapido e da dano ao bater
+    const air = this.air && this.g.bounce;
+    if (air) {
+      const h = this.pos[1] - floorAt(this.g.M, this.pos[0], this.pos[2]);
+      if (inp.jumpPressed && h > 2) {
+        this.chute = !this.chute; if (!this.chute) this.cutChute = true;
+        audio.play(this.chute ? 'chute' : 'whoosh', { vol: 0.7, ui: true });
+        inp = { ...inp, jumpPressed: false };
+      }
+      // celular: abre sozinho a 26 m (se a pessoa nao tiver soltado de proposito)
+      if (!this.chute && !this.cutChute && this.g.settings?.autoChute && h < 26) { this.chute = true; audio.play('chute', { vol: 0.7, ui: true }); }
+      speed = BR.bounce.airSpeed * (this.chute ? 1 : 1.35);
+    }
+    audio.loop('wind', air && !this.chute ? 0.55 : 0);
     // chao: acelera e freia firme (sem patinar); no ar quase nao muda a direcao
-    const acc = this.onGround ? 22 : 1.6;
+    const acc = air ? 5 : this.onGround ? 22 : 1.6;
     this.vel[0] = damp(this.vel[0], wx * speed, acc, dt);
     this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
     // pulo baixo e unico (~1 m), sem pulo no ar
     if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4 * Math.sqrt(this.sk('mola', 'jump')); this.onGround = false; audio.play('jump', { vol: 0.45 }); }
-    this.vel[1] -= 24 * dt;
+    // contagem do inicio: quem esta no ar fica parado ate soltar todo mundo
+    const hold = air && this.g.snap?.freeze > 0;
+    if (hold) this.vel = [0, 0, 0]; else this.vel[1] -= 24 * dt;
+    if (air) this.vel[1] = Math.max(this.vel[1], -(this.chute ? BR.bounce.chute : BR.bounce.freefall));
     const vy = this.vel[1];
     this.wasGround = this.onGround;
     this.onGround = moveBody(this.g.M, this.pos, this.vel, dt, 0.4, this.crouch ? 1.1 : 1.7);
+    if (this.onGround && air) {
+      // pousou: com paraquedas e' de leve; em queda livre, dano pela velocidade (o servidor confere a janela)
+      this.air = false;
+      const dmg = !this.chute && -vy > BR.bounce.safe ? Math.round((-vy - BR.bounce.safe) * BR.bounce.dmg) : 0;
+      this.g.net.send({ t: 'fall', dmg });
+      if (dmg > 0) { audio.play('splat', { vol: 0.9, ui: true }); this.g.shake?.(0.5); this.g.fx?.word('SPLAT!', [this.pos[0], this.pos[1] + 0.4, this.pos[2]], 1.6, 0.7); }
+      this.chute = false; audio.loop('wind', 0);
+    }
     if (this.onGround) {
       if (!this.wasGround && vy < -6) { this.g.vm.landed(-vy); audio.play('land', { vol: Math.min(0.8, -vy / 20) }); }
     }
@@ -349,7 +376,7 @@ export class Player {
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / 20;
-      const anim = this.g.down ? 'down' : !this.onGround ? 'jump' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
+      const anim = this.g.down ? 'down' : this.air && this.g.bounce ? (this.chute ? 'chute' : 'fall') : !this.onGround ? 'jump' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
       this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn });
     }
   }

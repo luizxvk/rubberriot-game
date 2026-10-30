@@ -58,13 +58,10 @@ export async function friends() {
   const list = await call('/social/friends');
   return (Array.isArray(list) ? list : []).map(f => ({ id: f.id, name: f.displayName || f.name || '?', avatar: f.avatarUrl || '', online: !!f.isOnline }));
 }
-// salas de amigos: so' a maquina do multiplayer sabe quais estao abertas, entao a chamada vai direto pra ela
-const MP_HTTP = MP_URL.replace(/^ws/, 'http').replace(/\/rubber-riot\/ws$/, '');
+// salas de amigos: a rovex-api repassa pela rede interna da Fly (nao acorda a rovex-games dormindo)
 export async function friendRooms() {
   if (!token()) return [];
-  const r = await fetch(MP_HTTP + '/api/games/rubber-riot/salas-amigos', { headers: { Authorization: 'Bearer ' + token() } });
-  if (!r.ok) return [];
-  const j = await r.json();
+  const j = await call('/games/rubber-riot/salas-amigos', { timeout: 5000 });
   return Array.isArray(j?.salas) ? j.salas : [];
 }
 export const invite = (friendId, room) => call('/games/rubber-riot/invite', { method: 'POST', body: { friendId, room } });
@@ -72,7 +69,7 @@ export const invite = (friendId, room) => call('/games/rubber-riot/invite', { me
 // ---------- save na conta ----------
 // a conta manda: logou, o save dela entra no lugar do local. Conta sem save herda o
 // progresso local, a nao ser que ele seja de OUTRA conta deste navegador.
-const KEYS = ['rr_progress_v1', 'rr_loadouts_v1', 'rr_challenges_v1', 'rr_settings', 'rr_lang'];
+const KEYS = ['rr_progress_v1', 'rr_loadouts_v1', 'rr_challenges_v1', 'rr_settings', 'rr_lang', 'rr_look_v1'];
 const OWNER = 'rr_owner';
 const ls = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },

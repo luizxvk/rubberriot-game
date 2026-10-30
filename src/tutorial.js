@@ -101,7 +101,7 @@ export class Tutorial {
   begin() {
     if (this.started) return;
     this.started = true;
-    document.getElementById('hud').appendChild(this.el);
+    document.body.appendChild(this.el); // fora do #hud: la' dentro a camada de toque (#touch, z 7) cobria o cartao e o toque nao chegava
     this.go(0);
   }
   go(i) {

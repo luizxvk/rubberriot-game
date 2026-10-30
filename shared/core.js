@@ -1,8 +1,9 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { AMMO, FIELD, WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
 import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
+import { cleanLook } from './looks.js';
 import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField } from './field.js';
 import { brInit, brSpawn, brSpawnPoint, brArmor, brKill, brTick, brSnap, brGoal, lootList, brDown, brNear } from './br.js';
 
@@ -27,8 +28,9 @@ export class Core {
     this.timePick = Number.isFinite(time) ? Math.max(0, Math.min(1800, time | 0)) : 0;
     // dupla: roda as regras do battle royale ('br') com times de 2 (cfg.teams liga o fogo amigo desligado)
     this.duo = mode === 'duo';
-    this.mode = this.duo ? 'br' : MODES[mode] ? mode : 'ffa';
-    this.cfg = MODES[this.duo ? 'duo' : this.mode];
+    this.bounce = mode === 'bounce';
+    this.mode = this.duo || this.bounce ? 'br' : MODES[mode] ? mode : 'ffa';
+    this.cfg = MODES[this.duo ? 'duo' : this.bounce ? 'bounce' : this.mode];
     // battle royale so na ilha (e a ilha so no battle royale)
     this.M = getMap(this.mode === 'br' ? 'ilha' : map && map !== 'auto' && map !== 'ilha' ? map : MODE_MAP[this.mode]);
     this.mapPick = this.mode === 'br' ? 'ilha' : map && MAP_IDS.includes(map) && map !== 'ilha' ? map : 'auto';
@@ -205,8 +207,10 @@ export class Core {
     this.players.set(id, p);
     // humano nasce no proximo tick, depois do 'welcome' chegar
     if (this.mode === 'bomb' && this.phase === 'play' && this.bomb) { p.alive = false; p.respawnT = 0; }
-    else if (this.mode === 'br' && this.phase === 'play' && this.zone && this.zone.phase + (this.zone.state === 'shrink' ? 1 : 0) > 0) { p.alive = false; p.respawnT = Infinity; } // chegou tarde: assiste
+    else if (this.mode === 'br' && this.phase === 'play' && this.zone && !this.bounceOpen() && this.zone.phase + (this.zone.state === 'shrink' ? 1 : 0) > 0) { p.alive = false; p.respawnT = Infinity; } // chegou tarde: assiste
     else if (bot) this.spawn(p); else p.respawnT = 0.05;
+    // battle royale ja rolando (jogo rapido): o br nao renasce sozinho, entao quem chega em tempo nasce por aqui
+    if (!bot && this.mode === 'br' && this.phase === 'play' && p.respawnT < 1) p.lateSpawn = true;
     this.pairDuo();
     return p;
   }
@@ -228,9 +232,10 @@ export class Core {
 
   // configuracao da sala (host no lobby). Refaz modo/mapa/times e a partida do zero; os humanos ficam.
   configure(m) {
-    const mode = MODES[m.mode] ? m.mode : (this.duo ? 'duo' : this.mode);
+    const mode = MODES[m.mode] ? m.mode : this.modeId();
     this.duo = mode === 'duo';
-    this.mode = this.duo ? 'br' : mode;
+    this.bounce = mode === 'bounce';
+    this.mode = this.duo || this.bounce ? 'br' : mode;
     this.cfg = MODES[mode];
     const map = typeof m.map === 'string' && MAP_IDS.includes(m.map) && m.map !== 'ilha' ? m.map : 'auto';
     this.mapPick = this.mode === 'br' ? 'ilha' : map;
@@ -251,10 +256,26 @@ export class Core {
     this.event({ k: 'cfg' });
   }
 
+  modeId() { return this.duo ? 'duo' : this.bounce ? 'bounce' : this.mode; }
+  // Bate-Volta: ainda da pra renascer? (ate a fase `until` da iris)
+  bounceOpen() { return this.bounce && !!this.zone && this.zone.phase + (this.zone.state === 'shrink' ? 1 : 0) < BR.bounce.until + 1 && this.zone.phase < BR.bounce.until; }
+
+  // Jogo Rapido: acabou a partida, a proxima sai em outro modo e outro mapa (sorteados)
+  nextQuick() {
+    const atual = this.modeId();
+    // battle royale e bate-volta sao os dois na ilha: depois de um deles a proxima sai em outro mapa
+    const ilha = this.M.id === 'ilha';
+    const modos = QUICK_MODES.filter(m => m !== atual && !(ilha && (m === 'br' || m === 'bounce')));
+    const mode = modos[Math.floor(Math.random() * modos.length)];
+    const mapas = MAP_IDS.filter(id => id !== 'ilha' && id !== this.M.id);
+    this.configure({ mode, map: mode === 'br' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
+  }
+
   // Jogo Rapido: da pra cair nesta sala agora? Partida rolando, sem fim a vista, com vaga, sem dupla;
   // battle royale so antes da iris comecar a fechar (depois disso quem chega so assiste)
   quickOpen() {
     if (this.phase !== 'play' || this.over || this.full() || this.duo) return false;
+    if (this.bounce) return this.bounceOpen(); // bate-volta: entra enquanto da pra renascer
     if (this.mode === 'br') return !!this.zone && this.zone.phase === 0 && this.zone.state === 'wait';
     return true;
   }
@@ -265,10 +286,11 @@ export class Core {
   join(id, name) {
     const p = this.addPlayer(id, (name || 'Player').slice(0, 14));
     this.balanceBots();
-    this.send(id, { t: 'welcome', id, mode: this.mode, duo: this.duo, map: this.M.id, team: p.team, phase: this.phase });
+    this.send(id, { t: 'welcome', id, mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, team: p.team, phase: this.phase });
     this.lobbyT = 0;
     // pecas das armas de quem ja estava na sala
     for (const o of this.players.values()) if (o.los && o.id !== id) this.send(id, { t: 'ev', k: 'lo', id: o.id, los: o.los, tracer: o.tracer });
+    for (const o of this.players.values()) if (o.look && o.id !== id) this.send(id, { t: 'ev', k: 'look', id: o.id, look: o.look }); // visual de quem ja estava
     this.event({ k: 'msg', key: 'joined', name: p.name });
   }
 
@@ -369,6 +391,8 @@ export class Core {
     p.pos = [x, y, z];
     p.vel = [0, 0, 0];
     p.yaw = this.openYaw(x, y, z);
+    // bate-volta: todo mundo entra caindo do ceu (paraquedas); `drop` abre a janela do dano de queda
+    if (this.bounce) { p.pos[1] = y + BR.bounce.dropH; p.drop = 30; p.chute = false; p.air = true; }
     p.hp = p.bot ? BOT_HP : 100;
     p.alive = true; p.shieldT = 0; p.fieldCd = Math.min(p.fieldCd || 0, 10); // renasce com o equipamento quase pronto
     const xn = hasSkill(p, 'bolso') ? SKILLS.bolso.nades : 0; // bolso fundo
@@ -382,13 +406,13 @@ export class Core {
       const prim = this.infKit.wpn;
       p.owned = new Set([prim, 'pistol', 'melee']); p.wpn = prim;
     }
-    else if (this.mode === 'br') brSpawn(this, p);
+    else if (this.mode === 'br') { brSpawn(this, p); if (this.bounce && p.deaths > 0) { p.owned.add('pistol'); p.wpn = 'pistol'; } } // renasceu: volta com pistola
     else if (p.bot) p.wpn = ['smg', 'rifle', 'shotgun', 'pistol', 'smg', 'rifle'][Math.floor(Math.random() * 6)];
     else p.wpn = PRIMARIES.includes(p.primary) ? p.primary : 'smg';
     p.maxHp = p.hp;
     p.owned.add(p.wpn);
     if (p.bot) { p.field ||= botPickField(); this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; }
-    this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team });
+    this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team, air: !!p.air });
   }
 
   // nasce olhando pro lado mais aberto (puxado pro meio do mapa), nunca de cara pra parede
@@ -461,6 +485,20 @@ export class Core {
         p.field = FIELD[m.field] && (p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null; // equipamento de campo
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
         this.event({ k: 'lo', id, los: p.los, tracer: p.tracer });
+        break;
+      }
+      case 'look': {
+        // visual do boneco: so o que existe no catalogo; repassa pra sala
+        p.look = cleanLook(m.look);
+        this.event({ k: 'look', id, look: p.look });
+        break;
+      }
+      case 'fall': {
+        // bate-volta: soltou o paraquedas e bateu forte no chao. So vale uma vez por queda, perto do chao.
+        if (!this.bounce || !p.alive || !(p.drop > 0)) break;
+        p.drop = 0; p.air = false;
+        const d = Math.max(0, Math.min(100, Number(m.dmg) || 0));
+        if (d > 0) this.damage(p, null, d, 'fall', false);
         break;
       }
       case 'state':
@@ -899,6 +937,18 @@ export class Core {
   // ---------- bots ----------
   tickBot(p, dt) {
     const ai = p.ai, M = this.M;
+    if (p.air) {
+      const fl = floorAt(M, p.pos[0], p.pos[2]);
+      if (p.pos[1] - fl < BR.bounce.dropH - 6) p.chute = true;
+      p.vel[1] = Math.max(p.vel[1] - 24 * dt, -(p.chute ? BR.bounce.chute : BR.bounce.freefall));
+      const z = this.zone?.to || this.zone, tx = z ? z.c[0] - p.pos[0] : 0, tz = z ? z.c[1] - p.pos[2] : 0, tl = Math.hypot(tx, tz) || 1;
+      const sp = tl > 8 ? BR.bounce.airSpeed * 0.7 : 0;
+      p.vel[0] += ((tx / tl) * sp - p.vel[0]) * Math.min(1, 2 * dt); p.vel[2] += ((tz / tl) * sp - p.vel[2]) * Math.min(1, 2 * dt);
+      p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7);
+      p.anim = p.chute ? 'chute' : 'fall';
+      if (p.onGround) { p.air = false; p.chute = false; p.drop = 0; ai.path = null; }
+      return;
+    }
     // dupla: caido fica no chao esperando o parceiro com a bomba de bicicleta
     if (p.down > 0) { p.vel[0] *= 0.8; p.vel[2] *= 0.8; p.vel[1] -= 24 * dt; p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7); p.anim = 'down'; return; }
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
@@ -1260,11 +1310,12 @@ export class Core {
       this.overT -= dt;
       // fim de partida: volta todo mundo pro lobby (pronto zerado)
       if (this.overT <= 0) {
-        if (this.useLobby) this.phase = 'lobby'; else this.reset();
+        if (this.useLobby) this.phase = 'lobby'; else if (this.autoNext) this.nextQuick(); else this.reset();
         this.over = false;
         for (const p of this.players.values()) p.lobbyReady = false;
         this.event({ k: 'restart' }); this.lobbyT = 0;
-        if (this.autoNext && !this.useLobby) this.event({ k: 'start' }); // cliente sai do lobby direto pra proxima
+        // cliente sai do lobby direto pra proxima (com o modo e o mapa novos pra carregar)
+        if (this.autoNext && !this.useLobby) this.event({ k: 'start', mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id });
       }
       this.snapshot(dt);
       return;
@@ -1296,8 +1347,11 @@ export class Core {
         // humano: depois do minimo, renasce quando pedir (botao/toque) ou sozinho 5 s depois
         // plantar a bomba: quem cai so volta na proxima rodada
         if (this.mode !== 'bomb' && this.mode !== 'br' && p.respawnT <= 0 && (p.bot || p.wantSpawn || p.respawnT <= -AUTO_SPAWN || p.deaths === 0)) { p.wantSpawn = false; this.spawn(p); }
+        // bate-volta: volta do ceu sozinho quando o tempo acaba (sem botao: a queda ja e a escolha de onde cair)
+        else if ((p.bounceBack || p.lateSpawn) && p.respawnT <= 0) { p.bounceBack = false; p.lateSpawn = false; this.spawn(p); }
         continue;
       }
+      if (p.drop > 0) p.drop -= dt;
       if (p.bot && !(this.freezeT > 0)) this.tickBot(p, dt);
       if (p.pos[1] < -20) this.kill(p, null, 'fall', false);
     }
@@ -1353,8 +1407,8 @@ export class Core {
     if (this.lobbyT > 0) return;
     this.lobbyT = 0.25;
     this.send(null, {
-      t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, map: this.M.id, host: this.hostId(),
-      cfg: { mode: this.duo ? 'duo' : this.mode, map: this.mapPick || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
+      t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, host: this.hostId(),
+      cfg: { mode: this.modeId(), map: this.mapPick || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
       players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), elite: !!p.elite })),
     });
   }
@@ -1378,7 +1432,7 @@ export class Core {
       });
     }
     this.send(null, {
-      t: 'snap', mode: this.mode, duo: this.duo, map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
+      t: 'snap', mode: this.mode, duo: this.duo, bounce: this.bounce, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,
@@ -1396,7 +1450,7 @@ export class Core {
   }
 
   info() {
-    return { mode: this.duo ? 'duo' : this.mode, map: this.M.id, humans: this.humans(), players: this.players.size, time: Math.round(this.time), phase: this.phase };
+    return { mode: this.modeId(), map: this.M.id, humans: this.humans(), players: this.players.size, time: Math.round(this.time), phase: this.phase };
   }
 }
 
@@ -1431,5 +1485,5 @@ function clampA(v, m) { return Math.max(-m, Math.min(m, v)); }
 function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
 
 // Jogo Rapido: modo sorteado quando nao tem partida aberta (dupla fica de fora: precisa de parceiro)
-export const QUICK_MODES = ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect', 'bomb', 'br'];
+export const QUICK_MODES = ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect', 'bomb', 'br', 'bounce'];
 export const QUICK_BOTS = 11;

@@ -41,6 +41,11 @@ export const CAMOS = [
   { id: 'tesla', code: 27, anim: true, legend: true, fx: 'storm' },
   { id: 'inkwell', code: 28, anim: true, legend: true, fx: 'drip' },
   { id: 'marquee', code: 29, anim: true, legend: true, fx: 'stars' },
+  // 30/10: leva nova de lendarias (variantes de elite novas)
+  { id: 'glacier', code: 32, anim: true, legend: true, fx: 'stars' },
+  { id: 'sludge', code: 33, anim: true, legend: true, fx: 'drip' },
+  { id: 'eclipse', code: 34, anim: true, legend: true, fx: 'storm' },
+  { id: 'stainedglass', code: 35, anim: true, legend: true, fx: 'stars' },
 ];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
@@ -76,6 +81,10 @@ export const CAMO_SWATCH = {
   hellfire: 'repeating-radial-gradient(circle at 50% 110%,#120806 0 5px,#ff6a1a 5px 6px,#120806 6px 9px),#120806',
   tesla: 'repeating-linear-gradient(90deg,#c9783f 0 4px,#7a3a18 4px 5px,#7fe6ff 5px 6px,#7a3a18 6px 7px)',
   inkwell: 'radial-gradient(ellipse 22% 30% at 32% 45%,#141210 30%,#ece9e1 34% 58%,transparent 62%),radial-gradient(ellipse 22% 30% at 68% 45%,#141210 30%,#ece9e1 34% 58%,transparent 62%),#08070a',
+  glacier: 'conic-gradient(from 30deg,#dff6ff,#8fd3f0 25%,#f6fdff 40%,#5fb3d9 60%,#e9f9ff 80%,#dff6ff)',
+  sludge: 'radial-gradient(circle at 30% 60%,#d8ff7a 10%,transparent 12%),radial-gradient(circle at 70% 35%,#d8ff7a 8%,transparent 10%),linear-gradient(#5f8f1a,#2c4a08)',
+  eclipse: 'radial-gradient(circle at 50% 50%,#0a0710 34%,#ffd36b 37%,#ff8a2a 42%,#3a1b5c 55%,#0a0710 75%)',
+  stainedglass: 'conic-gradient(#c2392b 0 60deg,#f2c94c 0 120deg,#2f5b8a 0 180deg,#7fb069 0 240deg,#b07cc6 0 300deg,#ef8a5b 0) 0 0/16px 16px',
   marquee: 'radial-gradient(circle,#ffe7a0 30%,#ffb21a 45%,transparent 50%) 0 0/9px 9px,linear-gradient(#b8862b 0 18%,#a3201a 18% 82%,#b8862b 82%)',
   void: 'radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),radial-gradient(circle at 70% 60%,#fff 1px,transparent 2px),radial-gradient(circle at 50% 50%,#5b3fd6,#1b0f3d 55%,#05030d)',
 };
@@ -334,6 +343,52 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     c = mix(c, lamp, bulb);
     glow = vec3(1.0, 0.75, 0.3) * bulb * on * 2.0 + gold * trim * smoothstep(0.95, 1.0, sin(p.z * 1.4 - t * 2.0)) * 0.8;
     return c;
+  }
+  if (k == 32) { // geleira: gelo facetado em placas; a geada corre pelas arestas e brilha
+    vec3 q = p * 4.5, id = floor(q), f = fract(q);
+    float h = c_h(id);
+    float edge = 1.0 - smoothstep(0.0, 0.08, min(min(f.x, 1.0 - f.x), min(min(f.y, 1.0 - f.y), min(f.z, 1.0 - f.z))));
+    vec3 ice = mix(vec3(0.55, 0.8, 0.93), vec3(0.93, 0.98, 1.0), h * 0.6 + lum * 0.5);
+    float frost = smoothstep(0.92, 1.0, sin((p.z + p.y) * 6.0 - t * 2.4 + h * 3.0));
+    float glint = step(0.97, c_h(floor(vec3(p.z * 18.0, p.y * 18.0, t * 2.0))));
+    glow = vec3(0.6, 0.9, 1.0) * (edge * frost * 1.6 + glint * 1.2);
+    return mix(ice * sh, vec3(1.0), edge * 0.55);
+  }
+  if (k == 33) { // lodo: gosma verde que mexe; bolhas sobem e estouram
+    float n = c_fbm(p * 2.8 + vec3(0.0, -t * 0.35, t * 0.2));
+    vec3 slime = mix(vec3(0.12, 0.25, 0.02), vec3(0.55, 0.85, 0.15), smoothstep(0.35, 0.75, n)) * sh;
+    vec2 q = vec2(p.z, p.y * 0.8 - t * 0.5) * 4.0; vec2 id = floor(q), f = fract(q) - 0.5;
+    float hb = c_h(vec3(id, 9.0)), life = fract(t * 0.6 + hb * 5.0);
+    float r = 0.12 + 0.18 * life;
+    float bub = step(0.6, hb) * (smoothstep(r, r - 0.04, length(f)) - smoothstep(r - 0.05, r - 0.09, length(f))) * (1.0 - smoothstep(0.85, 1.0, life));
+    glow = vec3(0.6, 1.0, 0.25) * (bub * 1.4 + smoothstep(0.7, 0.8, n) * 0.35);
+    return mix(slime, vec3(0.85, 1.0, 0.55), bub);
+  }
+  if (k == 34) { // eclipse: sol negro; a coroa dourada gira em volta e solta labaredas
+    vec2 q = vec2(p.z, p.y) * 1.6; vec2 cl = fract(q) - 0.5;
+    float r = length(cl), a = atan(cl.y, cl.x);
+    float disc = smoothstep(0.27, 0.25, r);
+    float flare = c_n(vec3(a * 3.0, r * 6.0, t * 1.4));
+    float ring = smoothstep(0.06, 0.0, abs(r - 0.3 - flare * 0.05)) * (0.6 + 0.4 * sin(a * 6.0 - t * 3.0));
+    vec3 sky = mix(vec3(0.12, 0.05, 0.2), vec3(0.03, 0.02, 0.05), smoothstep(0.3, 0.6, r)) * sh;
+    glow = vec3(1.0, 0.72, 0.25) * ring * 2.2 + vec3(0.7, 0.3, 1.0) * smoothstep(0.5, 0.3, r) * (1.0 - disc) * 0.25;
+    return mix(mix(sky, vec3(1.0, 0.8, 0.35), ring), vec3(0.01), disc);
+  }
+  if (k == 35) { // vitral: cacos coloridos com chumbo preto; a luz atravessa e varre os vidros
+    vec2 q = vec2(p.z, p.y) * 3.4; vec2 id = floor(q), f = fract(q);
+    float best = 9.0, second = 9.0; vec2 bid = id;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y)), c = id + o;
+      vec2 pt = o + vec2(c_h(vec3(c, 1.0)), c_h(vec3(c, 2.0))) - f;
+      float d = dot(pt, pt);
+      if (d < best) { second = best; best = d; bid = c; } else if (d < second) second = d;
+    }
+    float lead = 1.0 - smoothstep(0.03, 0.07, sqrt(second) - sqrt(best));
+    float hc = c_h(vec3(bid, 3.0));
+    vec3 glass = hc < 0.2 ? vec3(0.76, 0.22, 0.17) : hc < 0.4 ? vec3(0.95, 0.79, 0.3) : hc < 0.6 ? vec3(0.18, 0.36, 0.54) : hc < 0.8 ? vec3(0.5, 0.69, 0.41) : vec3(0.69, 0.49, 0.78);
+    float sweep = smoothstep(0.85, 1.0, sin(p.z * 1.8 + p.y * 0.9 - t * 1.6));
+    glow = glass * (0.35 + sweep * 1.4) * (1.0 - lead);
+    return mix(glass * (0.7 + lum * 0.6), vec3(0.03), lead);
   }
   if (k == 31) { // prestigio: laca preta, estrelas douradas piscando e um filete de ouro correndo
     vec3 q = p * 5.0, id = floor(q), f = fract(q) - 0.5;

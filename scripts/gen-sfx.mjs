@@ -57,6 +57,10 @@ const SFX = {
   crowd: ['1930s cartoon boxing crowd cheering and whistling, short burst, comedic', 2.0],
   pump: ['cartoon bicycle pump pumping three times, squeaky tchu tchu tchu with air hiss, comedic', 1.4],
   balloon: ['cartoon balloon inflating then floating away with a whistle, comedic, light', 1.2],
+  // 30/10: bate-volta (paraquedas)
+  chute: ['cartoon parachute popping open, big cloth fwump with a springy boing and a short slide whistle up, comedic', 1.2],
+  wind: ['steady falling through the sky wind rush, whooshing air, seamless loop, no music', 3.0],
+  splat: ['cartoon character slamming flat into the ground from high up, big comedic splat thud with a squeaky rubber honk', 1.0],
 };
 for (const [name, [text, dur]] of Object.entries(SFX)) {
   const out = `public/sfx/${name}.mp3`;

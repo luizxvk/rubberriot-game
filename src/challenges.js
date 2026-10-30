@@ -41,6 +41,11 @@ export const UNLOCKS = [
   { id: 'u_ww_garand', n: 40, xp: 1750, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_3', wpn: 'sniper' } },
   { id: 'u_ww_thompson', n: 3, xp: 1750, ok: (e) => e.type === 'multi', reward: { slot: 'body', id: 'subfusil_11', wpn: 'smg' } },
   { id: 'u_ww_ppsh', n: 100, xp: 2000, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_12', wpn: 'smg' } },
+  // visual do boneco: itens incomuns que so saem daqui (30/10)
+  { id: 'u_lk_plunger', n: 25, xp: 1250, ok: K('melee'), reward: { slot: 'look', id: 'hat:plunger' } },
+  { id: 'u_lk_knockout', n: 15, xp: 1250, ok: (e) => e.type === 'kill' && e.wpn === 'frag', reward: { slot: 'look', id: 'eyes:knockout' } },
+  { id: 'u_lk_oven', n: 5, xp: 1250, ok: (e) => e.type === 'win', reward: { slot: 'look', id: 'glove:oven' } },
+  { id: 'u_lk_stink', n: 8, xp: 1250, ok: (e) => e.type === 'streak', reward: { slot: 'look', id: 'fx:stink' } },
   { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
   { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
   { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
@@ -94,7 +99,7 @@ export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
 const ACTIVE = 4;
-const ORDER = ['u_am_fire', 'u_ember', 'u_ww_1911', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_ww_stg', 'u_splitter', 'u_tr_ink', 'u_ww_thompson', 'u_sscope', 'u_spitter',
+const ORDER = ['u_am_fire', 'u_lk_plunger', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_ww_thompson', 'u_sscope', 'u_spitter',
   'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_ww_ppsh', 'u_am_ap', 'u_fang', 'u_fscope', 'u_ww_tt', 'u_tr_toxic', 'u_bolt',
   'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice']; // WW2 (u_ww_*) intercaladas pra aparecer cedo
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];

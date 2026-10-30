@@ -174,7 +174,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .cross i { position: absolute; background: var(--xc, var(--paper)); border: 1.5px solid var(--ink); border-radius: 3px; }
 /* formatos da mira (Ajustes): cruz, cruz com ponto, ponto, circulo, T */
 .cross .xd, .cross .xr { position: absolute; display: none; border-radius: 50%; }
-.cross .xd { width: 6px; height: 6px; left: -4.5px; top: -4.5px; background: var(--xc, var(--paper)); border: 1.5px solid var(--ink); }
+.cross .xd { width: 7px; height: 7px; left: -3.5px; top: -3.5px; /* box-sizing border-box: metade da largura toda */ background: var(--xc, var(--paper)); border: 1.5px solid var(--ink); }
 .cross .xr { width: calc(var(--g) * 2 + 12px); height: calc(var(--g) * 2 + 12px); left: calc(-1 * var(--g) - 6px); top: calc(-1 * var(--g) - 6px); box-sizing: border-box; border: 2.5px solid var(--xc, var(--paper)); box-shadow: 0 0 0 1.5px var(--ink), inset 0 0 0 1.5px var(--ink); }
 .cross.x-dot i, .cross.x-circle i { display: none; }
 .cross.x-dot .xd, .cross.x-crossdot .xd, .cross.x-circle .xd, .cross.x-circle .xr { display: block; }
@@ -1307,7 +1307,7 @@ body.touchmode.is-dead #feed { visibility: hidden; } /* repetia o "te nocauteou"
 .use-prompt { max-width: min(420px, 44vw); white-space: normal; text-align: center; line-height: 1.2; }
 
 /* dica de primeira vez: balao de gibi com rabinho, embaixo do placar do topo */
-.tip { position: fixed; z-index: 7; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 74px); transform: translateX(-50%); width: min(380px, 88vw); display: grid; gap: 3px; padding: 10px 14px 8px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); font-family: var(--body); cursor: pointer; pointer-events: auto; }
+.tip { position: fixed; z-index: 9; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 74px); transform: translateX(-50%); width: min(380px, 88vw); display: grid; gap: 3px; padding: 10px 14px 8px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); font-family: var(--body); cursor: pointer; pointer-events: auto; }
 .tip::before { content: ''; position: absolute; left: 26px; top: -14px; border: 7px solid transparent; border-bottom-color: var(--ink); border-width: 0 9px 14px; }
 .tip b { font-family: var(--display); font-weight: 400; font-size: 17px; line-height: 1.1; }
 .tip span { font-weight: 700; font-size: 13px; line-height: 1.3; }
@@ -1456,7 +1456,7 @@ body.is-down #touch .tbtn:not([data-hid="use"]):not([data-hid="pause"]) { visibi
 
 /* ---------- treino (Seu Tinteiro): cartao de gibi no topo, uma tarefa por vez ---------- */
 body.tutorial #scorePlaque { display: none; }
-.tut { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%) rotate(-.6deg); z-index: 6;
+.tut { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%) rotate(-.6deg); z-index: 8;
   width: min(480px, calc(100vw - 360px)); min-width: 260px; max-height: 46vh; overflow: auto; pointer-events: none;
   background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 14px 10px; box-shadow: 5px 5px 0 var(--ink); }
 .tut.info { pointer-events: auto; cursor: pointer; }
@@ -1547,3 +1547,61 @@ body.tutorial #scorePlaque { display: none; }
 }
 @media (max-height: 420px) { .rovex-strip { display: none; } }
 @media (min-width: 761px) and (max-width: 1279px) and (min-height: 521px) and (max-height: 700px) { #menu:has(#friendRooms:not([hidden])) .rovex-strip { display: none; } }
+
+/* ---------- bate-volta: altura/dica e a lona do paraquedas ---------- */
+.chute-hud { position: absolute; left: 50%; bottom: 24%; translate: -50% 0; display: flex; align-items: center; gap: 10px; padding: 5px 14px 5px 6px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 30px; box-shadow: 4px 4px 0 var(--ink); font-family: var(--body); font-weight: 800; font-size: 14px; white-space: nowrap; z-index: 3; }
+.chute-hud[hidden] { display: none; }
+.chute-hud b { font-family: var(--display); font-weight: 400; font-size: 18px; background: var(--ink); color: var(--paper); border-radius: 20px; padding: 2px 10px; min-width: 64px; text-align: center; }
+body.chute-open .chute-hud b { background: var(--red); }
+.chute-canopy { position: absolute; left: -2vw; right: -2vw; top: 0; height: 15vh; pointer-events: none; translate: 0 -110%; transition: translate .35s cubic-bezier(.3, 1.6, .5, 1); z-index: 1; }
+.chute-canopy svg { width: 100%; height: 100%; display: block; }
+.chute-canopy .cord { position: absolute; top: 80%; width: 3px; height: 60vh; background: var(--ink); opacity: .55; transform-origin: top; }
+.chute-canopy .cord.l { left: 18%; rotate: -24deg; }
+.chute-canopy .cord.r { right: 18%; rotate: 24deg; }
+body.chute-open .chute-canopy { translate: 0 0; animation: chuteSway 2.4s ease-in-out infinite; }
+@keyframes chuteSway { 0%, 100% { rotate: -1deg; } 50% { rotate: 1deg; } }
+@media (max-height: 520px) { .chute-hud { bottom: 30%; font-size: 12px; } .chute-hud b { font-size: 15px; min-width: 52px; } }
+
+
+/* ---------- visual do boneco (o 3D gira no vao a esquerda, igual ao arsenal) ---------- */
+.look-card .card-head { flex-wrap: wrap; }
+.look-team { margin-left: auto; display: inline-flex; border: 3px solid var(--ink); border-radius: 30px; overflow: hidden; }
+.look-team button { font-family: var(--display); font-size: 14px; padding: 4px 12px; background: var(--paper); color: var(--ink); border: 0; }
+.look-team button[data-team="red"][aria-checked="true"] { background: var(--red); color: var(--paper); }
+.look-team button[data-team="blue"][aria-checked="true"] { background: var(--blue); color: var(--paper); }
+.look-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.look-tabs button { border: 3px solid var(--ink); border-radius: 30px; padding: 5px 12px; font-family: var(--display); font-size: 14px; background: var(--paper); color: var(--ink); }
+.look-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; max-height: min(52vh, 420px); overflow-y: auto; padding: 4px 4px 8px 2px; }
+.look-grid.swatches { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+.lk-it { position: relative; display: grid; gap: 3px; align-content: start; text-align: left; padding: 8px 10px; min-height: 58px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); transition: transform .1s, box-shadow .1s; }
+.lk-it b { font-family: var(--display); font-weight: 400; font-size: 15px; line-height: 1.1; }
+.lk-it:hover, .lk-it:focus-visible { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); outline: none; }
+.lk-it.on { background: var(--ink); color: var(--paper); box-shadow: 3px 3px 0 var(--red); }
+.lk-it.locked { opacity: .62; }
+.lk-it.locked.peek { opacity: 1; border-style: dashed; }
+.lk-it.sw { min-height: 58px; background: var(--c); }
+.lk-it.sw.on { box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--red); }
+.lk-r { justify-self: start; font-style: normal; font-weight: 800; font-size: 10px; padding: 0 6px; border-radius: 8px; border: 2px solid currentColor; line-height: 1.4; }
+.lk-r.r1 { color: var(--blue); background: #e3ebf3; }
+.lk-r.r2 { color: #8a5a00; background: #f6e7b8; border-color: #8a5a00; }
+.lk-it.on .lk-r { color: var(--paper); background: transparent; border-color: var(--paper); }
+.lk-lock { font-weight: 800; font-size: 11px; color: var(--red); }
+.lk-it.sw .lk-lock, .lk-it.sw .lk-r { position: absolute; left: 4px; bottom: 4px; background: var(--paper); border-radius: 8px; padding: 0 5px; }
+.look-note { margin: 8px 0 0; font-weight: 700; font-size: 12.5px; color: var(--graphite); }
+@media (max-height: 520px) {
+  .look-tabs { margin: 6px 0; gap: 4px; }
+  .look-tabs button { font-size: 12px; padding: 3px 9px; border-width: 2px; }
+  .look-grid { max-height: calc(100dvh - 190px); grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+  .lk-it { min-height: 46px; padding: 5px 8px; }
+  .lk-it b { font-size: 13px; }
+  .look-note { display: none; }
+}
+
+/* celular: a tela de morte com "toque pra voltar" fica acima da camada de toque (antes so o espectador ficava) */
+body.touchmode .dead.can { z-index: 8; }
+/* o cartao do treino saiu do #hud: some junto com o hud fora da partida */
+body:not(.ingame) .tut { display: none; }
+/* lona fechada: nada dela na tela (as cordas compridas ficavam aparecendo como dois riscos) */
+.chute-canopy { visibility: hidden; }
+body.chute-open .chute-canopy { visibility: visible; }

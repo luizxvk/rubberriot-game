@@ -184,7 +184,7 @@ export class Lobby {
     this.renderSide(m, myId);
     this.renderCfg(m, m.host === myId);
     $('lbMap').textContent = t('map_' + m.map);
-    $('lbMode').textContent = modeName(m.duo ? 'duo' : m.mode);
+    $('lbMode').textContent = modeName(m.duo ? 'duo' : m.bounce ? 'bounce' : m.mode);
     const host = m.host === myId;
     this.counting = m.phase === 'count';
     if (host !== this.isHost) { this.isHost = host; this.setReady(this.ready); }

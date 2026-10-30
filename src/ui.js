@@ -2,7 +2,7 @@
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS } from '../shared/weapons.js';
 import { SKILL_ICONS } from './skillicons.js';
 import { tip } from './tips.js';
-import { dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState } from './challenges.js';
+import { UNLOCKS, dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
@@ -11,6 +11,8 @@ import { CAMOS, CAMO_SWATCH } from './camos.js';
 import { DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
+import { LOOKS } from '../shared/looks.js';
+import { getLook, saveLook, lookOpen } from './lookstore.js';
 import { freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,20 +29,21 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look'];
   let settingsFromGame = false;
 
   ui.go = (name, fromGame = false) => {
     settingsFromGame = fromGame;
     for (const s of screens) $('scr-' + s).hidden = s !== name;
     ui.screen = name;
-    $('menu').classList.toggle('smithing', name === 'arsenal');
+    $('menu').classList.toggle('smithing', name === 'arsenal' || name === 'look');
     $('menu').classList.toggle('home', name === 'home');
     if (name === 'arsenal') { picking = false; renderSmith(); }
     if (name === 'skills') { renderSkills(); tip('skills'); }
     if (name === 'mp') ui.refreshRooms && ui.refreshRooms();
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
     if (name === 'controls') renderKeys();
+    if (name === 'look') renderLook();
     if (name === 'home') markNewChallenges();
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
@@ -129,6 +132,7 @@ export function initMenus(o) {
     ['toggle', 'autoSprint', 's_auto'],
     ['toggle', 'showFps', 's_fps'],
     ['toggle', 'threatRing', 's_threat'],
+    ['toggle', 'autoChute', 's_autoChute'],
     ['xhair'],
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
@@ -236,6 +240,35 @@ export function initMenus(o) {
   }
   document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
 
+  // ---------- visual do boneco: abas, itens com raridade e cadeado; o 3D gira ao lado (main.js) ----------
+  const LOOK_TABS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx'];
+  let lookTab = 'hat', lookTeam = 'red', lookPeek = null;
+  function renderLook() {
+    const cur = getLook();
+    $('lookTabs').innerHTML = LOOK_TABS.map(k => `<button role="tab" aria-selected="${k === lookTab}" data-lt="${k}">${t('lkt_' + k)}</button>`).join('');
+    document.querySelectorAll('#scr-look [data-team]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.team === lookTeam)));
+    const swatch = lookTab === 'gloveCol' || lookTab === 'shirt';
+    $('lookGrid').classList.toggle('swatches', swatch);
+    $('lookGrid').innerHTML = LOOKS[lookTab].map(it => {
+      const open = lookOpen(lookTab, it.id), on = cur[lookTab] === it.id, peek = lookPeek === it.id;
+      const lock = open ? '' : `<small class="lk-lock">${it.elite ? t('lookElite') : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
+      const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>`;
+      if (swatch) return `<button class="lk-it sw ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}" style="--c:${it.id}" aria-label="${it.id}">${it.elite ? '<i class="lk-r r2">Elite</i>' : ''}${lock}</button>`;
+      return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}"><b>${t('lk_' + lookTab + '_' + it.id)}</b>${rar}${lock}</button>`;
+    }).join('');
+    const show = lookPeek ? { ...cur, [lookTab]: lookPeek } : cur;
+    const pk = lookPeek && LOOKS[lookTab].find(i => i.id === lookPeek);
+    $('lookNote').textContent = !pk ? t('lookTeamNote') : pk.elite ? t('lookPeekElite') : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
+    o.onLook?.(show, lookTeam);
+    $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; renderLook(); });
+    $('lookGrid').querySelectorAll('.lk-it').forEach(b => b.onclick = () => {
+      const id = b.dataset.id;
+      if (b.classList.contains('locked')) { lookPeek = lookPeek === id ? null : id; audio.play('ui_hover', { ui: true }); renderLook(); return; }
+      lookPeek = null; saveLook({ ...getLook(), [lookTab]: id }); audio.play('swap', { ui: true, vol: 0.6 }); renderLook();
+    });
+  }
+  document.querySelectorAll('#scr-look [data-team]').forEach(b => b.onclick = () => { lookTeam = b.dataset.team; audio.play('ui_click', { ui: true, vol: 0.6 }); renderLook(); });
+
   // ---------- amigos jogando: salas abertas de amigos, no canto (no lugar das novidades) ----------
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   let frBusy = false;
@@ -257,14 +290,14 @@ export function initMenus(o) {
     });
   }
   ui.refreshFriendRooms = refreshFriendRooms;
-  setInterval(refreshFriendRooms, 15000);
+  setInterval(refreshFriendRooms, 30000);
   setTimeout(refreshFriendRooms, 1500);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFriendRooms(); });
   markNewChallenges();
 
   // texto do desafio de desbloqueio e o nome do premio
   function chName(u) { return t('ch_' + u.id, { n: u.n }); }
-  function rewardName(r) { if (r.slot === 'tracer') return t('s_tracer') + ' ' + t('tr_' + r.id.slice(3)); if (r.slot === 'ammo') return t('slot_ammo') + ' ' + t('am_' + r.id.slice(3)); return r.slot === 'camo' ? t('camo_' + r.id) : `${partName(r.slot, r.id)} (${wName(r.wpn)})`; }
+  function rewardName(r) { if (r.slot === 'look') return t('look') + ': ' + t('lk_' + r.id.replace(':', '_')); if (r.slot === 'tracer') return t('s_tracer') + ' ' + t('tr_' + r.id.slice(3)); if (r.slot === 'ammo') return t('slot_ammo') + ' ' + t('am_' + r.id.slice(3)); return r.slot === 'camo' ? t('camo_' + r.id) : `${partName(r.slot, r.id)} (${wName(r.wpn)})`; }
 
   // previa de item bloqueado: aparece no modelo e nos status, mas nao vai pro loadout
   let preview = null;

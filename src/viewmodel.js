@@ -3,9 +3,10 @@
 // erguida no ombro com o braco bombeando), recarga e troca.
 import * as THREE from 'three';
 import { umbrellaMesh } from './fieldview.js';
-import { ink, PAL, wordTexture } from './toon.js';
+import { ink, toon, PAL, wordTexture } from './toon.js';
 import { Hose } from './character.js';
 import { buildGun } from './arsenal.js';
+import { ovenTex } from './looks3d.js';
 
 const VM_SCALE = 0.8;
 // Inspecionar, um por categoria. Chave: [t 0..1, x, y, z, rx, ry, rz, maoEsqX, maoEsqY, maoEsqZ]
@@ -165,7 +166,7 @@ export class ViewModel {
       palm.scale.set(1, 0.85, 1.25); open.add(palm);
       for (let i = 0; i < 3; i++) {
         const f = ink(new THREE.CapsuleGeometry(0.016, 0.04, 3, 6), PAL.white, 0.006);
-        f.position.set(-0.03 + i * 0.03, 0.02, -0.05); f.rotation.x = -1.2;
+        f.position.set(-0.03 + i * 0.03, 0.02, -0.05); f.rotation.x = -1.2; f.userData.finger = true;
         open.add(f);
       }
       const th = ink(new THREE.CapsuleGeometry(0.016, 0.03, 3, 6), PAL.white, 0.006);
@@ -188,7 +189,7 @@ export class ViewModel {
       const cuff = ink(new THREE.CylinderGeometry(0.045, 0.06, 0.05, 10), PAL.white, 0.008);
       cuff.position.set(0, -0.01, 0.06); cuff.rotation.x = Math.PI / 2; g.add(cuff);
       fist.visible = false;
-      g.add(open, fist); g.userData = { open, fist };
+      g.add(open, fist); g.userData = { open, fist, cuff };
       return g;
     };
     this.gloveR = glove(); this.gloveL = glove();
@@ -255,6 +256,38 @@ export class ViewModel {
 
   inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = (INSPECTS[this.wpn] || INSPECTS.rifle).dur; }
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
+  // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
+  setGloves(look) {
+    const style = look?.glove || 'classic';
+    const col = style === 'golden' ? 0xd4a017 : style === 'oven' ? 0xffffff : parseInt(String(look?.gloveCol || '#faf8f2').slice(1), 16);
+    const mat = style === 'oven' ? toon(0xffffff, { map: ovenTex() }) : toon(col);
+    for (const g of [this.gloveR, this.gloveL]) {
+      if (!g) continue;
+      if (g.userData.extra) { for (const m of g.userData.extra.userData.parts || []) m.removeFromParent(); g.remove(g.userData.extra); }
+      const ex = g.userData.extra = new THREE.Group();
+      g.add(ex);
+      g.traverse(o => { if (o.isMesh && o.material?.isMeshToonMaterial) o.material = mat; if (o.userData.finger) o.visible = !['mitten', 'oven', 'boxing'].includes(style); });
+      const add = (m, c = mat) => { if (c) m.material = c; ex.add(m); return m; };
+      // luva sem dedos (la, forno, boxe): uma aba so na frente da mao aberta
+      if (['mitten', 'oven', 'boxing'].includes(style)) {
+        const flap = add(ink(new THREE.SphereGeometry(0.04, 10, 8), col, 0.007)); flap.scale.set(1.25, 0.7, 1.15); flap.position.set(-0.004, 0.018, -0.055);
+        g.userData.open.add(flap); flap.userData.styleFlap = true;
+        const th = add(ink(new THREE.SphereGeometry(0.02, 8, 6), col, 0.006)); th.position.set(0.05, 0.02, -0.02); g.userData.open.add(th);
+        ex.userData.parts = [flap, th];
+      }
+      if (style === 'boxing') { const lace = add(ink(new THREE.TorusGeometry(0.052, 0.006, 4, 12), PAL.white, 0), null); lace.position.set(0, -0.01, 0.05); }
+      if (style === 'spiked') {
+        const band = add(ink(new THREE.CylinderGeometry(0.058, 0.064, 0.04, 12), PAL.ink, 0.006), null); band.position.set(0, -0.01, 0.07); band.rotation.x = Math.PI / 2;
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2, s = add(ink(new THREE.ConeGeometry(0.011, 0.03, 6), PAL.white, 0.004), null);
+          s.position.set(Math.cos(a) * 0.072, -0.01 + Math.sin(a) * 0.072, 0.07); s.rotation.z = a - Math.PI / 2;
+        }
+      }
+      if (style === 'claw') for (const x of [-0.03, 0, 0.03]) { const c = add(ink(new THREE.ConeGeometry(0.011, 0.07, 6), PAL.paper, 0.004), null); c.position.set(x, 0.04, -0.075); c.rotation.x = -Math.PI / 2 - 0.25; }
+      if (style === 'golden') { const ring = add(ink(new THREE.TorusGeometry(0.019, 0.006, 6, 12), 0xffe28a, 0), null); ring.position.set(0, 0.024, -0.058); ring.rotation.x = -1.2; }
+      g.scale.setScalar(0.8 * (style === 'boxing' ? 1.3 : style === 'oven' ? 1.12 : style === 'mitten' ? 1.06 : 1));
+    }
+  }
 
   // st: { dt, moving, speed, sprint, tac, ads(0..1 alvo), crouch, slide, air, lookDX, lookDY, firing }
   update(st) {

@@ -66,6 +66,10 @@ export const BR = {
   // dupla: caido sangra `down` s (com `downHp` de vida pra quem quiser terminar); parceiro segura usar a
   // `reviveR` m por `revive` s e ele levanta com `reviveHp`. Caido rasteja a `crawl` da velocidade.
   duo: { down: 30, downHp: 100, revive: 4, reviveR: 2.6, reviveHp: 30, crawl: 0.3 },
+  // Bate-Volta: renasce ate a fase `until` da iris (depois disso vale o ringue e, depois, eliminacao);
+  // nasce a `dropH` m do chao; paraquedas desce a `chute` m/s, queda livre ate `freefall`; bater no chao
+  // acima de `safe` m/s tira `dmg` de vida por m/s a mais (so nesse modo)
+  bounce: { until: 2, wait: 8, dropH: 70, chute: 4.5, freefall: 20, safe: 10, dmg: 5, airSpeed: 7 },
   dropEvery: 55, dropFall: 6, lootWpn: ['pistol', 'pistol', 'smg', 'smg', 'rifle', 'rifle', 'shotgun', 'sniper'],
 };
 // Tipos de bala (peca "Municao" do Arsenal, por arma; liberadas por desafio). Mods multiplicam os status
@@ -109,6 +113,8 @@ export const MODES = {
   // battle royale: todo mundo nasce no soco, pega arma/colete no chao e a iris fecha o mapa. Ultimo de pe vence.
   br:       { name: 'Ultimo de Pe',      teams: false, limit: 0,   time: 900, desc: 'Nasce no soco, pega arma e colete no chao e foge da iris que fecha. Ultimo de pe vence.' },
   // mesmo battle royale em duplas: zerou a vida com o parceiro de pe = fica caido ate ele reerguer
+  // battle royale com renascimento: todo mundo cai de paraquedas; ate a fase 2 da iris quem cai volta do ceu
+  bounce:   { name: 'Bate-Volta', teams: false, limit: 0, time: 900, desc: 'Battle royale caindo de paraquedas. Ate a iris fechar duas vezes, quem cai volta do ceu. Depois e ringue, e depois e pra valer.' },
   duo:      { name: 'Ultimo de Pe: Dupla', teams: true,  limit: 0,   time: 900, desc: 'Battle royale em dupla. Caiu, o parceiro te reergue com a bomba de bicicleta. Ultima dupla de pe vence.' },
 };
 
@@ -190,5 +196,14 @@ export const BLUEPRINTS = {
                    mods: { spread: 0.78, dmg: 1.06, rate: 1.18, reload: 1.2 } },
   bp_matabarrao: { wpn: 'sniper',  mag: 'big', lo: { body: 'sniper_0', scope: 'sniper_scope_1', camo: 'inkwell', tracer: 'ink', paint: '#141210', accent: '#ece9e1', retColor: 'white' },
                    mods: { adsTime: 0.82, move: 1.06, dmg: 0.94, kick: 1.25 } },
+  // 30/10: leva nova (camos lendarias geleira, lodo, eclipse, vitral)
+  bp_geleira:    { wpn: 'sniper',  lo: { body: 'sniper_2', scope: 'sniper_scope_2', camo: 'glacier', tracer: 'ice', paint: '#dff6ff', accent: '#5fb3d9', retColor: 'white' },
+                   mods: { dmg: 1.05, rate: 1.1, adsTime: 0.9, kick: 1.12 } },
+  bp_lodo:       { wpn: 'smg',     mag: 'big', lo: { body: 'subfusil_7', scope: 'subfusil_scope_7', handle: 'subfusil_handle_3', laser: 'laser_2', camo: 'sludge', tracer: 'toxic', paint: '#2c4a08', accent: '#d8ff7a', retColor: 'white' },
+                   mods: { rate: 0.92, spread: 1.15, reload: 0.9, dmg: 0.96 } },
+  bp_eclipse:    { wpn: 'pistol',  mag: 'small', lo: { body: 'pistol_7', scope: 'pistol_scope_5', laser: 'laser_1', camo: 'eclipse', tracer: 'void', paint: '#0a0710', accent: '#ffd36b', retColor: 'amber' },
+                   mods: { dmg: 1.12, rate: 1.12, mag: 0.85, move: 0.97 } },
+  bp_vitral:     { wpn: 'shotgun', lo: { body: 'shotgun_1', scope: 'subfusil_scope_6', handle: 'subfusil_handle_3', laser: 'laser_2', camo: 'stainedglass', tracer: 'rainbow', paint: '#1b1916', accent: '#f2c94c', retColor: 'amber' },
+                   mods: { spread: 0.86, dmg: 1.03, reload: 1.15, move: 0.96 } },
 };
 export const bpMods = (bp) => BLUEPRINTS[bp]?.mods || {};

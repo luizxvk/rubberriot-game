@@ -108,7 +108,7 @@ export class Hud {
       const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
       html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else if (cfg.teams) {
-      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
+      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''}">${z.id}</span>`).join('')}</div>`;
       if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       html = `<div class="red"><span class="lbl">${t('h_red')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('h_blue')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
@@ -501,7 +501,7 @@ export class Hud {
     const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}"><td>${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
-    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.mode)}</h3>`;
+    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.mode)}</h3>`;
     if (cfg.teams) {
       for (const tm of ['red', 'blue']) html += `<table><caption style="text-align:left;font-family:var(--display);padding:6px 0 2px;color:var(--${tm})">${t(TEAM[tm])} · ${snap.teamScore[tm]}</caption>${head}${rows(sort(players.filter(p => p.team === tm)))}</table>`;
     } else html += `<table>${head}${rows(sort(players))}</table>`;

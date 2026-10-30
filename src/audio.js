@@ -6,7 +6,8 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'explosion', 'pan', // existiam mas nao carregavam: granada e bigorna tocavam ruido sintetico
   'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt', // momentos que eram mudos (contagem, rodada, fim, assist, renascer) e o ferrolho
   'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
-  'ringbell', 'crowd', 'pump', 'balloon']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
+  'ringbell', 'crowd', 'pump', 'balloon', // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
+  'chute', 'wind', 'splat']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
 function soundEdges(b) {
@@ -254,6 +255,21 @@ class Audio {
       g.gain.setTargetAtTime(0, t, 0.4); s.stop(t + 2.5);
       this.musicSrc = null;
     }
+  }
+
+  // som continuo (vento da queda livre): vol 0 apaga com fade
+  loop(name, vol) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime; this.loops ||= {};
+    let L = this.loops[name];
+    if (!L && vol > 0 && this.buf[name]) {
+      const s = this.ctx.createBufferSource(); s.buffer = this.buf[name]; s.loop = true;
+      const g = this.ctx.createGain(); g.gain.value = 0; s.connect(g).connect(this.sfxBus); s.start();
+      L = this.loops[name] = { s, g };
+    }
+    if (!L) return;
+    L.g.gain.setTargetAtTime(Math.max(0, vol) * this.vol.sfx, t, 0.15);
+    if (vol <= 0) { L.s.stop(t + 1); delete this.loops[name]; }
   }
 
   duck(amount, time = 0.6) {
