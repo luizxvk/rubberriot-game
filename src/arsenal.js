@@ -23,12 +23,12 @@ let gunTex = null;
 export const MELEE = Array.from({ length: 15 }, (_, i) => 'melee_' + i);
 const MELEE_LEN = [0.34, 0.5, 0.3, 0.72, 0.52, 0.36, 0.52, 0.56, 0.3, 0.55, 0.28, 0.5, 0.6, 0.52, 0.5];
 export const CATEGORY = {
-  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: [] },
-  smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_11', 'subfusil_12'], scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
-  rifle: { bodies: [...range('fusil_', 1, 7), 'fusil_9'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
-  shotgun: { bodies: ['shotgun_1', 'shotgun_2'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9'], chargers: ['shotgun_charguer_1'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
+  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (sai de desafio)
+  smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_12', 'subfusil_13'], scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
+  rifle: { bodies: [...range('fusil_', 1, 7), 'fusil_9', 'fusil_10', 'fusil_11', 'fusil_12'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
+  shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9'], chargers: ['shotgun_charguer_1'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
   melee: { bodies: MELEE, scopes: [], chargers: [], handles: [] },
-  sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3'], scopes: ['sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'], chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: [] },
+  sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], scopes: ['sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'], chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: [] },
 };
 // So uma peca (mira, pente, empunhadura), pintada como na arma: foto do banner de desbloqueio
 export function buildPartPreview(id, lo = {}) {
@@ -79,10 +79,11 @@ export function partName(slot, id) {
   const n = id.match(/(\d+)$/)?.[1] ?? '0';
   if (slot === 'body' && id.startsWith('melee_')) return t('ml_' + n);
   if (slot === 'body' && WW2_BODIES.includes(id)) return t('ww_' + id);
-  if (slot === 'body') return wName(catOf(id)) + ' ' + t('model') + ' ' + n;
+  if (slot === 'body') { const k = 'bn_' + id, s = t(k); return s !== k ? s : wName(catOf(id)) + ' ' + t('model') + ' ' + n; }
   if (slot === 'scope') { const b = parts[id]?.box; const big = b && (b.max.z - b.min.z) >= 0.6; return (big ? t('scopeBig') : t('scopeDot')) + ' ' + n + (id.startsWith('sniper') ? ' ' + t('long') : ''); }
   if (slot === 'charger') return t('mag') + ' ' + n;
   if (slot === 'laser') return t(id === 'laser_2' ? 'laserTac' : 'laserDot');
+  if (id === 'akimbo') return t('akimbo');
   return t('grip') + ' ' + n;
 }
 function catOf(id) { return id.startsWith('melee') ? 'melee' : id.startsWith('subfusil') ? 'smg' : id.startsWith('fusil') ? 'rifle' : id.startsWith('pistol') ? 'pistol' : id.startsWith('shotgun') ? 'shotgun' : 'sniper'; }
@@ -150,7 +151,7 @@ export function loadArsenal() {
       // lente das miras: faces verdes viradas pro eixo do cano viram buraco (vidro)
       const pal = paletteReader(gunTex);
       if (pal) for (const [name, p] of Object.entries(parts)) if (/scope/.test(name)) { p.lens = stripLens(p.geo, pal); levelScope(p); }
-    }).then(() => loadWW2(loader)).catch(e => console.warn('low_poly_guns.glb nao carregou', e)),
+    }).then(() => cutForeMounts()).then(() => loadWW2(loader)).then(() => loadRevolver(loader)).then(() => loadPack2(loader)).then(() => loadSniper4(loader)).catch(e => console.warn('low_poly_guns.glb nao carregou', e)),
     loader.loadAsync(import.meta.env.BASE_URL + 'models/src/melee.glb').then(g => {
       // cada mesh do arquivo vira melee_i: cabo no -z, ponta/cabeca no +z (sem a rotacao do Sketchfab)
       let i = 0;
@@ -174,6 +175,57 @@ export function loadArsenal() {
   return ready;
 }
 
+// Suporte de punho que ja vem no corpo (inclinado): com empunhadura equipada ele some e o punho encaixa
+// reto, direto embaixo do trilho, no meio de onde o suporte ficava. z = trecho do suporte, y = fundo do trilho
+// (medidos no perfil do corpo). Sem empunhadura o corpo continua como veio.
+const FORE_MOUNTS = { fusil_6: { z0: -4.62, z1: -4.2, y: 1.18 } };
+// marcas a mao em corpos do pacote principal (fracao do comprimento a partir do cano), pedidos dele 30/10:
+// Cuspideira: punho embaixo da ponta do corpo (pendia na quina de tras); Espirro: mira no trecho reto do
+// receptor (na lombada da alca ela subia e ficava com vao)
+const BODY_MARKS = { subfusil_5: { fore: 0.29 }, shotgun_2: { mid: 0.51 } };
+// mira com bloco grande embaixo (pedido dele 30/10): fica so o pezinho + o tubo. below = topo do bloco
+const SCOPE_TRIM = { fusil_scope_6: { below: 1.57 }, sniper_scope_1: { below: 8.785 } }; // luneta 1: so um tiquinho do pe embaixo do tubo (rente)
+function cutForeMounts() {
+  for (const [id, M] of Object.entries(BODY_MARKS)) {
+    const P = parts[id];
+    if (!P) continue;
+    const zAt = (f) => P.box.min.z + (P.box.max.z - P.box.min.z) * f;
+    if (M.fore !== undefined) P.fore = zAt(M.fore);
+    if (M.mid !== undefined) P.mid = zAt(M.mid);
+  }
+  for (const [id, T] of Object.entries(SCOPE_TRIM)) {
+    const P = parts[id];
+    if (!P) continue;
+    const g = P.geo.index ? P.geo.toNonIndexed() : P.geo, p = g.attributes.position, keep = [];
+    for (let t = 0; t < p.count / 3; t++) if (Math.max(p.getY(t * 3), p.getY(t * 3 + 1), p.getY(t * 3 + 2)) > T.below) keep.push(t);
+    P.geo = geoTake(g, keep);
+    // o que sobrou e atravessa a linha (pe inclinado de cima a baixo) e' achatado nela: fica so um filete de pe
+    const q = P.geo.attributes.position; for (let i = 0; i < q.count; i++) if (q.getY(i) < T.below) q.setY(i, T.below);
+    P.geo.computeVertexNormals(); P.geo.computeBoundingBox(); P.box = P.geo.boundingBox.clone();
+  }
+  for (const [id, M] of Object.entries(FORE_MOUNTS)) {
+    const P = parts[id];
+    if (!P) continue;
+    let g = P.geo.index ? P.geo.toNonIndexed() : P.geo.clone();
+    const pos = g.attributes.position, keep = [];
+    for (let i = 0; i < pos.count; i += 3) {
+      let y = 0, z = 0;
+      for (let k = 0; k < 3; k++) { y += pos.getY(i + k) / 3; z += pos.getZ(i + k) / 3; }
+      if (z > M.z0 && z < M.z1 && y < M.y) continue; // triangulo do suporte
+      keep.push(i, i + 1, i + 2);
+    }
+    const out = new THREE.BufferGeometry();
+    for (const [k, a] of Object.entries(g.attributes)) {
+      const arr = new a.array.constructor(keep.length * a.itemSize);
+      keep.forEach((v, j) => { for (let c = 0; c < a.itemSize; c++) arr[j * a.itemSize + c] = a.array[v * a.itemSize + c]; });
+      out.setAttribute(k, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
+    }
+    out.computeBoundingBox();
+    P.geoNoFore = out;
+    P.fore = (M.z0 + M.z1) / 2; P.foreY = M.y + 0.005;
+  }
+}
+
 // ---------- pacote WW2 (so as armas de fogo) ----------
 // Cada arma vira um corpo novo da categoria, com o pente original dela (ja vem encaixado no arquivo).
 // O arquivo tem o comprimento em X: gira pro padrao do jogo (cano no -z, cima +y; o cano e a ponta mais
@@ -191,13 +243,55 @@ export function loadArsenal() {
 const WW2 = [
   { node: 'M1 Garand_8', id: 'sniper_3', cat: 'sniper', k: 0.92, grip: 0.73, sight: 0.655, swap: true }, // Garand de atirador (M1C): mora na Luneta
   { node: 'STG 44_28', id: 'fusil_9', cat: 'rifle', k: 1, grip: 0.66, mid: 0.44, fore: 0.29 },
-  { node: 'Thompson M1_33', mag: 'Thompson M1 Maganize_37', fit: 'hang', well: 0.47, id: 'subfusil_11', cat: 'smg', k: 1, grip: 0.6, mid: 0.47 },
   { node: 'PPSH 41_23', id: 'subfusil_12', cat: 'smg', k: 1, grip: 0.62, fore: 0.25 }, // o corpo ja traz o tambor: sem pente separado
   { node: 'M1911_13', mag: 'M1911 Maganize_17', fit: 'grip', id: 'pistol_7', cat: 'pistol', k: 1, grip: 0.81 },
   { node: 'Mauser C96_18', id: 'pistol_8', cat: 'pistol', k: 1.1, grip: 0.9 },
   { node: 'TT Pistol_38', mag: 'TT Pistol Maganize_42', fit: 'grip', id: 'pistol_9', cat: 'pistol', k: 0.95, grip: 0.83 },
 ];
-export const WW2_BODIES = WW2.map(w => w.id);
+export const WW2_BODIES = [...WW2.map(w => w.id), 'pistol_10']; // pistol_10 = revolver (nome proprio, fora da numeracao)
+
+// Revolver (30/10, modelo dele): pecas soltas. Tambor e cao viram malhas proprias pra animar (tambor gira
+// 1/6 por tiro, cao arma e bate); o resto vira o corpo. A camuflagem vai no material de MAIOR area e o
+// destaque nos outros (pedido dele). Cano ja aponta pra -z.
+const REV = { id: 'pistol_10', k: 1.08, grip: 0.84, mid: 0.6 };
+function loadRevolver(loader) {
+  return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/revolver.glb').then(g => {
+    g.scene.updateMatrixWorld(true);
+    const pal = paletteReader(gunTex);
+    // metal (maior area) na zona VERDE: pinta com a Pintura e leva a camo (camoGreen); armacao e cabo no destaque
+    const uvCamo = pal ? paletteUV(pal, [90, 170, 60]) : [0.5, 0.5], uvAccent = pal ? paletteUV(pal, [178, 128, 84]) : [0.5, 0.5];
+    const meshes = [];
+    g.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+    // area por material: o maior leva a camo
+    const area = {};
+    const triArea = (ge) => { const p = ge.attributes.position, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(); let s = 0; for (let i = 0; i < p.count; i += 3) { a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2); s += b.sub(a).cross(c.sub(a)).length() / 2; } return s; };
+    // no espelhado (escala negativa no esqueleto) vira as faces do avesso: inverte a ordem dos vertices
+    const unflip = (ge) => { const p = ge.attributes.position; for (let i = 0; i < p.count; i += 3) for (let c = 0; c < p.itemSize; c++) { const t = p.getComponent(i + 1, c); p.setComponent(i + 1, c, p.getComponent(i + 2, c)); p.setComponent(i + 2, c, t); } return ge; };
+    const geos = meshes.map(o => { let ge = o.geometry.clone().applyMatrix4(o.matrixWorld); if (ge.index) ge = ge.toNonIndexed(); if (o.matrixWorld.determinant() < 0) unflip(ge); for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k); const mn = o.material?.name || ''; area[mn] = (area[mn] || 0) + triArea(ge); return { ge, mn, node: o.parent?.name || o.name }; });
+    const big = Object.entries(area).sort((x, y) => y[1] - x[1])[0]?.[0];
+    for (const q of geos) { const uv = q.mn === big ? uvCamo : uvAccent, n = q.ge.attributes.position.count, a = new Float32Array(n * 2); for (let i = 0; i < n; i++) { a[i * 2] = uv[0]; a[i * 2 + 1] = uv[1]; } q.ge.setAttribute('uv', new THREE.BufferAttribute(a, 2)); }
+    const isDrum = (q) => /^Cylinder_/.test(q.node) || /^Cylinder$/.test(q.node), isHammer = (q) => /^Hammer/.test(q.node);
+    // o tambor vem com as faces do avesso no proprio modelo (via-se por dentro e o contorno tampava): desvira
+    for (const q of geos) if (isDrum(q)) unflip(q.ge);
+    const bodyG = mergeGeometries(geos.filter(q => !isDrum(q) && !isHammer(q)).map(q => q.ge)), drumG = mergeGeometries(geos.filter(isDrum).map(q => q.ge)), hamG = mergeGeometries(geos.filter(isHammer).map(q => q.ge));
+    // escala pelo comprimento medio das pistolas (sem as WW2) e centraliza
+    const all = mergeGeometries([bodyG, drumG, hamG].filter(Boolean)); all.computeBoundingBox();
+    const b = all.boundingBox, len = b.max.z - b.min.z, c = b.getCenter(new THREE.Vector3());
+    const ls = CATEGORY.pistol.bodies.filter(id => parts[id] && !WW2_BODIES.includes(id)).map(id => parts[id].box.max.z - parts[id].box.min.z);
+    const k = (ls.reduce((s, x) => s + x, 0) / Math.max(1, ls.length)) * REV.k / len;
+    const m = new THREE.Matrix4().makeScale(k, k, k).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+    for (const ge of [bodyG, drumG, hamG]) if (ge) { ge.applyMatrix4(m); ge.computeVertexNormals(); ge.computeBoundingBox(); }
+    const bb = bodyG.boundingBox.clone().union(drumG?.boundingBox || bodyG.boundingBox).union(hamG?.boundingBox || bodyG.boundingBox);
+    const body = parts[REV.id] = { geo: bodyG, box: bb, ww2: true, camoGreen: true, metal: '#2a2724' };
+    const blen = bb.max.z - bb.min.z, zAt = (f) => bb.min.z + blen * f;
+    const pr = profile(REV.id), gz = zAt(REV.grip);
+    body.grip = { zc: gz, z0: gz - blen * 0.04, z1: gz + blen * 0.04, lo: pr.lo[sliceOf(pr, gz)] };
+    body.mid = zAt(REV.mid);
+    // pecas animadas: tambor gira no proprio eixo (z); cao gira na base (x)
+    if (drumG) { const db = drumG.boundingBox; body.drum = { geo: drumG, pivot: new THREE.Vector3((db.min.x + db.max.x) / 2, (db.min.y + db.max.y) / 2, 0) }; }
+    if (hamG) { const hb = hamG.boundingBox; body.hammer = { geo: hamG, pivot: new THREE.Vector3((hb.min.x + hb.max.x) / 2, hb.min.y + (hb.max.y - hb.min.y) * 0.2, hb.min.z + (hb.max.z - hb.min.z) * 0.25) }; }
+  }).catch(e => console.warn('revolver.glb nao carregou', e));
+}
 const nodeName = (s) => s.replace(/\s/g, '_').replace(/[[\].:/]/g, ''); // como o GLTFLoader renomeia
 // celula da paleta mais perto da cor pedida (amostra so o miolo de areas lisas, longe das bordas)
 function paletteUV(pal, rgb) {
@@ -270,6 +364,171 @@ function loadWW2(loader) {
       mg.translate(tx, ty, tz); mg.computeBoundingBox(); mag.box = mg.boundingBox.clone();
     }
   }).catch(e => console.warn('ww2_weapons.glb nao carregou', e));
+}
+
+// ---------- pacote 2 (AK, AR, DMR e MP5; pedido dele 30/10) ----------
+// Vem deitado no eixo X, uma malha por material: preto = metal (leva a camo), branco = destaque.
+// O pente vem colado no corpo: magCut recorta (fracoes do comprimento, a partir do cano) os triangulos
+// abaixo do fundo do receptor nesse trecho e vira o pente original, entao os outros pentes encaixam no lugar.
+// grip/mid/fore: mesmas marcas da WW2 (fracao a partir do cano). scopeCut tira a mira que vem colada.
+const PACK2 = [
+  { node: 'AK_10', id: 'fusil_10', cat: 'rifle', k: 1.04, grip: 0.685, mid: 0.5, magCut: [0.4, 0.57] },
+  { node: 'AR_7', id: 'fusil_11', cat: 'rifle', k: 1, grip: 0.7, mid: 0.52, magCut: [0.46, 0.58], scopeCut: [0.46, 0.56, 0.35] },
+  { node: 'dmr .45_12', id: 'fusil_12', cat: 'rifle', k: 1.08, grip: 0.72, mid: 0.5, magCut: [0.46, 0.57] },
+  { node: 'MP5_8', id: 'subfusil_13', cat: 'smg', k: 1, grip: 0.64, mid: 0.56, magCut: [0.37, 0.49] },
+];
+// AA-12 (pedido dele 30/10): escopeta automatica, malha unica com textura (a cor da textura decide as zonas).
+// scopeCut tira a alca traseira alta (batia na mira) e scopeCut2 a massa da frente (aparecia no ADS).
+const AA12 = [{ node: 'aa12', id: 'shotgun_3', cat: 'shotgun', k: 1, grip: 0.657, mid: 0.48, magCut: [0.4, 0.54], scopeCut: [0.6, 0.74], scopeCut2: [0, 0.16] }]; // scopeCut2: massa da frente (aparecia na mira ADS)
+export const PACK2_BODIES = [...PACK2, ...AA12].map(w => w.id);
+// ilhas: grupos de triangulos ligados por vertice (cada peca fechada do modelo low-poly)
+function geoIslands(ge) {
+  const p = ge.attributes.position, nT = p.count / 3, par = new Int32Array(nT).map((_, i) => i), seen = new Map();
+  const find = (x) => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
+  for (let t = 0; t < nT; t++) for (let j = 0; j < 3; j++) {
+    const v = t * 3 + j, key = Math.round(p.getX(v) * 1e4) + ',' + Math.round(p.getY(v) * 1e4) + ',' + Math.round(p.getZ(v) * 1e4);
+    const o = seen.get(key); if (o === undefined) seen.set(key, t); else { const a = find(o), c = find(t); if (a !== c) par[a] = c; }
+  }
+  const groups = new Map();
+  for (let t = 0; t < nT; t++) { const r = find(t); let gr = groups.get(r); if (!gr) groups.set(r, gr = { tris: [], box: new THREE.Box3() }); gr.tris.push(t); for (let j = 0; j < 3; j++) gr.box.expandByPoint(new THREE.Vector3().fromBufferAttribute(p, t * 3 + j)); }
+  return [...groups.values()];
+}
+// pinta a peca inteira numa cor da paleta (pente recortado do corpo vira peca escura, nao zona verde)
+function setUV(ge, uv) { const n = ge.attributes.position.count, a = new Float32Array(n * 2); for (let i = 0; i < n; i++) { a[i * 2] = uv[0]; a[i * 2 + 1] = uv[1]; } ge.setAttribute('uv', new THREE.BufferAttribute(a, 2)); return ge; }
+function geoTake(ge, tris) { const o = new THREE.BufferGeometry(); for (const [nm, a] of Object.entries(ge.attributes)) { const arr = new a.array.constructor(tris.length * 3 * a.itemSize); tris.forEach((t, j) => { for (let q = 0; q < 3 * a.itemSize; q++) arr[j * 3 * a.itemSize + q] = a.array[t * 3 * a.itemSize + q]; }); o.setAttribute(nm, new THREE.BufferAttribute(arr, a.itemSize)); } o.computeBoundingBox(); return o; }
+function loadPack2(loader) { return loadPackFile(loader, 'rifle_pack.glb', PACK2).then(() => loadPackFile(loader, 'aa12.glb', AA12)); }
+function loadPackFile(loader, file, LIST) {
+  return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/' + file).then(g => {
+    g.scene.updateMatrixWorld(true);
+    const pal = paletteReader(gunTex);
+    // metal principal na zona VERDE (como o revolver): a Pintura pinta ele e a camo cobre (camoGreen); claro = destaque
+    const uvMetal = pal ? paletteUV(pal, [90, 170, 60]) : [0.5, 0.5], uvLight = pal ? paletteUV(pal, [178, 128, 84]) : [0.5, 0.5], uvDark = pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5];
+    const lum = (c) => c ? 0.3 * c.r + 0.59 * c.g + 0.11 * c.b : 0;
+    for (const w of LIST) {
+      const gun = g.scene.getObjectByName(nodeName(w.node));
+      if (!gun) { console.warn('pacote 2: sem', w.node); continue; }
+      const list = [];
+      gun.traverse(o => {
+        if (!o.isMesh) return;
+        let ge = o.geometry.clone().applyMatrix4(o.matrixWorld);
+        if (ge.index) ge = ge.toNonIndexed();
+        // com textura: a cor dela em cada triangulo decide; sem: a cor do material
+        const tex = o.material?.map ? paletteReader(o.material.map) : null, uv0 = ge.attributes.uv, n = ge.attributes.position.count, a = new Float32Array(n * 2);
+        const matLight = lum(o.material?.color) > 0.5;
+        for (let i = 0; i < n; i += 3) {
+          let light = matLight;
+          if (tex && uv0) { const c = tex((uv0.getX(i) + uv0.getX(i + 1) + uv0.getX(i + 2)) / 3, (uv0.getY(i) + uv0.getY(i + 1) + uv0.getY(i + 2)) / 3); light = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2] > 110; }
+          const uv = light ? uvLight : uvMetal;
+          for (let j = 0; j < 3; j++) { a[(i + j) * 2] = uv[0]; a[(i + j) * 2 + 1] = uv[1]; }
+        }
+        for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k);
+        ge.setAttribute('uv', new THREE.BufferAttribute(a, 2));
+        list.push(ge);
+      });
+      const geo = list.length ? mergeGeometries(list) : null;
+      if (!geo) continue;
+      geo.computeBoundingBox();
+      const b = geo.boundingBox, len = b.max.x - b.min.x, pos = geo.attributes.position;
+      const ext = (lo, hi) => { let a = Infinity, c = -Infinity; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i); if (x >= lo && x <= hi) { const y = pos.getY(i); if (y < a) a = y; if (y > c) c = y; } } return c - a; };
+      const muzzleMinX = ext(b.min.x, b.min.x + len * 0.07) <= ext(b.max.x - len * 0.07, b.max.x);
+      const ls = CATEGORY[w.cat].bodies.filter(id => parts[id] && !parts[id].ww2).map(id => parts[id].box.max.z - parts[id].box.min.z);
+      const k = (ls.reduce((s, x) => s + x, 0) / Math.max(1, ls.length)) * w.k / len;
+      const c = b.getCenter(new THREE.Vector3());
+      const m = new THREE.Matrix4().makeScale(k, k, k)
+        .multiply(new THREE.Matrix4().makeRotationY(muzzleMinX ? -Math.PI / 2 : Math.PI / 2))
+        .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+      geo.applyMatrix4(m);
+      if (w.tilt) geo.rotateX(w.tilt); // modelo que vem com o cano inclinado: nivela
+      geo.computeVertexNormals(); geo.computeBoundingBox();
+      let bodyGeo = geo;
+      const bb0 = geo.boundingBox, zAt0 = (f) => bb0.min.z + (bb0.max.z - bb0.min.z) * f;
+      // pente e mira colados: o modelo low-poly traz cada peca como uma ilha fechada dentro da malha.
+      // Separa as ilhas (triangulos ligados por vertice) e tira as que cabem inteiras no trecho marcado,
+      // abaixo do fundo do receptor (pente) ou acima do topo dele (mira).
+      let magGeo = null;
+      parts[w.id] = { geo, box: bb0.clone() }; const pr0 = profile(w.id); delete profiles[w.id];
+      const yAt = (f, top) => { const s = sliceOf(pr0, zAt0(f)); return top ? pr0.hi[s] : pr0.lo[s]; };
+      const isl = geoIslands(geo), out = new Set(), magT = [];
+      const tol = (bb0.max.z - bb0.min.z) * 0.02, inZ = (bx, r) => { const [z0, z1] = [zAt0(r[0]), zAt0(r[1])].sort((x, y) => x - y); return bx.min.z >= z0 - tol && bx.max.z <= z1 + tol; };
+      for (const gr of isl) {
+        const cy = (gr.box.min.y + gr.box.max.y) / 2;
+        if (w.magCut && inZ(gr.box, w.magCut) && cy < yAt(w.magCut[0] - 0.03, false)) { gr.tris.forEach(t => out.add(t)); magT.push(...gr.tris); }
+        else if (w.scopeCut2 && inZ(gr.box, w.scopeCut2) && gr.box.max.y > yAt(0.2, true) + 0.04) gr.tris.forEach(t => out.add(t));
+        else if (w.scopeCut && inZ(gr.box, w.scopeCut) && (w.scopeCut[2] !== undefined ? gr.box.min.y >= w.scopeCut[2] : gr.box.max.y > yAt(w.scopeCut[0] - 0.03, true) + 0.04)) gr.tris.forEach(t => out.add(t)); // altura dada: a peca comeca acima dela; sem: o topo passa do receptor
+      }
+      if (out.size) { const keep = []; for (let t = 0; t < geo.attributes.position.count / 3; t++) if (!out.has(t)) keep.push(t); bodyGeo = geoTake(geo, keep); }
+      if (magT.length) magGeo = geoTake(geo, magT);
+      bodyGeo.computeBoundingBox();
+      const body = parts[w.id] = { geo: bodyGeo, box: bodyGeo.boundingBox.clone(), ww2: true, camoGreen: true, metal: '#2a2724' };
+      const bb = body.box, blen = bb.max.z - bb.min.z, zAt = (f) => bb.min.z + blen * f;
+      const pr = profile(w.id);
+      if (w.grip) { const gz = zAt(w.grip); body.grip = { zc: gz, z0: gz - blen * 0.04, z1: gz + blen * 0.04, lo: pr.lo[sliceOf(pr, gz)] }; }
+      if (w.mid) body.mid = zAt(w.mid);
+      if (w.fore) body.fore = zAt(w.fore);
+      if (magGeo) { setUV(magGeo, uvDark); magGeo.computeBoundingBox(); parts[w.id.replace(/_(\d+)$/, '_charger_$1')] = { geo: magGeo, box: magGeo.boundingBox.clone(), ww2: true }; }
+    }
+  }).catch(e => console.warn(file + ' nao carregou', e));
+}
+
+// ---------- sniper de ferrolho (pedido dele 30/10) ----------
+// 4 pecas: corpo (com luneta colada), gatilho, ferrolho, pente. Gatilho entra no corpo; a luneta colada sai
+// (ilhas acima do topo do receptor) pra a escolhida no Arsenal entrar; o ferrolho e' peca animada (gira e
+// puxa pra tras a cada tiro); o pente vira o original (troca com os outros de sniper).
+// Zonas: um material so com textura -> a cor da textura no triangulo decide (escuro leva camo, claro destaque).
+const SN4_CAMO_LIGHT = true; // na textura dela a coronha (maior area) e' clara: o claro leva a camo, o metal escuro vira destaque
+const SN4 = { id: 'sniper_4', k: 1, grip: 0.7, mid: 0.56, fore: 0.4, scopeCut: [0.3, 0.78] };
+function loadSniper4(loader) {
+  return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/bolt_sniper.glb').then(g => {
+    g.scene.updateMatrixWorld(true);
+    const pal = paletteReader(gunTex);
+    const uvMetal = pal ? paletteUV(pal, [90, 170, 60]) : [0.5, 0.5], uvLight = pal ? paletteUV(pal, [178, 128, 84]) : [0.5, 0.5];
+    const prep = (o) => {
+      let ge = o.geometry.clone().applyMatrix4(o.matrixWorld);
+      if (ge.index) ge = ge.toNonIndexed();
+      const tex = paletteReader(o.material?.map), uv0 = ge.attributes.uv, n = ge.attributes.position.count, a = new Float32Array(n * 2);
+      for (let i = 0; i < n; i += 3) {
+        let light = false;
+        if (tex && uv0) { const c = tex((uv0.getX(i) + uv0.getX(i + 1) + uv0.getX(i + 2)) / 3, (uv0.getY(i) + uv0.getY(i + 1) + uv0.getY(i + 2)) / 3); light = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2] > 140; }
+        const uv = light === SN4_CAMO_LIGHT ? uvMetal : uvLight; // a zona de maior area (coronha clara) leva a camo
+        for (let j = 0; j < 3; j++) { a[(i + j) * 2] = uv[0]; a[(i + j) * 2 + 1] = uv[1]; }
+      }
+      for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k);
+      ge.setAttribute('uv', new THREE.BufferAttribute(a, 2));
+      return ge;
+    };
+    const get = (nm) => { let m = null; g.scene.getObjectByName(nm)?.traverse(o => { if (o.isMesh && !m) m = o; }); return m ? prep(m) : null; };
+    const bodyRaw = get('MS_Sniper_Body'), trig = get('MS_Sniper_Trigger'), bolt = get('MS_Sniper_Bolt'), mag = get('MS_Sniper_Magazine');
+    if (!bodyRaw) return;
+    let bodyG = trig ? mergeGeometries([bodyRaw, trig]) : bodyRaw;
+    const all = mergeGeometries([bodyG, bolt, mag].filter(Boolean)); all.computeBoundingBox();
+    const b = all.boundingBox, len = b.max.z - b.min.z, pos = all.attributes.position;
+    // cano = ponta mais fina; o jogo quer o cano em z minimo
+    const ext = (lo, hi) => { let a = Infinity, c = -Infinity; for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i); if (z >= lo && z <= hi) { const y = pos.getY(i); if (y < a) a = y; if (y > c) c = y; } } return c - a; };
+    const flip = ext(b.max.z - len * 0.07, b.max.z) < ext(b.min.z, b.min.z + len * 0.07);
+    const ls = CATEGORY.sniper.bodies.filter(id => parts[id] && !parts[id].ww2).map(id => parts[id].box.max.z - parts[id].box.min.z);
+    const k = (ls.reduce((s, x) => s + x, 0) / Math.max(1, ls.length)) * SN4.k / len, c = b.getCenter(new THREE.Vector3());
+    const m = new THREE.Matrix4().makeScale(k, k, k).multiply(new THREE.Matrix4().makeRotationY(flip ? Math.PI : 0)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+    for (const ge of [bodyG, bolt, mag]) if (ge) { ge.applyMatrix4(m); ge.computeVertexNormals(); ge.computeBoundingBox(); }
+    // luneta colada: ilhas inteiras acima do topo do receptor no trecho marcado
+    const bb0 = bodyG.boundingBox.clone(), L0 = bb0.max.z - bb0.min.z, zA = (f) => bb0.min.z + L0 * f;
+    parts[SN4.id] = { geo: bodyG, box: bb0.clone() }; const pr0 = profile(SN4.id); delete profiles[SN4.id];
+    const recTop = pr0.hi[sliceOf(pr0, zA(0.2))]; // topo do receptor na frente da luneta
+    const out = [];
+    for (const gr of geoIslands(bodyG)) if (gr.box.min.z >= zA(SN4.scopeCut[0]) && gr.box.max.z <= zA(SN4.scopeCut[1]) && gr.box.max.y > recTop + 0.06) out.push(...gr.tris); // tubo e aneis (os aneis descem pra dentro do receptor)
+    if (out.length) { const kill = new Set(out), keep = []; for (let t = 0; t < bodyG.attributes.position.count / 3; t++) if (!kill.has(t)) keep.push(t); bodyG = geoTake(bodyG, keep); bodyG.computeVertexNormals(); }
+    bodyG.computeBoundingBox();
+    const bb = bodyG.boundingBox.clone();
+    if (bolt) bb.union(bolt.boundingBox);
+    const body = parts[SN4.id] = { geo: bodyG, box: bb, ww2: true, camoGreen: true, metal: '#2a2724' }; // coronha na zona verde: Pintura + camo
+    const blen = bb.max.z - bb.min.z, zAt = (f) => bb.min.z + blen * f, pr = profile(SN4.id), gz = zAt(SN4.grip);
+    body.grip = { zc: gz, z0: gz - blen * 0.04, z1: gz + blen * 0.04, lo: pr.lo[sliceOf(pr, gz)] };
+    body.mid = zAt(SN4.mid);
+    body.fore = zAt(SN4.fore); // mao de apoio no guarda-mao (sniper nao leva empunhadura)
+    // ferrolho: gira no proprio eixo (z) e corre pra tras; pivo no centro dele
+    if (bolt) { const ob = bolt.boundingBox; body.bolt = { geo: bolt, pivot: new THREE.Vector3((ob.min.x + ob.max.x) / 2, (ob.min.y + ob.max.y) / 2, (ob.min.z + ob.max.z) / 2), travel: (ob.max.z - ob.min.z) * 0.55 }; }
+    if (mag) parts.sniper_charger_4 = { geo: setUV(mag, pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5]), box: mag.boundingBox.clone(), ww2: true };
+    body.scopeCut = out.length;
+  }).catch(e => console.warn('bolt_sniper.glb nao carregou', e));
 }
 
 export function arsenalReady() { return !!parts.fusil_1; }
@@ -369,7 +628,7 @@ function rearTube(id) {
 // material da pintura (uniforms por arma)
 // part = peca encaixada (mira, pente, empunhadura): fica inteira na cor de destaque e nunca
 // recebe camuflagem. A camuflagem e' so do corpo, e mesmo nele o verde fica com a pintura.
-function paintMaterial(paint, accent, camo, part = false) {
+function paintMaterial(paint, accent, camo, part = false, camoGreen = false) {
   const m = toon(0xffffff, { map: gunTex, unique: true });
   // so a camo desta peca entra no shader (peca encaixada nunca leva camo)
   const glslCode = part ? 0 : camoById(camo).code;
@@ -377,7 +636,7 @@ function paintMaterial(paint, accent, camo, part = false) {
     uPart: { value: part ? 1 : 0 },
     uPaint: { value: new THREE.Color(paint || '#ffffff') }, uPaintOn: { value: paint ? 1 : 0 },
     uAccent: { value: new THREE.Color(accent || '#ffffff') }, uAccentOn: { value: accent ? 1 : 0 },
-    uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 },
+    uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 }, uCamoGreen: { value: camoGreen ? 1 : 0 },
   };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, m.userData.u);
@@ -385,7 +644,7 @@ function paintMaterial(paint, accent, camo, part = false) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn; uniform float uPart;\n' + camoGlsl(glslCode) + '\nvec3 gCamoGlow = vec3(0.0);')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn; uniform float uPart; uniform float uCamoGreen;\n' + camoGlsl(glslCode) + '\nvec3 gCamoGlow = vec3(0.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
@@ -406,7 +665,7 @@ function paintMaterial(paint, accent, camo, part = false) {
           if (uCamo > 0.5 && uPart < 0.5) {
             vec3 cg;
             vec3 cc = camoColor(int(uCamo + 0.5), vCamoPos, uTime, lum, cg);
-            float keep = max(accent, green);
+            float keep = uCamoGreen > 0.5 ? accent : max(accent, green); // revolver: a camo cobre o metal (zona verde)
             diffuseColor.rgb = mix(cc, diffuseColor.rgb, keep);
             gCamoGlow = cg * (1.0 - keep);
           }
@@ -487,6 +746,39 @@ function lensMaterial(big, ret, color) {
   });
 }
 
+// boca do pente: centro da face de cima (onde ele entra no poco). Pente curvo tem a caixa adiantada em
+// relacao a boca; alinhar pela caixa deixava todo pente trocado na frente do encaixe (pedido dele 30/10).
+const mouths = {};
+function magMouth(id) {
+  if (mouths[id]) return mouths[id].clone();
+  const P = parts[id], b = P.box, h = b.max.y - b.min.y, p = P.geo.attributes.position;
+  let zs = 0, n = 0;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) >= b.max.y - h * 0.12) { zs += p.getZ(i); n++; }
+  mouths[id] = new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, n ? zs / n : (b.min.z + b.max.z) / 2);
+  return mouths[id].clone();
+}
+// inclinacao do pente: angulo da linha boca -> centro do fundo (no plano do cano). Pente trocado gira em
+// volta da boca ate bater com a do original (reto num poco inclinado ficava torto e saindo do encaixe)
+// ajuste por pente (pedidos dele 30/10): flip = vira pro outro lado; noTilt = entra reto
+const MAG_FIT = { sniper_charger_1: { flip: true }, fusil_charguer_5: { noTilt: true, ins: 0.05 }, 'fusil_5|fusil_charger_1': { flip: true, noTilt: true, back: 0.35 } }; // chave 'corpo|pente' vale so naquela arma; back = recua (fracao da profundidade do pente) // ins = quanto entra no poco (fracao da altura; padrao ate 25%)
+// pentes que nao fazem sentido visual num corpo (conferidos na folha 30/10): nao aparecem pra escolher
+const MAG_BAN = {
+  fusil_1: ['fusil_charguer_5', 'fusil_charguer_7'], fusil_7: ['fusil_charguer_2'], fusil_11: ['fusil_charguer_2'],
+  // palito fino (pente de pistola) em poco largo
+  subfusil_1: ['subfusil_charguer_5', 'subfusil_charguer_6'], subfusil_2: ['subfusil_charguer_6'], subfusil_8: ['subfusil_charguer_5', 'subfusil_charguer_6'],
+  subfusil_9: ['subfusil_charguer_6'], subfusil_10: ['subfusil_charguer_5', 'subfusil_charguer_6'],
+};
+const MAG_THIN = ['subfusil_charguer_5', 'subfusil_charguer_6']; // finos como pente de pistola: ficavam palito em qualquer outro poco
+// o contrario: cabe visualmente mesmo fora da faixa de tamanho (pedido dele)
+const MAG_ALLOW = { sniper_2: ['sniper_charger_1'] };
+const tilts = {};
+function magTilt(id) {
+  if (tilts[id] !== undefined) return tilts[id];
+  const P = parts[id], b = P.box, h = b.max.y - b.min.y, p = P.geo.attributes.position, top = magMouth(id);
+  let zs = 0, n = 0;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) <= b.min.y + h * 0.12) { zs += p.getZ(i); n++; }
+  return (tilts[id] = n ? Math.atan2((zs / n) - top.z, h) : 0);
+}
 function anchor(slot, box) {
   // ponto de encaixe da propria peca
   const c = box.getCenter(new THREE.Vector3());
@@ -626,7 +918,9 @@ export function chargerOptions(body, cat) {
   for (const id of CATEGORY[cat].chargers) {
     if (id === native || !parts[id]) continue;
     const cb = parts[id].box, w = cb.max.x - cb.min.x, d = cb.max.z - cb.min.z;
-    if (w / nw < 0.6 || w / nw > 1.6 || d / nd < 0.6 || d / nd > 1.5) continue;
+    if (!MAG_ALLOW[body]?.includes(id) && (w / nw < 0.7 || w / nw > 1.5 || d / nd < 0.62 || d / nd > 1.5)) continue; // so o que cabe no poco (palito fino ou tijolo largo nao)
+    if (MAG_BAN[body]?.includes(id)) continue;
+    if (MAG_THIN.includes(id) && ownerBody(id) !== body) continue; // pente de palito so na arma dona dele
     // onde ele fica depois de encaixado (topo no topo do original)
     const dz = top.z - (cb.min.z + cb.max.z) / 2;
     const z0 = cb.min.z + dz, z1 = cb.max.z + dz;
@@ -657,7 +951,7 @@ function hiUnder(body, xc, halfW, z0, z1) {
 
 function bodySlot(body, slot) {
   const nat = nativePart(body, slot);
-  if (nat) return anchor(slot, parts[nat].box);
+  if (nat) return slot === 'charger' ? magMouth(nat) : anchor(slot, parts[nat].box);
   const b = parts[body].box, len = b.max.z - b.min.z, cx = (b.min.x + b.max.x) / 2;
   const pr = profile(body);
   const mag = nativePart(body, 'charger');
@@ -682,7 +976,7 @@ function bodySlot(body, slot) {
   }
   // empunhadura: parte mais baixa do guarda-mao, na frente do pente (nunca no cano fino)
   const fore = parts[body].fore;
-  if (fore !== undefined) return new THREE.Vector3(cx, pr.lo[sliceOf(pr, fore)] + 0.015, fore); // WW2: marcado a mao
+  if (fore !== undefined) return new THREE.Vector3(cx, (parts[body].foreY ?? pr.lo[sliceOf(pr, fore)]) + 0.015, fore); // WW2 e suporte de fabrica: marcado a mao
   const gi = gripInfo(body);
   const front = b.min.z;
   const back = Math.min(magBox ? magBox.min.z : Infinity, gi ? gi.z0 : Infinity, b.min.z + len * 0.55) - 0.08;
@@ -733,7 +1027,9 @@ function buildGunParts(wpn, lo) {
   const inner = new THREE.Group();
   inner.scale.setScalar(S);
   holder.add(inner);
-  const mat = paintMaterial(lo.paint, lo.accent, lo.camo);
+  // revolver: o metal (zona verde) e preto de fabrica e leva a camo por cima
+  const camoGreen = !!parts[lo.body]?.camoGreen;
+  const mat = paintMaterial(lo.paint || (camoGreen ? parts[lo.body].metal : null), lo.accent, lo.camo, false, camoGreen);
   const partMat = paintMaterial(lo.paint, lo.accent, null, true);
   const bodyBox = parts[lo.body].box;
   const len = bodyBox.max.z - bodyBox.min.z, h = bodyBox.max.y - bodyBox.min.y, cx = (bodyBox.min.x + bodyBox.max.x) / 2;
@@ -743,10 +1039,10 @@ function buildGunParts(wpn, lo) {
   const gi = gripInfo(lo.body);
   const gripZ = parts[lo.body].grip ? gi.zc : isPistol ? chargerSlot.z : gi ? gi.zc : Math.min(bodyBox.max.z - len * 0.15, chargerSlot.z + len * 0.17);
   const origin = new THREE.Vector3(cx, bodyBox.min.y + h * (isPistol ? 0.45 : 0.42), gripZ);
-  const add = (name, at, m0 = mat) => {
+  const add = (name, at, m0 = mat, geo = null) => {
     const p = parts[name];
     if (!p) return null;
-    const m = new THREE.Mesh(p.geo, m0);
+    const m = new THREE.Mesh(geo || p.geo, m0);
     outline(m, 0.0055);
     const off = new THREE.Vector3();
     if (at) off.copy(at.target).sub(at.self);
@@ -754,12 +1050,39 @@ function buildGunParts(wpn, lo) {
     inner.add(m);
     return m;
   };
-  add(lo.body);
+  add(lo.body, null, mat, lo.handle && parts[lo.handle] && parts[lo.body].geoNoFore || null); // com empunhadura: suporte de fabrica sai, o punho entra reto
+  // revolver: tambor e cao como pecas proprias (giram no tiro)
+  const anim = {};
+  for (const key of ['drum', 'hammer', 'bolt']) {
+    const P = parts[lo.body][key];
+    if (!P) continue;
+    const piv = new THREE.Group(); piv.position.copy(P.pivot).sub(origin);
+    const mm = new THREE.Mesh(P.geo, mat); outline(mm, key === 'drum' ? 0.0055 : 0.003); mm.position.copy(P.pivot).multiplyScalar(-1);
+    piv.add(mm); inner.add(piv); anim[key] = piv;
+  }
   let scopeInfo = null;
   for (const slot of ['charger', 'scope', 'handle']) {
     const id = lo[slot];
     if (!id || !parts[id]) continue;
     const nat = ownerBody(id) === lo.body;
+    if (slot === 'charger' && !nat) {
+      const self = magMouth(id), target = bodySlot(lo.body, 'charger'), F = MAG_FIT[lo.body + '|' + id] || MAG_FIT[id] || {};
+      if (F.back) target.z += (parts[id].box.max.z - parts[id].box.min.z) * F.back; // +z = pra tras (coronha)
+      // assenta pela ENTRADA do poco (fundo do corpo ali): entra o mesmo tanto que o original, mas no maximo 25%
+      // da propria altura (pente curto sumia dentro do corpo; comprido ficava com vao). Estendido entra pouco (fica comprido).
+      const mh = parts[id].box.max.y - parts[id].box.min.y, prB = profile(lo.body), lip = prB.lo[sliceOf(prB, target.z)];
+      if (Number.isFinite(lip)) target.y = lip + Math.min(Math.max(0, target.y - lip), mh * (F.ins ?? 0.25));
+      const mm = add(id, { self, target }, partMat);
+      const natM = nativePart(lo.body, 'charger');
+      const th = !F.noTilt && natM && Math.abs(magTilt(natM)) > 0.09 ? Math.max(-0.6, Math.min(0.6, magTilt(id) - magTilt(natM))) : 0; // so gira se o poco original e' inclinado (pente em cunha enganava a conta)
+      if (mm && (Math.abs(th) > 0.01 || F.flip)) {
+        // gira em volta da boca: v' = P + R(v - self), P = boca no espaco da arma
+        mm.rotation.set(th, F.flip ? Math.PI : 0, 0);
+        const P = target.clone().sub(origin);
+        mm.position.copy(P).sub(self.clone().applyQuaternion(mm.quaternion));
+      }
+      continue;
+    }
     if (slot !== 'scope') { add(id, nat ? null : { self: anchor(slot, parts[id].box), target: bodySlot(lo.body, slot) }, partMat); continue; }
     {
       const b = parts[id].box, sl = b.max.z - b.min.z, sh = b.max.y - b.min.y;
@@ -830,7 +1153,7 @@ function buildGunParts(wpn, lo) {
     const shift = nat ? new THREE.Vector3() : bodySlot(lo.body, 'handle').sub(anchor('handle', hb));
     hs = hb.getCenter(new THREE.Vector3()).add(shift);
   } else {
-    const pr = profile(lo.body), z = bodyBox.min.z + len * 0.3;
+    const pr = profile(lo.body), z = parts[lo.body].fore ?? bodyBox.min.z + len * 0.3; // marca do guarda-mao quando existe
     hs = new THREE.Vector3(cx, pr.lo[sliceOf(pr, z)] + 0.06, z);
   }
   gripL.position.copy(hs).sub(origin).multiplyScalar(S);
@@ -839,7 +1162,7 @@ function buildGunParts(wpn, lo) {
   const iron = new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6).sub(origin).multiplyScalar(S);
   holder.add(muzzle, gripR, gripL);
   const laser = lo.laser && LASER_DEF[lo.laser] ? addLaser(holder, lo, origin, isPistol) : null;
-  holder.userData = { id: wpn, muzzle, gripR, gripL, spin: null, scope: scopeInfo, iron, mat, laser, stats: loadoutStats(wpn, lo) };
+  holder.userData = { id: wpn, muzzle, gripR, gripL, spin: null, scope: scopeInfo, iron, mat, laser, stats: loadoutStats(wpn, lo), drum: anim.drum || null, hammer: anim.hammer || null, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
   return holder;
 }
 
@@ -885,11 +1208,43 @@ function buildMinigun() {
 }
 
 // Perfil de cada empunhadura (estilo COD: todo ganho cobra alguma coisa)
+// Perfis de pente e de mira (pedido dele 30/10): toda peca tem um ganho e uma perda propria.
+// Distribuidos em sequencia pela lista global de pecas (vizinhas nunca repetem); somam com a regra de tamanho.
+// rate e' o intervalo entre tiros (maior = mais lento); zoomK multiplica o zoom da mira.
+const MAG_STYLES = [
+  { reload: 0.84, mag: 0.9 },                // rapido: troca ligeiro, leva menos bala
+  { mag: 1.14, adsTime: 1.06, move: 0.98 },  // estendido: mais bala, pesa
+  { adsTime: 0.91, move: 1.03, kick: 1.07 }, // leve: mira e anda solto, a arma pula mais
+  { kick: 0.88, reload: 1.12 },              // estavel: peso embaixo segura o recuo, troca devagar
+  { mag: 1.22, reload: 1.2, move: 0.97 },    // duplo: muita bala, recarga lenta
+  { spread: 0.93, rate: 1.05 },              // mola dura: bala mais certa, cadencia um pouco menor
+];
+const SCOPE_STYLES = [
+  { adsTime: 0.88, zoomK: 0.9 },             // rapida: entra na mira ligeiro, menos zoom
+  { zoomK: 1.15, adsTime: 1.1 },             // longa: mais zoom, demora pra mirar
+  { spread: 0.88, move: 0.97 },              // estavel: mais precisao, pesa no passo
+  { kick: 0.9, adsTime: 1.06 },              // firme: segura o recuo, mira mais lenta
+  { hip: 0.9, zoomK: 0.94 },                 // aberta: melhor de quadril, zoom menor
+];
+// luneta de sniper: o mesmo jogo, mais forte
+const LONG_STYLES = [
+  { adsTime: 0.82, zoomK: 0.85 },            // de caca: mira rapida, zoom curto
+  { zoomK: 1.2, adsTime: 1.12, move: 0.96 }, // de longe: zoom alto, pesada
+  { spread: 0.85, kick: 1.08 },              // de precisao: bala mais certa, coice maior
+  { kick: 0.85, adsTime: 1.08 },             // amortecida: quase sem coice, mira lenta
+];
+let styleIdx = null;
+const styleOf = (id, list) => {
+  if (!styleIdx) { styleIdx = {}; for (const key of ['chargers', 'scopes']) { const all = [...new Set(Object.values(CATEGORY).flatMap(c => c[key]))].sort(); all.forEach((x, i) => { styleIdx[x] = i; }); } }
+  return list[(styleIdx[id] ?? 0) % list.length];
+};
+
 const GRIP_TRAITS = {
   subfusil_handle_2: { kick: 0.7, adsTime: 1.08, move: 0.98 },               // vertical: segura o recuo
   subfusil_handle_3: { adsTime: 0.86, kick: 0.88, spread: 1.05 },            // angulada: mira rapida
   subfusil_handle_6: { spread: 0.78, kick: 0.9, move: 0.97 },                // curta: tiro de quadril
   fusil_handle_2: { kick: 0.6, spread: 0.88, adsTime: 1.16, move: 0.93 },    // pesada: trava a arma
+  akimbo: { mag: 2, rate: 0.72, dmg: 0.86, spread: 1.4, kick: 1.1, reload: 1.55, move: 0.97 }, // duas pistolas: dobra o pente e alterna as maos; sem mirar
 };
 
 // Arma branca: textura propria do glb; camuflagem cobre a peca toda. Origem = mao (perto do fim do cabo),
@@ -943,7 +1298,7 @@ function buildMelee(lo) {
 
 // Modulo laser: na lateral esquerda do guarda-mao (o lado que a camera ve), na pistola embaixo do cano.
 // O feixe e' um cilindro aditivo que some ao longe; quem desenha o ponto no mundo e' o main.
-const BEAM_LEN = 12;
+const BEAM_LEN = 18; // feixe dos outros (era 12; mais longo pra ler a mira)
 function beamMaterial(color) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
@@ -970,20 +1325,20 @@ function addLaser(holder, lo, origin, isPistol) {
   const geo = new THREE.CylinderGeometry(0.003, 0.005, 1, 8, 1, true); geo.rotateX(-Math.PI / 2); geo.translate(0, 0, -0.5);
   const beam = new THREE.Mesh(geo, beamMaterial(D.color));
   beam.position.z = -d / 2 - 0.004; beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
-  beam.userData.noFx = true; // feixe de 12 m nao conta como superficie da arma (efeito da camo lendaria)
+  beam.userData.noFx = true; // feixe de 18 m nao conta como superficie da arma (efeito da camo lendaria)
   g.add(beam);
   holder.add(g);
   return { group: g, beam, color: D.color, len: BEAM_LEN };
 }
 
 // Efeito das pecas nos atributos (multiplicadores sobre WEAPONS)
-export function loadoutStats(wpn, lo) {
-  const st = { mag: 1, spread: 1, kick: 1, adsTime: 1, zoom: null, rate: 1, dmg: 1, reload: 1, move: 1, hip: 1, mode: null, burst: 0 };
+export function loadoutStats(wpn, lo, noStyle = false) {
+  const st = { mag: 1, spread: 1, kick: 1, adsTime: 1, zoom: null, zoomK: 1, rate: 1, dmg: 1, reload: 1, move: 1, hip: 1, mode: null, burst: 0 };
   if (!lo || !arsenalReady() || !parts[lo.body]) return st;
   // perfil do modelo: modo de tiro e cadencia/dano/quadril proprios
   const bt = bodyTrait(lo.body);
   st.mode = bt.mode || null; st.burst = bt.burst || 0;
-  for (const k of ['rate', 'dmg', 'hip', 'kick', 'spread']) if (bt[k]) st[k] *= bt[k];
+  for (const k of ['rate', 'dmg', 'hip', 'kick', 'spread', 'mag', 'reload']) if (bt[k]) st[k] *= bt[k];
   const nat = nativePart(lo.body, 'charger');
   if (lo.charger && nat && parts[lo.charger] && lo.charger !== nat) {
     const vol = (b) => { const s = b.getSize(new THREE.Vector3()); return s.x * s.y * s.z; };
@@ -991,6 +1346,7 @@ export function loadoutStats(wpn, lo) {
     // pente maior: mais balas, mas pesa (mira, recarga e passo mais lentos); menor: o contrario
     if (m > 1) { st.adsTime *= 1 + (m - 1) * 0.25; st.reload *= 1 + (m - 1) * 0.45; st.move *= 1 - (m - 1) * 0.06; }
     else { st.adsTime *= 1 - (1 - m) * 0.3; st.reload *= 1 - (1 - m) * 0.5; st.move *= 1 + (1 - m) * 0.05; }
+    for (const [k, v] of Object.entries(styleOf(lo.charger, MAG_STYLES))) st[k] *= v; // jeito proprio do pente
   }
   if (lo.laser && LASER_DEF[lo.laser]) for (const [k, v] of Object.entries(LASER_DEF[lo.laser].traits)) st[k] *= v;
   // tipo de bala: so os status que ela mexe (fogo, marca, respingo e parede ficam nas regras do jogo)
@@ -999,11 +1355,17 @@ export function loadoutStats(wpn, lo) {
     const g = GRIP_TRAITS[lo.handle] || { spread: 0.8, kick: 0.72, adsTime: 1.08 };
     for (const k in g) st[k] *= g[k];
   }
+  if (lo.handle === 'akimbo' && st.mode === 'burst') { st.mode = 'semi'; st.burst = 0; } // akimbo: cada bala sai de uma mao, intercalando (rajada viraria tiro duplo)
   if (lo.scope && parts[lo.scope]) {
     const b = parts[lo.scope].box, sl = b.max.z - b.min.z;
     st.zoom = sl >= 0.6 ? 2.6 + sl * 1.6 : 1.55;
     st.adsTime *= sl >= 0.6 ? 1.35 : 1.05;
     st.spread *= 0.85;
+    // jeito proprio da mira (luneta tem os seus); o zoom muda com ele
+    const li = CATEGORY.sniper.scopes.indexOf(lo.scope); // lunetas: uma por perfil, na ordem da lista de sniper
+    const sty = noStyle ? {} : sl >= 0.6 && li >= 0 ? LONG_STYLES[li % LONG_STYLES.length] : styleOf(lo.scope, sl >= 0.6 ? LONG_STYLES : SCOPE_STYLES);
+    for (const [k, v] of Object.entries(sty)) if (k === 'zoomK') st.zoomK = v; else st[k] *= v;
+    st.zoom *= st.zoomK || 1;
   }
   // corpo maior = mais preciso, um pouco mais lento
   const cat = CATEGORY[wpn];
@@ -1023,11 +1385,14 @@ export function partEffects(wpn, lo, slot, id) {
   const base = { ...lo }, cand = { ...lo };
   base[slot] = slot === 'charger' ? nativePart(lo.body, 'charger') : null;
   cand[slot] = id;
-  const a = loadoutStats(wpn, base), b = loadoutStats(wpn, cand);
+  // sniper sempre tem luneta: compara com a mesma luneta sem o jeito dela (mostra so o ganho e a perda)
+  const snipe = slot === 'scope' && wpn === 'sniper' && id;
+  const a = snipe ? loadoutStats(wpn, cand, true) : loadoutStats(wpn, base), b = loadoutStats(wpn, cand);
   // [chave do texto, quanto melhorou (positivo = bom)]
   const out = [
     ['st_ctrl', a.kick / b.kick - 1], ['st_acc', a.spread / b.spread - 1], ['st_hip', a.hip / b.hip - 1], ['st_ads', a.adsTime / b.adsTime - 1],
     ['st_reload', a.reload / b.reload - 1], ['st_move', b.move / a.move - 1], ['st_mag', b.mag / a.mag - 1],
+    ['st_rate', a.rate / b.rate - 1], ['st_zoom', b.zoomK / a.zoomK - 1],
   ].filter(([, v]) => Math.abs(v) >= 0.01);
   return out.sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
 }
@@ -1037,15 +1402,19 @@ const KEY = 'rr_loadouts_v1';
 export function getLoadouts() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
+  let gone = false;
   for (const c of Object.keys(CATEGORY)) {
     const lo = { ...defaultLoadout(c), ...(s[c] || {}) };
+    // modelo que saiu do jogo (Maquina de Escrever, subfusil_11): volta pro padrao e o save some com ele
+    if (lo.body && !CATEGORY[c].bodies.includes(lo.body)) { lo.body = defaultLoadout(c).body; lo.charger = null; gone = true; }
     // save antigo (sem m1): equipa a mira gratis uma vez so; depois vale a escolha do jogador
     if (s[c] && !s[c].m1) { if (!lo.scope && !lo.bp) lo.scope = freeScope(c, lo.body); lo.m1 = 1; }
     s[c] = lo;
   }
+  if (gone) { saveLoadouts(s); pushSoon(); }
   return s;
 }
-export function saveLoadouts(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ } }
+export function saveLoadouts(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ } pushSoon(); } // sobe pra conta Rovex tambem (antes so ia junto com outro save)
 
 // Na partida so vale o que ja foi desbloqueado; peca bloqueada volta pro padrao (o salvo fica intacto)
 export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
@@ -1077,4 +1446,4 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   if (cm && !camoOpen(cat, cm)) out.camo = null;
   return out;
 }
-export const _dbg = { parts, profile: b => profile(b), nativePart, rearTube: id => rearTube(id) };
+export const _dbg = { geoIslands: (g) => geoIslands(g.index ? g.toNonIndexed() : g), parts, profile: b => profile(b), nativePart, rearTube: id => rearTube(id) };

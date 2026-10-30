@@ -4,10 +4,11 @@ import * as THREE from 'three';
 import { moveBody, raycast, rayPlayer, hasLOS, wallThickness } from '../shared/map.js';
 import { standable, floorAt } from '../shared/nav.js';
 import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, bodyTrait } from '../shared/weapons.js';
-import { loadoutStats, nativePart, CATEGORY, infectLoadout } from './arsenal.js';
+import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
+import { LASER_BODY } from './world.js';
 import { t } from './i18n.js';
 import { isTouch } from './input.js';
 
@@ -17,6 +18,10 @@ const SLOT_ORDER = ['smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'pistol', 'm
 // pegou arma do chao: so troca sozinho se ela for "maior" que a da mao (faca < pistola < principais)
 const PICK_RANK = ['fists', 'melee', 'pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper'];
 
+// Deslizar (skill Carrinho, pedido dele 30/10): agachar correndo, no chao e rapido. Impulso reto que perde velocidade numa curva
+// ate a do agachado; da pra virar so um pouco; pular no meio vira pulo com o embalo; agachar de novo levanta;
+// bater na parede corta. Termina agachado e espera um pouco pra deslizar de novo.
+const SLIDE = { dur: 0.75, boost: 2.2, minSpeed: 8, end: 4, curve: 0.7, steer: 1.4, cd: 1, jumpKeep: 0.9, eye: 0.85, roll: -0.07, spread: 1.6 };
 export class Player {
   constructor(game) {
     this.g = game;
@@ -25,7 +30,7 @@ export class Player {
     this.onGround = true; this.wasGround = true; this.airJumps = 1;
     this.crouch = false; this.slideT = 0; this.eye = 1.6;
     this.sprint = false; this.tac = false; this.tacFuel = 3.5; this.sprintOut = 0;
-    this.owned = []; this.ammo = {}; this.wpn = 'smg'; this.lastWpn = 'pistol';
+    this.owned = []; this.ammo = {}; this.brBp = {}; this.wpn = 'smg'; this.lastWpn = 'pistol';
     this.fireT = 0; this.reloadT = 0; this.switchT = 0; this.adsK = 0; this.spinK = 0;
     this.alive = false; this.hp = 100;
     this.stepPhase = 0; this.lastStep = 0; this.firing = false;
@@ -38,6 +43,9 @@ export class Player {
   // pecas da arma: na escada de armas o modelo e' o do degrau, fora dela a classe do Arsenal
   lo(id) {
     if (this.g.mode === 'gungame' && this.ggBody && id === this.wpn) return this.ggLo(id, this.ggBody);
+    // battle royale: variante pega no chao ou no caixote vale no lugar da sua
+    const bp = this.g.mode === 'br' && this.brBp?.[id];
+    if (bp) return (this.bpCache ||= {})[bp] ||= bpLoadout(bp);
     // infectado: todo sobrevivente com a mesma arma sorteada pela partida (o modelo tambem), sempre
     // com o kit completo (ponto vermelho, laser, pente grande, empunhadura)
     if (this.g.mode === 'infect' && this.g.myTeam !== 'red' && id !== 'melee' && CATEGORY[id]) {
@@ -87,7 +95,7 @@ export class Player {
       this.give('pistol', false); this.give(primary, false); this.give('melee', false);
       this.equip(primary, true);
     }
-    this.crouch = false; this.tacFuel = 3.5;
+    this.crouch = false; this.tacFuel = 3.5; this.slideT = 0; this.slideDir = null; this.slideCd = 0;
   }
 
   give(id, announce = true, force = false) {
@@ -138,13 +146,20 @@ export class Player {
     if (!a || a.mag >= mag || a.reserve <= 0 || this.reloadT > 0) return;
     this.burstLeft = 0;
     const dur = W.reload * st.reload * this.sk('maos', 'reload') * this.cold('reload');
-    this.reloadT = dur;
+    this.reloadT = dur; this.reloadDur = dur; // o anel da mira enche com isso
     this.g.vm.reload(dur);
     audio.play('reload', { vol: 0.7, rate: 1.6 / dur + 0.2 });
   }
 
   impulse(v) { this.vel[0] += v[0]; this.vel[1] += v[1]; this.vel[2] += v[2]; this.onGround = false; }
 
+  // fim do deslize: crouch = termina agachado (tempo acabou ou parede); false = levanta (pulo ou cancelou)
+  endSlide(crouch, why = '') {
+    if (!(this.slideT > 0) && !this.slideDir) return;
+    this.slideWhy = why;
+    this.slideT = 0; this.slideDir = null; this.slideCd = SLIDE.cd;
+    this.crouch = crouch; // com "agachar segurando" o proximo quadro levanta se a tecla estiver solta
+  }
   update(dt, inp) {
     const S = this.g.settings;
     if (!this.alive) { this.firing = false; return; }
@@ -220,13 +235,25 @@ export class Player {
     if (!inp.sprint && !this.tac) this.sprint = false;
     if (mz <= 0.3 || inp.ads) { this.sprint = false; this.tac = false; }
     if (fire && (this.sprint || this.tac)) { this.sprint = false; this.tac = false; this.sprintOut = 0.12; }
+    if (this.slideT > 0) { this.sprint = false; this.tac = false; } // escorregando nao corre (Shift segurado religava e levantava)
     this.sprintOut -= dt;
     if (this.tac) { this.tacFuel -= dt; if (this.tacFuel <= 0) { this.tac = false; } }
     else this.tacFuel = Math.min(3.5, this.tacFuel + dt * 0.9);
 
+    // deslizar: comeca no lugar do agachar quando esta correndo rapido no chao
+    this.slideCd = Math.max(0, (this.slideCd || 0) - dt);
+    const hsNow = Math.hypot(this.vel[0], this.vel[2]);
+    if (this.slideT > 0 && inp.crouchPressed && this.slideT < SLIDE.dur - 0.2) { this.endSlide(false); inp = { ...inp, crouchPressed: false }; } // agachar de novo: levanta
+    if (inp.crouchPressed && !(this.slideT > 0) && (this.g.skills?.includes('carrinho') || this.g.tutorial?.slideOn) && this.onGround && (this.sprint || this.tac) && hsNow > SLIDE.minSpeed && !this.slideCd && !this.g.down && !(this.air && this.g.bounce)) {
+      this.slideT = SLIDE.dur; this.slideDir = [this.vel[0] / hsNow, this.vel[2] / hsNow]; this.slideV0 = hsNow + SLIDE.boost;
+      this.crouch = true; this.sprint = false; this.tac = false; this.slideDust = 0;
+      audio.play('slide', { vol: 0.6, key: 'slide', max: 1 });
+      this.g.tip?.('slide');
+      inp = { ...inp, crouchPressed: false };
+    }
     // agachar (alterna; com "agachar segurando" solta quando larga a tecla). Correr levanta.
     if (inp.crouchPressed) { this.crouch = !this.crouch; if (this.crouch) { this.sprint = false; this.tac = false; } }
-    if (inp.crouchHeld === false && S.holdCrouch) this.crouch = false;
+    if (inp.crouchHeld === false && S.holdCrouch && !(this.slideT > 0)) this.crouch = false;
     if (this.crouch && (inp.jumpPressed || this.sprint)) { this.crouch = false; if (inp.jumpPressed) inp = { ...inp, jumpPressed: false }; }
 
     // velocidade alvo
@@ -258,8 +285,27 @@ export class Player {
     audio.loop('wind', air && !this.chute ? 0.55 : 0);
     // chao: acelera e freia firme (sem patinar); no ar quase nao muda a direcao
     const acc = air ? 5 : this.onGround ? 22 : 1.6;
-    this.vel[0] = damp(this.vel[0], wx * speed, acc, dt);
-    this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
+    if (this.slideT > 0) {
+      // escorregando: direcao quase presa (vira devagar pro lado do analogico), velocidade caindo na curva
+      this.slideT = Math.max(0, this.slideT - dt);
+      if (wl > 0.2) {
+        const a0 = Math.atan2(this.slideDir[1], this.slideDir[0]), a1 = Math.atan2(wz, wx);
+        let da = a1 - a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+        const a = a0 + Math.max(-SLIDE.steer * dt, Math.min(SLIDE.steer * dt, da));
+        this.slideDir = [Math.cos(a), Math.sin(a)];
+      }
+      const k = 1 - this.slideT / SLIDE.dur, v = SLIDE.end + (this.slideV0 - SLIDE.end) * Math.pow(1 - k, SLIDE.curve);
+      this.vel[0] = this.slideDir[0] * v; this.vel[2] = this.slideDir[1] * v;
+      // poeira atras e rente ao chao (no pe ela subia na frente da camera baixa e a tela piscava)
+      if ((this.slideDust -= dt) <= 0) { this.slideDust = 0.09; this.g.fx?.puff([this.pos[0] - this.slideDir[0] * 1.2, this.pos[1] + 0.05, this.pos[2] - this.slideDir[1] * 1.2], 2, 0.22, 0xece9e1, 0.3); }
+      if (inp.jumpPressed && this.onGround) { // pulo no meio: sai com o embalo
+        this.endSlide(false);
+        this.vel[0] *= SLIDE.jumpKeep; this.vel[2] *= SLIDE.jumpKeep;
+      } else if (this.slideT <= 0) this.endSlide(true);
+    } else {
+      this.vel[0] = damp(this.vel[0], wx * speed, acc, dt);
+      this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
+    }
     // pulo baixo e unico (~1 m), sem pulo no ar
     if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4 * Math.sqrt(this.sk('mola', 'jump')); this.onGround = false; audio.play('jump', { vol: 0.45 }); }
     // contagem do inicio: quem esta no ar fica parado ate soltar todo mundo
@@ -268,7 +314,10 @@ export class Player {
     if (air) this.vel[1] = Math.max(this.vel[1], -(this.chute ? BR.bounce.chute : BR.bounce.freefall));
     const vy = this.vel[1];
     this.wasGround = this.onGround;
+    const pre = this.slideT > 0 ? [this.pos[0], this.pos[2]] : null;
     this.onGround = moveBody(this.g.M, this.pos, this.vel, dt, 0.4, this.crouch ? 1.1 : 1.7);
+    // bateu na parede deslizando: corta (andou bem menos do que devia)
+    if (pre && Math.hypot(this.pos[0] - pre[0], this.pos[2] - pre[1]) < Math.hypot(this.vel[0], this.vel[2]) * dt * 0.35) this.endSlide(true, 'parede');
     if (this.onGround && air) {
       // pousou: com paraquedas e' de leve; em queda livre, dano pela velocidade (o servidor confere a janela)
       this.air = false;
@@ -280,7 +329,7 @@ export class Player {
     if (this.onGround) {
       if (!this.wasGround && vy < -6) { this.g.vm.landed(-vy); audio.play('land', { vol: Math.min(0.8, -vy / 20) }); }
     }
-    const eyeT = this.g.down ? 0.5 : this.crouch ? 1.05 : 1.6;
+    const eyeT = this.g.down ? 0.5 : this.slideT > 0 ? SLIDE.eye : this.crouch ? 1.05 : 1.6;
     this.eye = damp(this.eye, eyeT, 12, dt);
 
     // passos no ritmo do balanco: fluido, alternando pe e variando um tiquinho
@@ -297,7 +346,7 @@ export class Player {
 
     // mira
     const adsTime = 0.16 * st.adsTime * (this.wpn === 'sniper' ? 1.5 : 1) * this.sk('lince', 'ads') * this.cold('ads');
-    const canAds = !W.noAds && this.reloadT <= 0 && !this.sprint && !this.tac;
+    const canAds = !W.noAds && this.reloadT <= 0 && !this.sprint && !this.tac && this.lo(this.wpn)?.handle !== 'akimbo'; // akimbo atira so do quadril
     this.adsK = damp(this.adsK, inp.ads && canAds ? 1 : 0, 1 / adsTime * 1.6, dt);
     if (inp.adsPressed && canAds) audio.play('ads', { vol: 0.35 });
 
@@ -371,12 +420,12 @@ export class Player {
     // camera
     this.zoomNow = st.zoom || W.zoom;
     // camera reta: andar de lado nao inclina a cabeca (era o que deixava o movimento "mole")
-    this.roll = damp(this.roll, 0, 10, dt);
+    this.roll = damp(this.roll, this.slideT > 0 ? SLIDE.roll : 0, 10, dt); // deslizando: inclina de leve
 
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / 20;
-      const anim = this.g.down ? 'down' : this.air && this.g.bounce ? (this.chute ? 'chute' : 'fall') : !this.onGround ? 'jump' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
+      const anim = this.g.down ? 'down' : this.air && this.g.bounce ? (this.chute ? 'chute' : 'fall') : !this.onGround ? 'jump' : this.slideT > 0 ? 'slide' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
       this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn });
     }
   }
@@ -494,6 +543,7 @@ export class Player {
     const noScope = this.wpn === 'sniper' && !ads;
     if (noScope) spread = 0.11;
     if (this.crouch) spread *= 0.75;
+    if (this.slideT > 0) spread *= SLIDE.spread; // atirando escorregando: espalha (o agachado nao vale aqui)
     const kick = (W.kick ?? 0.05) * (st.kick ?? 1) * this.sk('lince', 'kick');
     // recuo com padrao fixo por arma (aprende e compensa), volta ao inicio se soltar o gatilho
     if (performance.now() - this.patT > 320) this.patIdx = 0;
@@ -506,7 +556,9 @@ export class Player {
     this.recoilY += kick * adsK * 0.5 * py + (Math.random() - 0.5) * kick * 0.1 * adsK;
     g.vm.fire(kick * (ads ? 0.55 : 1.3));
     g.shake(W.kick * 0.4);
-    audio.play(this.wpn, { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05 });
+    const bodyNow = this.lo(this.wpn)?.body; // som proprio de modelo: revolver, AA-12 e o laser do Bico Longo
+    const laser = this.wpn === 'pistol' && bodyNow === LASER_BODY;
+    audio.play(laser ? 'laser' : bodyNow === 'pistol_10' ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : this.wpn, { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05 });
     audio.duck(0.6, 0.25);
 
     // boca do cano no mundo (pra o tracer sair da arma)
@@ -534,7 +586,16 @@ export class Player {
         const fall = this.wpn === 'shotgun' ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
         if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
-      if (i < (this.wpn === 'shotgun' ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)
+      if (i < (this.wpn === 'shotgun' ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)
+    }
+    // dirigivel inimigo no caminho da bala do meio: enche de furo (o servidor confere e estoura)
+    if (!victim && g.blimpMeshes?.length) {
+      const bh = this.traceBlimp(o, fwd.toArray(), 250);
+      if (bh) {
+        g.net.send({ t: 'hitBlimp', id: bh.m.userData.id, dmg: Math.round(W.dmg * pellets * dmgK), wpn: this.wpn });
+        g.fx.impact(bh.point, null); g.onHitConfirm?.(bh.point, false, Math.round(W.dmg * pellets * dmgK), null);
+        firstEnd = bh.point;
+      }
     }
     if (victim) {
       g.net.send({ t: 'hit', v: victim.id, dmg: Math.round(total), head, wpn: this.wpn });
@@ -554,6 +615,28 @@ export class Player {
 
   // tipo de bala da arma na mao (gun game e lamina nao tem)
   ammoNow() { const a = this.g.mode === 'gungame' || this.wpn === 'melee' ? null : this.lo(this.wpn)?.ammo; return AMMO[a] ? a : null; }
+
+  // raio contra o balao do dirigivel inimigo (elipsoide 3 x 2,4 x 6,9 no espaco do modelo); a parede na frente barra
+  traceBlimp(o, d, max) {
+    const wall = raycast(this.g.M, o, d, max).dist;
+    let best = null;
+    for (const m of this.g.blimpMeshes) {
+      const u = m.userData, own = this.g.remotes.get(u.owner);
+      if (u.owner === this.g.myId || (own && !this.g.isEnemy(own)) || (!own && this.g.myTeam && u.team === this.g.myTeam)) continue;
+      m.updateMatrixWorld(); const inv = m.matrixWorld.clone().invert();
+      const lo = new THREE.Vector3(...o).applyMatrix4(inv), ld = new THREE.Vector3(...d).transformDirection(inv);
+      lo.set(lo.x / 3, lo.y / 2.4, lo.z / 6.9); ld.set(ld.x / 3, ld.y / 2.4, ld.z / 6.9);
+      const a = ld.dot(ld), b = 2 * lo.dot(ld), c = lo.dot(lo) - 1, D = b * b - 4 * a * c;
+      if (D < 0) continue;
+      const tl = (-b - Math.sqrt(D)) / (2 * a); // em unidades do raio local: volta pro mundo pelo ponto
+      if (tl < 0) continue;
+      const pl = new THREE.Vector3(lo.x + ld.x * tl, lo.y + ld.y * tl, lo.z + ld.z * tl);
+      const pw = new THREE.Vector3(pl.x * 3, pl.y * 2.4, pl.z * 6.9).applyMatrix4(m.matrixWorld);
+      const dist = pw.distanceTo(new THREE.Vector3(...o));
+      if (dist < wall && dist < max && (!best || dist < best.dist)) best = { m, dist, point: pw.toArray() };
+    }
+    return best;
+  }
 
   traceTargets(o, d, max, pierce = false) {
     const wall = raycast(this.g.M, o, d, max);

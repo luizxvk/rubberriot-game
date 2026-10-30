@@ -7,7 +7,7 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt', // momentos que eram mudos (contagem, rodada, fim, assist, renascer) e o ferrolho
   'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
   'ringbell', 'crowd', 'pump', 'balloon', // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
-  'chute', 'wind', 'splat']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
+  'chute', 'wind', 'splat', 'revolver', 'aa12', 'laser']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
 function soundEdges(b) {

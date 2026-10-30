@@ -29,6 +29,8 @@ function hide() { if (!el) return; el.hidden = true; busy = false; clearTimeout(
 // mostra a dica 'id' se ainda nao viu (e marca como vista)
 export function tip(id) {
   if (seen[id] || queue.includes(id)) return;
+  // no treino o cartao do Seu Tinteiro ja explica tudo: dica por cima tampava ele (fica pra partida de verdade)
+  if (document.body.classList.contains('tutorial')) return;
   seen[id] = 1; try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch { /* */ }
   queue.push(id); show();
 }

@@ -56,7 +56,7 @@ export async function loadMe() {
 
 export async function friends() {
   const list = await call('/social/friends');
-  return (Array.isArray(list) ? list : []).map(f => ({ id: f.id, name: f.displayName || f.name || '?', avatar: f.avatarUrl || '', online: !!f.isOnline }));
+  return (Array.isArray(list) ? list : []).map(f => ({ id: f.id, name: f.displayName || f.name || '?', avatar: f.avatarUrl || '', online: !!f.lastSeenAt && Date.now() - new Date(f.lastSeenAt).getTime() < 5 * 60000 })); // isOnline mente: vale a janela do lastSeenAt
 }
 // salas de amigos: a rovex-api repassa pela rede interna da Fly (nao acorda a rovex-games dormindo)
 export async function friendRooms() {
@@ -65,6 +65,13 @@ export async function friendRooms() {
   return Array.isArray(j?.salas) ? j.salas : [];
 }
 export const invite = (friendId, room) => call('/games/rubber-riot/invite', { method: 'POST', body: { friendId, room } });
+// convites que chegaram pra mim (o sininho da Rovex nao aparece com o jogo aberto)
+export async function invites() {
+  if (!token()) return [];
+  const j = await call('/games/rubber-riot/convites', { timeout: 5000 });
+  return Array.isArray(j?.convites) ? j.convites : [];
+}
+export const inviteSeen = (id) => call('/games/rubber-riot/convites/' + encodeURIComponent(id) + '/lido', { method: 'POST' }).catch(() => {});
 
 // ---------- save na conta ----------
 // a conta manda: logou, o save dela entra no lugar do local. Conta sem save herda o

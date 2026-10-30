@@ -39,16 +39,26 @@ export const UNLOCKS = [
   // pacote WW2: cada arma antiga sai de um desafio proprio
   { id: 'u_ww_stg', n: 30, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'rifle', reward: { slot: 'body', id: 'fusil_9', wpn: 'rifle' } },
   { id: 'u_ww_garand', n: 40, xp: 1750, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_3', wpn: 'sniper' } },
-  { id: 'u_ww_thompson', n: 3, xp: 1750, ok: (e) => e.type === 'multi', reward: { slot: 'body', id: 'subfusil_11', wpn: 'smg' } },
   { id: 'u_ww_ppsh', n: 100, xp: 2000, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_12', wpn: 'smg' } },
   // visual do boneco: itens incomuns que so saem daqui (30/10)
   { id: 'u_lk_plunger', n: 25, xp: 1250, ok: K('melee'), reward: { slot: 'look', id: 'hat:plunger' } },
   { id: 'u_lk_knockout', n: 15, xp: 1250, ok: (e) => e.type === 'kill' && e.wpn === 'frag', reward: { slot: 'look', id: 'eyes:knockout' } },
   { id: 'u_lk_oven', n: 5, xp: 1250, ok: (e) => e.type === 'win', reward: { slot: 'look', id: 'glove:oven' } },
   { id: 'u_lk_stink', n: 8, xp: 1250, ok: (e) => e.type === 'streak', reward: { slot: 'look', id: 'fx:stink' } },
+  // akimbo (30/10): so sai daqui; duas pistolas, pente dobrado, sem mirar
+  // revolver Bang-Bang (30/10): so sai daqui
+  { id: 'u_revolver', n: 30, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_10', wpn: 'pistol' } },
+  { id: 'u_akimbo', n: 50, xp: 2000, ok: K('pistol'), reward: { slot: 'handle', id: 'akimbo', wpn: 'pistol' } },
   { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
   { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
   { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
+  // pacote 2 (30/10, pedido dele): cada arma nova sai de um desafio proprio (antes abria por nivel)
+  { id: 'u_pk_mp5', n: 60, xp: 1500, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_13', wpn: 'smg' } },
+  { id: 'u_pk_ak', n: 80, xp: 1750, ok: K('rifle'), reward: { slot: 'body', id: 'fusil_10', wpn: 'rifle' } },
+  { id: 'u_pk_aa12', n: 40, xp: 1750, ok: K('shotgun'), reward: { slot: 'body', id: 'shotgun_3', wpn: 'shotgun' } },
+  { id: 'u_pk_ar', n: 25, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'rifle', reward: { slot: 'body', id: 'fusil_11', wpn: 'rifle' } },
+  { id: 'u_pk_cuca', n: 20, xp: 2000, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper', reward: { slot: 'body', id: 'sniper_4', wpn: 'sniper' } },
+  { id: 'u_pk_dmr', n: 6, xp: 2000, ok: (e) => e.type === 'streak', reward: { slot: 'body', id: 'fusil_12', wpn: 'rifle' } },
   // tipos de bala (peca Municao, equipada por arma; a normal ja vem aberta)
   { id: 'u_am_fire', n: 40, xp: 1500, ok: K(), reward: { slot: 'ammo', id: 'am:fire' } },
   { id: 'u_am_trace', n: 15, xp: 1250, ok: (e) => e.type === 'assist', reward: { slot: 'ammo', id: 'am:trace' } },
@@ -99,22 +109,46 @@ export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
 const ACTIVE = 4;
-const ORDER = ['u_am_fire', 'u_lk_plunger', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_ww_thompson', 'u_sscope', 'u_spitter',
-  'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_ww_ppsh', 'u_am_ap', 'u_fang', 'u_fscope', 'u_ww_tt', 'u_tr_toxic', 'u_bolt',
+const ORDER = ['u_am_fire', 'u_akimbo', 'u_lk_plunger', 'u_revolver', 'u_pk_mp5', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_pk_ak', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_sscope', 'u_spitter',
+  'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_pk_aa12', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_pk_ar', 'u_tr_void', 'u_ww_ppsh', 'u_am_ap', 'u_fang', 'u_fscope', 'u_pk_cuca', 'u_ww_tt', 'u_tr_toxic', 'u_bolt', 'u_pk_dmr',
   'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice']; // WW2 (u_ww_*) intercaladas pra aparecer cedo
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];
-export function activeUnlocks() { return ordered().filter(u => (data.career[u.id] || 0) < u.n).slice(0, ACTIVE); }
+// o jogador pode escolher quais perseguir (aba Desafios): os escolhidos entram primeiro, a fila completa o resto
+const pending = (u) => (data.career[u.id] || 0) < u.n;
+export function activeUnlocks() {
+  const pinned = (data.pick || []).map(id => UNLOCKS.find(u => u.id === id)).filter(u => u && pending(u)).slice(0, ACTIVE);
+  return [...pinned, ...ordered().filter(u => pending(u) && !pinned.includes(u))].slice(0, ACTIVE);
+}
+export const unlockPinned = (id) => (data.pick || []).includes(id);
+// liga/desliga um desafio escolhido; cheio (4), sai o escolhido mais antigo
+export function togglePick(id) {
+  const p = (data.pick || []).filter(x => UNLOCKS.some(u => u.id === x && pending(u)));
+  data.pick = p.includes(id) ? p.filter(x => x !== id) : [...p, id].slice(-ACTIVE);
+  save();
+}
+export function pendingUnlocks() { return ordered().filter(pending).map(u => ({ ...u, prog: Math.min(u.n, data.career[u.id] || 0) })); }
 export const unlockActive = (id) => activeUnlocks().some(u => u.id === id);
 export const unlockProg = (id) => { const u = UNLOCKS.find(x => x.id === id); return u ? Math.min(1, (data.career[id] || 0) / u.n) : 1; };
 
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 function seeded(str) { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) / 4294967296); }
 
+const GONE_CH = ['u_ww_thompson'], GONE_BODIES = ['subfusil_11']; // Maquina de Escrever removida (30/10)
 let data = load();
 function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
-  return { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {}, tut: d.tut || null };
+  const out = { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {}, tut: d.tut || null, pick: Array.isArray(d.pick) ? d.pick : [] };
+  // desafios e modelos que sairam do jogo: some todo rastro deles do save (e da nuvem, no proximo envio)
+  let gone = false;
+  for (const id of GONE_CH) {
+    if (id in out.career) { delete out.career[id]; gone = true; }
+    if (id in out.done) { delete out.done[id]; gone = true; }
+    if (out.pick.includes(id)) { out.pick = out.pick.filter(x => x !== id); gone = true; }
+  }
+  if (out.tut && GONE_BODIES.includes(out.tut.body)) { delete out.tut.body; gone = true; }
+  if (gone) setTimeout(() => save(), 0);
+  return out;
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 

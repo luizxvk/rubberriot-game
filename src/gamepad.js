@@ -67,6 +67,7 @@ export class Pad {
       if (down(B.UP)) I.edges.add('STREAK');
       if (down(B.DOWN)) I.edges.add('INSPECT');
       if (down(B.RIGHT)) I.edges.add('FIELD');
+      if (down(B.LEFT)) I.edges.add('PING'); // marcar (battle royale)
       if (down(B.START)) I.edges.add('Escape');
     } else {
       // menus: anda pelo foco com direcional ou analogico (repete segurando)

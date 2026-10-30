@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Ver GLB por no</title>
+<style>body{margin:0;background:#dcd7cb;font:12px sans-serif}#g{display:grid;grid-template-columns:repeat(3,max-content)}div{position:relative}span{position:absolute;left:4px;top:2px;background:#fff8;padding:0 3px}</style>
+<div id="g"></div>
+<script type="module">
+// Ferramenta: cada no de primeiro nivel do GLB sozinho, de lado, cada malha numa cor (pra achar pente/mira soltos)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search), url = q.get('f'), side = q.get('side') || 'x';
+const g = await new GLTFLoader().loadAsync(url);
+g.scene.updateMatrixWorld(true);
+const root = g.scene.getObjectByName('GLTF_SceneRootNode') || g.scene.getObjectByName('RootNode') || g.scene; const tex = q.has('tex');
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(420, 220);
+const COL = [0xd9534f, 0x5bc0de, 0x5cb85c, 0xf0ad4e, 0x9b59b6, 0x34495e, 0xe67e22, 0x1abc9c];
+const out = document.getElementById('g');
+for (const node of root.children) {
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(0xdcd7cb);
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x777777, 2.2));
+  let i = 0; const names = [];
+  node.traverse(o => { if (!o.isMesh) return; const m = new THREE.Mesh(o.geometry, tex ? new THREE.MeshLambertMaterial({ map: o.material.map }) : new THREE.MeshLambertMaterial({ color: COL[i++ % COL.length] })); if (tex) i++; m.applyMatrix4(o.matrixWorld); sc.add(m); names.push(o.name + '(' + o.geometry.attributes.position.count + ')'); });
+  if (!i) continue;
+  const box = new THREE.Box3().setFromObject(sc), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const w = Math.max(s.x, s.y, s.z) * 0.6;
+  const cam = new THREE.OrthographicCamera(-w, w, w * 220 / 420, -w * 220 / 420, -100, 100);
+  cam.position.copy(c).add(side === 'x' ? new THREE.Vector3(10, 0, 0) : side === 'z' ? new THREE.Vector3(0, 0, 10) : new THREE.Vector3(0, 10, 0)); cam.lookAt(c);
+  r.render(sc, cam);
+  const d = document.createElement('div');
+  d.innerHTML = `<img src="${r.domElement.toDataURL()}"><span>${node.name} | ${names.join(', ')} | tam ${s.toArray().map(v => v.toFixed(2)).join('x')}</span>`;
+  out.appendChild(d);
+}
+document.title = 'pronto';
+</script>

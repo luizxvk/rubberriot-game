@@ -74,6 +74,32 @@ const INSPECTS = {
     [1, ...O]] },
 };
 // Catmull-Rom nas chaves: posicao e mao sem tranco entre os passos
+// Inspect do akimbo (30/10): as duas mostram a lateral, a direita gira no dedo (giro de caubói), depois a
+// esquerda, as duas viram pro outro lado e voltam. Valores: direita [x,y,z,rx,ry,rz] + esquerda [x,y,z,rx,ry,rz].
+const AK0 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const AKIMBO_INSPECT = { dur: 3.2, spinR: [0.27, 0.46], spinL: [0.5, 0.69], keys: [
+  [0, ...AK0],
+  [0.12, 0.01, 0.03, 0, 0.15, 0.1, -0.6, -0.01, 0.03, 0, 0.15, -0.1, 0.6],      // as duas deitam pra dentro
+  [0.26, 0.02, 0.07, 0.02, 0.3, 0, -0.15, -0.01, 0.03, 0, 0.15, -0.1, 0.6],     // direita sobe pro giro
+  [0.47, 0.02, 0.07, 0.02, 0.3, 0, -0.15, -0.02, 0.07, 0.02, 0.3, 0, 0.15],    // esquerda sobe
+  [0.56, 0, 0.02, 0, 0.08, 0, -0.08, -0.02, 0.07, 0.02, 0.3, 0, 0.15],
+  [0.7, 0, 0.02, 0, 0.08, 0, -0.08, 0, 0.02, 0, 0.08, 0, 0.08],
+  [0.8, -0.03, 0.04, 0, 0.2, 0.15, 0.55, 0.03, 0.04, 0, 0.2, -0.15, -0.55],   // mostram o outro lado
+  [0.92, -0.01, 0.01, 0, 0.05, 0.04, 0.12, 0.01, 0.01, 0, 0.05, -0.04, -0.12],
+  [1, ...AK0]] };
+// Inspect do revolver (Bang-Bang): deita mostrando o tambor, a esquerda da um tapa e ele gira 3 voltas,
+// sobe e da um giro de cauboi no dedo. Mesmo formato do INSPECTS (x, y, z, rx, ry, rz, mao esquerda x, y, z).
+const REV_INSPECT = { dur: 3.0, spinR: [0.67, 0.86], keys: [
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0.14, -0.04, 0.04, 0.02, 0.1, 0.2, -0.9, 0, 0, 0],
+  [0.3, -0.05, 0.05, 0.02, 0.12, 0.25, -1.1, 0.05, 0.05, 0.05],
+  [0.6, -0.05, 0.05, 0.02, 0.12, 0.25, -1.1, 0, 0, 0],
+  [0.66, 0, 0.07, 0, 0.32, 0, -0.1, 0, 0, 0],
+  [0.87, 0, 0.04, 0, 0.12, 0, 0, 0, 0, 0],
+  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] };
+// giro no dedo: 0 -> 2pi com aceleracao e freio suaves dentro da janela [a, b] do inspect
+const spinAt = (p, [a, b]) => { const u = THREE.MathUtils.clamp((p - a) / (b - a), 0, 1); return (u < 1 && u > 0) ? (u * u * u * (u * (u * 6 - 15) + 10)) * Math.PI * 2 : 0; };
+
 function inspectPose(k, p) {
   let i = 0;
   while (i < k.length - 2 && p > k[i + 1][0]) i++;
@@ -214,12 +240,27 @@ export class ViewModel {
     this.holder.clear();
     this.gun = buildGun(id, loadout);
     this.gun.scale.setScalar(VM_SCALE);
+    // faca em pegada invertida (COD): lamina sai por baixo do punho, deitada apontando pro centro
+    if (id === 'melee') this.gun.rotation.set(-0.75, 0, -1.35, 'ZXY');
     this.holder.add(this.gun);
+    // akimbo: segunda pistola na mao esquerda, espelhando a pose da direita
+    if (this.akimbo) { this.scene.remove(this.akimbo); this.akimbo = null; this.gun2 = null; }
+    if (id === 'pistol' && loadout?.handle === 'akimbo') {
+      this.gun2 = buildGun('pistol', { ...loadout, handle: null }); this.gun2.scale.setScalar(VM_SCALE);
+      this.akimbo = new THREE.Group(); this.akimbo.add(this.gun2); this.scene.add(this.akimbo);
+      this.kick2 = 0; this.akSide = false;
+    }
     this.wpn = id;
+    this.isBp = !!loadout?.bp; // variante de elite: corre com a arma levantada
     this.switchT = instant ? 0 : 0.32;
   }
 
   fire(kick) {
+    // revolver: o tambor da 1/6 de volta e o cao bate (na mao da vez, no akimbo)
+    const rv = (this.akimbo && !this.akSide ? this.gun2 : this.gun)?.userData;
+    if (rv?.drum) { rv.drumA = (rv.drumA || 0) + Math.PI / 3; rv.hamT = 1; }
+    // akimbo: um tiro em cada mao, alternando
+    if (this.akimbo) { this.akSide = !this.akSide; if (this.akSide) { this.kick2 += kick * 1.6; this.flashT = 0.05; return; } }
     this.kick += kick * 1.6;
     this.kickR += kick * 3.2 + Math.random() * kick;
     this.flashT = 0.05;
@@ -238,7 +279,8 @@ export class ViewModel {
     const key = JSON.stringify(lo || {});
     if (this.knifeKey !== key) {
       if (this.knife) this.scene.remove(this.knife);
-      this.knife = buildGun(lo?.fists ? 'fists' : 'melee', lo?.fists ? null : lo); // battle royale: soco rapido sem faca this.knife.scale.setScalar(VM_SCALE); this.knife.visible = false;
+      this.knife = buildGun(lo?.fists ? 'fists' : 'melee', lo?.fists ? null : lo); // battle royale: soco rapido sem faca
+      this.knife.scale.setScalar(VM_SCALE); this.knife.visible = false;
       this.scene.add(this.knife); this.knifeKey = key;
     }
   }
@@ -254,7 +296,8 @@ export class ViewModel {
     this.streakT = STREAK_DUR; this.inspectT = 0;
   }
 
-  inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = (INSPECTS[this.wpn] || INSPECTS.rifle).dur; }
+  inspectDef() { return this.akimbo ? AKIMBO_INSPECT : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
+  inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = this.inspectDef().dur; }
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
   // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
   setGloves(look) {
@@ -299,10 +342,13 @@ export class ViewModel {
     // pistola de braco esticado (MW 2019): mais longe do rosto
     const pistol = this.wpn === 'pistol';
     if (pistol) { tx = 0.16; ty = -0.17; tz = -0.52; }
-    // faca na mao: baixa a direita, lamina pra frente e levemente pra dentro (o antebraco aparece)
-    if (this.wpn === 'melee') { tx = 0.2; ty = -0.25; tz = -0.46; trx = 0.18; tryy = 0.32; trz = 0.22; }
-    if (st.tac) {
-      tx = 0.2; ty = -0.17; tz = -0.44; trx = 0.95; tryy = 0.35; trz = -0.55;
+    // faca na mao (pegada invertida): punho mais alto a direita pra lamina aparecer deitada
+    if (this.wpn === 'melee') { tx = 0.19; ty = -0.17; tz = -0.44; trx = 0.18; tryy = 0.32; trz = 0.22; }
+    // variante de elite: a corrida normal usa a pose de arma levantada (MW 2019); as outras armas correm normal
+    const bpRun = st.sprint && this.isBp && this.wpn !== 'melee' && this.wpn !== 'fists' && st.ads < 0.05;
+    if (st.tac || bpRun) {
+      // disparada estilo MW 2019: arma erguida de lado, cano pra cima, afastada a direita (o meio da tela fica livre)
+      tx = 0.3; ty = -0.1; tz = -0.72; trx = 1.3; tryy = 0.25; trz = -0.4;
     } else if (st.sprint && pistol) {
       // corrida de pistola (BO3): pistola erguida perto do peito, cano pra cima
       tx = 0.13; ty = -0.17; tz = -0.4; trx = 1.05; tryy = -0.12; trz = -0.28;
@@ -329,16 +375,35 @@ export class ViewModel {
       trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy *= 1 - st.ads; trz *= 1 - st.ads;
     }
     // inspecionar (pose por categoria); atirar, mirar, correr, recarregar ou granada cancela na hora
-    let insp = null;
+    let insp = null, akL = null, spinR = 0, spinL = 0;
     if (this.inspectT > 0) {
       if (st.firing || st.ads > 0.05 || st.sprint || st.tac || this.reloadT > 0 || this.throwT > 0) this.inspectT = 0;
       else {
         this.inspectT -= dt;
-        const I = INSPECTS[this.wpn] || INSPECTS.rifle;
-        insp = inspectPose(I.keys, 1 - Math.max(0, this.inspectT) / I.dur);
+        const I = this.inspectDef();
+        const ip = 1 - Math.max(0, this.inspectT) / I.dur;
+        insp = inspectPose(I.keys, ip);
         tx += insp[0]; ty += insp[1]; tz += insp[2]; trx += insp[3]; tryy += insp[4]; trz += insp[5];
+        if (this.akimbo) { akL = insp.slice(6, 12); insp = [...insp.slice(0, 6), 0, 0, 0]; spinR = spinAt(ip, I.spinR); spinL = spinAt(ip, I.spinL); }
+        else if (I === REV_INSPECT) spinR = spinAt(ip, I.spinR);
       }
     }
+    // revolver: tambor gira ate o proximo furo, cao volta armado; no inspect o tambor da 3 voltas rapidas
+    for (const gg of [this.gun, this.gun2]) {
+      const u = gg?.userData; if (!u?.drum) continue;
+      const ins = this.inspectT > 0 ? spinAt(1 - Math.max(0, this.inspectT) / this.inspectDef().dur, [0.32, 0.62]) * 3 : 0;
+      u.drumNow = damp(u.drumNow || 0, u.drumA || 0, 22, dt);
+      u.drum.rotation.z = u.drumNow + ins;
+      u.hamT = Math.max(0, (u.hamT || 0) - dt * 5);
+      if (u.hammer) u.hammer.rotation.x = u.hamT > 0.5 ? (1 - u.hamT) * 2 * 0.6 : u.hamT * 2 * 0.6; // bate e volta armado
+    }
+    // akimbo: a esquerda tem pose propria no inspect (suavizada igual a direita) e os giros no dedo
+    if (this.akimbo) {
+      const tgt = akL || [0, 0, 0, 0, 0, 0], a = (this.akL ||= [0, 0, 0, 0, 0, 0]);
+      for (let i = 0; i < 6; i++) a[i] = damp(a[i], tgt[i], i < 3 ? 16 : 14, dt);
+      this.akSpinL = spinL;
+    }
+    this.akSpinR = spinR; // giro no dedo da arma da direita (akimbo e revolver)
     if (st.crouch) ty -= 0.01 * (1 - st.ads); // agachado a arma desce um pouco, mas mirando fica no centro (a mira da arma batia abaixo da cruz)
 
     // depois de uma volta inteira, a rotacao volta pra faixa normal sem desenrolar
@@ -388,6 +453,15 @@ export class ViewModel {
     if (this.swingT > 0) { this.swingT -= dt; sp = 1 - Math.max(0, this.swingT) / this.swingDur; sw2 = Math.sin(sp * Math.PI); }
     let bo = 0;
     if (this.boltT > 0) { this.boltT -= dt; const bp = 1 - Math.max(0, this.boltT) / this.boltDur; bo = bp > 0 && bp <= 1 ? Math.sin(bp * Math.PI) : 0; }
+    // ferrolho de verdade (sniper com peca de ferrolho): levanta a alavanca, puxa, empurra e baixa
+    const gb = this.gun?.userData.bolt;
+    if (gb) {
+      const bp = this.boltT > 0 ? Math.min(1, Math.max(0, 1 - this.boltT / this.boltDur)) : 0;
+      const q = (a, c) => Math.min(1, Math.max(0, (bp - a) / (c - a)));
+      const up = bp < 0.5 ? q(0, 0.22) : 1 - q(0.78, 1), back = bp < 0.5 ? q(0.22, 0.5) : 1 - q(0.5, 0.78);
+      gb.g.rotation.z = -up * 1.2;
+      gb.g.position.z = gb.z0 + back * gb.travel;
+    }
     // faca rapida: a arma sai rapido (15% do tempo), fica fora e so volta nos 20% finais
     const out = this.swingT > 0 ? Math.min(1, sp / 0.15, (1 - sp) / 0.2) : 0;
     const dipQ = this.swingQuick ? out : 0;
@@ -404,6 +478,15 @@ export class ViewModel {
       s.rx + brx + this.kickR * kickAds * 0.5 - sw * 0.9 + rl * 0.35 - dipQ * 1.1 + c[3],
       s.ry + this.swayX * 2 * adsK + c[4],
       s.rz + brz + rl * 0.7 + bo * 0.22 + c[5], 'YXZ');
+    if (this.akSpinR) this.rig.rotation.x -= this.akSpinR; // giro de cauboi
+    if (this.akimbo) { // espelho da direita, com o recuo proprio
+      this.kick2 = damp(this.kick2 || 0, 0, 12, dt);
+      const a = this.akL || [0, 0, 0, 0, 0, 0], r = this.rig;
+      // a pose de inspect da direita sai do espelho (cada mao tem a sua); o giro no dedo e por cima
+      const ri = insp ? [insp[0], insp[1], insp[2], insp[3], insp[4], insp[5]] : [0, 0, 0, 0, 0, 0];
+      this.akimbo.position.set(-(r.position.x - ri[0]) + a[0], r.position.y - ri[1] + a[1], r.position.z - ri[2] + a[2] + this.kick2);
+      this.akimbo.rotation.set(r.rotation.x + (this.akSpinR || 0) - ri[3] + a[3] + this.kick2 * 0.5 - (this.akSpinL || 0), -(r.rotation.y - ri[4]) + a[4], -(r.rotation.z - ri[5]) + a[5], 'YXZ');
+    }
     // mirando, o recuo e o balanco giram a arma EM VOLTA DO OLHO: o ponto da mira fica onde o tiro
     // vai. Antes girava em volta do punho e o ponto subia dezenas de pixels a cada rajada.
     if (st.ads > 0 && this.adsEye) {
@@ -422,12 +505,13 @@ export class ViewModel {
     if (g.gripR) g.gripR.getWorldPosition(pR);
     if (g.gripL) g.gripL.getWorldPosition(pL);
     if (st.sprint && pistol) pL.set(-0.24 + Math.sin(this.bobT) * 0.04, -0.4 + Math.cos(this.bobT) * 0.06, -0.3 + Math.sin(this.bobT) * 0.08);
-    if (st.tac) pL.set(-0.2 + Math.sin(this.bobT) * 0.05, -0.2 + Math.cos(this.bobT) * 0.08, -0.35 + Math.sin(this.bobT) * 0.1);
+    if (st.tac || (st.sprint && this.isBp && this.wpn !== 'melee' && this.wpn !== 'fists')) pL.set(-0.2 + Math.sin(this.bobT) * 0.05, -0.2 + Math.cos(this.bobT) * 0.08, -0.35 + Math.sin(this.bobT) * 0.1);
     if (insp) pL.add(new THREE.Vector3(insp[6], insp[7], insp[8]).applyQuaternion(this.rig.quaternion));
     if (rl > 0) pL.lerp(new THREE.Vector3(pR.x - 0.02, pR.y - 0.12, pR.z + 0.02), rl);
     if (th > 0) pL.lerp(new THREE.Vector3(-0.12, -0.05 + th * 0.1, -0.5), th);
     // faca na mao: a esquerda fica fora da tela (baixa, de lado)
     if (this.wpn === 'melee') pL.set(-0.34, -0.62, -0.25);
+    if (this.akimbo && this.gun2?.userData.gripR) { this.akimbo.updateMatrixWorld(true); this.gun2.userData.gripR.getWorldPosition(pL); } // akimbo: a esquerda segura a 2a pistola
     // punhos: guarda de boxe balancando no ritmo; cada soco e um jab da mao da vez (alterna)
     const fists = this.wpn === 'fists';
     if (fists) {
@@ -496,6 +580,7 @@ export class ViewModel {
     this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR;
     this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL;
     if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); } // punho gira com a passada
+    else if (this.akimbo) this.gloveL.quaternion.copy(this.akimbo.quaternion); // akimbo: a esquerda segue a 2a pistola
     else this.gloveL.rotateZ(-0.9);
     // guarda-chuva aberto: a mao esquerda segura o cabo, cupula na frente-esquerda tampando o tronco
     if (this.umbOn) {
@@ -514,12 +599,19 @@ export class ViewModel {
       const over = g.scope.big && st.ads > 0.8;
       if (g.scope.lens.material.depthTest === over) { g.scope.lens.material.depthTest = !over; g.scope.lens.renderOrder = over ? 9 : 3; }
     }
-    this.armR.set(new THREE.Vector3(0.38, -0.55, 0.15), new THREE.Vector3(0.35, -0.3, 0.05).lerp(pR, 0.3), pR.clone().add(new THREE.Vector3(0, -0.01, 0.06)));
-    this.armL.set(new THREE.Vector3(-0.38, -0.6, 0.05), new THREE.Vector3(-0.3, -0.35, -0.1).lerp(pL, 0.3), pL.clone().add(new THREE.Vector3(0, -0.01, 0.06)));
+    // o antebraco sai do punho da luva na direcao dela: inclina junto com a arma (disparada, inspect, akimbo, soco)
+    const arm = (glove, p, sh, mid0) => {
+      const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(glove.quaternion);
+      const wrist = p.clone().addScaledVector(dir, 0.05).add(new THREE.Vector3(0, -0.01, 0));
+      const elbow = wrist.clone().addScaledVector(dir, 0.22).lerp(mid0.clone().lerp(p, 0.3), 0.35);
+      return [sh, elbow, wrist];
+    };
+    this.armR.set(...arm(this.gloveR, pR, new THREE.Vector3(0.38, -0.55, 0.15), new THREE.Vector3(0.35, -0.3, 0.05)));
+    this.armL.set(...arm(this.gloveL, pL, new THREE.Vector3(-0.38, -0.6, 0.05), new THREE.Vector3(-0.3, -0.35, -0.1)));
     this.rig.visible = !hideHands;
     for (const o of [this.gloveR, this.gloveL, this.armR.mesh, this.armL.mesh]) o.visible = !hideHands;
 
-    // laser: feixe curto na primeira pessoa (o ponto no mundo e' do main); correndo desliga
+    // laser: feixe longo na primeira pessoa (o ponto no mundo e' do main); correndo desliga
     if (g.laser) {
       const u = g.laser.beam.material.uniforms.uOn, b = g.laser.beam;
       // mirando some (o ponto no mundo continua); no quadril o feixe converge pro centro da mira
@@ -528,7 +620,7 @@ export class ViewModel {
       const from = b.getWorldPosition(new THREE.Vector3()), to = new THREE.Vector3(0, 0, -6);
       b.scale.z = 1;
       b.lookAt(to); b.rotateY(Math.PI); // a geometria aponta pra -z
-      b.scale.z = from.distanceTo(to) / b.parent.getWorldScale(new THREE.Vector3()).z * 0.45;
+      b.scale.z = from.distanceTo(to) / b.parent.getWorldScale(new THREE.Vector3()).z * 0.9; // quase ate o centro da mira: ajuda a precisao (pedido dele 30/10)
     }
     if (g.spin) {
       this.spinV = damp(this.spinV || 0, st.firing ? 40 : 0, 4, dt);
@@ -537,7 +629,7 @@ export class ViewModel {
     // clarao da boca
     if (this.flashT > 0 && g.muzzle) {
       this.flashT -= dt;
-      g.muzzle.getWorldPosition(this.flash.position);
+      (this.akimbo && this.akSide && this.gun2?.userData.muzzle ? this.gun2.userData.muzzle : g.muzzle).getWorldPosition(this.flash.position);
       // um tico a frente da boca do cano, na direcao que a arma aponta
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.rig.quaternion);
       this.flash.position.addScaledVector(fwd, 0.06);
@@ -551,7 +643,9 @@ export class ViewModel {
   // ponto da boca do cano na tela, em coordenadas de camera (pra puxar o tracer do lugar certo)
   muzzleCam() {
     const p = new THREE.Vector3();
-    if (this.gun?.userData.muzzle) this.gun.userData.muzzle.getWorldPosition(p);
+    const g2 = this.akimbo && this.akSide ? this.gun2 : null; // akimbo: o tiro sai da mao da vez
+    if (g2?.userData.muzzle) g2.userData.muzzle.getWorldPosition(p);
+    else if (this.gun?.userData.muzzle) this.gun.userData.muzzle.getWorldPosition(p);
     return p;
   }
 }

@@ -29,6 +29,9 @@ export const CAMOS = [
   { id: 'aquarium', code: 21, anim: true, req: { wpn: 17 } },
   { id: 'chrome', code: 22, anim: true, req: { wpn: 19 } },
   { id: 'phantom', code: 23, anim: true, req: { player: 30 } },
+  // 30/10 (noite, pedido dele): eter obscuro (escuro de verdade) e carbono animado
+  { id: 'darkaether', code: 42, anim: true, req: { player: 45 } },
+  { id: 'carbon', code: 43, anim: true, req: { wpn: 12 } },
   // reativas: mudam de estagio a cada 2 abates na mesma vida (2, 4, 6)
   { id: 'ember', code: 24, anim: true, react: true, req: { player: 20, wpn: 16 } },
   { id: 'inkreact', code: 25, anim: true, react: true, req: { player: 42, wpn: 20 } },
@@ -46,6 +49,13 @@ export const CAMOS = [
   { id: 'sludge', code: 33, anim: true, legend: true, fx: 'drip' },
   { id: 'eclipse', code: 34, anim: true, legend: true, fx: 'storm' },
   { id: 'stainedglass', code: 35, anim: true, legend: true, fx: 'stars' },
+  // 30/10 (noite): lendarias das armas novas, uma por variante de elite
+  { id: 'kintsugi', code: 36, anim: true, legend: true, fx: 'stars' },
+  { id: 'circuit', code: 37, anim: true, legend: true, fx: 'storm' },
+  { id: 'galaxy', code: 38, anim: true, legend: true, fx: 'stars' },
+  { id: 'popart', code: 39, anim: true, legend: true, fx: 'drip' },
+  { id: 'plasma', code: 40, anim: true, legend: true, fx: 'flame' },
+  { id: 'aurora', code: 41, anim: true, legend: true, fx: 'stars' },
 ];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
@@ -85,6 +95,14 @@ export const CAMO_SWATCH = {
   sludge: 'radial-gradient(circle at 30% 60%,#d8ff7a 10%,transparent 12%),radial-gradient(circle at 70% 35%,#d8ff7a 8%,transparent 10%),linear-gradient(#5f8f1a,#2c4a08)',
   eclipse: 'radial-gradient(circle at 50% 50%,#0a0710 34%,#ffd36b 37%,#ff8a2a 42%,#3a1b5c 55%,#0a0710 75%)',
   stainedglass: 'conic-gradient(#c2392b 0 60deg,#f2c94c 0 120deg,#2f5b8a 0 180deg,#7fb069 0 240deg,#b07cc6 0 300deg,#ef8a5b 0) 0 0/16px 16px',
+  darkaether: 'radial-gradient(circle at 30% 40%,#2a0f3a 0 18%,transparent 40%),radial-gradient(circle at 70% 65%,#06282a 0 16%,transparent 38%),#020103',
+  carbon: 'repeating-linear-gradient(45deg,#1a1c1f 0 3px,#2c2f33 3px 6px),repeating-linear-gradient(-45deg,#111214 0 3px,#24272b 3px 6px)',
+  kintsugi: 'linear-gradient(115deg,transparent 46%,#ffc24a 47% 50%,transparent 51%),linear-gradient(40deg,transparent 60%,#ffc24a 61% 63%,transparent 64%),#0b0b0c',
+  circuit: 'linear-gradient(90deg,transparent 45%,#3df5e6 45% 55%,transparent 55%) 0 0/12px 12px,linear-gradient(transparent 45%,#2e8a50 45% 55%,transparent 55%) 0 0/12px 12px,#04170c',
+  galaxy: 'radial-gradient(circle at 35% 40%,#ff6ad5 0 12%,transparent 30%),radial-gradient(circle at 65% 60%,#4a7bff 0 14%,transparent 34%),radial-gradient(circle,#fff 1px,transparent 1.5px) 0 0/7px 7px,#08051a',
+  popart: 'radial-gradient(circle,#ff2a7a 35%,transparent 38%) 0 0/7px 7px,#f6efdc',
+  plasma: 'conic-gradient(from 20deg,#ff8a1a,#c2128f,#ff4ad1,#ff8a1a)',
+  aurora: 'linear-gradient(100deg,transparent 20%,#3dffa0 35%,transparent 50%,#a24bff 68%,transparent 85%),#020615',
   marquee: 'radial-gradient(circle,#ffe7a0 30%,#ffb21a 45%,transparent 50%) 0 0/9px 9px,linear-gradient(#b8862b 0 18%,#a3201a 18% 82%,#b8862b 82%)',
   void: 'radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),radial-gradient(circle at 70% 60%,#fff 1px,transparent 2px),radial-gradient(circle at 50% 50%,#5b3fd6,#1b0f3d 55%,#05030d)',
 };
@@ -389,6 +407,87 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     float sweep = smoothstep(0.85, 1.0, sin(p.z * 1.8 + p.y * 0.9 - t * 1.6));
     glow = glass * (0.35 + sweep * 1.4) * (1.0 - lead);
     return mix(glass * (0.7 + lum * 0.6), vec3(0.03), lead);
+  }
+  if (k == 42) { // eter obscuro: quase preto; fumaca sombria violeta/petroleo, brasas raras e um ceu de estrelas cintilando
+    vec3 q = p * 1.4 + vec3(c_fbm(p * 1.2 + t * 0.12), c_fbm(p * 1.2 - t * 0.1), c_fbm(p * 1.2 + 3.0)) * 1.8;
+    float n = c_fbm(q), wisp = smoothstep(0.55, 0.8, n);
+    vec3 tint = mix(vec3(0.18, 0.04, 0.3), vec3(0.02, 0.2, 0.22), 0.5 + 0.5 * sin(t * 0.4 + p.z));
+    vec3 id = floor(p * 16.0); float ember = step(0.993, c_h(id)) * smoothstep(0.6, 1.0, sin(t * 1.3 + c_h(id + 5.0) * 40.0));
+    // estrelas (pedido dele): pontinhos finos cintilando no escuro, alguns violeta; uma estrela cadente de vez em quando
+    vec3 sq = p * 26.0, sc = floor(sq), hs = vec3(c_h(sc), c_h(sc + 1.7), c_h(sc + 3.1));
+    float star = step(0.95, hs.x) * smoothstep(0.14, 0.0, length(fract(sq) - 0.5)) * (0.35 + 0.65 * smoothstep(0.2, 1.0, sin(t * (2.0 + hs.y * 3.0) + hs.z * 30.0)));
+    vec3 starC = mix(vec3(1.0), vec3(0.75, 0.55, 1.0), step(0.6, hs.y));
+    float lane = fract(t * 0.18), shoot = smoothstep(0.03, 0.0, abs(p.y * 0.8 + p.z * 0.35 - (lane * 6.0 - 3.0))) * smoothstep(0.0, 0.25, lane) * smoothstep(0.55, 0.35, lane);
+    glow = tint * wisp * 0.35 + vec3(0.55, 0.2, 0.9) * ember * 0.5 + starC * star * 1.4 + vec3(0.85, 0.8, 1.0) * shoot * 1.2;
+    return mix(vec3(0.006, 0.004, 0.01), tint * 0.35, wisp) * (0.7 + lum * 0.4) + starC * star * 0.9 + shoot * 0.5;
+  }
+  if (k == 43) { // carbono: trama de fibra em sarja e um reflexo de luz varrendo a arma
+    vec2 q = vec2(p.z, p.y) * 22.0, cell = floor(q), f = fract(q);
+    float over = mod(cell.x + cell.y, 2.0) < 1.0 ? f.x : f.y; // fios que passam por cima alternam a direcao
+    float weave = 0.55 + 0.45 * sin(over * 3.1416);
+    float sheen = smoothstep(0.7, 1.0, sin(p.z * 1.2 - p.y * 0.8 - t * 1.4 + (mod(cell.x + cell.y, 2.0) < 1.0 ? 0.0 : 0.6)));
+    vec3 base = mix(vec3(0.04, 0.045, 0.05), vec3(0.16, 0.17, 0.19), weave) * sh;
+    glow = vec3(0.25, 0.28, 0.32) * sheen * weave * 0.6;
+    return base + vec3(0.35, 0.38, 0.42) * sheen * weave;
+  }
+  if (k == 36) { // kintsugi: ceramica preta, rachaduras de ouro que acendem em onda pela arma
+    vec2 q = vec2(p.z, p.y) * 3.4 + vec2(p.x * 2.0, 0.0), id = floor(q), f = fract(q);
+    float best = 9.0, second = 9.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y)), c = id + o, pt = o + vec2(c_h(vec3(c, 4.0)), c_h(vec3(c, 5.0))) - f;
+      float d = dot(pt, pt);
+      if (d < best) { second = best; best = d; } else if (d < second) second = d;
+    }
+    float crack = 1.0 - smoothstep(0.015, 0.05, sqrt(second) - sqrt(best));
+    float wave = 0.5 + 0.5 * sin(p.z * 2.5 + p.y * 1.5 - t * 2.2);
+    vec3 gold = vec3(1.0, 0.78, 0.32), glaze = mix(vec3(0.03, 0.03, 0.035), vec3(0.13, 0.13, 0.15), clamp(lum * 2.0 - 0.4, 0.0, 1.0));
+    glow = gold * crack * (0.35 + wave * 1.1);
+    return mix(glaze, gold * (0.8 + lum * 0.4), crack);
+  }
+  if (k == 37) { // placa de circuito: trilhas verdes no fundo escuro, pulsos ciano correndo e chips piscando ambar
+    vec2 q = vec2(p.z, p.y) * 7.0, id = floor(q), f = fract(q);
+    float tr = max(step(0.55, c_h(vec3(id, 1.0))) * (1.0 - smoothstep(0.06, 0.12, abs(f.y - 0.5))), step(0.55, c_h(vec3(id, 2.0))) * (1.0 - smoothstep(0.06, 0.12, abs(f.x - 0.5))));
+    float pad = (1.0 - smoothstep(0.12, 0.2, length(f - 0.5))) * step(0.8, c_h(vec3(id, 3.0)));
+    float pulse = smoothstep(0.88, 1.0, fract((id.x + id.y) * 0.13 - t * 0.8));
+    vec3 cy = vec3(0.2, 1.0, 0.95), on3 = mix(vec3(0.15, 0.55, 0.3), cy, pulse);
+    float on = max(tr, pad), blink = step(0.5, fract(t * 1.5 + c_h(vec3(id, 4.0))));
+    glow = cy * tr * pulse * 1.6 + vec3(1.0, 0.6, 0.1) * pad * blink;
+    return mix(vec3(0.02, 0.12, 0.07) * sh, on3, on);
+  }
+  if (k == 38) { // galaxia: braco espiral de nebulosa (rosa e azul) girando devagar e poeira de estrelas
+    vec2 q = vec2(p.z, p.y) * 1.6; float r = length(q), a = atan(q.y, q.x);
+    float arm = 0.5 + 0.5 * sin(a * 2.0 - log(r + 0.2) * 5.0 + t * 0.6);
+    float neb = c_fbm(vec3(q * 2.2, t * 0.08)) * arm;
+    vec3 tint = mix(vec3(0.95, 0.3, 0.75), vec3(0.25, 0.45, 1.0), c_n(vec3(q * 1.3, 2.0)));
+    vec3 col = mix(vec3(0.02, 0.01, 0.06), tint, smoothstep(0.2, 0.7, neb));
+    vec3 sq = p * 22.0, sp = floor(sq); float st = step(0.97, c_h(sp)) * smoothstep(0.16, 0.0, length(fract(sq) - 0.5)) * (0.5 + 0.5 * sin(t * 4.0 + c_h(sp + 2.0) * 30.0)); // estrela redonda (a celula inteira virava quadrado)
+    glow = col * smoothstep(0.35, 0.8, neb) * 0.9 + vec3(st);
+    return col * (0.6 + lum * 0.6) + st;
+  }
+  if (k == 39) { // gibi pop: pontos de reticula (Ben-Day) crescendo em ondas, cor trocando ciano/magenta/amarelo
+    vec2 q = vec2(p.z, p.y) * 18.0, f = fract(q) - 0.5, id = floor(q);
+    float w = 0.5 + 0.5 * sin(id.x * 0.35 + id.y * 0.2 - t * 2.5);
+    float dm = 1.0 - smoothstep(0.16 + w * 0.2, 0.21 + w * 0.2, length(f));
+    float ph = floor(mod(t * 0.5 + (id.x + id.y) * 0.02, 3.0));
+    vec3 ink = ph < 1.0 ? vec3(0.0, 0.75, 0.95) : ph < 2.0 ? vec3(0.95, 0.15, 0.55) : vec3(1.0, 0.86, 0.1);
+    glow = ink * dm * 0.25;
+    return mix(vec3(0.98, 0.95, 0.86) * sh, ink * sh, dm);
+  }
+  if (k == 40) { // plasma: lampada de plasma, ondas quentes magenta/laranja se misturando e veios brilhando
+    float v = sin(p.z * 4.0 + t * 1.3) + sin((p.y + p.z) * 3.0 - t * 1.7) + sin(length(vec2(p.z, p.y) * 3.0) * 4.0 - t * 2.1) + c_fbm(p * 2.0 + t * 0.2) * 2.0;
+    float m = 0.5 + 0.5 * sin(v * 1.6);
+    vec3 col = mix(vec3(0.55, 0.04, 0.5), vec3(1.0, 0.55, 0.1), m);
+    float vein = smoothstep(0.93, 1.0, sin(v * 3.0));
+    glow = col * 0.55 + vec3(1.0, 0.9, 1.0) * vein * 0.9;
+    return col * (0.55 + lum * 0.6) + vein * 0.4;
+  }
+  if (k == 41) { // aurora: ceu de noite com cortinas verdes e violeta ondulando e estrelas finas
+    float x = p.z * 1.3 + c_fbm(vec3(p.z * 0.8, t * 0.15, 1.0)) * 1.6;
+    float curtain = smoothstep(0.3, 1.0, sin(x * 3.0 + t * 0.7) * 0.5 + 0.5) * smoothstep(-0.6, 0.6, p.y * 2.0 + sin(x * 2.0 + t) * 0.4);
+    vec3 au = mix(vec3(0.15, 1.0, 0.55), vec3(0.65, 0.3, 1.0), smoothstep(0.2, 0.8, c_n(vec3(x * 0.7, p.y * 3.0, t * 0.2))));
+    float rays = 0.6 + 0.4 * sin(x * 40.0 + t * 2.0), st = step(0.99, c_h(floor(p * 25.0)));
+    glow = au * curtain * rays * 1.1 + vec3(st * 0.8);
+    return mix(mix(vec3(0.01, 0.02, 0.08), vec3(0.03, 0.06, 0.16), lum), au * 0.9, curtain * rays) + st * 0.6;
   }
   if (k == 31) { // prestigio: laca preta, estrelas douradas piscando e um filete de ouro correndo
     vec3 q = p * 5.0, id = floor(q), f = fract(q) - 0.5;

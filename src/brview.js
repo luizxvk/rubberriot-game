@@ -2,8 +2,15 @@
 // em volta da zona). Recebe a lista de loot do servidor (evento 'loot') e o estado da iris do snapshot.
 import * as THREE from 'three';
 import { ink, toon, PAL, wordTexture } from './toon.js';
-import { buildGun } from './arsenal.js';
+import { buildGun, bpLoadout } from './arsenal.js';
 import { milkBottle } from './world.js';
+
+const LOOT_FAR = 90; // m: alem disso o item nao e desenhado
+// material de pintura de arma e unico por modelo (paintMaterial): libera quando o item sai do mapa.
+// Geometria e contorno sao compartilhados, nao mexe.
+function freeMats(g) {
+  g.traverse(o => { const m = o.material; if (m && !Array.isArray(m) && m.userData?.u) m.dispose(); });
+}
 
 function vest() {
   // colete: peitoral acolchoado com tiras, em tinta escura e costura clara
@@ -97,24 +104,27 @@ export class BrView {
   dispose() { this.root.parent?.remove(this.root); }
 
   setLoot(list, loadouts) {
-    const seen = new Set();
-    for (const [id, kind, wpn, x, y, z] of list) {
+    const seen = new Set(), now = performance.now() / 1000;
+    for (const [id, kind, wpn, x, y, z, bp, life] of list) {
       seen.add(id);
-      if (this.items.has(id)) continue;
+      // life = segundos que faltam pro item sumir (0 = fica); a lista so chega quando muda
+      const die = life > 0 ? now + life : 0;
+      if (this.items.has(id)) { this.items.get(id).die = die; continue; }
       const g = new THREE.Group();
-      if (kind === 'wpn') { const gun = buildGun(wpn, loadouts?.[wpn] || null); if (gun) { gun.scale.setScalar(1.6); g.add(gun); } }
+      if (kind === 'wpn') { const gun = buildGun(wpn, bp ? bpLoadout(bp) : loadouts?.[wpn] || null); if (gun) { gun.scale.setScalar(1.6); g.add(gun); } }
       else if (kind === 'armor') g.add(vest());
       else if (kind === 'hp') g.add(milkBottle());
       else if (kind === 'nade') g.add(grenade());
       else if (kind === 'crate') g.add(crate(false));
       // disco no chao com a cor do tipo (arma clara, colete escuro, caixote vermelho)
-      const pad = ink(new THREE.CylinderGeometry(0.75, 0.85, 0.1, 16), kind === 'crate' ? PAL.red : kind === 'armor' ? PAL.dark : PAL.light, 0.03);
+      // variante de elite: disco dourado (da pra ver de longe que e arma especial)
+      const pad = ink(new THREE.CylinderGeometry(0.75, 0.85, 0.1, 16), bp ? 0xd4a017 : kind === 'crate' ? PAL.red : kind === 'armor' ? PAL.dark : PAL.light, 0.03);
       pad.position.y = -0.84; g.add(pad);
       g.position.set(x, y + 0.9, z);
       this.root.add(g);
-      this.items.set(id, { g, y: y + 0.9, kind });
+      this.items.set(id, { g, y: y + 0.9, kind, die });
     }
-    for (const [id, it] of this.items) if (!seen.has(id)) { this.root.remove(it.g); this.items.delete(id); }
+    for (const [id, it] of this.items) if (!seen.has(id)) { this.root.remove(it.g); freeMats(it.g); this.items.delete(id); }
   }
 
   drop(pos, fall) {
@@ -124,12 +134,18 @@ export class BrView {
 
   setZone(z) { this.zone = z; }
 
-  update(t, dt) {
+  update(t, dt, cam) {
     for (const { f, ph } of this.fans) f.position.y = Math.abs(Math.sin(t * 6 + ph)) * (this.cheer > 0 ? 0.45 : 0.12);
     if (this.cheer > 0) this.cheer -= dt;
     let i = 0;
+    const now = performance.now() / 1000, cx = cam?.position.x, cz = cam?.position.z;
     for (const it of this.items.values()) {
-      if (it.kind === 'crate') continue;
+      // longe da camera nao desenha nem gira (a ilha tem centenas de itens)
+      const far = cam && (it.g.position.x - cx) ** 2 + (it.g.position.z - cz) ** 2 > LOOT_FAR * LOOT_FAR;
+      // ultimos 5 s: pisca avisando que vai sumir
+      const left = it.die ? it.die - now : 99;
+      it.g.visible = !far && (left > 5 || Math.sin(t * (left > 2 ? 10 : 22)) > -0.2);
+      if (far || it.kind === 'crate') { i++; continue; }
       it.g.rotation.y = t * 1.4 + i; it.g.position.y = it.y + Math.sin(t * 3 + i) * 0.12; i++;
     }
     for (let k = this.falling.length - 1; k >= 0; k--) {

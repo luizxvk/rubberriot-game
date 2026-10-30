@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { buildWorld, buildObjectives, FX } from './world.js';
+import { buildWorld, buildObjectives, FX, LASER_BODY } from './world.js';
 import { Character } from './character.js';
 import { ViewModel } from './viewmodel.js';
 import { makePipeline } from './post.js';
 import { Tutorial } from './tutorial.js';
 import { Player } from './player.js';
-import { pushSoon, me as rovexMe, inRovex } from './rovex.js';
+import { pushSoon, me as rovexMe, inRovex, inviteRoom } from './rovex.js';
 import { Hud } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer } from './input.js';
 import { Pad } from './gamepad.js';
 import { LocalNet, WsNet } from './net.js';
 import { audio } from './audio.js';
-import { MODES, WEAPONS, STREAKS, GUN_LADDER, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR } from '../shared/weapons.js';
+import { MODES, WEAPONS, STREAKS, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR } from '../shared/weapons.js';
 import { updateCamoFx } from './camofx.js';
 import { getMap, hasLOS } from '../shared/map.js';
 import { loadArsenal, getLoadouts, scopeTarget } from './arsenal.js';
@@ -28,6 +28,8 @@ import { wornLook } from './lookstore.js';
 import { botLook } from '../shared/looks.js';
 import { floorAt } from '../shared/nav.js';
 import { shootPanels, stripHtml } from './killcam.js';
+import { Replay } from './replay.js';
+import { startHomeTour, homeTourSeen } from './hometour.js';
 import { FieldView } from './fieldview.js';
 import { SKILL_ICONS } from './skillicons.js';
 import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun, buildPartPreview, bpLoadout } from './arsenal.js';
@@ -36,12 +38,14 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------- ajustes ----------
-const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], autoChute: isTouch };
+const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], autoChute: isTouch, draw: isTouch ? 'mid' : 'far' };
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
   // versao 3: o filtro brutal saiu; quem estava nele volta pra pelicula colorida
   if (saved.film === 'brutal') saved.film = 'color';
+  // 30/10: skills que sairam do jogo (Cuca Dura, Pe de Pano) somem do save
+  if (Array.isArray(saved.skills)) saved.skills = saved.skills.filter(k => SKILLS[k]);
   Object.assign(settings, saved, { v: 3 });
 } catch { /* sem storage */ }
 function saveSettings() { try { localStorage.setItem('rr_settings', JSON.stringify(settings)); } catch { /* */ } applySettings(); }
@@ -51,6 +55,8 @@ const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
+// distancia de desenho (Ajustes > Graficos): curta/media/longa, em metros
+const DRAW_DIST = { near: 95, mid: 170, far: 500 };
 const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.05, 500);
 camera.rotation.order = 'YXZ';
 // luneta 3D: a lente mostra esta camera ampliada (picture-in-picture)
@@ -145,7 +151,7 @@ const G = {
   state: 'menu', // menu | game
   paused: false, shakeAmt: 0, deathPos: null, killer: null, t: 0, timeScale: 1, slowT: 0,
   seen: new Map(), // id -> ate quando aparece no radar (atirou)
-  nadeMeshes: new Map(), blimpMeshes: [], remoteLo: new Map(), remoteTracer: new Map(), remoteLook: new Map(), flashT: 0,
+  nadeMeshes: new Map(), blimpMeshes: [], remoteLo: new Map(), remoteTracer: new Map(), remoteLook: new Map(), remoteBp: new Map(), pings: new Map(), brDrops: [], ladder: GUN_LADDER, flashT: 0,
   isEnemy(r) { if (r.id === this.myId) return false; return !(MODES[this.mode].teams || this.duo) || r.team !== this.myTeam; },
   shake(a) { this.shakeAmt = Math.min(0.6, this.shakeAmt + a); },
   onHitConfirm(point, head, dmg, victim) {
@@ -159,6 +165,7 @@ const G = {
 // nivel por corpo: o corpo equipado de cada categoria decide de quem e o XP e o nivel que abre pecas
 setBodyResolver((cat) => (G.loadouts?.[cat]?.body) || CATEGORY[cat]?.bodies?.[0] || null, (cat) => CATEGORY[cat]?.bodies || []);
 G.fx = null;
+hud.g = G; // placar da escada de armas le a escada sorteada
 G.pad = pad;
 // o que o jogador levou da partida (tela de fim): XP por tipo, desbloqueios e nivel de partida
 function newMatchLog() { const pi = progressInfo(); return { xp: {}, unlocks: [], startXp: pi.xp, startLevel: pi.level }; }
@@ -170,7 +177,16 @@ function logUnlock(kind, name, img) { const L = G.matchLog; if (L && !L.unlocks.
 // so bot na sala (solo ou sala sem outra pessoa): XP bem menor que jogando com gente (pedido dele 30/10)
 const BOTS_ONLY_XP = 0.3;
 const onlyBots = () => !(G.snap?.players || []).some(p => !p.bot && p.id !== G.myId);
-const xpMult = () => (rovexMe?.elite ? 2 : 1) * (onlyBots() ? BOTS_ONLY_XP : 1);
+// fim de semana (sabado e domingo, hora local): XP em dobro em tudo, soma com o do Elite
+const weekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
+const xpMult = () => (rovexMe?.elite ? 2 : 1) * (weekend() ? 2 : 1) * (onlyBots() ? BOTS_ONLY_XP : 1);
+function wkndBadge() {
+  const on = weekend(), b = $('wknd'), n = $('wkndNote');
+  b.hidden = !on; if (!on) { n.hidden = true; b.setAttribute('aria-expanded', 'false'); }
+}
+$('wknd').onclick = (e) => { e.stopPropagation(); const n = $('wkndNote'); n.hidden = !n.hidden; $('wknd').setAttribute('aria-expanded', String(!n.hidden)); };
+document.addEventListener('click', (e) => { if (!e.target.closest?.('#wkndNote')) { $('wkndNote').hidden = true; $('wknd').setAttribute('aria-expanded', 'false'); } });
+wkndBadge(); setInterval(wkndBadge, 60000); // virou sabado com o jogo aberto
 
 function chEvent(e) {
   if (G.state !== 'game' || G.tutorial) return; // treino nao conta desafio
@@ -279,10 +295,8 @@ onProgress((e) => {
   // tudo vai pra tela de fim; na hora, banner estilo COD um por vez (ate 3)
   const shots = got.map(u => unlockShot(u));
   got.forEach((u, i) => logUnlock(t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), u.name, shots[i]));
-  got.slice(0, 3).forEach((u, i) => setTimeout(() => {
-    hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 });
-    audio.play('unlock', { vol: 0.8, ui: true, jitter: 0 });
-  }, 1100 + i * 3400));
+  got.slice(0, 3).forEach((u, i) => hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 }));
+  if (got.length) audio.play('unlock', { vol: 0.8, ui: true, jitter: 0 });
 });
 window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
@@ -301,6 +315,18 @@ function setMap(id) {
 }
 
 // visual dos outros: o que a pessoa mandou; bot tem o seu sorteado (fixo pelo id)
+G.tip = tip; // o jogador chama a dica de primeira vez (deslizar)
+// selo do equipamento de campo (centro de baixo): icone do equipado; no celular ele e' o botao (o lateral sai)
+G.setFieldHud = (f) => setFieldHud(f); // depuracao/treino
+function setFieldHud(f) {
+  $('fieldHud').hidden = !f;
+  if (f) $('fhIco').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[f].icon]}</svg>`;
+  if (input.fieldBtn) input.fieldBtn.hidden = true;
+}
+$('fhBadge').addEventListener('pointerdown', (e) => { e.preventDefault(); input.edges?.add('FIELD'); });
+const replay = G.replay = new Replay(); // camera da ultima morte antes do placar
+G.tracerOf = (id) => id === G.myId ? settings.tracer : G.remoteTracer.get(id) || 'chalk';
+
 function lookOf(p) { return G.remoteLook.get(p.id) || (p.bot ? botLook(p.id) : null); }
 
 function remoteFor(p) {
@@ -343,7 +369,8 @@ function onSnap(s) {
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team;
     r.kills = p.kills; r.hp = p.hp; r.dn = p.dn || 0; r.rv = p.rv || 0;
-    const lo = G.mode === 'gungame' ? { body: GUN_LADDER[Math.min(p.gunLvl || 0, GUN_LADDER.length - 1)].body } : G.remoteLo.get(p.id)?.[p.wpn] || null;
+    const rbp = G.mode === 'br' ? G.remoteBp.get(p.id)?.[p.wpn] : null;
+    const lo = G.mode === 'gungame' ? { body: G.ladder[Math.min(p.gunLvl || 0, G.ladder.length - 1)].body } : rbp ? bpLoadout(rbp) : G.remoteLo.get(p.id)?.[p.wpn] || null;
     const loKey = p.wpn + JSON.stringify(lo);
     if (r.loKey !== loKey) { r.loKey = loKey; r.wpn = p.wpn; r.char.setWeapon(p.wpn, lo); }
   }
@@ -362,7 +389,7 @@ function onSnap(s) {
   // dirigivel nasce ja la no alto (antes nascia na origem e subia do chao)
   while (G.blimpMeshes.length < bl.length) { const b = bl[G.blimpMeshes.length], m = fx.blimpMesh(b.team); m.position.fromArray(b.pos); scene.add(m); G.blimpMeshes.push(m); }
   while (G.blimpMeshes.length > bl.length) scene.remove(G.blimpMeshes.pop());
-  bl.forEach((b, i) => { G.blimpMeshes[i].userData.to = b.pos; });
+  bl.forEach((b, i) => { Object.assign(G.blimpMeshes[i].userData, { to: b.pos, id: b.id, owner: b.owner, team: b.team, hp: b.hp }); });
   if (G.state === 'game') hud.score(s, G.me, s.players);
 }
 
@@ -395,6 +422,7 @@ function onEvent(e) {
         if (e.team) G.myTeam = e.team;
         G.player.spawn(e);
         G.shieldT = 0; vm.umbOn = false; G.ringWait = false; G.bounceBack = false;
+        if (G.mode === 'br' && inGame) setTimeout(() => tip('ping'), 9000); // marcacao: dica de primeira vez (depois da do modo)
         if (e.air && G.bounce) hud.alert(t('bounceDrop'), t(settings.autoChute ? 'bounceDropAuto' : (isTouch ? 'bounceDropTouch' : 'bounceDropKey')), 'red');
         if (!G.inRing || e.pos[2] < (G.M.ring?.c[2] ?? 1e9) - 10) G.inRing = false; // saiu do ringue
         hud.hp(100); hud.weapon(G.player);
@@ -409,11 +437,16 @@ function onEvent(e) {
       if (e.id === G.myId) break;
       if (e.id !== 'blimp') G.seen.set(e.id, G.t + 2.2);
       const r = G.remotes.get(e.id);
-      audio.play(e.wpn, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2 });
+      if (G.specVm && G.specVm.startsWith(e.id + '|') && !G.player?.alive) vm.fire((WEAPONS[e.wpn]?.kick || 1) * 1.3);
+      const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && rBody === 'pistol_10', aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
+      const rTr = lzBody ? 'laser' : G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk', rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : aaBody ? 'aa12' : e.wpn;
+      audio.play(rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2 });
+      const rg = r?.char.gun?.userData; if (rg?.drum) rg.drum.rotation.z += Math.PI / 3; // tambor do revolver gira no boneco tambem
       if (e.e) {
         const mz = r?.char.gun?.userData.muzzle;
         const o = mz ? mz.getWorldPosition(new THREE.Vector3()).toArray() : e.o;
-        fx.bullet(o, e.e, G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk', e.wpn);
+        fx.bullet(o, e.e, rTr, e.wpn);
+        if (inGame) replay.shot(performance.now() / 1000, { id: e.id, o, e: e.e, tracer: rTr, wpn: e.wpn, snd: rSnd });
         if (Math.random() < 0.5) fx.impact(e.e, null);
       }
       break;
@@ -422,9 +455,14 @@ function onEvent(e) {
       if (e.v === G.myId && G.player) {
         audio.play('hit', { vol: 0.7, key: 'hurt', max: 2 });
         G.hurtFlash = Math.min(1, (G.hurtFlash || 0) + e.dmg / 60);
+        // tranco de FPS (pedido dele 30/10): a camera pula de leve pra cima e tomba pro lado do tiro, volta com mola
+        const kick = 0.01 + Math.min(0.018, e.dmg / 3000);
+        G.kickP = (G.kickP || 0) + kick; G.kickR = G.kickR || 0;
         if (e.from) {
           const dx = e.from[0] - G.player.pos[0], dz = e.from[2] - G.player.pos[2];
-          hud.hurtFrom(-(Math.atan2(-dx, -dz) - G.player.yaw));
+          const rel = -(Math.atan2(-dx, -dz) - G.player.yaw);
+          hud.hurtFrom(rel);
+          G.kickR += Math.sin(rel) * kick * 0.9; // tiro da direita tomba pra esquerda
         }
         G.shake(0.08 + Math.min(0.2, e.dmg / 300));
       } else if (e.a !== G.myId) G.remotes.get(e.v)?.char.flinch(e.head);
@@ -437,6 +475,7 @@ function onEvent(e) {
       if (e.v === G.myId && (G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { $('specBar').hidden = false; $('dead').classList.add('spec'); } // sem renascer: assiste
       if (e.v === G.myId) G.inRing = false; // perdeu no ringue: a parede da iris volta pra quem assiste
       const vPos = e.pos || posOf(e.v);
+      if (inGame) replay.setKill(performance.now() / 1000, e, vPos);
       if (vPos && inGame) {
         fx.puff([vPos[0], vPos[1] + 0.8, vPos[2]], 9, 1.1, 0xece9e1, 0.9);
         fx.splat([vPos[0], vPos[1], vPos[2]], 1.8);
@@ -550,6 +589,14 @@ function onEvent(e) {
     case 'streakReady':
       if (e.id === G.myId && inGame) { hud.message(t('streakReady', { s: t('s_' + e.kind), k: t(pad.active ? 'how_pad' : isTouch ? 'how_touch' : 'how_kb') }), 2.4); audio.play('pickup', { vol: 0.7, ui: true, rate: 0.8 }); }
       break;
+    case 'blimpDown': // dirigivel estourado a tiro: explode, some e a sala pode chamar outra sequencia
+      if (!inGame) break;
+      fx.explosion(e.pos); fx.explosion([e.pos[0] + 2, e.pos[1] - 1, e.pos[2] + 1]); fx.explosion([e.pos[0] - 2, e.pos[1] + 1, e.pos[2] - 2]);
+      fx.word('KABUM!', e.pos, 3, 0.9);
+      audio.play('explosion', { pos: e.pos, vol: 0.9, key: 'blimpx', max: 1 });
+      hud.message(t('blimpDownMsg', { w: nameOf(e.id), o: nameOf(e.owner) }), 2.6);
+      if (e.id === G.myId) gainXp('blimpDown');
+      break;
     case 'streak':
       if (inGame) {
         const mine = e.id === G.myId, ally = (MODES[G.mode].teams || G.duo) && e.team === G.myTeam;
@@ -562,6 +609,13 @@ function onEvent(e) {
       break;
     case 'look':
       if (e.id !== G.myId) { G.remoteLook.set(e.id, e.look); G.remotes.get(e.id)?.char.setLook(e.look); }
+      break;
+    case 'ladder': // escada de armas sorteada pra partida
+      G.ladder = e.list.map(b => ({ wpn: wpnOfBody(b), body: b })); G.ladderId = e.id;
+      if (inGame && e.id) hud.message(t('gg_' + e.id), 2.6);
+      break;
+    case 'brBp': // variante que alguem pegou no battle royale (os outros veem o modelo dela)
+      if (e.id !== G.myId) { const m = G.remoteBp.get(e.id) || {}; if (e.bp) m[e.wpn] = e.bp; else delete m[e.wpn]; G.remoteBp.set(e.id, m); }
       break;
     case 'lo':
       if (e.id !== G.myId) { G.remoteLo.set(e.id, e.los || {}); G.remoteTracer.set(e.id, e.tracer || 'chalk'); }
@@ -584,7 +638,13 @@ function onEvent(e) {
     case 'slurp': if (inGame) { audio.play('hole', { pos: e.to, vol: 0.6 }); fx.puff([e.to[0], e.to[1] + 0.5, e.to[2]], 6, 0.6, 0x141210, 0.5); } break;
     // ---------- battle royale ----------
     case 'loot': G.brLoot = e.list; brView?.setLoot(e.list, G.loadouts); G.brCrates = e.list.filter(l => l[1] === 'crate').map(l => [l[3], l[5]]); break;
+    case 'ping': // marcacao (minha ou do parceiro)
+      if (e.off) { G.pings.delete(e.id); break; }
+      G.pings.set(e.id, { pos: e.pos, kind: e.kind, label: e.label, t: G.t + 10 });
+      if (inGame) audio.play('ui_hover', { ui: true, vol: e.id === G.myId ? 0.45 : 0.7, rate: e.kind === 'enemy' ? 1.3 : 1, key: 'ping', max: 1 });
+      break;
     case 'drop':
+      G.brDrops = [...G.brDrops.filter(d => d.t > G.t), { pos: e.pos, t: G.t + (e.fall || 6) + 1 }];
       brView?.drop(e.pos, e.fall);
       if (inGame) { hud.alert(t('br_drop'), t('br_dropSub'), 'red'); audio.play('flag', { ui: true, vol: 0.45 }); }
       break;
@@ -651,6 +711,12 @@ function onEvent(e) {
       if (e.id === G.myId && G.player) {
         G.player.forced = G.mode === 'gungame';
         if (e.body) G.player.ggBody = e.body;
+        if (G.mode === 'br') { // variante (caixote ou chao): troca o modelo e os bonus; comum tira a variante
+          const had = G.player.brBp[e.wpn] || null;
+          if (e.bp) G.player.brBp[e.wpn] = e.bp; else delete G.player.brBp[e.wpn];
+          if (e.bp) { G.player.give(e.wpn, false); G.player.equip(e.wpn, true); hud.weapon(G.player); hud.message(t('brVariant', { n: t(e.bp) }), 2.6); audio.play('pickup', { vol: 0.6, ui: true }); break; } // ja na mao, com o modelo da variante
+          if (had && G.player.wpn === e.wpn) G.player.equip(e.wpn, true); // trocou variante pela comum
+        }
         G.player.give(e.wpn, true, !!e.force);
         hud.weapon(G.player);
         audio.play('pickup', { vol: 0.6, ui: true });
@@ -674,6 +740,9 @@ function onEvent(e) {
         if (z && p && p.alive && e.team === G.myTeam && Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) < z.r + 0.5) gainXp('zone');
       }
       break;
+    case 'notReady': // host tentou iniciar com gente sem dar pronto
+      $('lbStatus').textContent = t('notReady', { n: e.n });
+      break;
     case 'msg':
       if (inGame) hud.feed(esc(e.key ? t(e.key, { n: e.name }) : e.text));
       break;
@@ -686,7 +755,8 @@ function onEvent(e) {
         audio.duck(0.3, 2.2); setTimeout(() => audio.play(iWon ? 'win' : 'lose', { ui: true, vol: 0.6, jitter: 0, key: 'end', max: 1 }), 350);
         chEvent({ type: 'match' });
         gainXp('match');
-        setTimeout(() => showEnd(e.winner), 900);
+        // repassa o abate final de cinema e so depois o placar
+        setTimeout(() => { if (G.state !== 'game' || !replay.play(G, scene, fx, audio, wornLook(), () => { document.body.classList.remove('replay'); showEnd(e.winner); })) { showEnd(e.winner); return; } cineTag(); document.body.classList.add('replay'); }, 900);
       }
       break;
     case 'restart':
@@ -749,6 +819,14 @@ function onEvent(e) {
   }
 }
 
+// letreiro do replay: quem derrubou quem no abate final
+function cineTag() {
+  const K = replay.kill;
+  $('cineKind').textContent = t('finalKill');
+  const v = `<span class="${teamCls(K.v)}">${esc(nameOf(K.v))}</span>`;
+  $('cineWho').innerHTML = K.a && K.a !== K.v ? t('finalKillBy', { a: `<span class="${teamCls(K.a)}">${esc(nameOf(K.a))}</span>`, v }) : t('finalSelf', { v });
+}
+
 function showEnd(winner) {
   const inf = G.mode === 'infect';
   const won = inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
@@ -765,8 +843,8 @@ function showEnd(winner) {
   $('theend').hidden = false;
   animateEndXp(L.startXp, L.startXp + total, total);
   audio.play('flag', { vol: 0.8, ui: true });
-  let n = 8;
-  const tick = () => { if ($('theend').hidden) return; $('endNext').textContent = t('nextIn', { n }); if (n-- > 0) setTimeout(tick, 1000); };
+  const endAt = performance.now() + Math.max(1, (G.snap?.overT ?? 9) - 1) * 1000;
+  const tick = () => { if ($('theend').hidden) return; const n = Math.max(0, Math.round((endAt - performance.now()) / 1000)); $('endNext').textContent = t('nextIn', { n }); if (n > 0) setTimeout(tick, 1000); };
   tick();
 }
 
@@ -817,16 +895,39 @@ function matchLoadouts() {
 function sendLoadout() {
   if (!G.net) return;
   const los = {};
-  for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee']) los[w] = G.loadouts[w];
+  for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee']) { const { saved, ...lo } = G.loadouts[w] || {}; los[w] = lo; } // a memoria por modelo nao vai pro servidor
   // skills passivas equipadas (so as que o nivel ja abriu); o jogador aplica as de mao, o servidor as de regra
   G.skills = (settings.skills || []).filter(s => SKILLS[s] && unlockLevel() >= SKILLS[s].lvl).slice(0, SKILL_SLOTS);
   // equipamento de campo (um so; o nivel tem que ter liberado). O botao de toque mostra o icone dele.
   G.field = G.tutorial?.fieldOverride || (FIELD[settings.field] && unlockLevel() >= FIELD[settings.field].lvl ? settings.field : null); // treino: a Mola emprestada vale
-  if (input.fieldBtn) { input.fieldBtn.hidden = !G.field; if (G.field) input.fieldBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[G.field].icon]}</svg>`; }
+  setFieldHud(G.field);
   G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, skills: G.skills, field: G.field });
   if (G.tutorial?.fieldOverride) { const me = G.net.core?.players.get(G.myId); if (me) me.field = G.tutorial.fieldOverride; } // o servidor local checa o nivel; no treino passa
   G.net.send({ t: 'look', look: wornLook() }); // visual do boneco (os outros veem)
   vm.setGloves?.(wornLook());
+}
+
+// ---------- marcacao (ping) do battle royale ----------
+// mirando num inimigo marca ele; num item do chao marca o item; senao marca o lugar. Marcar de novo
+// perto da sua marcacao apaga.
+function makePing(p) {
+  const o = p.eyePos(), d = camera.getWorldDirection(new THREE.Vector3()).toArray();
+  const hit = p.traceTargets(o, d, 150);
+  let ping = null;
+  if (hit.player) ping = { kind: 'enemy', pos: [...hit.player.pos], label: t('pg_enemy') };
+  else {
+    let best = null, bt = Math.min(hit.dist, 80);
+    for (const [, kind, wpn, x, y, z, bp] of G.brLoot || []) {
+      const v = [x - o[0], y + 0.9 - o[1], z - o[2]], along = v[0] * d[0] + v[1] * d[1] + v[2] * d[2];
+      if (along <= 0 || along > bt + 2) continue;
+      const perp = Math.hypot(v[0] - d[0] * along, v[1] - d[1] * along, v[2] - d[2] * along);
+      if (perp < 0.9 + along * 0.012 && (!best || along < best.along)) best = { along, pos: [x, y, z], label: kind === 'wpn' ? (bp ? t(bp) : wName(wpn)) : t('pg_' + kind) };
+    }
+    ping = best ? { kind: 'item', pos: best.pos, label: best.label } : { kind: 'spot', pos: hit.point, label: '' };
+  }
+  const mine = G.pings.get(G.myId);
+  if (mine && mine.t > G.t && Math.hypot(mine.pos[0] - ping.pos[0], mine.pos[2] - ping.pos[2]) < 2.5) { G.net?.send({ t: 'ping', off: true }); return; }
+  G.net?.send({ t: 'ping', ...ping });
 }
 
 // ---------- iris ----------
@@ -862,6 +963,7 @@ function startAttract() {
 }
 
 function clearRemotes() {
+  replay.reset(scene); document.body.classList.remove('replay');
   for (const r of G.remotes.values()) scene.remove(r.char.root);
   G.remotes.clear();
   for (const m of G.nadeMeshes.values()) scene.remove(m);
@@ -899,7 +1001,7 @@ async function startGame(net, name, mpArgs = null) {
 // 1a vez que a arma surgia (travada da faca no gun game).
 async function warmGuns() {
   try {
-    const list = G.mode === 'gungame' ? GUN_LADDER.map(u => [u.wpn, { ...(G.loadouts[u.wpn] || {}), body: u.body }])
+    const list = G.mode === 'gungame' ? G.ladder.map(u => [u.wpn, { ...(G.loadouts[u.wpn] || {}), body: u.body }])
       : [...new Set([...PRIMARIES, 'pistol', 'melee'])].map(w => [w, G.loadouts[w]]);
     const grp = new THREE.Group(); grp.position.set(0, 0, -1);
     for (const [w, lo] of list) { const gun = buildGun(w, lo); if (gun) grp.add(gun); }
@@ -913,6 +1015,7 @@ async function warmGuns() {
 async function beginMatch(join) {
   if (G.state !== 'lobby') return;
   G.state = 'loading';
+  if (ui.fromLobby?.()) { $('menu').hidden = true; ui.go('home'); sendLoadout(); } // comecou com o arsenal aberto: vai com o que montou
   lobby.hide();
   await runLoading({ map: G.M.id, mode: G.duo ? 'duo' : G.bounce ? 'bounce' : G.mode, join });
   if (G.state !== 'loading') return;
@@ -920,7 +1023,7 @@ async function beginMatch(join) {
   hideLoading();
   G.state = 'game';
   audio.music(true, G.mode === 'br' || G.duo ? 'music_br' : 'music_m' + (1 + Math.floor(Math.random() * 4)));
-  G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; G.countEnd = 0; G.spec = { i: 0, map: false };
+  G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); G.countEnd = 0; G.spec = { i: 0, map: false };
   input.mode = G.mode;
   // avisa o servidor que carregou: quando o ultimo avisar, sai a contagem pra todo mundo
   G.net?.send({ t: 'loaded' });
@@ -1007,10 +1110,25 @@ function syncLobbyPick(mode) {
   lobbyPickMode = mode;
   renderLobbyPick();
 }
+function openLobbySmith() {
+  audio.play('ui_click', { ui: true });
+  $('lobby').hidden = true; $('menu').hidden = false;
+  ui.go('arsenal', 'lobby', PRIMARIES.includes(settings.primary) ? settings.primary : PRIMARIES[0]);
+}
+function closeLobbySmith(ready) {
+  if ($('menu').hidden) return;
+  $('menu').hidden = true; ui.go('home');
+  sendLoadout(); renderLobbyPick();
+  if (G.state !== 'lobby') return; // a partida ja comecou
+  $('lobby').hidden = false;
+  if (ready && !lobby.isHost && !lobby.ready) $('lbReady').click();
+}
 function renderLobbyPick() {
   const list = PRIMARIES;
   if (!list.includes(settings.primary)) { settings.primary = list[0]; saveSettings(); sendLoadout(); }
-  $('lbPickList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${wName(w)}</span></button>`).join('');
+  $('lbSmith').onclick = openLobbySmith;
+  // nome proprio do modelo montado em cada principal
+  $('lbPickList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
   $('lbPickList').querySelectorAll('button').forEach(b => b.onclick = () => {
     settings.primary = b.dataset.w; saveSettings(); sendLoadout();
     audio.play('pickup', { ui: true, vol: 0.5 });
@@ -1057,20 +1175,27 @@ const ui = initMenus({
   // treino guiado na Vila: partida solo sem lobby, sem bots (os bonecos entram no passo de tiro)
   onTutorial: () => {
     try { localStorage.setItem('rr_tutorial_seen', '1'); } catch { /* */ } // primeira vez so abre sozinho uma vez
-    G.tutorial = new Tutorial(G, { quit: () => quitGame(), reward: tutorialReward, setField: (f) => {
+    G.tutorial = new Tutorial(G, { quit: () => quitGame(), reward: tutorialReward, setPing: (on) => { if (input.pingBtn) input.pingBtn.hidden = !on; }, setField: (f) => {
       const me = G.net?.core?.players.get(G.myId); if (me) me.field = f;
       if (G.tutorial) G.tutorial.fieldOverride = f;
       G.field = f; G.fieldCd = 0;
-      if (input.fieldBtn) { input.fieldBtn.hidden = false; input.fieldBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[f].icon]}</svg>`; }
+      setFieldHud(f);
     } });
     startGame(new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 500, time: 1800 }), settings.name || t('youCap')).catch(() => { G.tutorial?.dispose(); G.tutorial = null; });
   },
   onSolo: ({ mode, map, bots, difficulty, limit, time }) => startGame(new LocalNet({ mode, map, bots, difficulty, limit, time }), settings.name || t('youCap')),
   onMp: (args) => startGame(new WsNet(args), args.name, args),
   onLook: (look, team) => setLookPreview(look, team),
-  onSmith: (gun) => { smithHolder.clear(); if (gun) smithHolder.add(gun); },
+  // vitrine: o feixe do laser e' curto (o de 12 m da partida cruzava a tela inteira); so mostra a cor saindo do cano
+  onSmith: (gun) => { smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; smithHolder.add(gun); },
   onBackFromSettingsInGame: () => { $('menu').hidden = true; $('pause').hidden = false; },
+  // arsenal aberto do lobby: aplica a arma montada e volta pra sala (ready = ja marca pronto)
+  onBackToLobby: (ready) => closeLobbySmith(ready),
+  lobbyHost: () => lobby.isHost,
   inGame: () => G.state === 'game',
+  inRoom: () => G.state === 'game' || lobby.open, // a partida de fundo do menu nao conta
+  roomCode: () => (G.net && $('lbRoomCode')?.textContent) || null,
+  leave: () => quitGame(),
   loadoutsChanged: (l) => { G.loadouts = l; },
 });
 
@@ -1086,7 +1211,8 @@ function frame() {
   // camera lenta no abate final
   if (G.slowT > 0) G.slowT -= realDt;
   G.timeScale += ((G.slowT > 0 ? 0.25 : 1) - G.timeScale) * Math.min(1, realDt * 8);
-  const dt = realDt * G.timeScale;
+  let dt = realDt * G.timeScale;
+  if (replay.on) dt = replay.tick(realDt, scene); else if (G.state === 'game') replay.record(now / 1000, G);
   G.t += dt;
   camoTime.value = (camoTime.value + realDt) % 600; // tempo curto: numero grande perde precisao no shader do celular
   updateCamoFx(realDt);
@@ -1107,7 +1233,8 @@ function frame() {
     renderer.render(lookScene, lookCam);
     return;
   }
-  if (ui.screen === 'arsenal' && G.state === 'menu') {
+  if (ui.screen === 'arsenal' && (G.state === 'menu' || (G.state === 'lobby' && !$('menu').hidden))) {
+    if (G.state === 'lobby') { G.net && G.net.update(realDt); }
     menuT += realDt;
     smithHolder.rotation.y = Math.sin(menuT * 0.5) * 0.6 - Math.PI / 2 + 0.25;
     smithHolder.position.y = Math.sin(menuT * 1.3) * 0.01;
@@ -1133,14 +1260,27 @@ function frame() {
   G.net && G.net.update(dt);
   if (G.state === 'lobby') lobby.frame();
   world.update(G.t, dt);
-  objectives.update(G.t, G.snap, G.mode);
+  objectives.update(G.t, G.snap, G.mode, (id) => id === G.myId ? { me: true } : G.remotes.get(id));
   fieldView?.update(G.t, dt, G.snap, G.remotes);
   // recarga do equipamento: aro do botao de toque enche; guarda-chuva fecha sozinho
   if (G.fieldCd > 0) G.fieldCd = Math.max(0, G.fieldCd - dt);
   if (G.shieldT > 0 && (G.shieldT -= dt) <= 0) vm.umbOn = false;
-  if (input.fieldBtn && G.field) { const k = G.fieldMax ? 1 - (G.fieldCd || 0) / G.fieldMax : 1; input.fieldBtn.style.setProperty('--cd', Math.round(k * 100) + '%'); input.fieldBtn.classList.toggle('cooling', (G.fieldCd || 0) > 0); }
+  if (G.field) {
+    const k = G.fieldMax ? 1 - (G.fieldCd || 0) / G.fieldMax : 1, cool = (G.fieldCd || 0) > 0, fh = $('fieldHud');
+    $('fhBadge').style.setProperty('--cd', (k * 100).toFixed(1) + '%');
+    if (cool) { const n = String(Math.ceil(G.fieldCd)); if ($('fhCd').textContent !== n) $('fhCd').textContent = n; }
+    if (cool !== fh.classList.contains('cooling')) {
+      fh.classList.toggle('cooling', cool);
+      if (!cool) { // ficou pronto: vai pro centro de baixo, estala e volta pro canto
+        fh.classList.remove('pop'); void fh.offsetWidth; fh.classList.add('pop', 'announce');
+        clearTimeout(G.fhT); G.fhT = setTimeout(() => fh.classList.remove('announce'), 1800);
+      }
+    }
+    const key = isTouch ? '' : G.pad?.active ? t('fh_pad') : 'Z';
+    if ($('fhKey').textContent !== key) $('fhKey').textContent = key;
+  }
   if (brView) {
-    brView.setZone(G.mode === 'br' && !G.inRing ? G.snap?.br : null); brView.update(G.t, dt); // no ringue a parede da iris some (ela fica logo atras)
+    brView.setZone(G.mode === 'br' && !G.inRing ? G.snap?.br : null); brView.update(G.t, dt, camera); // no ringue a parede da iris some (ela fica logo atras)
     // fora da iris: pelicula queimando na borda da tela + aviso; area nova: nome dela no meio da tela
     const Z = G.mode === 'br' && G.state === 'game' ? G.snap?.br : null, P = G.player;
     const out = !!(Z && P?.alive && Math.hypot(P.pos[0] - Z.c[0], P.pos[2] - Z.c[1]) > Z.r);
@@ -1182,6 +1322,7 @@ function frame() {
   }
 
   for (const r of G.remotes.values()) {
+    if (replay.on && replay.pose(r, r.id)) continue;
     const k = 1 - Math.exp(-14 * dt);
     const ox = r.pos[0], oz = r.pos[2];
     r.pos[0] += (r.target[0] - r.pos[0]) * k; r.pos[1] += (r.target[1] - r.pos[1]) * k; r.pos[2] += (r.target[2] - r.pos[2]) * k;
@@ -1194,6 +1335,7 @@ function frame() {
     const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
     r.char.lod(camD);
     r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || camD < 30);
+    if (r.team && r.team === G.myTeam) r.char.sharpTag(renderer);
   }
 
   let scopeOn = false;
@@ -1212,6 +1354,10 @@ function frame() {
     // luneta 3D: fora da lente so um zoom leve; dentro da lente, o zoom de verdade
     const outer = big ? 1.2 : zoom;
     const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0)) / (1 + (outer - 1) * p.adsK);
+    // distancia de desenho (Ajustes): o que passa do corte nem e desenhado; a nevoa fecha antes pra nada sumir seco
+    const dd = DRAW_DIST[settings.draw] || DRAW_DIST.far;
+    if (camera.far !== dd) camera.far = dd;
+    if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = Math.min(b[1], dd * 0.96); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.55); } // rrBase: a nevoa original do mapa
     camera.fov += (fovT - camera.fov) * (1 - Math.exp(-14 * realDt));
     camera.updateProjectionMatrix();
     vm.camera.fov = settings.vmFov - p.adsK * 12; vm.camera.updateProjectionMatrix();
@@ -1221,7 +1367,8 @@ function frame() {
       // balanco de cabeca curto e so na vertical (o grosso do balanco e' da arma, como no COD)
       const bob = p.onGround && Math.hypot(p.vel[0], p.vel[2]) > 2 ? Math.abs(Math.sin(p.stepPhase)) * (p.sprint ? 0.03 : 0.016) * (1 - p.adsK) : 0;
       camera.position.set(p.pos[0], p.pos[1] + p.eye - bob, p.pos[2]);
-      camera.rotation.set(p.pitch + (Math.random() - 0.5) * sh * 0.05, p.yaw + (Math.random() - 0.5) * sh * 0.05, p.roll);
+      G.kickP = (G.kickP || 0) * Math.exp(-11 * realDt); G.kickR = (G.kickR || 0) * Math.exp(-9 * realDt);
+      camera.rotation.set(p.pitch + G.kickP + (Math.random() - 0.5) * sh * 0.05, p.yaw + (Math.random() - 0.5) * sh * 0.05, p.roll + G.kickR);
     } else if ((G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { // bate-volta voltando do ceu: tela de morte normal com a contagem
       // fora da rodada: assiste um colega em primeira pessoa ou o mapa de cima (battle royale: qualquer um vivo)
       const list = [...G.remotes.values()].filter(r => r.alive && (G.mode === 'br' || !G.isEnemy(r)));
@@ -1239,6 +1386,10 @@ function frame() {
         r.char.root.visible = false;
         camera.position.set(r.pos[0], r.pos[1] + 1.55, r.pos[2]);
         camera.rotation.set(r.pitch || 0, r.yaw, 0);
+        // a arma de quem esta sendo assistido na primeira pessoa, com a luva do visual dele
+        const sk = r.id + '|' + r.loKey;
+        if (G.specVm !== sk) { G.specVm = sk; vm.setWeapon(r.wpn, G.mode === 'gungame' ? null : G.remoteLo.get(r.id)?.[r.wpn] || null, true); vm.setGloves(lookOf(r)); }
+        G.specR = r;
       } else {
         const A = G.M.arena;
         camera.position.lerp(tmpV.set(0, A * 1.35, A * 0.75), 1 - Math.exp(-3 * realDt));
@@ -1258,8 +1409,14 @@ function frame() {
       $('deadGo').hidden = !canGo; $('dead').classList.toggle('can', !!canGo);
       if (canGo && (inp.jumpPressed || inp.firePressed)) G.net?.send({ t: 'respawn' });
     }
-    vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: inp.lookX, lookDY: inp.lookY, firing: p.firing });
-    vmPass.enabled = p.alive && !G.down; // caido: sem arma na mao
+    if (inp.pingPressed && (G.mode === 'br' || G.tutorial?.pingOn) && p.alive && G.state === 'game') makePing(p);
+    const SR = !p.alive && G.specR && G.specR.alive && !G.spec?.map ? G.specR : null; G.specR = null;
+    if (SR) { // espectador: a arma do outro anda e corre como a dele
+      const sp = SR.speed || 0, run = SR.anim === 'sprint' || SR.anim === 'tac';
+      vm.update({ dt: realDt, moving: sp > 1.5 && SR.anim !== 'jump', speed: sp, sprint: run, tac: SR.anim === 'tac', ads: 0, crouch: SR.anim === 'crouch', air: SR.anim === 'jump', pistolSprint: run && SR.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false });
+    } else vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: inp.lookX, lookDY: inp.lookY, firing: p.firing });
+    if (!SR && G.specVm && p.alive) { G.specVm = null; vm.setWeapon(p.wpn, p.lo(p.wpn), true); vm.setGloves(wornLook()); } // voltou: a sua arma e a sua luva
+    vmPass.enabled = (p.alive || !!SR) && !G.down; // caido: sem arma na mao
     const inAir = p.alive && p.air && G.bounce;
     if (inAir !== G.chuteHud) { G.chuteHud = inAir; $('chuteHud').hidden = !inAir; }
     if (inAir) {
@@ -1274,9 +1431,10 @@ function frame() {
     } else if (G.chuteK) { G.chuteK = ''; document.body.classList.remove('chute-open'); }
     // camera de cinema (so gravacao de video, definida pelo console/gravador): comanda a camera e tira a arma da mao
     if (G.cineCam) { G.cineCam(camera, realDt, G); vmPass.enabled = false; }
+    if (replay.on) { replay.camera(camera, realDt, G); vmPass.enabled = false; }
     const ru = vm.gun?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0;
     // ponto do laser no mundo: onde o centro da mira bate
-    if (g?.laser && p.alive && !p.sprint && !p.tac) {
+    if (g?.laser && p.alive && !p.sprint && !p.tac && !replay.on) {
       const d = camera.getWorldDirection(tmpV2), o = p.eyePos();
       const hit = p.traceTargets(o, d.toArray(), 120);
       laserDot.position.set(hit.point[0] - d.x * 0.04, hit.point[1] - d.y * 0.04, hit.point[2] - d.z * 0.04);
@@ -1285,6 +1443,15 @@ function frame() {
       laserDot.visible = true;
     } else laserDot.visible = false;
     hud.frame(p, realDt, settings);
+    { // anel de recarga em volta da mira
+      const on = p.alive && p.reloadT > 0 && p.reloadDur > 0, rr = $('reloadRing');
+      if (on !== rr.classList.contains('on')) rr.classList.toggle('on', on);
+      if (on) $('rrBar').style.strokeDashoffset = (100 * p.reloadT / p.reloadDur).toFixed(1);
+    }
+    if (settings.xhair === 'dyn') { // mira dinamica: troca o formato quando muda a arma ou o jeito de atirar
+      const mode = p.stats(p.wpn).st.mode || (WEAPONS[p.wpn]?.auto ? 'auto' : 'semi'), xk = p.wpn + mode;
+      if (xk !== G.xhKey) { G.xhKey = xk; applyCrosshair($('cross'), settings, { wpn: p.wpn, mode }); }
+    } else G.xhKey = null;
     hud.countIn(G.snap);
     hud.threat(G, settings.threatRing !== false && G.mode !== 'bomb'); // plantar a bomba: sem anel de passos e tiros (regra dele)
     hud.bomb(G);
@@ -1299,12 +1466,13 @@ function frame() {
       bombMesh.userData.light.visible = bombBeep > period * 0.5 || !planted;
     }
     if (G.snap) { hud.objectives(G.snap, camera, G.me); hud.radar(G, camera); hud.nadeWarn(G, camera); }
+    hud.compass(G, camera);
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
     const low = p.alive ? Math.max(0, (40 - p.hp) / 40) * 0.5 : 0.4;
     film.uniforms.hurt.value = Math.min(1, G.hurtFlash + low);
     G.flashT = Math.max(0, G.flashT - realDt);
     film.uniforms.flash.value = Math.min(1, G.flashT);
-    if (big && p.adsK > 0.3 && p.alive) {
+    if (big && p.adsK > 0.3 && p.alive && !replay.on) {
       scopeOn = true;
       camera.updateMatrixWorld();
       scopeCam.position.copy(camera.position);
@@ -1458,6 +1626,8 @@ const BOOT_T = performance.now();
   $('splash').remove();
   await iris(150, 1200);
   $('menu').classList.remove('intro');
+  // primeira vez no jogo: tour do cartaz mostrando o que cada botao faz (convite direto pra sala pula)
+  if (!homeTourSeen() && !inviteRoom) setTimeout(() => { if (G.state === 'menu' && ui.screen === 'home' && !$('menu').hidden) startHomeTour({ touch: isTouch }); }, 900);
   const wake = () => { audio.init(); audio.music(true, 'music'); removeEventListener('pointerdown', wake); removeEventListener('keydown', wake); };
   addEventListener('pointerdown', wake); addEventListener('keydown', wake);
 })();

@@ -97,6 +97,7 @@ export class Input {
       if (document.pointerLockElement !== canvas) { if (!isTouch) lockPointer(canvas); return; }
       if (e.button === 0) { this.mouse.fire = true; this.edges.add('FIRE'); }
       if (e.button === 2) { this.mouse.ads = true; this.edges.add('ADS'); }
+      if (e.button === 1) { e.preventDefault(); this.edges.add('PING'); }
     });
     addEventListener('mouseup', (e) => { if (e.button === 0) this.mouse.fire = false; if (e.button === 2) this.mouse.ads = false; });
     addEventListener('contextmenu', (e) => e.preventDefault());
@@ -126,6 +127,7 @@ export class Input {
       flashPressed: edge('KeyF') || edge('FLASH'),
       streakPressed: edge('KeyX') || edge('STREAK'),
       inspectPressed: edge('KeyI') || edge('INSPECT'),
+      pingPressed: edge('KeyB') || edge('PING'), // marcar (battle royale): B, botao do meio, direcional esquerdo, botao de toque
       use: has('KeyE') || t.use || !!pd.use,
       mapPressed: edge('KeyM') || edge('MAP'),
       meleePressed: edge('KeyV') || edge('MELEE'),
@@ -157,6 +159,8 @@ const ICON = {
   flash: 'M7 11H1v2h6v-2zm2.17-3.24L7.05 5.64 5.64 7.05l2.12 2.12 1.41-1.41zM13 1h-2v6h2V1zm5.36 6.05l-1.41-1.41-2.12 2.12 1.41 1.41 2.12-2.12zM17 11v2h6v-2h-6zm-5-2c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm2.83 7.24l2.12 2.12 1.41-1.41-2.12-2.12-1.41 1.41zm-9.19.71l1.41 1.41 2.12-2.12-1.41-1.41-2.12 2.12zM11 23h2v-6h-2v6z',
   // gavel (Material Icons): golpe de lamina
   melee: 'M1 21h12v2H1zM5.245 8.07l2.83-2.827 14.14 14.142-2.828 2.828zM12.317 1l5.657 5.656-2.83 2.83-5.654-5.66zM3.825 9.485l5.657 5.657-2.828 2.828-5.657-5.657z',
+  // place (Material Icons): marcar
+  ping: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
   inspect: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
   streak: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
   // pan_tool (Material Icons): segurar pra plantar / desarmar
@@ -202,6 +206,8 @@ export function buildTouch(input, root) {
   // usar (plantar / desarmar a bomba): segurar; so aparece no modo bomba
   input.useBtn = btn(t('t_use'), 'use', at(4, 92, 80), () => { input.touch.use = true; }, () => { input.touch.use = false; });
   btn(t('t_inspect'), 'inspect', at(220, 84, 44), () => input.edges.add('INSPECT'));
+  // marcar (so no battle royale): acima do equipamento de campo
+  input.pingBtn = btn(t('t_ping'), 'ping', at(214, 206, 44), () => input.edges.add('PING'));
 
   // analogico: empurrar ate a borda = corre
   let sid = null, cx = 0, cy = 0;
@@ -244,6 +250,7 @@ export function setFireButton(input) {
   if (input.fireBtn) input.fireBtn.hidden = !!input.settings?.autoFire;
   if (input.useBtn) {
     input.useBtn.hidden = input.mode !== 'bomb' && input.mode !== 'br'; // br: trocar arma no chao
+    if (input.pingBtn) input.pingBtn.hidden = input.mode !== 'br';
     // a mao (plantar/desarmar) vai pro lugar do botao de atirar quando ele some: e onde o polegar ja esta.
     // Com tiro manual, fica acima do recarregar, fora do meio da tela. Posicao salva no editor de HUD manda.
     if (!input.settings?.hudLayout?.pos?.use) {

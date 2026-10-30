@@ -183,7 +183,8 @@ export class Character {
     this.shadow = sh;
 
     // nome
-    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(name, { burst: false, size: 256, fill: team === 'red' ? '#e0a49a' : team === 'blue' ? '#a8c0dc' : '#faf8f2' }), transparent: true, depthTest: false }));
+    this.tagName = name; this.tagFill = team === 'red' ? '#e0a49a' : team === 'blue' ? '#a8c0dc' : '#faf8f2';
+    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(name, { burst: false, size: 256, fill: this.tagFill }), transparent: true, depthTest: false }));
     this.tag.scale.set(1.5, 1.5, 1); this.tag.position.y = 2.55; this.tag.renderOrder = 5;
     this.root.add(this.tag);
 
@@ -221,6 +222,9 @@ export class Character {
     this.gunHolder.clear();
     this.gun = buildGun(id, lo);
     this.gunHolder.add(this.gun);
+    // akimbo: a segunda pistola vai na mao esquerda (espelho da direita)
+    if (this.gun2h) { this.body.remove(this.gun2h); this.gun2h = null; }
+    if (id === 'pistol' && lo?.handle === 'akimbo') { this.gun2h = new THREE.Group(); this.gun2h.add(buildGun('pistol', { ...lo, handle: null })); this.body.add(this.gun2h); }
     // pecas da arma (mira, pente, punho, laser) e os contornos dela: de longe so o corpo da arma
     this.gunDetails = [];
     let body = null, big = 0;
@@ -239,6 +243,15 @@ export class Character {
   }
 
   // tranco de quem leva tiro: inclina pra tras e amassa (cabeca = mais forte)
+  // nome de aliado nitido (pedido dele 30/10): o dobro de resolucao e filtro anisotropico; inimigo fica como esta
+  sharpTag(renderer) {
+    if (this.sharp) return;
+    this.sharp = true;
+    const tx = wordTexture(this.tagName, { burst: false, size: 512, fill: this.tagFill });
+    tx.anisotropy = renderer?.capabilities.getMaxAnisotropy?.() || 8;
+    tx.needsUpdate = true;
+    this.tag.material.map = tx; this.tag.material.needsUpdate = true;
+  }
   flinch(head) { this.hitT = head ? 0.26 : 0.18; this.hitHead = head; }
 
   update(dt, s) {
@@ -317,6 +330,12 @@ export class Character {
     if (this.gun) {
       gripR.copy(this.gun.userData.gripR.position).applyMatrix4(gp.matrix);
       gripL.copy(this.gun.userData.gripL.position).applyMatrix4(gp.matrix);
+    }
+    if (this.gun2h) { // espelho do suporte da direita; a mao esquerda vai no cabo dela
+      this.gun2h.position.set(-gp.position.x, gp.position.y, gp.position.z);
+      this.gun2h.rotation.set(gp.rotation.x, -gp.rotation.y, -gp.rotation.z);
+      this.gun2h.updateMatrix();
+      gripL.copy(this.gun2h.children[0].userData.gripR.position).applyMatrix4(this.gun2h.matrix);
     }
     const pump = sprinting ? Math.sin(ph) * 0.15 : 0;
     this.handR.position.copy(gripR); this.handR.position.z += pump * 0.3;

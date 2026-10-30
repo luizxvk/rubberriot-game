@@ -1,6 +1,6 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
 import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
 import { cleanLook } from './looks.js';
@@ -50,6 +50,9 @@ export class Core {
 
   reset() {
     const M = this.M;
+    // escada de armas: sorteia a escada da partida (todo mundo recebe; quem entra depois tambem)
+    this.gg = this.mode === 'gungame' ? ggPickLadder() : null;
+    if (this.gg) this.event({ k: 'ladder', id: this.gg.id, list: this.gg.list.map(u => u.body) });
     // meta e tempo da partida pelo tamanho do mapa (mapa apertado = mais abates pra vencer)
     const R = matchRules(this.mode, M.id, this.cfg, MATCH_TIME);
     // o host pode trocar meta e tempo no lobby (0 = o padrao do modo/mapa)
@@ -183,6 +186,9 @@ export class Core {
   }
 
   // gente em cada lado (skip = quem esta trocando de lado)
+  // modos em que da pra escolher o time no lobby (infectado sorteia, dupla e BR montam as duplas)
+  teamPick() { return !!this.cfg.teams && this.mode !== 'infect' && this.mode !== 'br' && !this.duo; }
+
   teamHumans(skip) {
     const n = { red: 0, blue: 0 };
     for (const p of this.players.values()) if (!p.bot && p.id !== skip && p.team in n) n[p.team]++;
@@ -190,8 +196,9 @@ export class Core {
   }
 
   // lobby da bomba: bots completam o lado mais vazio, pra sala ficar equilibrada em volta de quem escolheu
+  // (vale pra todo modo de time no lobby: quem troca de lado puxa os bots pro outro)
   spreadBots() {
-    if (this.mode !== 'bomb' || this.phase !== 'lobby') return;
+    if (!this.teamPick() || this.phase !== 'lobby') return;
     const n = this.teamHumans();
     for (const p of this.players.values()) if (p.bot) { p.team = n.red <= n.blue ? 'red' : 'blue'; n[p.team]++; }
   }
@@ -291,6 +298,7 @@ export class Core {
     // pecas das armas de quem ja estava na sala
     for (const o of this.players.values()) if (o.los && o.id !== id) this.send(id, { t: 'ev', k: 'lo', id: o.id, los: o.los, tracer: o.tracer });
     for (const o of this.players.values()) if (o.look && o.id !== id) this.send(id, { t: 'ev', k: 'look', id: o.id, look: o.look }); // visual de quem ja estava
+    if (this.gg) this.send(id, { t: 'ev', k: 'ladder', id: this.gg.id, list: this.gg.list.map(u => u.body) });
     this.event({ k: 'msg', key: 'joined', name: p.name });
   }
 
@@ -309,11 +317,14 @@ export class Core {
   }
 
   // modelo travado do degrau da escada de armas (fora dela, null)
-  ggBody(p) { return this.mode === 'gungame' ? GUN_LADDER[Math.min(p.gunLvl, GUN_LADDER.length - 1)].body : null; }
-  bodyOf(p, wpn) { return this.ggBody(p) || p.los?.[wpn]?.body; }
+  get ladder() { return this.gg?.list || GUN_LADDER; } // escada sorteada da partida
+  ggBody(p) { return this.mode === 'gungame' ? this.ladder[Math.min(p.gunLvl, this.ladder.length - 1)].body : null; }
+  // battle royale: a variante que a pessoa pegou no chao/caixote vale no lugar da sua (p.brBp)
+  brBp(p, wpn) { return this.mode === 'br' ? p.brBp?.[wpn] || null : null; }
+  bodyOf(p, wpn) { const b = this.brBp(p, wpn); return this.ggBody(p) || (b ? BLUEPRINTS[b].lo.body : p.los?.[wpn]?.body); }
   // variante de elite equipada (escada de armas usa o modelo do degrau, sem variante)
-  bpOf(p, wpn) { return this.ggBody(p) ? {} : bpMods(p.los?.[wpn]?.bp); }
-  ammoOf(p, wpn) { const a = this.ggBody(p) || wpn === 'melee' ? null : p.los?.[wpn]?.ammo; return AMMO[a] ? a : null; }
+  bpOf(p, wpn) { return this.ggBody(p) ? {} : bpMods(this.brBp(p, wpn) || p.los?.[wpn]?.bp); }
+  ammoOf(p, wpn) { const a = this.ggBody(p) || wpn === 'melee' || this.brBp(p, wpn) ? null : p.los?.[wpn]?.ammo; return AMMO[a] ? a : null; }
 
   // host = humano mais antigo na sala (Map guarda a ordem de entrada); saiu, passa pro proximo
   hostId() { for (const p of this.players.values()) if (!p.bot) return p.id; return null; }
@@ -372,7 +383,7 @@ export class Core {
   }
 
   spawn(p) {
-    p.down = 0; p.reviveT = 0;
+    p.down = 0; p.reviveT = 0; p.brBp = null; // variante pega no BR some ao renascer (bate-volta)
     const S = this.M.spawns;
     const infect = this.mode === 'infect';
     let list = S.ffa;
@@ -399,7 +410,7 @@ export class Core {
     p.nades = { frag: 1 + xn, flash: 1 + xn };
     p.owned = new Set(SPAWN_KIT);
     if (this.mode !== 'gungame' && this.mode !== 'br') p.owned.add('melee');
-    if (this.mode === 'gungame') p.wpn = GUN_LADDER[Math.min(p.gunLvl, GUN_LADDER.length - 1)].wpn;
+    if (this.mode === 'gungame') p.wpn = this.ladder[Math.min(p.gunLvl, this.ladder.length - 1)].wpn;
     else if (infect && p.team === 'red') { p.owned = new Set(['melee']); p.wpn = 'melee'; p.hp = INFECT.hp; p.nades = { frag: 0, flash: 1 }; }
     else if (infect) {
       // sobrevivente: a arma sorteada da partida (igual pra todo mundo), pistola e faca
@@ -441,7 +452,7 @@ export class Core {
       }
       // plantar a bomba: escolher o lado no lobby (lado com 8 pessoas recusa; bots se arrumam em volta)
       case 'team': {
-        if (this.mode !== 'bomb' || this.phase !== 'lobby' || (m.team !== 'red' && m.team !== 'blue')) break;
+        if (!this.teamPick() || this.phase !== 'lobby' || (m.team !== 'red' && m.team !== 'blue')) break;
         if (m.team !== p.team && this.teamHumans(id)[m.team] >= TEAM_MAX) break;
         p.team = m.team;
         this.spreadBots();
@@ -454,9 +465,11 @@ export class Core {
         this.configure(m);
         break;
       }
-      // so o host (primeiro humano da sala) solta a contagem; quem nao deu pronto entra igual
+      // so o host (primeiro humano da sala) solta a contagem, e so com TODO humano pronto (regra dele 30/10)
       case 'start': {
         if (id !== this.hostId() || this.phase !== 'lobby') break;
+        const wait = [...this.players.values()].filter(o => !o.bot && o.id !== id && !o.lobbyReady).length;
+        if (wait) { this.send(id, { t: 'ev', k: 'notReady', n: wait }); break; }
         this.phase = 'count'; this.countT = COUNTDOWN; this.lobbyT = 0;
         break;
       }
@@ -535,6 +548,36 @@ export class Core {
         }
         break;
       }
+      case 'hitBlimp': { // tiro no dirigivel inimigo: enche de furo ate estourar
+        const b = this.blimps.find(x => x.id === m.id), w = WEAPONS[m.wpn], owner = b && this.players.get(b.owner);
+        if (!b || !w || w.melee || !p.alive || p.down > 0 || !Number.isFinite(m.dmg) || m.dmg <= 0) return;
+        if (owner && !this.enemies(p, owner)) return;
+        if (m.wpn !== p.wpn && m.wpn !== p.lastWpn) return;
+        const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
+        if (Math.sqrt(dist2(eye, b.pos)) > (w.range || 260) + 10 || !hasLOS(this.M, eye, b.pos)) return;
+        const dmg = Math.min(m.dmg, w.dmg * (w.pellets || 1) * 1.5, Math.max(0, p.budget));
+        if (dmg <= 0) return;
+        p.budget -= dmg;
+        b.hp -= dmg;
+        if (b.hp <= 0) {
+          this.blimps = this.blimps.filter(x => x !== b); this.streakGap = 0; // some e libera a proxima sequencia na hora
+          this.event({ k: 'blimpDown', id: p.id, owner: b.owner, pos: [...b.pos] });
+        }
+        break;
+      }
+      // marcacao (ping) do battle royale: so o time ve (dupla = o parceiro; sozinho = so voce)
+      case 'ping': {
+        if ((this.mode !== 'br' && !this.pingAny) || !p.alive) break; // pingAny: treino (passo de marcar)
+        const now = this.clock || 0;
+        if (now - (p.pingAt || -9) < 0.4) break;
+        p.pingAt = now;
+        const off = !!m.off;
+        if (!off && !(Array.isArray(m.pos) && m.pos.length === 3 && m.pos.every(Number.isFinite))) break;
+        const kind = ['spot', 'item', 'enemy'].includes(m.kind) ? m.kind : 'spot';
+        const ev = { t: 'ev', k: 'ping', id, off, pos: off ? null : m.pos.map(v => Math.round(v * 10) / 10), kind, label: String(m.label || '').slice(0, 32) };
+        for (const o of this.players.values()) if (!o.bot && (o.id === id || (this.duo && o.team === p.team))) this.send(o.id, ev);
+        break;
+      }
       case 'nade':
         if (p.alive && !(p.down > 0) && NADES[m.kind] && p.nades[m.kind] > 0 && Array.isArray(m.d) && m.d.every(Number.isFinite)) {
           p.nades[m.kind]--;
@@ -581,7 +624,7 @@ export class Core {
 
   event(ev) {
     // tiro de gente (nao do dirigivel) vira barulho: bot perto ouve e vai ver (some em 3 s)
-    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && !hasSkill(this.players.get(ev.id), 'pano')) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
+    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
     this.send(null, { t: 'ev', ...ev });
   }
 
@@ -592,7 +635,7 @@ export class Core {
     if (this.over || this.freezeT > 0 || !v.alive || !Number.isFinite(dmg)) return;
     if (a && a !== v && !this.enemies(a, v)) return;
     if (fieldBlocks(this, v, a, wpn)) return; // guarda-chuva aberto de frente pro tiro
-    if (head) dmg *= hasSkill(v, 'cuca') ? SKILLS.cuca.head : 1.6; // cuca dura
+    if (head) dmg *= 1.6;
     if (BLAST.includes(wpn) && hasSkill(v, 'couro')) dmg *= SKILLS.couro.blast; // couro grosso
     if (this.mode === 'br' && wpn !== 'iris') dmg = brArmor(v, dmg); // colete (a iris passa direto)
     v.hurtAt = this.clock || 0;
@@ -613,8 +656,8 @@ export class Core {
       if (this.cfg.teams && this.mode === 'tdm') this.teamScore[a.team]++;
       if (this.mode === 'gungame' && WEAPONS[wpn]) {
         a.gunLvl++;
-        if (a.gunLvl >= GUN_LADDER.length) { a.gunLvl = GUN_LADDER.length - 1; this.end(a.name); }
-        else { a.wpn = GUN_LADDER[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
+        if (a.gunLvl >= this.ladder.length) { a.gunLvl = this.ladder.length - 1; this.end(a.name); }
+        else { a.wpn = this.ladder[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
       }
       if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
         if (a.streak === s.kills - (hasSkill(a, 'pavio') && s.kills > 3 ? SKILLS.pavio.streak : 0)) {
@@ -793,7 +836,7 @@ export class Core {
       for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5), streak: true });
       this.event({ k: 'anvilWarn', list });
     }
-    if (kind === 'blimp') this.blimps.push({ owner: p.id, team: p.team, t: STREAKS.blimp.time, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
+    if (kind === 'blimp') this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, owner: p.id, team: p.team, t: STREAKS.blimp.time, hp: STREAKS.blimp.hp, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
     if (kind === 'nuke') this.nukes.push({ owner: p.id, t: STREAKS.nuke.delay });
     this.event({ k: 'streak', id: p.id, kind, team: p.team, delay: kind === 'nuke' ? STREAKS.nuke.delay : undefined });
   }
@@ -930,7 +973,7 @@ export class Core {
 
   end(winner) {
     if (this.over) return;
-    this.over = true; this.overT = 9;
+    this.over = true; this.overT = 12.5; // +3,5 s: a camera da ultima morte roda antes do placar
     this.event({ k: 'end', winner });
   }
 
@@ -1440,7 +1483,7 @@ export class Core {
       flags: this.flags, zones: this.zones.map(z => ({ id: z.id, owner: z.owner, prog: z.prog })),
       pickups: this.pickups.map(k => k.active),
       nades: this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos.map(r2) })),
-      blimps: this.blimps.map(b => ({ pos: b.pos.map(r2), team: b.team, owner: b.owner })),
+      blimps: this.blimps.map(b => ({ id: b.id, pos: b.pos.map(r2), team: b.team, owner: b.owner, hp: Math.max(0, Math.round(b.hp / STREAKS.blimp.hp * 100)) })),
       uavs: this.uavs.map(u => ({ owner: u.owner, team: u.team })),
       sLock: (() => { const l = this.streakLock(); return l ? { kind: l.kind, t: Math.ceil(l.t) } : null; })(),
       br: this.mode === 'br' && this.zone ? brSnap(this) : null,

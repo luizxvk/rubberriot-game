@@ -4,8 +4,9 @@
 // - Todo mundo nasce no soco, espalhado pelo mapa, sem renascer.
 // - Loot no chao (arma, colete, leite, granada) nao reaparece; quem cai larga a melhor arma e o colete.
 // - A iris (zona) fecha em fases: espera, fecha, proxima. Fora dela perde vida.
-// - O dirigivel solta um caixote de tempos em tempos (Moedor + colete cheio), dentro da proxima iris.
-import { BR, WEAPONS, PRIMARIES } from './weapons.js';
+// - O dirigivel solta um caixote de tempos em tempos (variante de elite sorteada + colete cheio), dentro da
+//   proxima iris. A variante viaja com a arma: quem cai larga ela no chao (p.brBp[wpn] = id da variante).
+import { BR, WEAPONS, PRIMARIES, BLUEPRINTS } from './weapons.js';
 import { floorAt, standable } from './nav.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -17,14 +18,19 @@ const bestGun = (owned) => [...owned].filter(w => w !== 'fists' && w !== 'melee'
 
 export function brInit(c) {
   const M = c.M, A = M.arena;
-  c.loot = []; c.lootSeq = 0; c.lootDirty = true; c.lootT = 0;
-  for (const s of M.loot || []) {
-    if (!standable(M, s[0], s[1])) continue;
-    const r = Math.random(), pos = [s[0], floorAt(M, s[0], s[1]), s[1]];
-    if (r < 0.55) addLoot(c, 'wpn', pos, BR.lootWpn[Math.floor(Math.random() * BR.lootWpn.length)]);
-    else if (r < 0.72) addLoot(c, 'armor', pos);
-    else if (r < 0.88) addLoot(c, 'hp', pos);
+  c.loot = []; c.lootSeq = 0; c.lootDirty = true; c.lootT = 0; c.lifeT = BR.lifeStep;
+  const spot = (x, z, wpnK) => {
+    if (!standable(M, x, z)) return;
+    const r = Math.random(), pos = [x, floorAt(M, x, z), z];
+    if (r < wpnK) addLoot(c, 'wpn', pos, lootGun(), { life: BR.spawnLife * rnd(0.8, 1.25), spawn: 1 });
+    else if (r < wpnK + (1 - wpnK) * 0.38) addLoot(c, 'armor', pos);
+    else if (r < wpnK + (1 - wpnK) * 0.74) addLoot(c, 'hp', pos);
     else addLoot(c, 'nade', pos);
+  };
+  for (const s of M.loot || []) {
+    spot(s[0], s[1], 0.55);
+    // segundo item do lado (mais arma no chao): puxado pra arma
+    if (Math.random() < BR.lootExtra) { const a = Math.random() * Math.PI * 2; spot(s[0] + Math.cos(a) * 1.6, s[1] + Math.sin(a) * 1.6, 0.7); }
   }
   // iris: comeca cobrindo tudo; cada fase sorteia o proximo circulo dentro do atual
   const R0 = A * BR.r0;
@@ -35,10 +41,50 @@ export function brInit(c) {
   c.ringQ = []; c.ringFight = null;
 }
 
+// sorteio por peso (BR.lootWpn): pistola sobra, Moedor quase nunca
+function lootGun() {
+  const L = Object.entries(BR.lootWpn), tot = L.reduce((a, [, w]) => a + w, 0);
+  let r = Math.random() * tot;
+  for (const [w, k] of L) if ((r -= k) <= 0) return w;
+  return 'pistol';
+}
+// variante de elite sorteada (caixote do dirigivel)
+function randomBp() { const ids = Object.keys(BLUEPRINTS); return ids[Math.floor(Math.random() * ids.length)]; }
+// larga a arma no chao levando a variante junto (se era variante)
+function dropGun(c, p, wpn, pos) {
+  const bp = p.brBp?.[wpn] || null;
+  if (p.brBp) delete p.brBp[wpn];
+  return addLoot(c, 'wpn', pos, wpn, { life: BR.dropLife, ...(bp ? { bp } : {}) });
+}
+
 function addLoot(c, kind, pos, wpn = null, extra = {}) {
   const it = { id: ++c.lootSeq, kind, wpn, pos, ...extra };
   c.loot.push(it); c.lootDirty = true;
   return it;
+}
+
+// arma do mapa venceu: troca de ponto (id novo, modelo novo no cliente); o que caiu de alguem some
+function lootAge(c, step) {
+  const spots = c.M.loot || [];
+  for (let i = c.loot.length - 1; i >= 0; i--) {
+    const it = c.loot[i];
+    if (!(it.life > 0) || it.fallT > 0) continue;
+    if ((it.life -= step) > 0) continue;
+    c.loot.splice(i, 1); c.lootDirty = true;
+    if (!it.spawn) continue;
+    // outro ponto de loot (do lado dele: o ponto em si quase sempre ja tem item), longe de outro item e de
+    // quem esta vivo (nao aparece na cara de ninguem). Nao achou: fica onde estava por mais uma volta.
+    let put = null;
+    for (let k = 0; k < 16 && spots.length && !put; k++) {
+      const s = spots[Math.floor(Math.random() * spots.length)], a = rnd(0, Math.PI * 2), d = rnd(0, 2.6);
+      const x = s[0] + Math.cos(a) * d, z = s[1] + Math.sin(a) * d;
+      if (!standable(c.M, x, z)) continue;
+      if (c.loot.some(o => (o.pos[0] - x) ** 2 + (o.pos[2] - z) ** 2 < 1.3 * 1.3)) continue;
+      if ([...c.players.values()].some(p => p.alive && (p.pos[0] - x) ** 2 + (p.pos[2] - z) ** 2 < 15 * 15)) continue;
+      put = [x, floorAt(c.M, x, z), z];
+    }
+    addLoot(c, 'wpn', put || it.pos, put ? lootGun() : it.wpn, { life: BR.spawnLife * rnd(0.8, 1.25), spawn: 1 });
+  }
 }
 
 function nextCircle(c) {
@@ -59,9 +105,15 @@ export function brSpawnPoint(c, p) {
   const mate = c.duo && p.team && [...c.players.values()].find(o => o !== p && o.team === p.team && o.alive);
   if (mate) { const n = brNear(c, mate.pos); return [n[0], n[2]]; }
   const M = c.M, A = M.arena - 6, others = [...c.players.values()].filter(o => o !== p && o.alive);
+  // Bate-Volta: cai do ceu sempre dentro da zona segura. Usa o circulo de DESTINO da iris (a queda leva uns
+  // 10-15 s e a zona anda nesse meio tempo), com folga da borda. Antes sorteava a ilha toda.
+  const Z = c.bounce && c.zone ? (c.zone.state === 'closed' ? c.zone : c.zone.to || c.zone) : null;
+  const inZone = (x, z) => !Z || Math.hypot(x - Z.c[0], z - Z.c[1]) < Z.r * 0.72;
   let best = null, bs = -1;
-  for (let i = 0; i < 60; i++) {
-    const x = rnd(-A, A), z = rnd(-A, A);
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * Math.PI * 2, d = Z ? Math.sqrt(Math.random()) * Z.r * 0.72 : 0;
+    const x = Z ? Z.c[0] + Math.cos(a) * d : rnd(-A, A), z = Z ? Z.c[1] + Math.sin(a) * d : rnd(-A, A);
+    if (Math.abs(x) > A || Math.abs(z) > A || !inZone(x, z)) continue;
     if (!standable(M, x, z)) continue;
     const m = others.reduce((v, o) => Math.min(v, Math.hypot(o.pos[0] - x, o.pos[2] - z)), 999);
     if (m > bs) { bs = m; best = [x, z]; }
@@ -131,8 +183,8 @@ export function brKill(c, v) {
   // bate-volta: enquanto a iris nao fechar duas vezes, quem cai larga o que tinha e volta do ceu
   if (c.bounceOpen?.() && v.inRing !== 'fight') {
     const g0 = bestGun(v.owned || []), at0 = [v.pos[0], floorAt(c.M, v.pos[0], v.pos[2]), v.pos[2]];
-    if (g0) addLoot(c, 'wpn', [at0[0] + 0.6, at0[1], at0[2]], g0);
-    if (v.armor >= 10) addLoot(c, 'armor', [at0[0] - 0.6, at0[1], at0[2]], null, { amt: Math.round(v.armor) });
+    if (g0) dropGun(c, v, g0, [at0[0] + 0.6, at0[1], at0[2]]);
+    if (v.armor >= 10) addLoot(c, 'armor', [at0[0] - 0.6, at0[1], at0[2]], null, { amt: Math.round(v.armor), life: BR.dropLife });
     v.armor = 0; v.air = false; v.chute = false;
     v.respawnT = BR.bounce.wait; v.bounceBack = true;
     c.event({ k: 'bounceWait', id: v.id, s: BR.bounce.wait }); // 's': o 't' da mensagem e' o tipo
@@ -147,16 +199,16 @@ export function brKill(c, v) {
     v.ringUsed = true; v.inRing = 'wait'; v.ringWaitT = 0; v.respawnT = Infinity;
     c.ringQ.push(v.id);
     const g0 = bestGun(v.owned || []), at0 = [v.pos[0], floorAt(c.M, v.pos[0], v.pos[2]), v.pos[2]];
-    if (g0) addLoot(c, 'wpn', [at0[0] + 0.6, at0[1], at0[2]], g0);
-    if (v.armor >= 10) addLoot(c, 'armor', [at0[0] - 0.6, at0[1], at0[2]], null, { amt: Math.round(v.armor) });
+    if (g0) dropGun(c, v, g0, [at0[0] + 0.6, at0[1], at0[2]]);
+    if (v.armor >= 10) addLoot(c, 'armor', [at0[0] - 0.6, at0[1], at0[2]], null, { amt: Math.round(v.armor), life: BR.dropLife });
     v.armor = 0;
     c.event({ k: 'ringWait', id: v.id });
     return;
   }
   // quem cai larga a melhor arma e o que sobrou do colete
   const g = bestGun(v.owned || []), at = [v.pos[0], floorAt(c.M, v.pos[0], v.pos[2]), v.pos[2]];
-  if (g) addLoot(c, 'wpn', [at[0] + 0.6, at[1], at[2]], g);
-  if (v.armor >= 10) addLoot(c, 'armor', [at[0] - 0.6, at[1], at[2]], null, { amt: Math.round(v.armor) });
+  if (g) dropGun(c, v, g, [at[0] + 0.6, at[1], at[2]]);
+  if (v.armor >= 10) addLoot(c, 'armor', [at[0] - 0.6, at[1], at[2]], null, { amt: Math.round(v.armor), life: BR.dropLife });
   v.armor = 0;
   v.respawnT = Infinity; // sem renascer
   v.place = c.players.size ? alive(c).length + 1 : 1;
@@ -175,7 +227,7 @@ function makeRoom(c, p, wpn, force) {
   else { if (!force && (!p.using || (p.swapCd || 0) > 0)) return false; drop = PRIM.includes(p.wpn) ? p.wpn : prims[0]; }
   p.owned.delete(drop);
   if (p.wpn === drop) p.wpn = wpn;
-  addLoot(c, 'wpn', [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], drop);
+  dropGun(c, p, drop, [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]]);
   p.swapCd = 0.8; // a que caiu fica no pe: sem isso trocava de volta na hora
   c.event({ k: 'take', id: p.id, wpn: drop });
   return true;
@@ -252,15 +304,27 @@ function give(c, p, it) {
   else if (it.kind === 'armor') { if (p.armor >= BR.armorMax) return false; p.armor = Math.min(BR.armorMax, (p.armor || 0) + (it.amt || BR.armorPiece)); }
   else if (it.kind === 'nade') { p.nades.frag = Math.min(3, (p.nades.frag || 0) + 1); }
   else if (it.kind === 'crate') {
+    // caixote: colete cheio + uma variante de elite sorteada (troca pela da mesma classe, se tiver)
     p.armor = BR.armorMax;
-    if (!p.owned.has('minigun')) makeRoom(c, p, 'minigun', true);
-    p.owned.add('minigun'); c.event({ k: 'give', id: p.id, wpn: 'minigun' });
-    if (p.bot) { p.wpn = 'minigun'; c.botReload(p, true); }
+    const bp = it.bp || randomBp(), wpn = BLUEPRINTS[bp].wpn;
+    if (!p.owned.has(wpn) && PRIM.includes(wpn)) makeRoom(c, p, wpn, true);
+    p.owned.add(wpn); (p.brBp ||= {})[wpn] = bp;
+    c.event({ k: 'give', id: p.id, wpn, bp });
+    c.event({ k: 'brBp', id: p.id, wpn, bp });
+    if (p.bot) { p.wpn = wpn; c.botReload(p, true); }
   } else {
-    if (p.owned.has(it.wpn)) return false;
-    if (PRIM.includes(it.wpn) && !makeRoom(c, p, it.wpn, false)) return false;
-    p.owned.add(it.wpn);
-    c.event({ k: 'give', id: p.id, wpn: it.wpn });
+    if (p.owned.has(it.wpn)) {
+      // ja tem a classe: variante no chao troca pela comum que esta na mao (segurando usar, igual trocar arma)
+      if (!it.bp || p.brBp?.[it.wpn] === it.bp || (!p.bot && !p.using)) return false;
+      dropGun(c, p, it.wpn, [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]]);
+      p.owned.add(it.wpn);
+    } else {
+      if (PRIM.includes(it.wpn) && !makeRoom(c, p, it.wpn, false)) return false;
+      p.owned.add(it.wpn);
+    }
+    if (it.bp) (p.brBp ||= {})[it.wpn] = it.bp; else if (p.brBp) delete p.brBp[it.wpn];
+    c.event({ k: 'give', id: p.id, wpn: it.wpn, bp: it.bp || undefined });
+    c.event({ k: 'brBp', id: p.id, wpn: it.wpn, bp: it.bp || null });
     if (p.bot && RANK.indexOf(it.wpn) > RANK.indexOf(p.wpn)) { p.wpn = it.wpn; c.botReload(p, true); }
   }
   return true;
@@ -305,6 +369,9 @@ export function brTick(c, dt) {
       break;
     }
   }
+  // tempo de vida do loot: confere em lote a cada BR.lifeStep s
+  c.lifeT -= dt;
+  if (c.lifeT <= 0) { const step = BR.lifeStep - c.lifeT; c.lifeT = BR.lifeStep; lootAge(c, step); }
   // caixote do dirigivel: cai dentro da proxima iris
   c.dropT -= dt;
   if (c.dropT <= 0 && alive(c).length > 2) {
@@ -335,7 +402,7 @@ export function brTick(c, dt) {
 
 export function lootList(c) {
   const r = (v) => Math.round(v * 100) / 100;
-  return c.loot.filter(it => !(it.fallT > 0)).map(it => [it.id, it.kind, it.wpn || 0, r(it.pos[0]), r(it.pos[1]), r(it.pos[2])]);
+  return c.loot.filter(it => !(it.fallT > 0)).map(it => [it.id, it.kind, it.wpn || 0, r(it.pos[0]), r(it.pos[1]), r(it.pos[2]), it.bp || 0, it.life > 0 ? Math.round(it.life) : 0]);
 }
 
 export function brSnap(c) {

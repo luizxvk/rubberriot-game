@@ -14,6 +14,7 @@ export class Lobby {
     this.onCfg = onCfg; this.cfgPrev = null;
     $('lbModesClose').onclick = () => this.closeModes();
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('lbModes').hidden) this.closeModes(); });
+    $('lbVer').textContent = 'Rubber Riot v' + (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'); // versao: so aqui no lobby
     this.ready = false;
     this.isHost = false;
     this.lastCount = -1;
@@ -88,17 +89,28 @@ export class Lobby {
     this.ready = v;
     const b = $('lbReady');
     b.setAttribute('aria-pressed', String(v));
-    b.textContent = this.isHost ? t('lbStart') : t(v ? 'lbUnready' : 'lbReady');
+    b.textContent = this.isHost ? (this.waitN ? t('lbWaitReady', { n: this.waitN }) : t('lbStart')) : t(v ? 'lbUnready' : 'lbReady');
     if (v) audio.play('ui_click', { ui: true });
   }
 
   // plantar a bomba: popup com os dois lados e quanta gente tem em cada; lado cheio some
   renderSide(m, myId) {
-    const bomb = m.mode === 'bomb' && m.phase === 'lobby';
-    $('lbSwap').hidden = !bomb;
-    const on = bomb && this.sideOpen;
+    // todo modo de time deixa trocar de lado (infectado sorteia; dupla e BR montam as duplas)
+    const pick = m.phase === 'lobby' && MODES[m.mode]?.teams && m.mode !== 'infect' && m.mode !== 'br' && !m.duo;
+    const bomb = m.mode === 'bomb';
+    $('lbSwap').hidden = !pick;
+    $('lbSwap').querySelector('span').textContent = t(bomb ? 'sideSwap' : 'teamSwap');
+    const on = pick && this.sideOpen;
     $('lbSide').hidden = !on;
     if (!on) return;
+    $('lbSideTitle').textContent = t(bomb ? 'sideTitle' : 'teamTitle');
+    $('lbSide').querySelector('.lb-side-note').hidden = !bomb; // troca de lado no intervalo e so da bomba
+    const side = $('lbSide');
+    side.querySelector('[data-side="red"] b').textContent = t(bomb ? 'sideAtk' : 'h_red');
+    side.querySelector('[data-side="red"] small').textContent = t(bomb ? 'sideAtkTip' : 'teamRedTip');
+    side.querySelector('[data-side="blue"] b').textContent = t(bomb ? 'sideDef' : 'h_blue');
+    side.querySelector('[data-side="blue"] small').textContent = t(bomb ? 'sideDefTip' : 'teamBlueTip');
+    for (const b of side.querySelectorAll('[data-side]')) b.setAttribute('aria-pressed', String(m.players.find(p => p.id === myId)?.team === b.dataset.side));
     const n = { red: 0, blue: 0 };
     for (const p of m.players) if (!p.bot && p.id !== myId && p.team in n) n[p.team]++;
     for (const b of $('lbSide').querySelectorAll('[data-side]')) {
@@ -188,7 +200,10 @@ export class Lobby {
     const host = m.host === myId;
     this.counting = m.phase === 'count';
     if (host !== this.isHost) { this.isHost = host; this.setReady(this.ready); }
-    $('lbReady').disabled = host && this.counting;
+    // host so inicia com todo humano pronto (regra dele 30/10): o botao conta quem falta
+    const waitN = m.players.filter(p => !p.bot && !p.ready && p.id !== m.host).length;
+    if (waitN !== this.waitN) { this.waitN = waitN; this.setReady(this.ready); }
+    $('lbReady').disabled = host && (this.counting || waitN > 0);
     const list = [...m.players].sort((a, b) => (a.team || '').localeCompare(b.team || '') || (a.bot - b.bot));
     $('lbPlayers').innerHTML = list.map(p => {
       const me = p.id === myId;
@@ -212,7 +227,7 @@ export class Lobby {
       this.countEnd = performance.now() + m.countT * 1000;
     } else {
       this.lastCount = -1;
-      $('lbStatus').textContent = this.hostNote || (host ? t('lbHostHint') : t('lbWaitHost', { n: waiting }));
+      $('lbStatus').textContent = this.hostNote || (host ? t(waiting ? 'lbHostWait' : 'lbHostHint', { n: waiting }) : t(this.ready ? (waiting ? 'lbWaitOthers' : 'lbWaitHost') : 'lbTapReady', { n: waiting }));
     }
   }
 

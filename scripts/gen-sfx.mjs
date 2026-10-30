@@ -9,7 +9,7 @@ const SFX = {
   smg: ['single submachine gun shot, one round only, snappy punchy crack, close, dry, no echo', 0.5],
   rifle: ['single assault rifle gunshot, one round, heavy punchy boom with short crack, close mic, no music', 0.7],
   shotgun: ['big cartoon blunderbuss blast with comedic boom and echo', 1.0],
-  sniper: ['loud cartoon elephant gun crack with long echo', 1.2],
+  sniper: ['classic cartoon sniper rifle shot sound effect, one huge deep booming PUMMM blast, fat low thump with a comedic rubbery bounce and a short rolling echo, exaggerated old cartoon, no ricochet, no music', 1.3], // 30/10: refeito mais PUM (o velho em opcoes/sniper_original.mp3)
   rocket: ['cartoon firework rocket launch whoosh with slide whistle', 1.0],
   minigun: ['cartoon gatling gun rattle, short burst, toy machine', 0.5],
   pan: ['cartoon frying pan bonk hit on head', 0.6],
@@ -61,6 +61,8 @@ const SFX = {
   chute: ['cartoon parachute popping open, big cloth fwump with a springy boing and a short slide whistle up, comedic', 1.2],
   wind: ['steady falling through the sky wind rush, whooshing air, seamless loop, no music', 3.0],
   splat: ['cartoon character slamming flat into the ground from high up, big comedic splat thud with a squeaky rubber honk', 1.0],
+  aa12: ['cartoon automatic shotgun single blast, punchy chunky BLAM with a springy metallic clack, comedic and exaggerated, short tail, no echo, no music', 0.6], // 30/10: AA-12 (Liquidificador)
+  revolver: ['classic 1940s theatrical cartoon gunshot sound effect, one big booming rumbling PRRRUMMM blast with a deep rolling low echo, old cartoon pistol shot, comedic and exaggerated, no ricochet, no music', 1.3],
 };
 for (const [name, [text, dur]] of Object.entries(SFX)) {
   const out = `public/sfx/${name}.mp3`;

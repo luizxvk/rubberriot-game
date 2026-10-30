@@ -5,6 +5,15 @@ function builder(arena) {
   const boxes = [];
   const box = (cx, cz, w, d, h, y0 = 0, kind = 'crate', extra = {}) => {
     boxes.push({ min: [cx - w / 2, y0, cz - d / 2], max: [cx + w / 2, y0 + h, cz + d / 2], kind, ...extra });
+    // telhado pontudo tem corpo: 3 degraus em piramide acompanhando a inclinacao (antes quem subia ficava
+    // de pe no topo da parede, por dentro do telhado). Mesmas medidas do desenho: base 0,877 da parede, altura 0,4h
+    if (kind === 'house' && extra.roof === 'peak') {
+      const rh = h * 0.4, N = 3;
+      for (let i = 0; i < N; i++) {
+        const k = 0.877 * (1 - (i + 0.5) / N);
+        boxes.push({ min: [cx - w / 2 * k, y0 + h + rh * i / N, cz - d / 2 * k], max: [cx + w / 2 * k, y0 + h + rh * (i + 1) / N, cz + d / 2 * k], kind: 'roof' });
+      }
+    }
   };
   // escada: n degraus subindo na direcao (dx,dz)
   const stairs = (x0, z0, dx, dz, width, n, stepH, stepD, kind = 'step') => {
@@ -501,6 +510,37 @@ export function clampArena(M, pos, rad = 0.4) {
 }
 
 // Raio contra o mapa. Devolve distancia (Infinity se nada) e normal.
+// Forma de verdade dentro da caixa (30/10: a bala batia no canto invisivel da caixa do pilar redondo).
+// So vale pra tiro e linha de visao; o corpo continua batendo na caixa.
+const ROUND = { pillar: 1.15, post: 1, vat: 1 }; // cilindro em pe (pilar afina pra cima: raio medio)
+function shapeHit(b, o, d, tmin, tmax) {
+  const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+  const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], dd = b.max[2] - b.min[2];
+  // intervalo do raio dentro de uma quadrica (eixos u,v escalados pelos raios); devolve [t0, t1, normal no t0]
+  const quad = (axes) => {
+    let A = 0, B = 0, C = -1;
+    for (const [k, c, r] of axes) { const oo = (o[k] - c) / r, dk = d[k] / r; A += dk * dk; B += 2 * oo * dk; C += oo * oo; }
+    if (A < 1e-12) return C <= 0 ? [-Infinity, Infinity] : null;
+    const D = B * B - 4 * A * C; if (D < 0) return null;
+    const q = Math.sqrt(D); return [(-B - q) / (2 * A), (-B + q) / (2 * A)];
+  };
+  const kind = b.kind;
+  let iv, axes;
+  if (ROUND[kind]) { const r = Math.min(w, dd) / 2 * ROUND[kind]; axes = [[0, cx, r], [2, cz, r]]; }
+  else if (kind === 'pipe') { const r = Math.min(w, dd, h) / 2; axes = w > dd ? [[1, cy, r], [2, cz, r]] : [[0, cx, r], [1, cy, r]]; }
+  else if (kind === 'rock') axes = [[0, cx, w * 0.525], [1, b.min[1] + h * 0.5, h * 0.575], [2, cz, dd * 0.525]];
+  else return { t: tmin, n: null };
+  iv = quad(axes);
+  if (!iv) return null;
+  const t0 = Math.max(iv[0], tmin), t1 = Math.min(iv[1], tmax);
+  if (t0 > t1 || t1 < 0) return null;
+  if (t0 > iv[0] + 1e-6) return { t: t0, n: null }; // entrou pela tampa da caixa (topo/base): normal da caixa
+  const p = [o[0] + d[0] * t0, o[1] + d[1] * t0, o[2] + d[2] * t0], n = [0, 0, 0];
+  for (const [k, c, r] of axes) n[k] = (p[k] - c) / (r * r);
+  const l = Math.hypot(n[0], n[1], n[2]) || 1;
+  return { t: t0, n: [n[0] / l, n[1] / l, n[2] / l] };
+}
+
 export function raycast(M, o, d, maxDist = 250) {
   let best = maxDist, normal = null;
   if (d[1] < 0) {
@@ -508,6 +548,7 @@ export function raycast(M, o, d, maxDist = 250) {
     if (t >= 0 && t < best) { best = t; normal = [0, 1, 0]; }
   }
   for (const b of M.boxes) {
+    if (b.kind === 'rope') continue; // corda do ringue: a bala passa entre as cordas
     let tmin = 0, tmax = best, nAxis = -1, nSign = 0, miss = false;
     for (let a = 0; a < 3; a++) {
       if (Math.abs(d[a]) < 1e-9) { if (o[a] < b.min[a] || o[a] > b.max[a]) { miss = true; break; } continue; }
@@ -518,7 +559,14 @@ export function raycast(M, o, d, maxDist = 250) {
       if (t2 < tmax) tmax = t2;
       if (tmin > tmax) { miss = true; break; }
     }
-    if (!miss && tmin < best && nAxis >= 0) { best = tmin; normal = [0, 0, 0]; normal[nAxis] = nSign; }
+    if (miss || tmin >= best) continue;
+    if (b.kind in ROUND || b.kind === 'pipe' || b.kind === 'rock') {
+      const sh = shapeHit(b, o, d, tmin, tmax);
+      if (!sh || sh.t >= best) continue;
+      best = sh.t; if (sh.n) normal = sh.n; else if (nAxis >= 0) { normal = [0, 0, 0]; normal[nAxis] = nSign; }
+      continue;
+    }
+    if (nAxis >= 0) { best = tmin; normal = [0, 0, 0]; normal[nAxis] = nSign; }
   }
   return { dist: best >= maxDist ? Infinity : best, normal };
 }

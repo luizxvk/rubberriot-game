@@ -16,6 +16,8 @@ const KEYS = {
     swap: ['1, 2, 3 ou rodinha', 'Y', 'Botao de trocar'], melee: ['V', 'R3', 'Botao da faca'], frag: ['G', 'LB', 'Botao da granada'], flash: ['F', 'RB', 'Botao do flash'],
     streak: ['X', 'Direcional pra cima', 'Botao da estrela'], field: ['Z', 'Direcional pra direita', 'Botao do equipamento'], use: ['E (segurar)', 'X (segurar)', 'Botao de usar (segurar)'],
     board: ['Tab', 'Select', 'Toque no placar'], pause: ['Esc', 'Start', 'Botao de pausa'], next: ['Espaco', 'A', 'Toque no cartao'],
+    inspect: ['I', 'Direcional pra baixo', 'Botao do olho'], ping: ['B ou botao do meio', 'Direcional pra esquerda', 'Botao do alfinete'],
+    slide: ['Shift + C', 'L3 + B', 'Correr + agachar'],
   },
   en: {
     move: ['W A S D', 'Left stick', 'Left stick'], look: ['Mouse', 'Right stick', 'Drag the right side'],
@@ -24,6 +26,8 @@ const KEYS = {
     swap: ['1, 2, 3 or wheel', 'Y', 'Swap button'], melee: ['V', 'R3', 'Knife button'], frag: ['G', 'LB', 'Grenade button'], flash: ['F', 'RB', 'Flash button'],
     streak: ['X', 'D-pad up', 'Star button'], field: ['Z', 'D-pad right', 'Gear button'], use: ['E (hold)', 'X (hold)', 'Use button (hold)'],
     board: ['Tab', 'Select', 'Tap the scoreboard'], pause: ['Esc', 'Start', 'Pause button'], next: ['Space', 'A', 'Tap the card'],
+    inspect: ['I', 'D-pad down', 'Eye button'], ping: ['B or middle mouse', 'D-pad left', 'Pin button'],
+    slide: ['Shift + C', 'L3 + B', 'Sprint + crouch'],
   },
 };
 
@@ -36,18 +40,22 @@ const TXT = {
     move: ['Ande', 'Ande pela Vila com {move}. Cinco passos largos bastam.'],
     body: ['Corpo de borracha', 'Corra com {sprint}, pule com {jump} e agache com {crouch}. Agachado voce erra menos e aparece menos.'],
     gSprint: 'Correr', gJump: 'Pular', gCrouch: 'Agachar',
+    slide: ['Carrinho', 'Correndo, agache ({slide}) e voce desliza no chao, mais rapido que correndo. Da pra atirar escorregando, mas o tiro abre. E a skill **Carrinho** (libera no nivel 5); no treino ela ja vem ligada.'],
     aim: ['Mire', 'Segure {ads} pra mirar pela arma. Mirando o tiro fica bem mais certeiro.'],
     targets: ['Derrube os bonecos', 'Tres bonecos de treino apareceram na sua frente. Atire com {fire}. Mirar na cabeca derruba mais rapido. **{c} de 3**'],
-    reload: ['Recarregue', 'O pente acaba rapido. Recarregue com {reload} antes de entrar na briga.'],
-    classes: ['As armas', '**Estalo** (pistola): sempre com voce. **Matraca** (submetralhadora): rapida, de perto. **Trovao** (fuzil): o meio-termo. **Bacamarte** (escopeta): arrasa de pertinho. **Luneta** (sniper): de longe, um tiro. **Lamina**: a faca. E o **Moedor**, a metralhadora que aparece no chao do mapa. Escolha a principal no Arsenal ou no lobby.'],
+    reload: ['Recarregue', 'O pente acaba rapido. Recarregue com {reload} antes de entrar na briga. O anel em volta da mira enche ate a arma ficar pronta.'],
+    ping: ['Marque o inimigo', 'Mire num boneco e marque com {ping}. No Ultimo de Pe a marca aparece pro seu parceiro e na bussola: inimigo, item do chao ou um lugar. Marcar de novo no mesmo lugar apaga.'],
+    inspect: ['Inspecione', 'Mostre a arma com {inspect}. Cada arma tem o seu jeito (o akimbo gira as duas no dedo).'],
+    classes: ['As armas', '**Estalo** (pistola): sempre com voce. **Matraca** (submetralhadora): rapida, de perto. **Trovao** (fuzil): o meio-termo. **Bacamarte** (escopeta): arrasa de pertinho. **Luneta** (sniper): de longe, um tiro. **Lamina**: a faca. E o **Moedor**, a metralhadora rara do chao do Ultimo de Pe. Escolha a principal no Arsenal ou no lobby. Desafios liberam pecas especiais, como o **Akimbo** (duas pistolas) e as **variantes de elite**, armas prontas com camuflagem lendaria que correm com a arma levantada.'],
     swap: ['Troque de arma', 'Troque entre a principal e a pistola com {swap}. Trocar e mais rapido que recarregar.'],
     melee: ['Faca rapida', 'Encostou no inimigo? {melee} da uma facada sem trocar de arma.'],
     nades: ['Granadas', 'Jogue uma granada com {frag} ou um flash com {flash}. A granada estoura, o flash cega quem olhar.'],
-    field: ['Equipamento de campo', 'Este e a **Mola**: use com {field} e pule em cima. Tem tambem o **Guarda-chuva** (segura tiro de frente), a **Bigorna** (cai onde voce mira) e o **Buraco portatil** (entra num lado, sai no outro). Ele recarrega sozinho; escolha o seu em Skills.'],
-    streak: ['Sequencias', 'Derrubar sem cair libera sequencias. Voce ja tem o **Radar Espiao**: chame com {streak}. Depois vem a **Chuva de Bigornas**, o **Dirigivel** e a **Torta Atomica**. So uma fica no ar por vez na sala.'],
+    field: ['Equipamento de campo', 'Este e a **Mola**: use com {field} e pule em cima. Tem tambem o **Guarda-chuva** (segura tiro de frente), a **Bigorna** (cai onde voce mira) e o **Buraco portatil** (entra num lado, sai no outro). Ele recarrega sozinho: o selo no canto da tela mostra a carga e avisa no meio quando fica pronto. Escolha o seu em Skills.'],
+    streak: ['Sequencias', 'Derrubar sem cair libera sequencias. Voce ja tem o **Radar Espiao**: chame com {streak}. Depois vem a **Chuva de Bigornas**, o **Dirigivel** e a **Torta Atomica**. So uma fica no ar por vez na sala. O dirigivel inimigo cai na bala: encha ele de furo e libera o ceu.'],
     use: ['O botao de usar', '{use} planta e desarma a bomba (Plantar a Bomba), troca a arma do chao pela da mao (Ultimo de Pe) e enche a bomba de bicicleta pra reerguer o parceiro (Dupla).'],
-    modes: ['Os modos', '**Contra Todos**, **Mata-Mata**, **Escada de Armas**, **Captura a Bandeira**, **Dominacao**, **Plantar a Bomba**, **Infectado**, **Ultimo de Pe** (battle royale na Ilha Rebobina, com ringue de boxe pra quem cai) e **Ultimo de Pe: Dupla**. Quem cria a sala escolhe tudo no lobby. {board} mostra o placar.'],
-    menus: ['Fora da partida', '**Arsenal**: monta a arma peca por peca, camuflagem e tracado; cada modelo sobe de nivel sozinho. **Skills**: duas passivas e o equipamento. **Desafios** do dia e de carreira. No nivel maximo, o **Prestigio**. Entre na conta **Rovex** pra salvar o progresso e chamar amigos.'],
+    br: ['Ultimo de Pe', 'No battle royale tem **bussola** em cima: parceiro, caixote e inimigo que atirou. Mire num item, num inimigo ou num lugar e marque com {ping}; seu parceiro ve. O caixote do dirigivel traz colete cheio e uma **variante de elite** sorteada; as armas mais fortes sao as mais raras no chao.'],
+    modes: ['Os modos', '**Jogo Rapido** cai direto numa partida e troca de modo e mapa a cada rodada. **Contra Todos**, **Mata-Mata**, **Escada de Armas** (a escada muda a cada partida), **Captura a Bandeira**, **Dominacao**, **Plantar a Bomba**, **Infectado**, **Ultimo de Pe** (battle royale na Ilha Rebobina, com ringue de boxe pra quem cai) **Ultimo de Pe: Dupla** e **Bate-Volta** (cai de paraquedas e volta do ceu ate a iris fechar duas vezes). No lobby a partida so comeca com todo mundo pronto, e da pra trocar de time. {board} mostra o placar.'],
+    menus: ['Fora da partida', '**Arsenal**: monta a arma peca por peca, camuflagem e tracado; cada modelo sobe de nivel sozinho. **Visual**: chapeu, olhos, luvas, camisa, estampa e efeito do seu boneco. **Skills**: duas passivas (como o **Carrinho**) e o equipamento. **Desafios** do dia e de carreira. No nivel maximo, o **Prestigio**. Sabado e domingo o XP vale **em dobro**. Entre na conta **Rovex** pra salvar o progresso e chamar amigos: o convite chega ate com o jogo aberto.'],
     bye: ['Pronto pro show!', 'Agora e com voce. A cortina abre em "Jogar".'],
     dummy: 'Boneco',
   },
@@ -58,30 +66,35 @@ const TXT = {
     move: ['Walk', 'Walk around the Village with {move}. Five big steps will do.'],
     body: ['Rubber body', 'Sprint with {sprint}, jump with {jump} and crouch with {crouch}. Crouched you miss less and show less.'],
     gSprint: 'Sprint', gJump: 'Jump', gCrouch: 'Crouch',
+    slide: ['Slide', 'While sprinting, crouch ({slide}) to slide along the floor, faster than running. You can shoot mid-slide, but the spread opens up. It is the **Slide** skill (unlocks at level 5); in training it is already on.'],
     aim: ['Aim', 'Hold {ads} to aim down the sights. Aiming makes every shot far more accurate.'],
     targets: ['Knock down the dummies', 'Three training dummies showed up in front of you. Fire with {fire}. Headshots drop them faster. **{c} of 3**'],
-    reload: ['Reload', 'Mags run dry fast. Reload with {reload} before the next fight.'],
-    classes: ['The weapons', '**Snap** (pistol): always with you. **Rattler** (SMG): fast, up close. **Thunder** (rifle): the all-rounder. **Blunderbuss** (shotgun): wrecks at point blank. **Spyglass** (sniper): long range, one shot. **Blade**: the knife. And the **Grinder**, the minigun lying around the map. Pick your primary in the Arsenal or the lobby.'],
+    reload: ['Reload', 'Mags run dry fast. Reload with {reload} before the next fight. The ring around your crosshair fills until the gun is ready.'],
+    ping: ['Ping the enemy', 'Aim at a dummy and ping it with {ping}. In Last One Standing the mark shows up for your partner and on the compass: enemy, floor item or a spot. Ping the same spot again to clear it.'],
+    inspect: ['Inspect', 'Show off your gun with {inspect}. Every gun has its own move (akimbo spins both on the finger).'],
+    classes: ['The weapons', '**Snap** (pistol): always with you. **Rattler** (SMG): fast, up close. **Thunder** (rifle): the all-rounder. **Blunderbuss** (shotgun): wrecks at point blank. **Spyglass** (sniper): long range, one shot. **Blade**: the knife. And the **Grinder**, the rare minigun on the Last One Standing floor. Pick your primary in the Arsenal or the lobby. Challenges unlock special parts like **Akimbo** (dual pistols) and **elite variants**, ready-made guns with legendary camo that run with the gun raised.'],
     swap: ['Swap weapons', 'Switch between your primary and the pistol with {swap}. Swapping beats reloading.'],
     melee: ['Quick knife', 'Right on top of someone? {melee} stabs without switching weapons.'],
     nades: ['Grenades', 'Throw a grenade with {frag} or a flash with {flash}. The grenade blows up, the flash blinds whoever looks.'],
-    field: ['Field gear', 'This is the **Spring**: use it with {field} and jump on it. There is also the **Umbrella** (blocks shots from the front), the **Anvil** (drops where you aim) and the **Portable Hole** (in one side, out the other). It recharges by itself; pick yours in Skills.'],
-    streak: ['Streaks', 'Knockouts without dying unlock streaks. You already have the **Spy Radar**: call it with {streak}. Next come **Anvil Rain**, the **Blimp** and the **Atomic Pie**. Only one can be up in the room at a time.'],
+    field: ['Field gear', 'This is the **Spring**: use it with {field} and jump on it. There is also the **Umbrella** (blocks shots from the front), the **Anvil** (drops where you aim) and the **Portable Hole** (in one side, out the other). It recharges by itself: the badge in the corner shows the charge and calls it out in the middle when it is ready. Pick yours in Skills.'],
+    streak: ['Streaks', 'Knockouts without dying unlock streaks. You already have the **Spy Radar**: call it with {streak}. Next come **Anvil Rain**, the **Blimp** and the **Atomic Pie**. Only one can be up in the room at a time. An enemy blimp goes down to gunfire: fill it with holes to clear the sky.'],
     use: ['The use button', '{use} plants and defuses the bomb (Plant the Bomb), swaps the gun on the floor for yours (Last One Standing) and pumps your partner back up with the bicycle pump (Duo).'],
-    modes: ['The modes', '**Free-for-All**, **Team Deathmatch**, **Gun Game**, **Capture the Flag**, **Domination**, **Plant the Bomb**, **Infected**, **Last One Standing** (battle royale on Rewind Island, with a boxing ring for whoever drops) and **Last Duo Standing**. Whoever creates the room sets it all up in the lobby. {board} shows the scoreboard.'],
-    menus: ['Outside the match', '**Arsenal**: build your gun part by part, camo and tracer; each model levels up on its own. **Skills**: two passives and your field gear. Daily and career **Challenges**. At max level, **Prestige**. Sign in with **Rovex** to save progress and call friends.'],
+    br: ['Last One Standing', 'Battle royale has a **compass** on top: partner, crate and any enemy who fired. Aim at an item, an enemy or a spot and ping it with {ping}; your partner sees it. The blimp crate brings a full vest and a random **elite variant**; the strongest guns are the rarest on the floor.'],
+    modes: ['The modes', '**Quick Play** drops you straight into a match and switches mode and map every round. **Free-for-All**, **Team Deathmatch**, **Gun Game** (the ladder changes every match), **Capture the Flag**, **Domination**, **Plant the Bomb**, **Infected**, **Last One Standing** (battle royale on Rewind Island, with a boxing ring for whoever drops) **Last Duo Standing** and **Bounce Back** (parachute in and drop back from the sky until the iris closes twice). In the lobby the match only starts when everyone is ready, and you can switch teams. {board} shows the scoreboard.'],
+    menus: ['Outside the match', '**Arsenal**: build your gun part by part, camo and tracer; each model levels up on its own. **Look**: hat, eyes, gloves, shirt, pattern and effect for your toon. **Skills**: two passives (like the **Slide**) and your field gear. Daily and career **Challenges**. At max level, **Prestige**. On Saturday and Sunday XP counts **double**. Sign in with **Rovex** to save progress and call friends: invites reach you even with the game open.'],
     bye: ['Ready for the show!', 'Now it is up to you. The curtain opens in "Play".'],
     dummy: 'Dummy',
   },
 };
 
-const STEPS = ['welcome', 'look', 'move', 'body', 'aim', 'targets', 'reload', 'classes', 'swap', 'melee', 'nades', 'field', 'streak', 'use', 'modes', 'menus', 'bye'];
-const INFO = new Set(['welcome', 'classes', 'use', 'modes', 'menus', 'bye']);
+const STEPS = ['welcome', 'look', 'move', 'body', 'slide', 'aim', 'targets', 'ping', 'reload', 'inspect', 'classes', 'swap', 'melee', 'nades', 'field', 'streak', 'use', 'br', 'modes', 'menus', 'bye'];
+const INFO = new Set(['welcome', 'classes', 'use', 'br', 'modes', 'menus', 'bye']);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Tutorial {
-  constructor(G, { quit, setField, reward }) {
-    this.G = G; this.quit = quit; this.setField = setField; this.reward = reward;
+  constructor(G, { quit, setField, reward, setPing }) {
+    this.G = G; this.quit = quit; this.setField = setField; this.reward = reward; this.setPing = setPing;
+    this.slideOn = true; // Carrinho ligado no treino todo (a skill de verdade so no nivel 5)
     this.i = -1; this.st = {}; this.targets = []; this.kills = 0; this.started = false;
     const el = this.el = document.createElement('div');
     el.className = 'tut'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
@@ -109,6 +122,8 @@ export class Tutorial {
     const id = STEPS[i], G = this.G;
     if (id === 'targets') this.spawnTargets();
     if (id === 'field') this.setField('spring');
+    // marcar: so existe no battle royale; no treino liga do passo 'ping' em diante
+    if (id === 'ping') { const C = G.net?.core; if (C) C.pingAny = true; this.pingOn = true; this.setPing?.(true); }
     if (id === 'streak') { const me = G.net?.core?.players.get(G.myId); if (me && !me.ready.includes('uav')) me.ready.push('uav'); }
     if (id === 'swap') this.st.w = G.player?.wpn;
     // fim: concluiu o treino = premio dos Desafios (modelo + camuflagem sorteados, uma vez so)
@@ -177,6 +192,7 @@ export class Tutorial {
     const G = this.G, id = STEPS[this.i], me = G.myId;
     if (e.k === 'spawn' && this.targets.includes(e.id)) setTimeout(() => this.placeTarget(e.id, this.targets.indexOf(e.id)), 0);
     if (e.k === 'kill' && e.a === me && this.targets.includes(e.v) && id === 'targets') { this.kills++; this.render(); if (this.kills >= 3) this.complete(); }
+    if (e.k === 'ping' && e.id === me && !e.off && id === 'ping') this.complete();
     if (e.k === 'swing' && e.id === me && id === 'melee') this.complete();
     if (e.k === 'throw' && e.id === me && id === 'nades') this.complete();
     if (e.k === 'field' && e.id === me && id === 'field') this.complete();
@@ -199,10 +215,12 @@ export class Tutorial {
       if (ch) { audio.play('ui_hover', { ui: true, vol: 0.5 }); this.render(); }
       if (st.sprint && st.jump && st.crouch) this.complete();
     }
+    if (id === 'slide' && P.slideT > 0) this.complete();
     if (id === 'aim') { st.ads = P.adsK > 0.9 ? (st.ads || 0) + dt : 0; if (st.ads > 0.4) this.complete(); }
     if (id === 'reload' && P.reloadT > 0) this.complete();
+    if (id === 'inspect' && this.G.vm?.inspectT > 0) this.complete();
     // bonecos sumiram (sala refeita, bot removido): monta de novo
-    if (id === 'targets') { const C = this.G.net?.core; if (C && (this.targets.length < 3 || this.targets.some(t => !C.players.has(t)))) this.spawnTargets(); }
+    if (id === 'targets' || id === 'ping') { const C = this.G.net?.core; if (C && (this.targets.length < 3 || this.targets.some(t => !C.players.has(t)))) this.spawnTargets(); }
     if (id === 'swap' && P.wpn !== st.w && P.wpn !== 'melee') this.complete();
   }
 

@@ -22,6 +22,35 @@ export const GUN_LADDER = [
   { wpn: 'pistol', body: 'pistol_4' }, { wpn: 'pistol', body: 'pistol_3' },
   { wpn: 'melee', body: 'melee_14' }, { wpn: 'melee', body: 'melee_0' },
 ];
+// mais escadas (pedido dele 30/10): a partida sorteia uma; todas com 18 degraus e lamina no fim.
+// 'sorteio' monta uma escada nova a cada partida (classe por degrau fixa, modelo sorteado)
+const L = (...ids) => ids.map(body => ({ wpn: wpnOfBody(body), body }));
+export function wpnOfBody(b) { return b.startsWith('melee') ? 'melee' : b.startsWith('subfusil') ? 'smg' : b.startsWith('fusil') ? 'rifle' : b.startsWith('pistol') ? 'pistol' : b.startsWith('shotgun') ? 'shotgun' : 'sniper'; }
+export const GG_LADDERS = {
+  classic: GUN_LADDER,
+  ww2: L('pistol_9', 'pistol_8', 'pistol_7', 'subfusil_6', 'subfusil_12', 'subfusil_1', 'fusil_9', 'fusil_5', 'fusil_6', 'shotgun_1', 'sniper_3', 'sniper_0', 'subfusil_8', 'fusil_3', 'pistol_5', 'pistol_6', 'melee_11', 'melee_1'),
+  rajada: L('pistol_3', 'pistol_5', 'subfusil_8', 'subfusil_3', 'subfusil_10', 'fusil_2', 'fusil_6', 'fusil_3', 'fusil_7', 'shotgun_2', 'sniper_2', 'sniper_3', 'sniper_1', 'subfusil_9', 'pistol_6', 'pistol_2', 'melee_12', 'melee_5'),
+  avesso: L('sniper_0', 'sniper_2', 'sniper_1', 'shotgun_1', 'shotgun_2', 'fusil_4', 'fusil_1', 'fusil_7', 'fusil_9', 'subfusil_4', 'subfusil_7', 'subfusil_9', 'subfusil_1', 'pistol_1', 'pistol_4', 'pistol_7', 'melee_7', 'melee_9'),
+  // 30/10 (noite): escadas novas com as armas novas
+  novas: L('pistol_10', 'pistol_9', 'subfusil_13', 'subfusil_12', 'subfusil_5', 'fusil_10', 'fusil_11', 'fusil_12', 'shotgun_3', 'subfusil_9', 'fusil_9', 'shotgun_2', 'sniper_4', 'sniper_2', 'pistol_3', 'pistol_8', 'melee_7', 'melee_1'),
+  pesada: L('pistol_3', 'pistol_7', 'subfusil_10', 'subfusil_12', 'fusil_10', 'fusil_4', 'fusil_12', 'fusil_3', 'shotgun_3', 'shotgun_1', 'fusil_9', 'shotgun_2', 'sniper_2', 'sniper_0', 'pistol_6', 'pistol_10', 'melee_12', 'melee_3'),
+  curta: L('pistol_2', 'pistol_1', 'subfusil_13', 'subfusil_2', 'subfusil_6', 'subfusil_4', 'shotgun_3', 'shotgun_2', 'fusil_11', 'subfusil_7', 'shotgun_1', 'fusil_6', 'sniper_1', 'sniper_4', 'pistol_4', 'pistol_9', 'melee_14', 'melee_9'),
+};
+const GG_POOL = {
+  pistol: ['pistol_1', 'pistol_2', 'pistol_3', 'pistol_4', 'pistol_5', 'pistol_6', 'pistol_7', 'pistol_8', 'pistol_9'],
+  smg: ['subfusil_1', 'subfusil_2', 'subfusil_3', 'subfusil_4', 'subfusil_5', 'subfusil_6', 'subfusil_7', 'subfusil_8', 'subfusil_9', 'subfusil_10', 'subfusil_12', 'subfusil_13'],
+  rifle: ['fusil_1', 'fusil_2', 'fusil_3', 'fusil_4', 'fusil_5', 'fusil_6', 'fusil_7', 'fusil_9', 'fusil_10', 'fusil_11', 'fusil_12'],
+  shotgun: ['shotgun_1', 'shotgun_2', 'shotgun_3'], sniper: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'],
+  melee: ['melee_0', 'melee_1', 'melee_3', 'melee_4', 'melee_7', 'melee_9', 'melee_11', 'melee_12', 'melee_14'],
+};
+const GG_SHAPE = ['pistol', 'pistol', 'smg', 'smg', 'smg', 'rifle', 'rifle', 'rifle', 'shotgun', 'smg', 'rifle', 'shotgun', 'sniper', 'sniper', 'pistol', 'pistol', 'melee', 'melee'];
+export function ggPickLadder() {
+  const ids = [...Object.keys(GG_LADDERS), 'sorteio'], id = ids[Math.floor(Math.random() * ids.length)];
+  if (id !== 'sorteio') return { id, list: GG_LADDERS[id] };
+  const used = new Set();
+  const list = GG_SHAPE.map(w => { const pool = GG_POOL[w].filter(b => !used.has(b)); const b = (pool.length ? pool : GG_POOL[w])[Math.floor(Math.random() * (pool.length || GG_POOL[w].length))]; used.add(b); return { wpn: w, body: b }; });
+  return { id, list };
+}
 export const SPAWN_KIT = ['pistol', 'smg'];
 export const PRIMARIES = ['smg', 'rifle', 'shotgun', 'sniper'];
 export const BOT_HP = 80;
@@ -42,17 +71,17 @@ export const NADES = {
 // O servidor aplica as que mexem em dano e regra (couro, folego, bolso, pavio, cuca, pano); as de mao
 // (maos, borracha, lince, mola, catador, sangue) o jogo aplica no proprio jogador.
 // icon = Material Icons (desenho real, tingido no Arsenal).
+// 30/10: Cuca Dura (apelona) e Pe de Pano sairam (pedido dele)
 export const SKILLS = {
   maos: { lvl: 3, reload: 0.75, swap: 0.7, icon: 'pan_tool' },             // recarrega e troca de arma mais rapido
   mola: { lvl: 4, jump: 1.3, icon: 'height' },                              // pula mais alto
+  carrinho: { lvl: 5, slide: true, icon: 'sledding' },                      // agachar correndo = desliza (so com ela equipada; pedido dele 30/10)
   borracha: { lvl: 6, move: 1.08, icon: 'directions_run' },                 // anda e corre mais rapido
   catador: { lvl: 8, mags: 1, icon: 'backpack' },                           // cada abate devolve um pente na reserva
   lince: { lvl: 10, ads: 0.75, kick: 0.85, icon: 'visibility' },            // mira mais rapido, menos recuo
   sangue: { lvl: 12, below: 35, reload: 0.7, ads: 0.7, icon: 'ac_unit' },  // com pouca vida: recarrega e mira mais rapido
   bolso: { lvl: 14, nades: 1, reserve: 1.3, icon: 'inventory_2' },          // +1 granada de cada e mais municao reserva
-  cuca: { lvl: 16, head: 1.25, icon: 'sports_motorsports' },               // cabecada em voce doi menos (1,6 -> 1,25)
   couro: { lvl: 18, blast: 0.7, icon: 'shield' },                           // menos dano de explosao
-  pano: { lvl: 20, icon: 'do_not_step' },                                   // seus tiros nao chamam os bots
   folego: { lvl: 22, after: 4, regen: 8, icon: 'favorite' },                // vida volta sozinha depois de 4 s sem dano
   pavio: { lvl: 26, streak: 1, icon: 'local_fire_department' },             // sequencias custam 1 abate a menos
 };
@@ -70,7 +99,14 @@ export const BR = {
   // nasce a `dropH` m do chao; paraquedas desce a `chute` m/s, queda livre ate `freefall`; bater no chao
   // acima de `safe` m/s tira `dmg` de vida por m/s a mais (so nesse modo)
   bounce: { until: 2, wait: 8, dropH: 70, chute: 4.5, freefall: 20, safe: 10, dmg: 5, airSpeed: 7 },
-  dropEvery: 55, dropFall: 6, lootWpn: ['pistol', 'pistol', 'smg', 'smg', 'rifle', 'rifle', 'shotgun', 'sniper'],
+  dropEvery: 55, dropFall: 6,
+  // arma no chao por raridade (peso): as comuns aparecem muito, as apelonas pouco (pedido dele 30/10)
+  lootWpn: { pistol: 30, smg: 24, shotgun: 18, rifle: 15, sniper: 8, minigun: 1.5 },
+  lootExtra: 0.6, // chance de cada ponto de loot ganhar um segundo item do lado (mais arma no chao)
+  // arma do mapa fica `spawnLife` s parada e reaparece em outro ponto de loot (pedido dele 30/10); o que cai
+  // de quem morre ou troca de arma some depois de `dropLife` s. Conferido a cada `lifeStep` s, de lote (a
+  // lista de loot so e reenviada quando algo vence, nunca a cada quadro).
+  spawnLife: 60, dropLife: 45, lifeStep: 3,
 };
 // Tipos de bala (peca "Municao" do Arsenal, por arma; liberadas por desafio). Mods multiplicam os status
 // (mesma regra do arsenal). O servidor aplica fogo, respingo e parede; a marca no minimapa e do cliente.
@@ -96,7 +132,7 @@ export const hasSkill = (p, id) => !!p?.skills?.includes(id);
 export const STREAKS = {
   uav: { kills: 3, time: 25 },
   anvil: { kills: 5 },
-  blimp: { kills: 7, time: 22, dmg: 24 },
+  blimp: { kills: 7, time: 22, dmg: 14, hp: 1200 }, // da pra derrubar a tiro (hp)
   nuke: { kills: 15, delay: 6 },
 };
 
@@ -154,26 +190,32 @@ export const BODY_TRAITS = {
   subfusil_8: { mode: 'burst', burst: 2, rate: 0.7, dmg: 1.15 },
   subfusil_9: { mode: 'auto', rate: 1.1, dmg: 1.05, kick: 0.85, hip: 1.05 },
   subfusil_10: { mode: 'semi', rate: 1.6, dmg: 1.55, spread: 0.7, hip: 1.2 },
+  subfusil_13: { mode: 'auto', rate: 0.9, dmg: 0.95, kick: 0.8, hip: 0.95 },        // sanfona (pacote 2): rapida e controlada
   fusil_1: { mode: 'auto' },
   fusil_2: { mode: 'burst', burst: 3, rate: 0.6, dmg: 1.05, kick: 0.9 },
-  fusil_3: { mode: 'semi', rate: 2.4, dmg: 1.7, spread: 0.5, hip: 1.4, kick: 1.4 }, // de precisao
+  fusil_3: { mode: 'semi', rate: 2.6, dmg: 1.55, spread: 0.5, hip: 1.4, kick: 1.45 }, // de precisao (nerf leve 30/10: era rate 2.4, dmg 1.7, kick 1.4)
   fusil_4: { mode: 'auto', rate: 1.3, dmg: 1.25, kick: 1.25, hip: 1.15 },
   fusil_5: { mode: 'auto', rate: 0.85, dmg: 0.9, hip: 0.85 },
   fusil_6: { mode: 'burst', burst: 4, rate: 0.55, dmg: 0.85 },
   fusil_7: { mode: 'semi', rate: 1.7, dmg: 1.45, spread: 0.65, hip: 1.25 },
+  fusil_10: { mode: 'auto', rate: 1.12, dmg: 1.12, kick: 1.25, hip: 0.95 },            // rolo compressor (pacote 2): lento e pesado
+  fusil_11: { mode: 'auto', rate: 0.95, dmg: 1, kick: 0.9, hip: 1 },                   // bate-estaca: o fuzil certinho, pouco coice
+  fusil_12: { mode: 'semi', rate: 2.3, dmg: 1.5, spread: 0.55, hip: 1.35, kick: 1.35 }, // bico de pena: semi de precisao (abaixo da Agulha)
   shotgun_1: { mode: 'semi' },                                                     // bomba
   shotgun_2: { mode: 'semi', rate: 0.55, dmg: 0.82, kick: 0.85 },                  // semiautomatica
+  shotgun_3: { mode: 'auto', rate: 0.3, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~4,8/s), dano baixo por tiro, 32 no pente (6 x 5,34)
   // pacote WW2
   fusil_9: { mode: 'auto', rate: 1.12, dmg: 1.1, kick: 1.15, hip: 1.05 },             // trovao de lata
-  subfusil_11: { mode: 'auto', rate: 0.92, dmg: 1.05, kick: 1.1, hip: 0.95 },         // maquina de escrever
-  subfusil_12: { mode: 'auto', rate: 0.7, dmg: 0.82, kick: 1.25, spread: 1.1 },       // tamborzao: cospe bala
+  subfusil_12: { mode: 'auto', rate: 0.7, dmg: 0.82, kick: 1.25, spread: 1.1, mag: 1.875, reload: 1.25 }, // tamborzao: cospe bala; tambor de 60 (32 x 1,875), troca devagar
   pistol_7: { mode: 'semi', rate: 1.25, dmg: 1.3, kick: 1.3 },                        // quarenta e cinco
   pistol_8: { mode: 'semi', rate: 1.1, dmg: 1.15, spread: 0.8, hip: 1.15 },           // cabo de vassoura
   pistol_9: { mode: 'semi', rate: 0.95, dmg: 1.05 },                                  // estrelinha
+  pistol_10: { mode: 'semi', rate: 1.9, dmg: 1.5, kick: 1.7, spread: 0.85, hip: 1.1, mag: 0.5, reload: 1.35 },  // Bang-Bang (revolver): forte e lento; pente de 6, recarga lenta (arsenal)
   sniper_0: { mode: 'bolt' },                                                     // ferrolho
   sniper_1: { mode: 'semi', rate: 0.5, dmg: 0.62, kick: 0.7 },                    // semiauto, nao mata de 1
-  sniper_2: { mode: 'bolt', rate: 1.3, dmg: 1.25, kick: 1.3 },                   // ferrolho pesado
+  sniper_2: { mode: 'semi', rate: 0.75, dmg: 1.1, kick: 1.45 },                  // marretao (Barrett): semi pesada, coice grande (era ferrolho; pedido dele 30/10)
   sniper_3: { mode: 'bolt', rate: 0.88, dmg: 0.95, kick: 1.1 },                  // ping velho (WW2): ferrolho mais agil que o padrao
+  sniper_4: { mode: 'bolt', rate: 1, dmg: 1.05, kick: 1.05 },                     // ferrolho classico (modelo novo 30/10)
 };
 // laminas: faca rapida e curta, machado/espada lento e com mais alcance (1 golpe sempre derruba)
 const ML = [[0.6, 2.4], [1.0, 3.0], [0.55, 2.3], [1.15, 3.3], [1.05, 3.0], [0.62, 2.5], [0.95, 2.9], [0.85, 3.0], [0.55, 2.3], [1.0, 2.9], [0.5, 2.2], [1.0, 3.0], [0.9, 3.2], [0.95, 2.9], [1.0, 3.0]];
@@ -205,5 +247,18 @@ export const BLUEPRINTS = {
                    mods: { dmg: 1.12, rate: 1.12, mag: 0.85, move: 0.97 } },
   bp_vitral:     { wpn: 'shotgun', lo: { body: 'shotgun_1', scope: 'subfusil_scope_6', handle: 'subfusil_handle_3', laser: 'laser_2', camo: 'stainedglass', tracer: 'rainbow', paint: '#1b1916', accent: '#f2c94c', retColor: 'amber' },
                    mods: { spread: 0.86, dmg: 1.03, reload: 1.15, move: 0.96 } },
+  // 30/10 (noite): uma variante por arma nova, camo lendaria exclusiva de cada
+  bp_kintsugi:   { wpn: 'rifle',   lo: { body: 'fusil_10', scope: 'fusil_scope_2', handle: 'fusil_handle_2', laser: 'laser_1', camo: 'kintsugi', tracer: 'gold', paint: '#0b0b0c', accent: '#ffc24a', retColor: 'amber' },
+                   mods: { dmg: 1.08, kick: 1.12, rate: 1.04, move: 0.98 } },
+  bp_placa:      { wpn: 'rifle',   lo: { body: 'fusil_11', scope: 'fusil_scope_5', handle: 'subfusil_handle_3', laser: 'laser_2', camo: 'circuit', tracer: 'spark', paint: '#04170c', accent: '#3df5e6', retColor: 'green' },
+                   mods: { spread: 0.88, adsTime: 0.92, dmg: 0.97, reload: 1.08 } },
+  bp_galaxia:    { wpn: 'rifle',   mag: 'small', lo: { body: 'fusil_12', scope: 'fusil_scope_6', handle: 'subfusil_handle_6', laser: 'laser_1', camo: 'galaxy', tracer: 'void', paint: '#08051a', accent: '#ff6ad5', retColor: 'white' },
+                   mods: { dmg: 1.06, spread: 0.9, rate: 1.1, mag: 0.9 } },
+  bp_gibi:       { wpn: 'smg',     mag: 'big', lo: { body: 'subfusil_13', scope: 'subfusil_scope_7', handle: 'subfusil_handle_3', laser: 'laser_1', camo: 'popart', tracer: 'ink', paint: '#f6efdc', accent: '#ff2a7a', retColor: 'red' },
+                   mods: { rate: 0.92, kick: 1.1, mag: 1.1, spread: 1.08 } },
+  bp_plasma:     { wpn: 'shotgun', lo: { body: 'shotgun_3', scope: 'subfusil_scope_9', handle: 'subfusil_handle_6', laser: 'laser_2', camo: 'plasma', tracer: 'fire', paint: '#2a0628', accent: '#ff8a1a', retColor: 'amber' },
+                   mods: { dmg: 1.05, rate: 1.08, spread: 1.1, move: 0.97 } },
+  bp_aurora:     { wpn: 'sniper',  lo: { body: 'sniper_4', scope: 'sniper_scope_0', laser: 'laser_2', camo: 'aurora', tracer: 'ice', paint: '#020615', accent: '#3dffa0', retColor: 'green' },
+                   mods: { adsTime: 0.9, dmg: 0.97, move: 1.02, reload: 1.1 } },
 };
 export const bpMods = (bp) => BLUEPRINTS[bp]?.mods || {};

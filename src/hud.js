@@ -102,7 +102,9 @@ export class Hud {
       // rodadas de cada lado + relogio da rodada (ou o pavio da bomba plantada)
       const B = snap.bomb, planted = B?.state === 'planted';
       const mid = `<div class="${planted ? 'fuse' : ''}"><span class="lbl">${planted ? t('bombLbl') : t('roundN', { n: snap.round?.n || 1 })}</span><span class="val">${planted ? Math.ceil(snap.time) + 's' : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`}</span></div>`;
-      html = `<div class="red"><span class="lbl">${t('bomb_atk')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('bomb_def')}</span><span class="val">${snap.teamScore.blue}</span></div>`;
+      // quem ainda esta vivo na rodada: bolinha cheia vivo, X morto (o placar do topo e o Tab)
+      const pips = (tm) => `<span class="pips">${(players || []).filter(p => p.team === tm).sort((a, b) => String(a.id).localeCompare(String(b.id))).map(p => `<i class="${p.alive ? 'on' : 'off'}${p.id === me?.id ? ' me' : ''}"></i>`).join('')}</span>`;
+      html = `<div class="red"><span class="lbl">${t('bomb_atk')}</span><span class="val">${snap.teamScore.red}</span>${pips('red')}</div>${mid}<div class="blue"><span class="lbl">${t('bomb_def')}</span><span class="val">${snap.teamScore.blue}</span>${pips('blue')}</div>`;
     } else if (mode === 'infect') {
       // infectado: quantos de cada lado + o relogio (ou quanto falta pra sair o primeiro infectado)
       const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
@@ -115,9 +117,10 @@ export class Hud {
     } else {
       const sorted = [...players].sort((a, b) => mode === 'gungame' ? b.gunLvl - a.gunLvl || b.kills - a.kills : b.kills - a.kills);
       const lead = sorted[0];
-      const mine = me ? (mode === 'gungame' ? `${me.gunLvl + 1}/${GUN_LADDER.length}` : me.kills) : 0;
-      const leadV = lead ? (mode === 'gungame' ? `${lead.gunLvl + 1}/${GUN_LADDER.length}` : lead.kills) : 0;
-      html = `<div><span class="lbl">${t('h_you')}</span><span class="val">${mine}</span></div><div><span class="lbl">${lead ? esc(lead.name) : t('h_leader')}</span><span class="val">${leadV}</span></div>${mode === 'gungame' && me ? `<div><span class="lbl">${t('h_weapon')}</span><span class="val" style="font-size:15px">${wName(GUN_LADDER[Math.min(me.gunLvl, GUN_LADDER.length - 1)].wpn)}</span></div>` : `<div><span class="lbl">${t('h_goal')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`}${clock}`;
+      const LAD = this.g?.ladder || GUN_LADDER;
+      const mine = me ? (mode === 'gungame' ? `${me.gunLvl + 1}/${LAD.length}` : me.kills) : 0;
+      const leadV = lead ? (mode === 'gungame' ? `${lead.gunLvl + 1}/${LAD.length}` : lead.kills) : 0;
+      html = `<div><span class="lbl">${t('h_you')}</span><span class="val">${mine}</span></div><div><span class="lbl">${lead ? esc(lead.name) : t('h_leader')}</span><span class="val">${leadV}</span></div>${mode === 'gungame' && me ? `<div><span class="lbl">${t('h_weapon')}</span><span class="val" style="font-size:15px">${wName(LAD[Math.min(me.gunLvl, LAD.length - 1)].wpn)}</span></div>` : `<div><span class="lbl">${t('h_goal')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`}${clock}`;
     }
     if (html !== this.lastPlaque) { this.el.plaque.innerHTML = html; this.lastPlaque = html; }
   }
@@ -134,6 +137,9 @@ export class Hud {
     else if (f > 0.05 && f < 4) { num = String(Math.max(1, Math.min(3, Math.ceil(f - 0.5)))); sub = t('countReady'); }
     else if (now < (this.goUntil || 0)) { num = t('countGo'); go = true; }
     el.box.hidden = !num && !sub;
+    // Bate-Volta: tela escura durante a contagem (ninguem fica vendo os outros parados no ar)
+    const dark = !!this.g?.bounce && (f > 0 || !!snap?.loading) && !!this.g?.player?.air;
+    if (dark !== !!this.bDark) { this.bDark = dark; document.body.classList.toggle('bounce-dark', dark); }
     if (el.num.textContent !== num) {
       el.num.textContent = num;
       el.num.classList.toggle('go', go);
@@ -216,13 +222,21 @@ export class Hud {
   }
 
   // aviso grande no meio de cima da tela (infectado, ultimo sobrevivente)
+  // Pilha de eventos da partida (30/10): avisos, alertas e desbloqueios entram na hora no topo da pilha,
+  // os anteriores descem; nada se sobrepoe e nada espera fila. No maximo 4 na tela.
+  push(html, cls, ms) {
+    const box = this.stack ||= document.getElementById('evStack');
+    const el = document.createElement('div');
+    el.className = 'ev ' + cls; el.innerHTML = html;
+    box.prepend(el);
+    while (box.children.length > (document.body.classList.contains('touchmode') ? 3 : 4)) box.lastChild.remove(); // celular: 3 (os botoes ocupam a lateral)
+    setTimeout(() => el.classList.add('out'), ms);
+    setTimeout(() => el.remove(), ms + 320);
+    return el;
+  }
+
   alert(title, sub = '', tone = 'red') {
-    const el = $('bigAlert');
-    el.hidden = true; void el.offsetWidth;
-    $('alertTitle').textContent = title; $('alertSub').textContent = sub;
-    el.className = 'alert ' + tone;
-    el.hidden = false;
-    clearTimeout(this.alertT); this.alertT = setTimeout(() => { el.hidden = true; }, 2900);
+    this.push(`<b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}`, 'ev-big ' + tone, 2900);
   }
 
   feed(html, mine) {
@@ -246,22 +260,13 @@ export class Hud {
   }
 
   // elite concluido na partida: cartaz grande com a arma ganha em cima de um sol de raios girando
+  // variante de elite ganha: cartao discreto na pilha (antes era um cartaz grande no meio da tela)
   eliteBanner({ title, name, sub, xp, img }) {
-    const el = document.createElement('div');
-    el.className = 'elite-win'; el.setAttribute('role', 'status');
-    el.innerHTML = `<div class="ew-rays" aria-hidden="true"></div><p class="ew-stamp">${title}</p>${img ? `<img src="${img}" alt="">` : ''}<b>${name}</b>${sub ? `<small>${sub}</small>` : ''}<em>+${xp} XP</em>`;
-    document.getElementById('hud').appendChild(el);
-    setTimeout(() => el.classList.add('out'), 4600);
-    setTimeout(() => el.remove(), 5100);
+    this.push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>★ ${title}</small><b>${name}</b>${sub ? `<i>${sub}</i>` : ''}</span><em>+${xp} XP</em>`, 'ev-unl elite', 4200);
   }
 
   unlockBanner({ kind, name, img, more = 0 }) {
-    const el = document.createElement('div');
-    el.className = 'unl-banner';
-    el.innerHTML = `${img ? `<img src="${img}" alt="">` : ''}<div><small>${kind}</small><b>${name}</b>${more ? `<em>+${more}</em>` : ''}</div>`;
-    document.getElementById('hud').appendChild(el);
-    setTimeout(() => el.classList.add('out'), 2900);
-    setTimeout(() => el.remove(), 3300);
+    this.push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>${kind}</small><b>${name}</b></span>${more ? `<em>+${more}</em>` : ''}`, 'ev-unl', 3200);
   }
 
   // granada de fragmentacao perto (< 9 m): icone em cima dela; fora da tela, preso na borda apontando
@@ -371,7 +376,7 @@ export class Hud {
     el.querySelector('span').style.width = Math.round(Math.min(1, s.rv > 0 ? s.rv : s.t / BR.duo.down) * 100) + '%';
     el.classList.toggle('pump', s.rv > 0);
   }
-  message(text, t = 2.4) { this.el.msg.textContent = text; this.el.msg.classList.add('on'); this.msgT = t; }
+  message(text, t = 2.4) { this.push(esc(text), 'ev-msg', t * 1000); }
 
   hurtFrom(angle) {
     const h = this.el.hurt;
@@ -456,9 +461,44 @@ export class Hud {
     }
   }
 
+  // bussola do battle royale: rumo e marcadores pelo angulo em relacao a camera
+  compass(G, camera) {
+    const on = G.mode === 'br' && G.state === 'game' && !!G.player?.alive;
+    const el = this.cp ||= { box: document.getElementById('compass'), strip: document.getElementById('cpStrip'), hd: document.getElementById('cpHd') };
+    if (el.box.hidden === on) el.box.hidden = !on;
+    if (!on) return;
+    const yaw = G.player.yaw, W = el.strip.clientWidth || 400, span = Math.PI * 0.42; // metade do que cabe na faixa
+    const ang = (dx, dz) => Math.atan2(-dx, -dz);
+    const xOf = (a) => { let d = a - yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); return Math.abs(d) > span ? null : W / 2 - d / span * W / 2; };
+    let html = '';
+    const CD = t('cp_dirs').split(',');
+    for (let i = 0; i < 24; i++) {
+      const a = -i * Math.PI / 12, x = xOf(a);
+      if (x == null) continue;
+      html += i % 3 ? `<i class="tk" style="left:${x.toFixed(0)}px"></i>` : `<span class="cd${i === 0 ? ' n' : ''}" style="left:${x.toFixed(0)}px">${CD[i / 3]}</span>`;
+    }
+    const me = G.player.pos, mark = (p, cls) => { const x = xOf(ang(p[0] - me[0], p[2] - me[2])); if (x != null) html += `<i class="mk ${cls}" style="left:${x.toFixed(0)}px"></i>`; };
+    for (const r of G.remotes.values()) {
+      if (!r.alive) continue;
+      if (!G.isEnemy(r)) mark(r.pos, 'ally');
+      else if ((G.seen.get(r.id) || 0) > G.t || (G.marked?.get(r.id) || 0) > G.t || (G.uavOn && G.uavOn())) mark(r.pos, 'enemy');
+    }
+    for (const c of G.brCrates || []) mark([c[0], 0, c[1]], 'crate');
+    for (const d of G.brDrops || []) if (d.t > G.t) mark(d.pos, 'crate');
+    for (const [id, pg] of G.pings || []) if (pg.t > G.t) mark(pg.pos, 'ping' + (id === G.myId ? '' : ' mate'));
+    const deg = Math.round(((-yaw * 180 / Math.PI) % 360 + 360) % 360);
+    if (html !== el.last) { el.strip.innerHTML = html; el.last = html; }
+    el.hd.textContent = deg + '°';
+  }
+
   objectives(snap, camera, me) {
     const mode = snap.mode;
     const pts = [];
+    // marcacoes (ping) do battle royale: icone + o que e + distancia
+    for (const [id, pg] of this.g?.pings || []) {
+      if (pg.t <= (this.g?.t || 0)) continue;
+      pts.push({ p: [pg.pos[0], pg.pos[1] + (pg.kind === 'enemy' ? 2.4 : 1.6), pg.pos[2]], cls: 'ping' + (id === this.g?.myId ? '' : ' mate') + (pg.kind === 'enemy' ? ' enemy' : ''), txt: pg.kind === 'enemy' ? '!' : pg.kind === 'item' ? '◆' : '▼', sub: pg.label || '' });
+    }
     if (mode === 'ctf') {
       for (const team of ['red', 'blue']) {
         const f = snap.flags[team];
@@ -498,7 +538,8 @@ export class Hud {
     if (!show || !snap) return;
     const cfg = MODES[snap.mode];
     const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
-    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}"><td>${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
+    const bomb = snap.mode === 'bomb';
+    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
     let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.mode)}</h3>`;

@@ -72,6 +72,7 @@ export function buildWorld(scene, M) {
   for (const b of M.boxes) {
     const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], d = b.max[2] - b.min[2];
     const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+    if (b.kind === 'roof') continue; // corpo invisivel do telhado pontudo (o desenho vem com a casa)
     if (b.kind === 'house') {
       const g = new THREE.Group();
       g.position.set(cx, b.min[1], cz);
@@ -406,13 +407,17 @@ export function buildObjectives(scene, M) {
   return {
     flags, zones: zoneObjs, pickups, root,
     dispose() { scene.remove(root); },
-    update(t, snap, mode) {
+    // carrier(id): { me } pra quem carrega sou eu, { pos, yaw } pro boneco suavizado dos outros
+    update(t, snap, mode, carrier) {
       for (const team of ['red', 'blue']) {
         const f = flags[team];
         f.g.visible = f.pad.visible = mode === 'ctf';
         if (!snap || mode !== 'ctf') continue;
         const s = snap.flags[team];
-        f.g.position.set(s.pos[0], s.pos[1] + (s.state === 'carried' ? 1.2 : 0), s.pos[2]);
+        const c = s.state === 'carried' && s.carrier != null ? carrier?.(s.carrier) : null;
+        if (c?.me) { f.g.visible = false; continue; } // a minha bandeira nas costas tampava a camera parado
+        if (c?.pos) f.g.position.set(c.pos[0] + Math.sin(c.yaw) * 0.35, c.pos[1] + 1.2, c.pos[2] + Math.cos(c.yaw) * 0.35); // nas costas do boneco
+        else f.g.position.set(s.pos[0], s.pos[1] + (s.state === 'carried' ? 1.2 : 0), s.pos[2]);
         f.g.rotation.y = t * (s.state === 'dropped' ? 2 : 0.4);
         const a = f.cloth.geometry.attributes.position;
         for (let i = 0; i < a.count; i++) {
@@ -474,13 +479,17 @@ const TRACERS = {
   toxic: { w: 1.8, life: 0.26, grow: 0.9 },    // toxico: verde gosmento com bolhas
   gold: { w: 1.3, life: 0.2, grow: 0.2 },      // ouro: brilho que corre e purpurina
   ice: { w: 1.5, life: 0.22, grow: 0.1 },      // gelo: azul cristalino em facetas
+  laser: { w: 2.8, life: 0.2, grow: 0.0 },     // laser (fora da lista: e do modelo Bico Longo): raio vermelho de miolo branco
 };
+// modelo que sempre atira laser (tiro e som proprios, ignora o tracado escolhido)
+export const LASER_BODY = 'pistol_5';
 // bala visivel: risco curto que voa da boca ate o impacto. seg = comprimento do risco (m), speed = m/s na
 // tela (bem abaixo da real, pra dar pra ver; cada tiro da rajada vira uma bala, a cadencia vira um fio)
 const BULLET = {
   pistol: { seg: 0.35, speed: 120 }, smg: { seg: 0.35, speed: 115 }, rifle: { seg: 0.5, speed: 150 },
   shotgun: { seg: 0.25, speed: 100 }, sniper: { seg: 0.9, speed: 240 }, minigun: { seg: 0.4, speed: 130 },
 };
+const LASER_BOLT = { seg: 1.3, speed: 85 }; // raio comprido e mais lento que bala (de cinema)
 function tracerMaterial(style, len) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, // mistura normal: em cenario claro, somar luz deixava tudo branco
@@ -513,10 +522,13 @@ function tracerMaterial(style, len) {
           float glit = step(0.9, fract(sin(floor(t * uLen * 9.0) * 51.3 + uK * 9.0) * 9631.7));
           c = mix(vec3(0.75, 0.52, 0.1), vec3(1.0, 0.9, 0.5), edge); c = mix(c, vec3(1.0), max(shine, glit));
           a = (1.0 - uK) * (0.6 + edge * 0.4);
-        } else {
+        } else if (uS < 7.5) {
           float facet = step(0.5, fract(t * uLen * 1.2 + vUv.x * 2.0));
           c = mix(vec3(0.45, 0.8, 1.0), vec3(0.92, 0.98, 1.0), max(edge * 0.7, facet * 0.4));
           a = (1.0 - uK * uK) * (0.5 + edge * 0.5);
+        } else {
+          c = mix(vec3(1.0, 0.06, 0.04), vec3(1.0, 0.9, 0.86), smoothstep(0.55, 1.0, edge));
+          a = (1.0 - uK) * (0.75 + edge * 0.25);
         }
         gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
       }`,
@@ -565,7 +577,7 @@ export class FX {
     const len = a.distanceTo(b);
     if (len < 0.5) return;
     // bala do tamanho de bala (pedido dele: fina e curta); o contorno de tinta e o que faz ela aparecer
-    const B = BULLET[wpn] || BULLET.rifle, seg = Math.min(len, B.seg), fly = len / B.speed, tail = 0.06;
+    const B = style === 'laser' ? LASER_BOLT : BULLET[wpn] || BULLET.rifle, seg = Math.min(len, B.seg), fly = len / B.speed, tail = 0.06;
     const dir = b.clone().sub(a).normalize();
     const T = TRACERS[style], w = (T ? T.w : 1) * 0.6;
     const mat = T ? tracerMaterial(style, seg) : this.tracerMat.clone();
@@ -573,7 +585,9 @@ export class FX {
     m.position.copy(a); m.lookAt(b); m.scale.set(w, w, 0.01);
     m.renderOrder = 3;
     // contorno de tinta (como os bonecos): sem ele o giz claro sumia no ceu e no chao de papel
-    const ink = new THREE.Mesh(this.tracerGeo, this.bulletInk ??= new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.BackSide, transparent: true, opacity: 0.85, depthWrite: false }));
+    // laser: contorno vermelho escuro (o preto engolia o raio visto de tras)
+    const ink = new THREE.Mesh(this.tracerGeo, style === 'laser' ? (this.laserInk ??= new THREE.MeshBasicMaterial({ color: 0x8a0a06, side: THREE.BackSide, transparent: true, opacity: 0.9, depthWrite: false }))
+      : (this.bulletInk ??= new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.BackSide, transparent: true, opacity: 0.85, depthWrite: false })));
     ink.scale.set(1.6, 1.6, 1); m.add(ink);
     const life = fly + tail;
     this.add(m, life, (f, k) => {
