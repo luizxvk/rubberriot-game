@@ -6,7 +6,7 @@
 // fracao 0..1 do caminho).
 import { floorAt, standable } from './nav.js';
 
-export const ESCORT = { time: 210, cpBonus: 75, r: 4.2, speed: 1.55, perExtra: 0.18, maxMul: 1.6, back: 0.45, backAfter: 9, overtime: 25 };
+export const ESCORT = { time: 210, cpBonus: 60, r: 4.2, speed: 1.15, perExtra: 0.18, maxMul: 1.6, back: 0.45, backAfter: 9, overtime: 25 };
 
 // trilho em trechos: comprimento acumulado de cada ponto
 export function trackOf(M) {
@@ -67,9 +67,9 @@ export function escTick(c, dt) {
 // o tempo acabou: a defesa segurou
 export const escTimeout = () => 'blue';
 
-// nascimento estilo Overwatch (31/10, pedido dele): o ataque nasce ATRAS, antes do ultimo ponto conquistado
-// (no comeco, atras da largada), e vem empurrando; a defesa nasce LA NA FRENTE, depois do proximo ponto de
-// controle (no fim, na garagem), e corre ate o bonde pra parar ele. Defesa nunca nasce a menos de 22 m do bonde.
+// nascimento (31/10, pedidos dele): o ataque nasce ATRAS, antes do ultimo ponto conquistado (no comeco, atras
+// da largada), e vem empurrando; a defesa nasce SEMPRE na base dela, na garagem do outro lado (no ponto A ficava
+// desequilibrado), e corre ate o bonde pra parar ele. Defesa nunca nasce a menos de 22 m do bonde.
 // Antes a defesa nascia so 30-38 m de trilho a frente, que no zigue-zague caia colado no bonde.
 const DEF_MIN = 22;
 function trackOrBack(M, d) { // antes do comeco do trilho: segue reto pra tras do primeiro trecho
@@ -79,7 +79,7 @@ function trackOrBack(M, d) { // antes do comeco do trilho: segue reto pra tras d
 }
 export function escSpawn(c, team) {
   const E = c.esc, base = E.next > 0 ? E.cps[E.next - 1] : 0, tram = trackAt(c.M, E.d);
-  const d = team === 'red' ? base - 12 : E.next < E.cps.length ? E.cps[E.next] + 12 : E.len - 6;
+  const d = team === 'red' ? base - 12 : E.len - 6;
   const far = (x, z) => team === 'red' || Math.hypot(x - tram.x, z - tram.z) >= DEF_MIN;
   // de lado do trilho (perpendicular), espalhado; ponto dentro de casa/caixote e sorteado de novo
   for (let k = 0; k < 24; k++) {

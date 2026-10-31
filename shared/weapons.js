@@ -115,13 +115,16 @@ export const AMMO = {
   trace: { mark: 3, icon: 'my_location' },                                   // alvo no seu minimapa por 3 s
   boom: { mag: 0.7, kick: 1.25, splash: 2.2, splashK: 0.35, icon: 'flare' }, // respinga em quem esta perto
   ap: { rate: 1.12, pierce: 0.7, wallK: 0.75, icon: 'double_arrow' },        // atravessa parede fina (ate 0,7 m)
+  // balote (31/10, pedido dele): so escopeta. Um projetil so (sem espalhar), 60% do dano somado dos chumbos,
+  // espalha 12% do normal, alcance 2,6x e cai devagar com a distancia
+  slug: { only: 'shotgun', slugK: 0.6, spread: 0.12, range: 2.6, icon: 'gps_fixed' },
 };
 export const AMMO_IDS = Object.keys(AMMO);
 // Equipamento de campo: um por jogador (escolhido na secao Skills), tecla Z / direcional direita / botao
 // de toque. need = pontos de partida pra encher a barra (31/10, pedido dele: estilo especialista do Black Ops 3,
 // enche so com pontuacao e abate; abate = 100); lvl = nivel que libera.
 export const FIELD = {
-  umbrella: { lvl: 2, need: 300, dur: 5, icon: 'beach_access' },            // escudo na frente: bloqueia tiro e soco que vem de frente
+  umbrella: { lvl: 2, need: 300, dur: 5, hp: 170, icon: 'beach_access' },  // escudo na frente: bloqueia tiro e soco que vem de frente; aguenta hp de dano e estoura
   spring: { lvl: 5, need: 250, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
   hole: { lvl: 9, need: 350, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
   anvil: { lvl: 13, need: 400, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado

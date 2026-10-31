@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { moveBody, raycast, rayPlayer, hasLOS, wallThickness } from '../shared/map.js';
 import { standable, floorAt } from '../shared/nav.js';
 import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, bodyTrait } from '../shared/weapons.js';
+import { EV } from '../shared/events.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
@@ -86,7 +87,7 @@ export class Player {
     this.owned = []; this.ammo = {}; this.stash = {};
     // escada de armas e infectado: o servidor decide o kit (infectado = so a lamina)
     if (this.g.mode === 'gungame') { this.give(ev.wpn, false); this.equip(ev.wpn, true); }
-    else if ((this.g.mode === 'infect' || this.g.mode === 'br') && ev.owned?.length) { // infectado e battle royale: o servidor decide o kit
+    else if ((this.g.mode === 'infect' || this.g.mode === 'br' || EV(ev.mut ?? this.g.snap?.mut)?.kit) && ev.owned?.length) { // infectado, battle royale e evento com armas fixas: o servidor decide o kit
       for (const w of ev.owned) this.give(w, false);
       this.equip(ev.wpn, true);
     }
@@ -102,7 +103,7 @@ export class Player {
   // A municao nao enche de graca: a arma que sai guarda o que tinha e volta com isso se for escolhida de novo.
   rearm() {
     if (!this.alive) return;
-    if (this.g.mode !== 'gungame' && this.g.mode !== 'infect' && this.g.mode !== 'br') {
+    if (this.g.mode !== 'gungame' && this.g.mode !== 'infect' && this.g.mode !== 'br' && !EV(this.g.snap?.mut)?.kit) {
       const primary = PRIMARIES.includes(this.g.settings.primary) ? this.g.settings.primary : 'smg';
       const old = this.owned.find(w => PRIMARIES.includes(w) && w !== primary);
       if (old) { this.stash[old] = this.ammo[old]; this.owned = this.owned.filter(w => w !== old); delete this.ammo[old]; }
@@ -302,8 +303,10 @@ export class Player {
       speed = BR.bounce.airSpeed * (this.chute ? 1 : 1.35);
     }
     audio.loop('wind', air && !this.chute ? 0.55 : 0);
-    // chao: acelera e freia firme (sem patinar); no ar quase nao muda a direcao
-    const acc = air ? 5 : this.onGround ? 22 : 1.6;
+    const E = EV(this.g.snap?.mut); // evento de fim de semana (fisica)
+    if (E?.boost) speed *= E.boost;
+    // chao: acelera e freia firme (sem patinar); no ar quase nao muda a direcao. Chao de sabao: patina tudo
+    const acc = air ? 5 : this.onGround ? (E?.ice ? 2.2 : 22) : 1.6;
     if (this.slideT > 0) {
       // escorregando: direcao quase presa (vira devagar pro lado do analogico), velocidade caindo na curva
       this.slideT = Math.max(0, this.slideT - dt);
@@ -326,10 +329,10 @@ export class Player {
       this.vel[2] = damp(this.vel[2], wz * speed, acc, dt);
     }
     // pulo baixo e unico (~1 m), sem pulo no ar
-    if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4 * Math.sqrt(this.sk('mola', 'jump')); this.onGround = false; audio.play('jump', { vol: 0.45 }); }
+    if (inp.jumpPressed && this.onGround) { this.vel[1] = 7.4 * Math.sqrt(this.sk('mola', 'jump')) * (EV(this.g.snap?.mut)?.jump || 1); this.onGround = false; audio.play('jump', { vol: 0.45 }); }
     // contagem do inicio: quem esta no ar fica parado ate soltar todo mundo
     const hold = air && this.g.snap?.freeze > 0;
-    if (hold) this.vel = [0, 0, 0]; else this.vel[1] -= 24 * dt;
+    if (hold) this.vel = [0, 0, 0]; else this.vel[1] -= 24 * (EV(this.g.snap?.mut)?.grav || 1) * dt;
     if (air) this.vel[1] = Math.max(this.vel[1], -(this.chute ? BR.bounce.chute : BR.bounce.freefall));
     const vy = this.vel[1];
     this.wasGround = this.onGround;
@@ -576,6 +579,8 @@ export class Player {
     // sniper sem mirar: nunca acerta o centro da mira (sorteia num anel)
     const noScope = this.wpn === 'sniper' && !ads;
     if (noScope) spread = 0.11;
+    const slug = this.wpn === 'shotgun' && this.ammoNow() === 'slug'; // balote: um projetil, quase sem espalhar
+    if (slug) spread *= AMMO.slug.spread;
     if (this.crouch) spread *= 0.75;
     if (this.slideT > 0) spread *= SLIDE.spread; // atirando escorregando: espalha (o agachado nao vale aqui)
     const kick = (W.kick ?? 0.05) * (st.kick ?? 1) * this.sk('lince', 'kick');
@@ -603,7 +608,7 @@ export class Player {
     const ndc = mz.clone().project(g.vm.camera);
     const muzzleScreen = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(cam).sub(cam.position).normalize().multiplyScalar(1.1).add(cam.position);
 
-    const pellets = W.pellets || 1, ammo = this.ammoNow();
+    const pellets = slug ? 1 : W.pellets || 1, ammo = this.ammoNow();
     let total = 0, head = false, victim = null, hitPoint = null, firstEnd = null;
     const dmgK = st.dmg;
     for (let i = 0; i < pellets; i++) {
@@ -617,7 +622,7 @@ export class Player {
       const hit = this.traceTargets(o, d.toArray(), 250, ammo === 'ap');
       if (i === 0 || hit.player) firstEnd = hit.point;
       if (hit.player) {
-        const fall = this.wpn === 'shotgun' ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
+        const fall = slug ? Math.max(0.55, 1 - hit.dist / 110) * (W.pellets || 1) * AMMO.slug.slugK : this.wpn === 'shotgun' ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
         if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
       if (i < (this.wpn === 'shotgun' ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)

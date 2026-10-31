@@ -6,6 +6,7 @@ import { navPath, floorAt, standable } from './nav.js';
 import { cleanLook } from './looks.js';
 import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
 import { escInit, escTick, escSpawn, escGoal, escSnap, escPos } from './escort.js';
+import { EVENTS, EV } from './events.js';
 import { brInit, brSpawn, brSpawnPoint, brArmor, brKill, brTick, brSnap, brGoal, lootList, brDown, brNear } from './br.js';
 
 const BOT_NAMES = ['Botao', 'Salsicha', 'Rolha', 'Bigorna', 'Carvao', 'Pipoca', 'Tamanco', 'Fuligem',
@@ -49,7 +50,8 @@ export function nadeStep(M, n, dt) {
 }
 
 export class Core {
-  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false }) {
+  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null }) {
+    this.mut = !ranked && EVENTS[mut] ? mut : null; // evento de fim de semana (regra maluca); rankeada nunca
     this.ranked = ranked; // rankeada (31/10): sala publica so com os modos competitivos; vale pontos de rank
     this.autoNext = autoNext; // jogo rapido: acabou a partida, a proxima ja comeca (sem lobby)
     this.limitPick = Number.isFinite(limit) ? Math.max(0, Math.min(500, limit | 0)) : 0; // meta/tempo do host (0 = padrao)
@@ -282,6 +284,7 @@ export class Core {
     if ([0.7, 1, 1.35].includes(m.difficulty)) { this.difficulty = m.difficulty; this.skill = botSkill(m.difficulty); }
     this.limitPick = Number.isFinite(m.limit) ? Math.max(0, Math.min(500, m.limit | 0)) : 0;
     this.timePick = Number.isFinite(m.time) ? Math.max(0, Math.min(1800, m.time | 0)) : 0;
+    if ('mut' in m) this.mut = !this.ranked && EVENTS[m.mut] ? m.mut : null; // evento de fim de semana
     // times do zero no modo novo (bomba/infectado/dupla tem regra propria de lado)
     this.infStarted = false;
     for (const p of this.players.values()) p.team = null;
@@ -355,7 +358,7 @@ export class Core {
   bodyOf(p, wpn) { const b = this.brBp(p, wpn); return this.ggBody(p) || (b ? BLUEPRINTS[b].lo.body : p.los?.[wpn]?.body); }
   // variante de elite equipada (escada de armas usa o modelo do degrau, sem variante)
   bpOf(p, wpn) { return this.ggBody(p) ? {} : bpMods(this.brBp(p, wpn) || p.los?.[wpn]?.bp); }
-  ammoOf(p, wpn) { const a = this.ggBody(p) || wpn === 'melee' || this.brBp(p, wpn) ? null : p.los?.[wpn]?.ammo; return AMMO[a] ? a : null; }
+  ammoOf(p, wpn) { const a = this.ggBody(p) || wpn === 'melee' || this.brBp(p, wpn) ? null : p.los?.[wpn]?.ammo; return AMMO[a] && (!AMMO[a].only || AMMO[a].only === wpn) ? a : null; } // balote so na escopeta
 
   // host = humano mais antigo na sala (Map guarda a ordem de entrada); saiu, passa pro proximo
   hostId() { for (const p of this.players.values()) if (!p.bot) return p.id; return null; }
@@ -453,12 +456,15 @@ export class Core {
     else if (this.mode === 'br') { brSpawn(this, p); if (this.bounce && p.deaths > 0) { p.owned.add('pistol'); p.wpn = 'pistol'; } } // renasceu: volta com pistola
     else if (p.bot) p.wpn = ['smg', 'rifle', 'shotgun', 'pistol', 'smg', 'rifle'][Math.floor(Math.random() * 6)];
     else p.wpn = PRIMARIES.includes(p.primary) ? p.primary : 'smg';
+    const E = EV(this.mut);
+    if (E?.kit && this.mode !== 'gungame' && this.mode !== 'br' && !infect) { p.owned = new Set(E.kit); p.wpn = E.kit[0]; } // evento: armas fixas
+    p.fuse = E?.fuse || 0; // bomba-relogio: pavio no peito
     p.maxHp = p.hp;
     p.owned.add(p.wpn);
     if (p.bot) { p.field ||= botPickField(); this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; }
     // mode vai junto: na troca de modo da sala o 'spawn' chega antes do 'start' e o cliente montava o kit do modo
     // velho (saindo da escada de armas ficava so com uma arma e nao trocava mais)
-    this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team, air: !!p.air, mode: this.mode });
+    this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team, air: !!p.air, mode: this.mode, mut: this.mut });
   }
 
   // nasce olhando pro lado mais aberto (puxado pro meio do mapa), nunca de cara pra parede
@@ -640,7 +646,7 @@ export class Core {
     if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return 0;
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     const d = Math.sqrt(dist2(eye, v.pos));
-    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260);
+    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1); // balote alcanca mais
     if (d > range) return 0;
     if (w.melee) { const now = this.clock || 0; if (now - (p.meleeAt || -9) < 0.3) return 0; p.meleeAt = now; return Math.min(m.dmg, w.dmg); }
     const chest = [v.pos[0], v.pos[1] + 1.1, v.pos[2]], head = [v.pos[0], v.pos[1] + 1.6, v.pos[2]];
@@ -671,8 +677,9 @@ export class Core {
   damage(v, a, dmg, wpn, head, burn = false) {
     if (this.over || this.freezeT > 0 || !v.alive || !Number.isFinite(dmg)) return;
     if (a && a !== v && !this.enemies(a, v)) return;
-    if (fieldBlocks(this, v, a, wpn)) return; // guarda-chuva aberto de frente pro tiro
-    if (head) dmg *= 1.6;
+    if (fieldBlocks(this, v, a, wpn, head ? dmg * 1.6 : dmg)) return; // guarda-chuva aberto de frente pro tiro (gasta a vida dele)
+    const E = EV(this.mut);
+    if (head) dmg = E?.oneHead && wpn !== 'melee' ? 999 : dmg * (E?.headMul || 1.6); // evento: cabecao doi mais; duelo: cuca derruba
     if (BLAST.includes(wpn) && hasSkill(v, 'couro')) dmg *= SKILLS.couro.blast; // couro grosso
     if (this.mode === 'br' && wpn !== 'iris') dmg = brArmor(v, dmg); // colete (a iris passa direto)
     v.hurtAt = this.clock || 0;
@@ -691,6 +698,9 @@ export class Core {
     if (!suicide) {
       // abate da propria Torta Atomica nao conta pra sequencia (senao ela se alimentava)
       a.kills++; if (wpn !== 'nuke') a.streak++; a.score += 100;
+      const E = EV(this.mut);
+      if (E?.killHeal && a.alive) a.hp = Math.min(a.maxHp || 100, a.hp + E.killHeal); // vampiro: abate enche a vida
+      if (E?.fuseKill && a.alive) a.fuse = Math.min(99, (a.fuse || 0) + E.fuseKill); // bomba-relogio: abate da mais pavio
       if (this.cfg.teams && this.mode === 'tdm') this.teamScore[a.team]++;
       // escada de armas (31/10, pedido dele): so sobe quem mata com a arma do degrau; abate de faca fora do
       // degrau da faca nao sobe ninguem e derruba a vitima um degrau (no ultimo degrau a arma E a faca: vence)
@@ -807,6 +817,26 @@ export class Core {
       n.fuse -= dt;
       if (nadeStep(this.M, n, dt) > 3) this.event({ k: 'bounce', pos: n.pos });
       if (n.fuse <= 0) { this.detonate(n); this.nades.splice(i, 1); }
+    }
+  }
+
+  // evento de fim de semana: chuva de bigornas (perto de quem esta vivo, com aviso) e bomba-relogio (zerou = KABUM)
+  tickEvent(dt) {
+    const E = EV(this.mut);
+    if (!E || this.over) return;
+    if (E.anvilRain && (this.rainT = (this.rainT ?? 3) - dt) <= 0) {
+      this.rainT = E.anvilRain * (0.6 + Math.random() * 0.8);
+      const alive = [...this.players.values()].filter(p => p.alive), list = [];
+      for (let k = 0; k < 2 && alive.length; k++) {
+        const v = alive[Math.floor(Math.random() * alive.length)];
+        for (let j = 0; j < 6; j++) { const x = v.pos[0] + rnd(-7, 7), z = v.pos[2] + rnd(-7, 7); if (standable(this.M, x, z)) { list.push([x, floorAt(this.M, x, z), z]); break; } }
+      }
+      for (const pos of list) this.anvils.push({ owner: null, pos, t: 1.4 + Math.random() * 0.4 });
+      if (list.length) this.event({ k: 'anvilWarn', list });
+    }
+    if (E.fuse) for (const p of this.players.values()) {
+      if (!p.alive || !(p.fuse > 0) || p.down > 0) continue;
+      if ((p.fuse -= dt) <= 0) { p.fuse = 0; this.detonate({ kind: 'frag', pos: [p.pos[0], p.pos[1] + 1.1, p.pos[2]], owner: p.id, hand: true }); }
     }
   }
 
@@ -1127,7 +1157,7 @@ export class Core {
     const tx = moveDir ? moveDir[0] * speed : 0, tz = moveDir ? moveDir[1] * speed : 0;
     p.vel[0] += (tx - p.vel[0]) * Math.min(1, acc * dt);
     p.vel[2] += (tz - p.vel[2]) * Math.min(1, acc * dt);
-    p.vel[1] -= 24 * dt;
+    p.vel[1] -= 24 * (EV(this.mut)?.grav || 1) * dt;
     ai.stuckT += dt;
     if (ai.stuckT > 0.6) {
       const moved = Math.hypot(p.pos[0] - ai.last[0], p.pos[2] - ai.last[2]);
@@ -1441,6 +1471,7 @@ export class Core {
     }
 
     this.tickNades(dt);
+    this.tickEvent(dt);
     this.tickStreaks(dt);
     fieldTick(this, dt);
 
@@ -1493,7 +1524,7 @@ export class Core {
     this.lobbyT = 0.25;
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, host: this.hostId(),
-      cfg: { mode: this.modeId(), map: this.mapPick || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
+      cfg: { mut: this.mut, mode: this.modeId(), map: this.mapPick || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
       players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), elite: !!p.elite, rk: p.rk ?? -1 })),
     });
   }
@@ -1513,11 +1544,11 @@ export class Core {
         id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: p.score, gunLvl: p.gunLvl, respawnT: r2(p.respawnT),
-        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pr: p.prest || 0,
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0,
       });
     }
     this.send(null, {
-      t: 'snap', mode: this.mode, ranked: this.ranked, duo: this.duo, bounce: this.bounce, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
+      t: 'snap', mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,

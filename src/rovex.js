@@ -32,6 +32,18 @@ export const MP_URL = qs.get('mp')
     : /^https?:/.test(API) ? 'wss://rovex-games.fly.dev/rubber-riot/ws'
       : `ws://${location.hostname}:3000/rubber-riot/ws`);
 
+// meta da comunidade: le o contador da semana e soma os PLAFTs da partida (sem conta tambem conta; sem token vai anonimo)
+export async function metaGet() {
+  try { const r = await fetch(API + '/games/rubber-riot/meta', { signal: AbortSignal.timeout?.(6000) }); return r.ok ? await r.json() : null; } catch { return null; }
+}
+export async function metaPost(n) {
+  const tk = token();
+  try {
+    const r = await fetch(API + '/games/rubber-riot/meta', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', ...(tk ? { Authorization: 'Bearer ' + tk } : {}) }, body: JSON.stringify({ n }) });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
 export function token() {
   try { return STANDALONE ? localStorage.getItem(OWN) : (localStorage.getItem('token') || sessionStorage.getItem('token') || null); } catch { return null; }
 }

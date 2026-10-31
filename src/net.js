@@ -3,11 +3,11 @@ import { Core } from '../shared/core.js';
 import { token } from './rovex.js';
 
 export class LocalNet {
-  constructor({ mode, map, bots, difficulty, lobby = true, limit = 0, time = 0 }) {
+  constructor({ mode, map, bots, difficulty, lobby = true, limit = 0, time = 0, mut = null }) {
     this.queue = [];
     this.onmsg = () => {};
     this.onclose = () => {};
-    this.core = new Core({ mode, map, bots, difficulty, lobby, limit, time, send: (to, m) => { if (to == null || to === 'me') this.queue.push(m); } });
+    this.core = new Core({ mode, map, bots, difficulty, lobby, limit, time, mut, send: (to, m) => { if (to == null || to === 'me') this.queue.push(m); } });
   }
   connect(name) { this.core.join('me', name); return Promise.resolve(); }
   send(m) { this.core.handle('me', m); }

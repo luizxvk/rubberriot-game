@@ -104,11 +104,27 @@ export function buildHat(id, teamCol) {
       add(ink(new THREE.OctahedronGeometry(0.06), 0xc084fc, 0.01), 0, 0.05, -0.33);
       g.position.set(0, 0.24, 0); break;
     }
+    case 'capcrown': {
+      // coroa de tampinhas (meta da comunidade): aro dourado e tampinhas de garrafa em pe, serrilhadas, cores alternando
+      const ring = add(ink(new THREE.CylinderGeometry(0.29, 0.3, 0.1, 18, 1, true), 0xe3a92b, 0.014), 0, 0.03);
+      ring.userData.detail = false;
+      const cols = [0xa83a2c, 0xece9e1, 0xe3a92b, 0x141210];
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const cap = add(ink(new THREE.CylinderGeometry(0.075, 0.08, 0.03, 21), cols[i % 4], 0.008), Math.sin(a) * 0.3, 0.13, -Math.cos(a) * 0.3);
+        cap.rotation.set(Math.PI / 2, 0, 0); cap.rotation.y = -a; cap.userData.detail = true; // em pe, de frente pra fora
+      }
+      add(ink(new THREE.SphereGeometry(0.05, 8, 6), 0xffcf3a, 0.008), 0, 0.2, -0.31);
+      g.position.set(0, 0.26, 0); break;
+    }
     case 'rovexcap': {
-      // bone violeta da Rovex: copa violeta, aba preta, hexagono claro na testa
+      // bone violeta da Rovex: copa violeta, aba violeta escura (preta sumia no rosto preto) e o logo
+      // "Rovex" (classic text) em branco na testa (31/10, pedido dele)
       add(ink(new THREE.SphereGeometry(0.31, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0x6d3df5, 0.02));
-      const vis = add(ink(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 16, 1, false, 0, Math.PI), PAL.ink, 0.015), 0, 0.01, -0.22); vis.rotation.y = Math.PI / 2; vis.scale.set(1, 1, 1.4);
-      const hex = add(ink(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 6), PAL.paper, 0.012), 0, 0.15, -0.26); hex.rotation.x = Math.PI / 2 - 0.5;
+      const vis = add(ink(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 16, 1, false, 0, Math.PI), 0x3b1d9a, 0.015), 0, 0.01, -0.22); vis.rotation.y = Math.PI / 2; vis.scale.set(1, 1, 1.5); vis.rotation.x = 0.12;
+      // logo colado na curva da frente: um pedaco de esfera um pouco maior que a copa (centro na frente, -z)
+      const logo = new THREE.Mesh(new THREE.SphereGeometry(0.314, 24, 8, Math.PI * 1.5 - 0.62, 1.24, 0.92, 0.42), new THREE.MeshBasicMaterial({ map: rovexText(), transparent: true, depthWrite: false }));
+      logo.renderOrder = 2; g.add(logo);
       add(ink(new THREE.SphereGeometry(0.04, 8, 6), PAL.white, 0.01), 0, 0.31);
       g.position.set(0, 0.2, 0); g.rotation.x = -0.12; break;
     }
@@ -283,6 +299,12 @@ export function patternTex(id) {
 
 // ---------- efeitos em volta do boneco ----------
 const FXTEX = new Map();
+// logo "Rovex" classic text em branco (bone da Rovex): carregado uma vez
+let rovexTex = null;
+function rovexText() {
+  if (!rovexTex) { rovexTex = new THREE.TextureLoader().load(import.meta.env.BASE_URL + 'brand/rovex-classic-white.png'); rovexTex.colorSpace = THREE.SRGBColorSpace; rovexTex.anisotropy = 4; }
+  return rovexTex;
+}
 function fxTex(kind) {
   if (FXTEX.has(kind)) return FXTEX.get(kind);
   const t = canvasTex(64, 64, (g) => {

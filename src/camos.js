@@ -60,6 +60,8 @@ export const CAMOS = [
   { id: 'popart', code: 39, anim: true, legend: true, fx: 'drip' },
   { id: 'plasma', code: 40, anim: true, legend: true, fx: 'flame' },
   { id: 'aurora', code: 41, anim: true, legend: true, fx: 'stars' },
+  // meta da comunidade (31/10): Ouro da Borracha, so pra quem jogou na semana que bateu 1 milhao de PLAFTs
+  { id: 'plaftgold', code: 44, anim: true, meta: true, fx: 'stars' },
 ];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
@@ -495,6 +497,21 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     float rays = 0.6 + 0.4 * sin(x * 40.0 + t * 2.0), st = step(0.99, c_h(floor(p * 25.0)));
     glow = au * curtain * rays * 1.1 + vec3(st * 0.8);
     return mix(mix(vec3(0.01, 0.02, 0.08), vec3(0.03, 0.06, 0.16), lum), au * 0.9, curtain * rays) + st * 0.6;
+  }
+  if (k == 44) { // Ouro da Borracha (meta da comunidade): ouro de gibi com estrelas de PLAFT pulsando, contorno de tinta e brilho correndo
+    vec2 q = vec2(p.z, p.y) * 4.5, id = floor(q), f = fract(q) - 0.5;
+    float rnd = c_h(vec3(id, 3.0));
+    float a = atan(f.y, f.x), r = length(f);
+    float spikes = 0.22 + 0.09 * cos(a * 8.0 + rnd * 6.28) + 0.03 * sin(t * 3.0 + rnd * 9.0);
+    float star = 1.0 - smoothstep(spikes - 0.015, spikes + 0.015, r);
+    float edge = smoothstep(spikes - 0.05, spikes - 0.02, r) * star;
+    float sweep = smoothstep(0.92, 1.0, sin(p.z * 3.0 - p.y * 2.0 - t * 2.4));
+    vec3 gold = mix(vec3(0.72, 0.5, 0.12), vec3(1.0, 0.84, 0.3), 0.5 + 0.5 * sin(p.y * 6.0 + p.z * 2.0));
+    vec3 burst = mix(vec3(1.0, 0.95, 0.7), vec3(0.75, 0.2, 0.12), step(0.5, rnd));
+    vec3 col = mix(gold, burst, star);
+    col = mix(col, vec3(0.08, 0.07, 0.06), edge);
+    glow = gold * sweep * 0.8 + burst * star * 0.15 * (0.5 + 0.5 * sin(t * 4.0 + rnd * 6.0));
+    return col * (0.6 + lum * 0.55) + sweep * 0.35;
   }
   if (k == 31) { // prestigio: laca preta, estrelas douradas piscando e um filete de ouro correndo
     vec3 q = p * 5.0, id = floor(q), f = fract(q) - 0.5;

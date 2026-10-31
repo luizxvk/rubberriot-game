@@ -22,7 +22,7 @@ export function fieldUse(c, p, m) {
     const x = m.at[0], z = m.at[2], d = Math.hypot(x - p.pos[0], z - p.pos[2]);
     if (d <= (F.range || 4) + 1 && standable(c.M, x, z)) { const y = floorAt(c.M, x, z); if (hasLOS(c.M, eye, [x, y + 0.6, z])) at = [x, y, z]; }
   }
-  if (p.field === 'umbrella') p.shieldT = F.dur;
+  if (p.field === 'umbrella') { p.shieldT = F.dur; p.umbHp = F.hp; }
   else if (p.field === 'spring') c.springs.push({ id: ++seq, pos: at && Math.hypot(at[0] - p.pos[0], at[2] - p.pos[2]) < 5 ? at : [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], t: F.dur });
   else if (p.field === 'hole') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.holes.push({ id: ++seq, a: [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], b: at, t: F.dur, owner: p.id }); }
   else if (p.field === 'anvil') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.anvils.push({ owner: p.id, pos: at, t: F.fall }); c.event({ k: 'anvilWarn', list: [at] }); }
@@ -30,13 +30,16 @@ export function fieldUse(c, p, m) {
   c.event({ k: 'field', id: p.id, kind: p.field, at });
 }
 
-// guarda-chuva aberto: bloqueia o que vem da frente (tiro, soco, faca); explosao e iris passam
-export function fieldBlocks(c, v, a, wpn) {
+// guarda-chuva aberto: bloqueia o que vem da frente (tiro, soco, faca); explosao e iris passam.
+// Tem vida (31/10, pedido dele): alguns tiros ele segura, tiro demais estoura na mao e some
+export function fieldBlocks(c, v, a, wpn, dmg = 0) {
   if (!(v.shieldT > 0) || !a || a === v || wpn === 'iris' || wpn === 'anvil' || wpn === 'frag' || wpn === 'nuke') return false;
   const dx = a.pos[0] - v.pos[0], dz = a.pos[2] - v.pos[2], d = Math.hypot(dx, dz) || 1;
   const fx = -Math.sin(v.yaw), fz = -Math.cos(v.yaw);
   if ((dx * fx + dz * fz) / d < 0.3) return false;
-  c.event({ k: 'block', v: v.id, a: a.id });
+  v.umbHp = (v.umbHp ?? FIELD.umbrella.hp) - (dmg || 0);
+  if (v.umbHp <= 0) { v.shieldT = 0; v.umbHp = 0; c.event({ k: 'umbBreak', id: v.id }); return true; } // o tiro que estoura ainda e segurado
+  c.event({ k: 'block', v: v.id, a: a.id, hp: Math.round(v.umbHp / FIELD.umbrella.hp * 100) });
   return true;
 }
 

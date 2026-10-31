@@ -5,6 +5,7 @@ import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { TEAM_MAX, MODES } from '../shared/weapons.js';
 import { LIMIT_MODES, TIME_MODES, MAP_IDS } from '../shared/core.js';
+import { currentEvent } from '../shared/events.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -152,6 +153,8 @@ export class Lobby {
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
       ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
       ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
+      // evento de fim de semana: o host liga/desliga (so aparece quando tem evento no ar ou a sala ja esta nele)
+      ...(currentEvent() || c.mut ? [['mut', ['', currentEvent() || c.mut], c.mut || '', (v) => v ? t('ev_' + v) : t('evOff')]] : []),
     ];
     // so redesenha quando muda alguma coisa (o lobby chega 4x/s; redesenhar sempre cortava o carimbo)
     const sig = JSON.stringify(c) + host + m.map;
@@ -181,7 +184,7 @@ export class Lobby {
     for (const b of $('lbCfgList').querySelectorAll('.ar')) b.onclick = () => {
       const k = b.closest('li').dataset.k, row = rows.find(r => r[0] === k), list = row[1];
       const v = list[(Math.max(0, list.indexOf(row[2])) + Number(b.dataset.d) + list.length) % list.length];
-      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0 };
+      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0, mut: c.mut || '' };
       if (k === 'players') next.bots = v - 1; else next[k] = v;
       if (k === 'mode') { next.limit = 0; next.time = 0; if (v === 'br' || v === 'duo') next.map = 'auto'; } // meta e tempo de outro modo nao servem
       audio.play('ui_click', { ui: true, vol: 0.6 });
@@ -198,6 +201,8 @@ export class Lobby {
     this.renderCfg(m, m.host === myId);
     $('lbMap').textContent = t('map_' + m.map);
     $('lbMode').textContent = modeName(m.duo ? 'duo' : m.bounce ? 'bounce' : m.mode);
+    // evento de fim de semana ligado na sala: etiqueta propria ao lado do modo (toda a sala ve)
+    const mut = m.cfg?.mut; $('lbEv').hidden = !mut; if (mut) $('lbEv').textContent = t('ev_' + mut);
     const host = m.host === myId;
     this.counting = m.phase === 'count';
     if (host !== this.isHost) { this.isHost = host; this.setReady(this.ready); }

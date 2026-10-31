@@ -26,7 +26,8 @@ export const CATEGORY = {
   pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (sai de desafio)
   smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_12', 'subfusil_13'], scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
   rifle: { bodies: [...range('fusil_', 1, 7), 'fusil_9', 'fusil_10', 'fusil_11', 'fusil_12'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
-  shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9'], chargers: ['shotgun_charguer_1'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
+  // escopeta: as 3 lunetas do fim da lista so cabem no Bacamarte (LONG_SCOPE)
+  shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9', 'sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2'], chargers: ['shotgun_charguer_1'], handles: ['subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
   melee: { bodies: MELEE, scopes: [], chargers: [], handles: [] },
   sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], scopes: ['sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'], chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: [] },
 };
@@ -92,9 +93,12 @@ function catOf(id) { return id.startsWith('melee') ? 'melee' : id.startsWith('su
 // red dot/holografica, fuzil ate luneta media, sniper so luneta. A mira original do corpo sempre cabe.
 // O indice na lista de miras continua o mesmo (e ele que decide o nivel de desbloqueio).
 const SCOPE_LEN = { pistol: [0, 0.45], shotgun: [0, 0.45], smg: [0, 0.6], rifle: [0, 0.75], sniper: [0.6, 9] };
+// corpos que aceitam luneta de sniper (31/10, pedido dele: lunetas no Bacamarte)
+const LONG_SCOPE = { shotgun_1: ['sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2'] };
 export function scopeFits(body, cat, id) {
   if (!id) return cat !== 'sniper';
   if (id === nativePart(body, 'scope')) return true;
+  if (LONG_SCOPE[body]) { if (LONG_SCOPE[body].includes(id)) return true; } else if (id.startsWith('sniper_scope') && cat !== 'sniper') return false;
   const b = parts[id]?.box, r = SCOPE_LEN[cat];
   if (!b || !r) return true;
   const len = b.max.z - b.min.z;
@@ -1101,7 +1105,8 @@ function buildGunParts(wpn, lo) {
       const sw = Math.min((b.max.x - b.min.x) * 0.45, 0.12), scx = (b.min.x + b.max.x) / 2 + shift.x;
       let seat = hiUnder(lo.body, scx, sw, b.min.z + shift.z + 0.02, b.max.z + shift.z - 0.02);
       // WW2: assenta no corpo (topo tipico do receptor sob a mira), ignorando o relevo da alca/massa de mira
-      if (hand && !nat) {
+      // luneta comprida no Bacamarte tambem: o pe passava por cima da mira da ponta do cano e boiava
+      if ((hand || LONG_SCOPE[lo.body]?.includes(id)) && !nat) {
         const pr = profile(lo.body), z0 = b.min.z + shift.z, z1 = b.max.z + shift.z, hs = [];
         for (let k = sliceOf(pr, z0); k <= sliceOf(pr, z1); k++) hs.push(pr.hi[k]);
         hs.sort((x, y) => x - y);
@@ -1115,7 +1120,8 @@ function buildGunParts(wpn, lo) {
       // luneta: o corpo entre o olho e a lente tambem nao pode tampar a imagem
       if (sl >= 0.6 && !hand) top = Math.max(top, topInFront(lo.body, lensC.x + shift.x, lr * 0.75, b.max.z + shift.z, b.max.z + shift.z + 0.15));
       // alca marcada (WW2): mira rente ao corpo, na frente da alca; a massa da boca do cano nao levanta nada
-      const lift = hand ? 0 : Math.max(0, top + 0.012 - (lensC.y + shift.y - lr * 0.82));
+      // luneta no Bacamarte (LONG_SCOPE): a mira da ponta do cano levantava a luneta e ela boiava; assenta no cano
+      const lift = hand || LONG_SCOPE[lo.body]?.includes(id) ? 0 : Math.max(0, top + 0.012 - (lensC.y + shift.y - lr * 0.82));
       shift.y += lift;
       add(id, { self: new THREE.Vector3(), target: shift }, partMat);
       // vao entre a mira e o corpo vira suporte (riser), nunca fica boiando

@@ -1,6 +1,6 @@
 // Visual do proprio boneco: localStorage (espelhado na conta Rovex pelo save) + desbloqueio.
 import { LOOKS, DEFAULT_LOOK, cleanLook } from '../shared/looks.js';
-import { unlockLevel, progressInfo, rankData } from './progress.js';
+import { unlockLevel, progressInfo, rankData, metaOwned } from './progress.js';
 import { unlockDone } from './challenges.js';
 import { me as rovexMe } from './rovex.js';
 
@@ -17,6 +17,7 @@ export function lookOpen(slot, id) {
   if (!it) return false;
   if (it.elite) return !!rovexMe?.elite;
   if (it.acct) return !!rovexMe; // premio de quem tem conta Rovex (guest ve trancado)
+  if (it.meta) return metaOwned(); // set da meta da comunidade
   if (it.rank != null) return rankData().peak >= it.rank; // premio da rankeada
   if (it.ch) return unlockDone(it.ch) || !!progressInfo().unlockAll;
   return unlockLevel() >= (it.lvl || 1);

@@ -6,9 +6,10 @@ import * as THREE from 'three';
 import { Character } from './character.js';
 import { raycast } from '../shared/map.js';
 
-const KEEP = 8, STEP = 1 / 20;
+const KEEP = 14, STEP = 1 / 20; // 14 s: da pra repassar o ultimo abate do jogador no clipe
 const BEFORE = 1.7, AFTER = 1.1; // segundos de partida antes e depois do abate
 const SLOW = 0.28, SLOW_W = 0.3; // camera lenta em volta do instante da queda
+const CLIP_BEFORE = 6, CLIP_AFTER = 2.5; // clipe da jogada: repasse mais longo (~10 s com a camera lenta)
 
 // camera nao atravessa parede: puxa pra frente do que estiver entre o foco e ela
 function unclip(M, from, to) {
@@ -23,11 +24,11 @@ const lerpA = (a, b, k) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2
 export class Replay {
   constructor() { this.hist = []; this.shots = []; this.kill = null; this.on = false; this.lastRec = -1; this.dt = 0; }
 
-  reset(scene) { this.done = null; this.stop(scene); this.hist.length = 0; this.shots.length = 0; this.kill = null; this.lastRec = -1; }
+  reset(scene) { this.done = null; this.stop(scene); this.hist.length = 0; this.shots.length = 0; this.kill = null; this.mine = null; this.lastRec = -1; }
 
   // uma foto de todo mundo (remotos + eu)
   record(now, G) {
-    if (this.on || now - this.lastRec < STEP) return;
+    if (this.on || G.snap?.over || now - this.lastRec < STEP) return; // acabou: congela (o clipe repassa o fim)
     this.lastRec = now;
     const p = new Map();
     for (const r of G.remotes.values()) p.set(r.id, { pos: [...r.pos], yaw: r.char.root.rotation.y, pitch: r.pitch || 0, anim: r.anim, alive: r.alive, speed: r.speed || 0 });
@@ -38,7 +39,9 @@ export class Replay {
     while (this.shots.length && now - this.shots[0].t > KEEP) this.shots.shift();
   }
   shot(now, s) { if (!this.on) this.shots.push({ t: now, ...s }); }
-  setKill(now, e, pos) { if (!this.on) this.kill = { t: now, a: e.a || null, v: e.v, wpn: e.wpn, head: !!e.head, pos: pos ? [...pos] : null }; }
+  setKill(now, e, pos, myId) { if (this.on) return; this.kill = { t: now, a: e.a || null, v: e.v, wpn: e.wpn, head: !!e.head, pos: pos ? [...pos] : null }; if (myId && e.a === myId) this.mine = this.kill; } // mine = ultimo abate meu (clipe)
+  // clipe: tem abate meu (ou o final) ainda dentro da gravacao?
+  clipKill() { const last = this.hist[this.hist.length - 1]?.t ?? -1, ok = (K) => K && last - K.t <= KEEP - CLIP_BEFORE && this.hist.length >= 10; return ok(this.mine) ? this.mine : ok(this.kill) ? this.kill : null; }
 
   sample(t, id) {
     const H = this.hist;
@@ -52,12 +55,12 @@ export class Replay {
   }
 
   // comeca o replay; devolve false se nao tem o que repassar (abate velho demais, sem gravacao)
-  play(G, scene, fx, audio, look, done) {
+  play(G, scene, fx, audio, look, done, clip = false) {
     const K = this.kill, H = this.hist;
     if (!K || H.length < 10 || !G.player) return false;
     const last = H[H.length - 1].t;
-    if (last - K.t > KEEP - BEFORE) return false;
-    this.t0 = Math.max(H[0].t, K.t - BEFORE); this.t1 = Math.min(last, K.t + AFTER);
+    if (last - K.t > KEEP - (clip ? CLIP_BEFORE : BEFORE)) return false;
+    this.t0 = Math.max(H[0].t, K.t - (clip ? CLIP_BEFORE : BEFORE)); this.t1 = Math.min(last, K.t + (clip ? CLIP_AFTER : AFTER));
     this.rt = this.t0; this.done = done; this.on = true; this.fx = fx; this.audio = audio; this.G = G;
     this.firedKill = false; this.shotI = this.shots.findIndex(s => s.t >= this.t0); if (this.shotI < 0) this.shotI = this.shots.length;
     // eu tambem apareço: um boneco com o meu visual e a minha arma

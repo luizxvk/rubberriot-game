@@ -103,7 +103,12 @@
       <h1 class="title"><span>Rubber</span><span>Riot</span></h1>
       <p class="tagline" data-i18n="tagline">Um tiroteio de borracha na Vila Borracha</p>
       <!-- XP em dobro no fim de semana: carimbo de borracha no cartaz; clicar explica (sabado e domingo, hora local) -->
+      <!-- carimbos lado a lado (mesma altura de antes): XP em dobro e o evento do fim de semana (sexta a domingo) -->
+      <div class="stamps">
       <button class="wknd" id="wknd" type="button" aria-expanded="false" aria-controls="wkndNote" hidden><b>2x</b><span>XP</span><small data-i18n="wkndStamp">fim de semana</small></button>
+      <button class="wknd ev-stamp" id="evStamp" type="button" aria-expanded="false" aria-controls="evNote" hidden><i id="evStampIco"></i><span data-i18n="cfg_mut">Evento</span><small id="evStampName"></small></button>
+      </div>
+      <div class="wknd-note ev-note" id="evNote" role="dialog" aria-labelledby="evNoteName" hidden><small data-i18n="evTitle">Evento do fim de semana</small><b id="evNoteName"></b><span id="evNoteDesc"></span><button class="big" id="evPlay" data-i18n="evPlay">Jogar o evento</button></div>
       <p class="wknd-note" id="wkndNote" role="status" hidden><b data-i18n="wkndTitle">XP em dobro no fim de semana</b><span data-i18n="wkndBody">Sabado e domingo, todo XP vale o dobro: abates, partidas e desafios. Soma com o XP do Elite.</span></p>
       <!-- guest (site proprio sem conta): banner fixo pra criar a conta Rovex e nao perder o progresso. Icone: Material Icons (Apache 2.0) -->
       <a class="elite-promo guest-promo" id="guestPromo" href="#" target="_top" rel="noopener" hidden>
@@ -205,6 +210,12 @@
     </div>
   </section>
 
+  <!-- perfil (31/10): nome, conta, nivel e todas as estatisticas; sair/trocar de conta (Rovex) -->
+  <section class="card wide" id="scr-profile" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="profile">Perfil</h2></header>
+    <div class="pf" id="pfBody"></div>
+  </section>
+
   <!-- skills passivas: secao propria (separada das armas); 2 medalhoes (slots) + cartas. Icones Material Icons (Apache 2.0) -->
   <section class="card wide" id="scr-skills" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="skTab">Skills</h2></header>
@@ -230,7 +241,7 @@
 <section id="lobby" hidden>
   <header class="lb-marquee">
     <h2 class="lb-map" id="lbMap">Vila</h2>
-    <p class="lb-mode" id="lbMode"></p>
+    <p class="lb-mode" id="lbMode"></p><p class="lb-mode lb-ev" id="lbEv" hidden></p>
     <p class="lb-ver" id="lbVer"></p>
     <div class="lb-room" id="lbRoom" hidden>
       <span data-i18n="lbRoomLbl">Sala</span><b id="lbRoomCode"></b>
@@ -403,12 +414,19 @@
       <section class="end-panel end-prog" aria-labelledby="endProgTitle">
         <h3 id="endProgTitle" data-i18n="endProg">Seu progresso</h3>
         <!-- rankeada: badge, pontos contando e o bonus da vitoria -->
+        <!-- meta da comunidade: PLAFTs da semana de todo mundo; bateu = set Ouro da Borracha -->
+        <div class="end-meta" id="endMeta" hidden><small data-i18n="metaTitle">Meta da comunidade</small><span class="em-bar"><i id="emBar"></i></span><b id="emNum"></b><em id="emYou"></em></div>
         <div class="end-rank" id="endRank" hidden><span class="er-badge" id="erBadge"></span><div><small data-i18n="ranked">Rankeada</small><b id="erPts">+0</b><em id="erWhy"></em></div><span class="er-total" id="erTotal"></span><p class="er-up" id="erUp" hidden></p></div>
         <div class="end-lvl"><b id="endLvl">1</b><span><small id="endLvlTxt"></small><span class="xpbar"><i id="endBar"></i></span></span><em id="endXpNum">+0 XP</em></div>
         <ul class="end-xplist" id="endXpList"></ul>
         <h4 id="endUnlTitle" data-i18n="endUnl">Liberado nesta partida</h4>
         <ul class="end-unl" id="endUnl"></ul>
       </section>
+    </div>
+    <!-- compartilhar: cartaz de procurado do melhor da partida e clipe da jogada (Material Icons, Apache 2.0) -->
+    <div class="end-share">
+      <button class="end-sh" id="endPoster" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg><span data-i18n="endPoster">Cartaz de Procurado</span></button>
+      <button class="end-sh" id="endClip" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg><span data-i18n="endClip">Clipe da jogada</span></button>
     </div>
     <p class="end-next" id="endNext"></p>
   </div>

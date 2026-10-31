@@ -22,7 +22,8 @@ function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
-  return { xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0 };
+  // meta = set Ouro da Borracha ganho (semana em que a comunidade bateu a meta); st = estatisticas do Perfil
+  return { st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0 };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
@@ -46,6 +47,18 @@ const keyOf = (w, body) => body || (w && bodyOf(w)) || w;
 const lvOf = (xp) => { let n = 1; while (n < MAX_WPN_LEVEL && xp >= wpnLevelXp(n + 1)) n++; return n; };
 export function wpnLevel(w, body) { return lvOf(data.wpn[keyOf(w, body)] || 0); }
 export const catLevel = (w) => Math.max(wpnLevel(w), ...bodiesOf(w).map(b => lvOf(data.wpn[b] || 0)));
+// set da meta da comunidade (Ouro da Borracha): fica no save pra sempre
+export const metaOwned = () => !!data.meta || !!data.unlockAll;
+export function grantMeta(week) { if (data.meta) return false; data.meta = { week, at: Date.now() }; save(); return true; }
+
+// estatisticas do Perfil (31/10): soma (statAdd) e recorde (statMax)
+export function statAdd(k, n = 1) { if (!n) return; data.st[k] = (data.st[k] || 0) + n; save(); }
+export function statMax(k, v) { if (v > (data.st[k] || 0)) { data.st[k] = v; save(); } }
+export function stats() {
+  let fav = null, fx = 0; for (const [k, v] of Object.entries(data.wpn || {})) if (v > fx) { fx = v; fav = k; } // arma (modelo) com mais XP
+  return { ...data.st, kills: data.kills || 0, matches: data.matches || 0, fav, rp: data.rp || 0, meta: !!data.meta };
+}
+
 export function progressInfo() {
   const lv = level(), cur = levelXp(lv), next = levelXp(Math.min(MAX_LEVEL, lv + 1));
   return { level: lv, xp: data.xp, into: data.xp - cur, need: Math.max(1, next - cur), max: lv >= MAX_LEVEL, unlockAll: data.unlockAll,
@@ -87,6 +100,7 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
   if (key) data.wpn[key] = (data.wpn[key] || 0) + amount;
   if (kind === 'kill') data.kills++;
   if (kind === 'match') data.matches++;
+  if (['head', 'assist', 'win', 'streak'].includes(kind)) data.st[kind] = (data.st[kind] || 0) + 1; // Perfil
   save();
   const after = level(), wAfter = wpn ? wpnLevel(wpn) : 0, cAfter = wpn ? catLevel(wpn) : 0;
   emit({ kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
@@ -114,6 +128,7 @@ export function reqProgress(wpn, req) {
 
 export function camoUnlocked(wpn, camo) {
   if (data.unlockAll || gifted(camo.id)) return true; // presente do treino vale em todas as armas
+  if (camo.meta) return metaOwned(); // lendaria da meta da comunidade
   if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite
   if (camo.elite) return !!rovexMe?.elite;     // exclusiva do Elite da Rovex
   if (camo.prestige) return data.prestige >= camo.prestige; // exclusiva de quem prestigiou

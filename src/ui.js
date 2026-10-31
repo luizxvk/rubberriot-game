@@ -8,6 +8,7 @@ import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
+import { stats as pStats } from './progress.js';
 import { DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
@@ -42,7 +43,7 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'ranked'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'ranked', 'profile'];
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
@@ -65,6 +66,7 @@ export function initMenus(o) {
     if (name === 'controls') renderKeys();
     if (name === 'look') renderLook();
     if (name === 'ranked') renderRanked();
+    if (name === 'profile') renderProfile();
     if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); }
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
@@ -273,7 +275,7 @@ export function initMenus(o) {
       for (const [sl, list] of [['scope', C.scopes], ['handle', C.handles], ['laser', c === 'melee' ? [] : LASERS]]) list.forEach((id, i) => { if (partUnlocked(c, i + 1, id)) out.push(A + sl + '|' + id); });
       for (const cm of CAMOS) if (camoUnlocked(c, cm)) out.push(A + 'camo|' + cm.id);
       if (c !== 'melee') {
-        for (const id of AMMO_IDS) if (partUnlocked(c, 1, 'am:' + id)) out.push(A + 'ammo|' + id);
+        for (const id of AMMO_IDS) if ((!AMMO[id].only || AMMO[id].only === c) && partUnlocked(c, 1, 'am:' + id)) out.push(A + 'ammo|' + id);
         for (const id of TRACER_STYLES) if (partUnlocked(c, 1, 'tr:' + id)) out.push(A + 'tracer|' + id);
       }
       for (const id of BP_ORDER) if (BLUEPRINTS[id].wpn === c && bpUnlocked(id)) out.push(A + 'bp|' + id);
@@ -599,7 +601,7 @@ export function initMenus(o) {
     }
     if (slot === 'camo') {
       // grupos: estaticas, animadas, reativas (cada um com titulo ocupando a linha)
-      const grp = (c) => c.legend ? 'legend' : c.react ? 'react' : c.anim ? 'anim' : 'static';
+      const grp = (c) => c.legend || c.meta ? 'legend' : c.react ? 'react' : c.anim ? 'anim' : 'static';
       let last = null;
       p.innerHTML = CAMOS.map(c => {
         const g = grp(c), head = g !== last ? `<p class="pk-h">${t('cg_' + g)}</p>` : '';
@@ -610,8 +612,8 @@ export function initMenus(o) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
         // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
-        const req = c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
-        const bar = open || c.legend || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
+        const req = c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const bar = open || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {
@@ -622,10 +624,10 @@ export function initMenus(o) {
     }
     if (slot === 'ammo') {
       // balas: ganho e perda de cada uma (status em verde/vermelho como nas variantes); trancadas mostram o desafio
-      const UP = { fire: 'am_up_burn', trace: 'am_up_mark', boom: 'am_up_splash', ap: 'am_up_pierce' };
+      const UP = { fire: 'am_up_burn', trace: 'am_up_mark', boom: 'am_up_splash', ap: 'am_up_pierce', slug: 'am_up_slug' };
       const MOD_TXT = { dmg: 'st_dmg', rate: 'st_rate', kick: 'st_ctrl', mag: 'st_mag' };
       const good = (k, v) => (k === 'dmg' || k === 'mag') ? v > 1 : v < 1;
-      p.innerHTML = [null, ...AMMO_IDS].map(id => {
+      p.innerHTML = [null, ...AMMO_IDS.filter(id => !AMMO[id].only || AMMO[id].only === cat)].map(id => { // balote so aparece na escopeta
         const A = id ? AMMO[id] : null, lk = id && LOCKED_BY['am:' + id], open = !id || partUnlocked(cat, 1, 'am:' + id), cur = (lo.ammo || null) === id;
         const mods = !A ? '' : `<b class="up">+ ${t(UP[id])}</b>` + Object.entries(A).filter(([k]) => MOD_TXT[k]).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
         const lock = open || !lk ? '' : `<small class="req-ch">${unlockActive(lk.id) ? t('reqCh') + ': ' + chName(lk) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lk.id) * 100)}%"></i></span>`;
@@ -722,7 +724,11 @@ export function initMenus(o) {
     if (!el) { el = document.createElement('div'); el.id = 'lvlBadge'; el.className = 'lvl-badge'; document.querySelector('.poster-frame').appendChild(el); }
     // estrelas de prestigio do lado do numero; no nivel maximo, o botao de prestigio (pede confirmacao)
     const stars = pi.prestige ? `<em class="prest" title="${t('prestN', { n: pi.prestige })}">★${pi.prestige > 1 ? pi.prestige : ''}</em>` : '';
-    el.innerHTML = `<b>${pi.level}</b>${stars}<span><small>${t('playerLevel')}</small><span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span><small>${pi.max ? t('maxed') : pi.into + ' / ' + pi.need + ' XP'}</small></span>` +
+    // nome do jogador em cima do nivel; o bloco todo abre o Perfil
+    el.setAttribute('role', 'button'); el.tabIndex = 0; el.setAttribute('aria-label', t('profile'));
+    el.onclick = (e) => { if (e.target.closest('#prestGo')) return; audio.play('ui_click', { ui: true }); ui.go('profile'); };
+    el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ui.go('profile'); } };
+    el.innerHTML = `<b>${pi.level}</b>${stars}<span><span class="lv-top"><strong class="lv-name">${esc(myName())}</strong><small>${t('playerLevel')}</small></span><span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span><small>${pi.max ? t('maxed') : pi.into + ' / ' + pi.need + ' XP'}</small></span>` +
       (pi.canPrestige ? `<button class="prest-go" id="prestGo">${t('prestGo')}</button>` : '');
     const go = document.getElementById('prestGo');
     if (go) go.onclick = () => {
@@ -738,6 +744,25 @@ export function initMenus(o) {
     };
   };
   drawLevel();
+  // ---------- perfil ----------
+  function myName() { return rovex.me?.name || S.name || (rovex.isGuest() ? rovex.guestName() : t('youCap')); }
+  function renderProfile() {
+    const pi = progressInfo(), st = pStats(), rk = myTier(), us = unlockState();
+    const kd = (st.kills / Math.max(1, st.deaths || 0)).toFixed(2), fav = st.fav ? partName('body', st.fav) : '-';
+    const acct = rovex.me ? (rovex.STANDALONE ? t('pfAccount') : t('pfRovexIn')) : t('pfGuest');
+    const n = (v) => Number(v || 0).toLocaleString();
+    const cell = (k, v, big) => `<li class="${big ? 'big' : ''}"><b>${v}</b><small>${t(k)}</small></li>`;
+    $('pfBody').innerHTML = `<div class="pf-head"><span class="pf-lvl">${pi.level}${pi.prestige ? `<em>★${pi.prestige > 1 ? pi.prestige : ''}</em>` : ''}</span><div class="pf-id"><h3>${esc(myName())}</h3><small>${esc(acct)}</small>`
+      + `<span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span><small>${pi.max ? t('maxed') : n(pi.into) + ' / ' + n(pi.need) + ' XP'}</small></div>`
+      + `<span class="pf-rk">${rk >= 0 ? badgeSvg(rk, 40) + `<small>${t('rk_' + TIERS[rk].id)} · ${n(st.rp)} RP</small>` : `<small>${t('pf_rankNone')}</small>`}</span></div>`
+      + `<ul class="pf-grid">` + cell('pf_kills', n(st.kills), 1) + cell('pf_deaths', n(st.deaths)) + cell('pf_kd', kd, 1) + cell('pf_matches', n(st.matches)) + cell('pf_wins', n(st.win))
+      + cell('pf_head', n(st.head)) + cell('pf_assist', n(st.assist)) + cell('pf_streak', n(st.streak)) + cell('pf_best', n(st.bestStreak)) + cell('pf_plafts', n(st.plafts), 1)
+      + cell('pf_fav', esc(fav)) + cell('pf_ch', `${us.done}/${us.total}`) + cell('pf_xp', n(pi.xp)) + (st.meta ? cell('pf_meta', '★') : '') + `</ul>`
+      + `<div class="pf-acts">${rovex.STANDALONE ? `<button class="big" id="pfSwitch">${t(rovex.me ? 'pfSwitch' : 'pfLogin')}</button>` : `<a class="big" id="pfManage" href="https://tryrovex.com/" target="_top" rel="noopener">${t('pfManage')}</a>`}</div>`;
+    const sw = $('pfSwitch');
+    // sair/trocar: apaga a sessao do jogo e vai pro login da Rovex, que devolve pro jogo ja logado
+    if (sw) sw.onclick = () => { audio.play('ui_click', { ui: true }); if (rovex.me) rovex.logout(); location.href = rovex.AUTH_URL; };
+  }
   onProgress(() => { drawLevel(); if (ui.screen === 'arsenal') renderSmith(); });
   ui.relang = () => {
     drawLevel();

@@ -7,7 +7,7 @@ import { ViewModel } from './viewmodel.js';
 import { makePipeline } from './post.js';
 import { Tutorial } from './tutorial.js';
 import { Player } from './player.js';
-import { pushSoon, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
+import { metaGet, metaPost, pushSoon, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
 import { Hud } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer } from './input.js';
 import { Pad } from './gamepad.js';
@@ -15,13 +15,15 @@ import { LocalNet, WsNet } from './net.js';
 import { audio } from './audio.js';
 import { MODES, WEAPONS, STREAKS, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES } from '../shared/weapons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
+import { EV, currentEvent, META, metaWeek } from '../shared/events.js';
+import { wantedPoster, shareFile, ClipRec } from './share.js';
 import { updateCamoFx } from './camofx.js';
 import { getMap, hasLOS } from '../shared/map.js';
 import { loadArsenal, getLoadouts, scopeTarget } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
-import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver } from './progress.js';
+import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { track, grantTutorial } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
@@ -41,7 +43,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------- ajustes ----------
-const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], autoChute: isTouch, draw: isTouch ? 'mid' : 'far' };
+const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, draw: isTouch ? 'mid' : 'far' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -158,6 +160,7 @@ const G = {
   isEnemy(r) { if (r.id === this.myId) return false; return !(MODES[this.mode].teams || this.duo) || r.team !== this.myTeam; },
   shake(a) { this.shakeAmt = Math.min(0.6, this.shakeAmt + a); },
   onHitConfirm(point, head, dmg, victim) {
+    if (victim) this.plafts = (this.plafts || 0) + 1; // meta da comunidade: todo acerto em boneco e um PLAFT
     hud.hitmark(head);
     audio.play(head ? 'headshot' : 'hitmarker', { vol: head ? 0.75 : 0.55, ui: true, key: 'hitm', max: 2, jitter: 0 });
     if (dmg) fx.number([point[0], point[1] + 0.3, point[2]], dmg, head);
@@ -190,6 +193,24 @@ function wkndBadge() {
 $('wknd').onclick = (e) => { e.stopPropagation(); const n = $('wkndNote'); n.hidden = !n.hidden; $('wknd').setAttribute('aria-expanded', String(!n.hidden)); };
 document.addEventListener('click', (e) => { if (!e.target.closest?.('#wkndNote')) { $('wkndNote').hidden = true; $('wknd').setAttribute('aria-expanded', 'false'); } });
 wkndBadge(); setInterval(wkndBadge, 60000); // virou sabado com o jogo aberto
+// evento do fim de semana (sexta a domingo): carimbo ao lado do 2x; tocar abre o cartao com o botao de jogar.
+// ?evento=<id> no endereco forca um evento (teste e gravacao de Reels)
+G.evNow = currentEvent;
+function evBadge() {
+  const id = G.evNow(), b = $('evStamp');
+  b.hidden = !id; if (!id) { $('evNote').hidden = true; return; }
+  $('evStampIco').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[EV(id).icon] || ''}</svg>`;
+  $('evStampName').textContent = t('ev_' + id); $('evNoteName').textContent = t('ev_' + id); $('evNoteDesc').textContent = t('evd_' + id);
+}
+$('evStamp').onclick = (e) => { e.stopPropagation(); const n = $('evNote'); n.hidden = !n.hidden; $('evStamp').setAttribute('aria-expanded', String(!n.hidden)); };
+document.addEventListener('click', (e) => { if (!e.target.closest?.('#evNote')) { $('evNote').hidden = true; $('evStamp').setAttribute('aria-expanded', 'false'); } });
+$('evPlay').onclick = () => {
+  audio.play('ui_click', { ui: true }); $('evNote').hidden = true;
+  let c = {}; try { c = JSON.parse(localStorage.getItem('rr_lastcfg') || '{}'); } catch { /* */ }
+  const mode = ['ffa', 'tdm', 'dom', 'ctf'].includes(c.mode) ? c.mode : 'ffa';
+  startGame(new LocalNet({ mode, map: c.map || 'auto', bots: Number.isFinite(c.bots) && c.bots > 0 ? c.bots : 7, difficulty: c.difficulty || 1, mut: G.evNow() }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap')));
+};
+evBadge(); setInterval(evBadge, 60000);
 
 function chEvent(e) {
   if (G.state !== 'game' || G.tutorial) return; // treino nao conta desafio
@@ -395,6 +416,7 @@ function remoteFor(p) {
 
 function onSnap(s) {
   G.snap = s;
+  if (s.mut !== G.mutSeen) { G.mutSeen = s.mut; if (s.mut && G.state === 'game') { hud.message(t('evOn', { e: t('ev_' + s.mut) }), 3.5); audio.play('ringbell', { vol: 0.6, ui: true }); } } // evento de fim de semana: anuncia na entrada
   G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen;
   if (s.map && s.map !== G.M.id) setMap(s.map);
   const seen = new Set();
@@ -531,10 +553,11 @@ function onEvent(e) {
       if (e.id === G.myId) { gainXp('assist'); chEvent({ type: 'assist' }); audio.play('ding', { ui: true, vol: 0.35, key: 'ding', max: 1 }); }
       break;
     case 'kill': {
+      if (inGame && !G.tutorial) { if (e.v === G.myId) statAdd('deaths'); if (e.a === G.myId && e.streak) statMax('bestStreak', e.streak); } // Perfil
       if (e.v === G.myId && (G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { $('specBar').hidden = false; $('dead').classList.add('spec'); } // sem renascer: assiste
       if (e.v === G.myId) G.inRing = false; // perdeu no ringue: a parede da iris volta pra quem assiste
       const vPos = e.pos || posOf(e.v);
-      if (inGame) replay.setKill(performance.now() / 1000, e, vPos);
+      if (inGame) replay.setKill(performance.now() / 1000, e, vPos, G.myId);
       if (vPos && inGame) {
         fx.puff([vPos[0], vPos[1] + 0.8, vPos[2]], 9, 1.1, 0xece9e1, 0.9);
         fx.splat([vPos[0], vPos[1], vPos[2]], 1.8);
@@ -682,12 +705,18 @@ function onEvent(e) {
     // ---------- equipamento de campo ----------
     case 'field': {
       const pos = e.id === G.myId ? G.player?.pos : posOf(e.id);
-      if (e.id === G.myId) { G.fieldK = 0; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } }
+      if (e.id === G.myId) { G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } }
       if (inGame) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
       break;
     }
     case 'fieldFail': if (e.id === G.myId && inGame) { hud.message(t('fieldFail'), 1.6); audio.play('empty', { vol: 0.4 }); } break;
     case 'fieldReady': if (e.id === G.myId && inGame) { G.fieldK = 1; audio.play('fieldready', { ui: true, vol: 0.5 }); hud.message(t('fieldReady', { w: t('fd_' + G.field) }), 1.6); } break;
+    case 'umbBreak': { // guarda-chuva levou tiro demais: estoura e some
+      const q = e.id === G.myId ? G.player?.pos : posOf(e.id);
+      if (e.id === G.myId) { G.shieldT = 0; vm.umbOn = false; if (inGame) hud.message(t('umbBreak'), 1.6); }
+      if (q && inGame) { fx.word('PLOFT!', [q[0], q[1] + 1.4, q[2]], 1.6, 0.6); audio.play('balloon', { pos: q, vol: 0.7, rate: 0.8 }); }
+      break;
+    }
     case 'block': {
       const q = e.v === G.myId ? G.player?.pos : posOf(e.v);
       if (q && inGame) { fx.word('PLINK!', [q[0], q[1] + 1.4, q[2]], 1.2, 0.45); audio.play('pan', { pos: q, vol: 0.5, rate: 1.4, key: 'block', max: 2 }); }
@@ -901,6 +930,77 @@ function cineTag() {
   $('cineWho').innerHTML = K.a && K.a !== K.v ? t('finalKillBy', { a: `<span class="${teamCls(K.a)}">${esc(nameOf(K.a))}</span>`, v }) : t('finalSelf', { v });
 }
 
+// meta da comunidade: no fim da partida soma os seus PLAFTs no contador da semana e mostra a barra.
+// Bateu a meta na semana em que voce jogou: ganha o set Ouro da Borracha (fica no save pra sempre)
+function metaShow(m, mine) {
+  const el = $('endMeta'); if (!m) { el.hidden = true; return; }
+  el.hidden = false;
+  $('emBar').style.width = Math.min(100, m.n / m.goal * 100).toFixed(1) + '%';
+  $('emNum').textContent = `${Math.min(m.n, m.goal).toLocaleString()} / ${m.goal.toLocaleString()}`;
+  $('emYou').textContent = mine ? t('metaYou', { n: mine }) : '';
+  el.classList.toggle('done', !!m.done);
+}
+function metaClaim(m) {
+  if (!m?.done || m.week !== metaWeek()) return;
+  if (!grantMeta(m.week)) return;
+  const name = t('camo_plaftgold') + ' + ' + t('lk_hat_capcrown'), img = unlockShot({ slot: 'camo', id: 'plaftgold', wpn: settings.primary || 'smg' });
+  audio.fanfare?.(0.8);
+  // na tela do fim entra na lista "Liberado nesta partida" (o banner do HUD ficava atras do titulo)
+  if (!$('theend').hidden) { $('endUnlTitle').textContent = t('endUnl'); $('endUnl').insertAdjacentHTML('afterbegin', `<li>${img ? `<img alt="" src="${img}">` : ''}<small>${esc(t('metaDone'))}</small><b>${esc(name)}</b></li>`); }
+  else hud.unlockBanner({ kind: t('metaDone'), name, img });
+}
+async function sendMeta() {
+  const mine = Math.min(G.plafts || 0, META.perMatch);
+  if (!G.tutorial) statAdd('plafts', G.plafts || 0); // Perfil
+  G.plafts = 0;
+  if (G.tutorial) { $('endMeta').hidden = true; return; }
+  const m = mine ? await metaPost(mine) || await metaGet() : await metaGet();
+  metaShow(m, mine); metaClaim(m);
+}
+
+// cartaz de PROCURADO: o melhor da partida (mais pontos) com o visual e a arma dele
+async function makePoster() {
+  const b = $('endPoster'); if (b.disabled) return;
+  const top = [...(G.snap?.players || [])].sort((a, c) => c.score - a.score || c.kills - a.kills)[0];
+  if (!top) return;
+  b.disabled = true; const label = b.querySelector('span').textContent; b.querySelector('span').textContent = t('shareWait');
+  try {
+    const me = top.id === G.myId, r = G.remotes.get(top.id);
+    // fundo: o mapa da partida, como esta na tela agora (desfocado no cartaz). Renderiza e copia no mesmo quadro
+    let bg = null;
+    try { renderer.render(scene, camera); bg = await createImageBitmap(canvas); } catch { /* sem fundo */ }
+    // nome: o do jogador (conta Rovex / ajuste), nao "Voce"
+    const blob = await wantedPoster({
+      bg, name: me ? (rovexMe?.name || settings.name || (rovexGuest() ? rovexGuestName() : top.name)) : top.name, kills: top.kills, map: t('map_' + G.M.id), team: top.team || null,
+      look: me ? wornLook() : r ? lookOf(r) : lookOf(top), wpn: me ? G.player?.wpn : top.wpn,
+      lo: me ? G.loadouts?.[G.player?.wpn] : G.remoteLo.get(top.id)?.[top.wpn] || null,
+    });
+    await shareFile(blob, `procurado-${String(top.name).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`, t('shareTxt'));
+  } catch (e) { console.warn('cartaz', e); }
+  b.disabled = false; b.querySelector('span').textContent = label;
+}
+$('endPoster').onclick = () => { audio.play('ui_click', { ui: true }); makePoster(); };
+
+// clipe da jogada: repassa o seu ultimo abate (ou o final) gravando a tela em pe e entrega o arquivo
+async function makeClip() {
+  const b = $('endClip'); if (b.disabled || replay.on || !window.MediaRecorder) return;
+  const K = replay.clipKill(); if (!K) return;
+  b.disabled = true; const label = b.querySelector('span').textContent; b.querySelector('span').textContent = t('shareWait');
+  const keep = replay.kill; replay.kill = K;
+  $('theend').hidden = true; document.body.classList.add('replay');
+  let rec = null;
+  try { rec = G.clipRec = new ClipRec(canvas, audio.ctx, audio.master); } catch (e) { console.warn('clipe', e); }
+  const ok = rec && replay.play(G, scene, fx, audio, wornLook(), async () => {
+    G.clipRec = null; document.body.classList.remove('replay'); $('theend').hidden = false; replay.kill = keep;
+    const blob = await rec.stop();
+    const ext = /mp4/.test(blob.type) ? 'mp4' : 'webm';
+    try { await shareFile(blob, `rubber-riot-clipe.${ext}`, t('shareTxt')); } catch (e) { console.warn('clipe', e); }
+    b.disabled = false; b.querySelector('span').textContent = label;
+  }, true);
+  if (!ok) { G.clipRec = null; rec?.stop(); document.body.classList.remove('replay'); $('theend').hidden = false; replay.kill = keep; b.disabled = false; b.querySelector('span').textContent = label; }
+}
+$('endClip').onclick = () => { audio.play('ui_click', { ui: true }); makeClip(); };
+
 function showEnd(winner) {
   const inf = G.mode === 'infect';
   const won = inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
@@ -919,7 +1019,13 @@ function showEnd(winner) {
     G.loadouts = matchLoadouts(); sendLoadout();
   }
   $('theend').hidden = false;
+  $('endClip').hidden = !window.MediaRecorder || !replay.clipKill(); // so com abate pra repassar
+  // acabou: solta o mouse e para os controles (antes mexer o mouse ainda girava a camera e a roda nao rolava a tela)
+  input.enabled = false; input.keys.clear(); input.mouse.fire = input.mouse.ads = false; input.touch.fire = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  setTouchBoard(false);
   animateEndXp(L.startXp, L.startXp + total, total);
+  sendMeta();
   showRankEnd();
   audio.play('flag', { vol: 0.8, ui: true });
   const endAt = performance.now() + Math.max(1, (G.snap?.overT ?? 9) - 1) * 1000;
@@ -1150,7 +1256,7 @@ async function beginMatch(join) {
   hideLoading();
   G.state = 'game';
   audio.music(true, G.mode === 'br' || G.duo ? 'music_br' : 'music_m' + (1 + Math.floor(Math.random() * 4)));
-  G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); G.countEnd = 0; G.spec = { i: 0, map: false };
+  G.plafts = 0; G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); G.countEnd = 0; G.spec = { i: 0, map: false };
   input.mode = G.mode;
   // avisa o servidor que carregou: quando o ultimo avisar, sai a contagem pra todo mundo
   G.net?.send({ t: 'loaded' });
@@ -1278,7 +1384,7 @@ function openGameSmith() {
 }
 function renderPausePick() {
   // escada de armas nao escolhe; infectado (vermelho) so tem a lamina; sobrevivente nao pega sniper
-  const off = G.mode === 'gungame' || G.mode === 'infect';
+  const off = G.mode === 'gungame' || G.mode === 'infect' || !!EV(G.snap?.mut)?.kit; // evento com armas fixas tambem
   $('pausePick').hidden = off || G.mode === 'br'; // battle royale: a principal vem do chao, mas as pecas valem
   $('pauseSmith').hidden = off || !!G.tutorial;
   $('pauseSmith').onclick = openGameSmith;
@@ -1313,6 +1419,8 @@ document.addEventListener('pointerdown', (e) => {
   if (G.paused) return;
   const inR = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
   if (input.touchBoard) { if (!inR($('board'))) setTouchBoard(false); e.stopPropagation(); return; } // nao vira tiro nem giro de camera
+  // selo do equipamento: fica embaixo da camada de toque, entao o toque nele e lido aqui (antes nunca chegava)
+  if (!$('fieldHud').hidden && inR($('fhBadge'))) { input.edges.add('FIELD'); e.stopPropagation(); return; }
   if (inR($('scorePlaque'))) { setTouchBoard(true); e.stopPropagation(); }
 }, true);
 $('resume').onclick = () => { audio.play('ui_click', { ui: true }); setPaused(false); };
@@ -1445,7 +1553,7 @@ function frame() {
   if (G.shieldT > 0 && (G.shieldT -= dt) <= 0) vm.umbOn = false;
   if (G.field) {
     const meS = G.snap?.players?.find(p => p.id === G.myId);
-    if (meS && meS.fc != null && !(G.fieldK === 0 && meS.fc >= 100)) G.fieldK = meS.fc / 100; // logo depois de usar o snapshot velho ainda diz cheio
+    if (meS && meS.fc != null && !(G.t - (G.fieldUsedT ?? -9) < 0.6 && meS.fc >= 100)) G.fieldK = meS.fc / 100; // logo depois de usar o snapshot velho ainda diz cheio (antes travava em 0 se a carga voltasse cheia sem o aviso)
     const k = G.fieldK ?? 0, cool = k < 1, fh = $('fieldHud');
     $('fhBadge').style.setProperty('--cd', (k * 100).toFixed(1) + '%');
     if (cool) { const n = Math.floor(k * 100) + '%'; if ($('fhCd').textContent !== n) $('fhCd').textContent = n; }
@@ -1512,6 +1620,8 @@ function frame() {
     while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
     r.char.root.rotation.y += dy * k;
     r.char.update(dt, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1] });
+    const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
+    if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
     const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
     r.char.lod(camD);
     r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || camD < 30);
@@ -1679,6 +1789,7 @@ function frame() {
   const fwd = camera.getWorldDirection(tmpV.clone());
   audio.setListener(camera.position, fwd, new THREE.Vector3(0, 1, 0));
   composer.render(realDt);
+  G.clipRec?.draw(); // clipe gravando: copia o quadro na hora (o canvas do jogo nao guarda o desenho)
   if (lineup.chars.some(c => c.root.visible)) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(lineupScene, camera); renderer.autoClear = true; }
 }
 
