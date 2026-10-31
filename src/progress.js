@@ -1,6 +1,6 @@
 // Progressao: XP do jogador (nivel 1..55) e de cada CORPO de arma (modelo, nivel 1..20; cada um o seu).
 // Pecas do Arsenal e camuflagens desbloqueiam por nivel. Fica salvo neste aparelho.
-import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted } from './challenges.js';
+import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted, wasUnlocked } from './challenges.js';
 import { pushSoon, me as rovexMe } from './rovex.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
@@ -22,7 +22,7 @@ function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
-  return { xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)) };
+  return { xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0 };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
@@ -65,6 +65,15 @@ export function wpnInfo(w, body) {
   return { level: lv, into: xp - cur, need: Math.max(1, next - cur), max: lv >= MAX_WPN_LEVEL };
 }
 
+// rankeada (31/10): pontos de rank (rp), maior faixa ja alcancada (rkPeak, -1 = nunca jogou) e partidas
+export const rankData = () => ({ rp: data.rp, peak: data.rkPeak, games: data.rkGames });
+export function rankApply(delta, tierOf) {
+  const before = data.rp, peakBefore = data.rkPeak;
+  data.rp = Math.max(0, data.rp + delta); data.rkGames++;
+  data.rkPeak = Math.max(data.rkPeak, tierOf(data.rp));
+  save(); emit({ kind: 'rank' });
+  return { before, after: data.rp, newPeak: data.rkPeak > peakBefore ? data.rkPeak : -1 };
+}
 export function setUnlockAll(v) { data.unlockAll = DEBUG && !!v; save(); emit({ kind: 'unlock' }); }
 export function onProgress(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit(ev) { for (const fn of listeners) fn(ev); }
@@ -88,7 +97,7 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
 export function partReq(i) { return i <= 0 ? 1 : Math.min(MAX_WPN_LEVEL, 1 + Math.ceil(i * 1.5)); }
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 export function partUnlocked(wpn, i, id) {
-  if (data.unlockAll || gifted(id)) return true; // presente do treino
+  if (data.unlockAll || gifted(id) || wasUnlocked(id)) return true; // presente do treino / desafio antigo ja fechado
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
   if (id && id.startsWith('am:')) return true;  // bala normal
@@ -108,6 +117,7 @@ export function camoUnlocked(wpn, camo) {
   if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite
   if (camo.elite) return !!rovexMe?.elite;     // exclusiva do Elite da Rovex
   if (camo.prestige) return data.prestige >= camo.prestige; // exclusiva de quem prestigiou
+  if (camo.rank != null) return data.rkPeak >= camo.rank; // premio da rankeada
 
   if (LOCKED_BY[camo.id]) return unlockDone(LOCKED_BY[camo.id].id);
   if (!camo.req) return true;

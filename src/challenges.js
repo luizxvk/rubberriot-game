@@ -39,7 +39,6 @@ export const UNLOCKS = [
   // pacote WW2: cada arma antiga sai de um desafio proprio
   { id: 'u_ww_stg', n: 30, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'rifle', reward: { slot: 'body', id: 'fusil_9', wpn: 'rifle' } },
   { id: 'u_ww_garand', n: 40, xp: 1750, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_3', wpn: 'sniper' } },
-  { id: 'u_ww_ppsh', n: 100, xp: 2000, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_12', wpn: 'smg' } },
   // visual do boneco: itens incomuns que so saem daqui (30/10)
   { id: 'u_lk_plunger', n: 25, xp: 1250, ok: K('melee'), reward: { slot: 'look', id: 'hat:plunger' } },
   { id: 'u_lk_knockout', n: 15, xp: 1250, ok: (e) => e.type === 'kill' && e.wpn === 'frag', reward: { slot: 'look', id: 'eyes:knockout' } },
@@ -47,16 +46,11 @@ export const UNLOCKS = [
   { id: 'u_lk_stink', n: 8, xp: 1250, ok: (e) => e.type === 'streak', reward: { slot: 'look', id: 'fx:stink' } },
   // akimbo (30/10): so sai daqui; duas pistolas, pente dobrado, sem mirar
   // revolver Bang-Bang (30/10): so sai daqui
-  { id: 'u_revolver', n: 30, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_10', wpn: 'pistol' } },
   { id: 'u_akimbo', n: 50, xp: 2000, ok: K('pistol'), reward: { slot: 'handle', id: 'akimbo', wpn: 'pistol' } },
   { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
   { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
   { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
   // pacote 2 (30/10, pedido dele): cada arma nova sai de um desafio proprio (antes abria por nivel)
-  { id: 'u_pk_mp5', n: 60, xp: 1500, ok: K('smg'), reward: { slot: 'body', id: 'subfusil_13', wpn: 'smg' } },
-  { id: 'u_pk_ak', n: 80, xp: 1750, ok: K('rifle'), reward: { slot: 'body', id: 'fusil_10', wpn: 'rifle' } },
-  { id: 'u_pk_aa12', n: 40, xp: 1750, ok: K('shotgun'), reward: { slot: 'body', id: 'shotgun_3', wpn: 'shotgun' } },
-  { id: 'u_pk_ar', n: 25, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'rifle', reward: { slot: 'body', id: 'fusil_11', wpn: 'rifle' } },
   { id: 'u_pk_cuca', n: 20, xp: 2000, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper', reward: { slot: 'body', id: 'sniper_4', wpn: 'sniper' } },
   { id: 'u_pk_dmr', n: 6, xp: 2000, ok: (e) => e.type === 'streak', reward: { slot: 'body', id: 'fusil_12', wpn: 'rifle' } },
   // tipos de bala (peca Municao, equipada por arma; a normal ja vem aberta)
@@ -103,14 +97,18 @@ export function eliteToday() {
   return { ...c, prog: Math.min(c.n, data.elite.prog), done: data.elite.done, reward: data.elite.reward };
 }
 
+// modelos que eram de desafio e agora abrem por nivel (31/10, pedido dele): quem ja tinha fechado o
+// desafio antigo continua com o modelo aberto
+const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_12: ['u_ww_ppsh', 100], subfusil_13: ['u_pk_mp5', 60], fusil_10: ['u_pk_ak', 80], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
+export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
 // item -> desafio que libera (o arsenal consulta isso)
 export const LOCKED_BY = Object.fromEntries(UNLOCKS.map(u => [u.reward.id, u]));
 export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u.id === id)?.n ?? Infinity);
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
 const ACTIVE = 4;
-const ORDER = ['u_am_fire', 'u_akimbo', 'u_lk_plunger', 'u_revolver', 'u_pk_mp5', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_pk_ak', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_sscope', 'u_spitter',
-  'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_pk_aa12', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_pk_ar', 'u_tr_void', 'u_ww_ppsh', 'u_am_ap', 'u_fang', 'u_fscope', 'u_pk_cuca', 'u_ww_tt', 'u_tr_toxic', 'u_bolt', 'u_pk_dmr',
+const ORDER = ['u_am_fire', 'u_akimbo', 'u_lk_plunger', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_sscope', 'u_spitter',
+  'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_am_ap', 'u_fang', 'u_fscope', 'u_pk_cuca', 'u_ww_tt', 'u_tr_toxic', 'u_bolt', 'u_pk_dmr',
   'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice']; // WW2 (u_ww_*) intercaladas pra aparecer cedo
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];
 // o jogador pode escolher quais perseguir (aba Desafios): os escolhidos entram primeiro, a fila completa o resto

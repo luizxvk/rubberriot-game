@@ -4,7 +4,7 @@
 const qs = new URLSearchParams(location.search);
 // site proprio (rubberriot.tryrovex.com): outra origem, entao o jogo guarda a PROPRIA sessao,
 // vinda da tela "autorizar app" da Rovex (cofre RUBBER_RIOT, nao derruba o login do site).
-export const STANDALONE = !qs.has('api') && /(^|\.)rubberriot\.tryrovex\.com$/.test(location.hostname);
+export const STANDALONE = !qs.has('api') && (/(^|\.)rubberriot\.tryrovex\.com$/.test(location.hostname) || (import.meta.env.DEV && qs.has('solto'))); // ?solto: testa o site proprio no dev
 export const API = STANDALONE ? 'https://api.tryrovex.com/api' : (qs.get('api') || '/api').replace(/\/$/, '');
 const OWN = 'rr_token';
 if (STANDALONE && location.hash.startsWith('#token=')) {
@@ -12,6 +12,15 @@ if (STANDALONE && location.hash.startsWith('#token=')) {
   history.replaceState(null, '', location.pathname + location.search);
 }
 export const AUTH_URL = 'https://tryrovex.com/autorizar-app?app=rubber-riot&callback=' + encodeURIComponent('https://rubberriot.tryrovex.com/');
+// guest (31/10): no site proprio da pra jogar sem conta, como guest-NNNN; o save fica so neste aparelho
+// (rr_owner = 'guest'). Entrou numa conta: o progresso de guest sobe pra ela (conta com save: fica o maior).
+export function guestName() {
+  let n = null;
+  try { n = localStorage.getItem('rr_guest'); } catch { /* */ }
+  if (!n) { n = 'guest-' + String(Math.floor(1000 + Math.random() * 9000)); try { localStorage.setItem('rr_guest', n); } catch { /* */ } }
+  return n;
+}
+export const isGuest = () => STANDALONE && !me;
 export function logout() { try { localStorage.removeItem(OWN); } catch { /* */ } }
 export const inviteRoom = (qs.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || null;
 export const inRovex = qs.has('api');
@@ -85,14 +94,22 @@ const ls = {
 };
 
 export async function pullSave() {
-  if (!(await loadMe())) return;
+  if (!(await loadMe())) {
+    // sem conta no site proprio = guest: save local de outra conta deste navegador nao vira do guest
+    // (a conta continua salva na nuvem e volta quando ela entrar)
+    if (STANDALONE) { const owner = ls.get(OWNER); if (owner && owner !== 'guest') for (const k of KEYS) ls.del(k); ls.set(OWNER, 'guest'); }
+    return;
+  }
   try {
     const r = await call('/games/rubber-riot/save', { timeout: 5000 });
+    const owner = ls.get(OWNER), wasGuest = owner === 'guest';
+    const xpOf = (raw) => { try { return JSON.parse(raw)?.xp || 0; } catch { return 0; } };
     if (r && r.data) {
-      for (const k of KEYS) if (typeof r.data[k] === 'string') ls.set(k, r.data[k]); else ls.del(k);
+      // guest que acabou de entrar: se jogou mais como guest do que a conta tem, o dele vale e sobe
+      if (wasGuest && xpOf(ls.get('rr_progress_v1')) > xpOf(r.data.rr_progress_v1)) pushSave();
+      else for (const k of KEYS) if (typeof r.data[k] === 'string') ls.set(k, r.data[k]); else ls.del(k);
     } else {
-      const owner = ls.get(OWNER);
-      if (owner && owner !== me.id) for (const k of KEYS) ls.del(k);
+      if (owner && owner !== me.id && !wasGuest) for (const k of KEYS) ls.del(k);
       ls.set(OWNER, me.id);
       pushSave();
     }

@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
 import { STREAKS, BR } from '../shared/weapons.js';
 import { t, wName, modeName, eliteTag } from './i18n.js';
+import { badgeSvg } from './rank.js';
+import { partName } from './arsenal.js';
 import { isTouch } from './input.js';
 import { audio } from './audio.js';
 
@@ -24,7 +26,9 @@ export class Hud {
 
   weapon(p) {
     const W = WEAPONS[p.wpn];
-    this.el.wname.textContent = wName(p.wpn);
+    // nome do MODELO na mao (antes era o da categoria: todo fuzil aparecia como Trovao); variante = nome dela
+    const lo = p.lo?.(p.wpn), bp = p.brBp?.[p.wpn];
+    this.el.wname.textContent = bp ? t(bp) : lo?.body ? partName('body', lo.body) : wName(p.wpn);
     const a = p.ammo[p.wpn];
     const mag = a ? a.mag : 0;
     this.el.mag.textContent = mag === Infinity ? '∞' : mag;
@@ -447,15 +451,15 @@ export class Hud {
     // tecla de cada aparelho: teclado G/F/X, controle LB/RB/direcional pra cima, toque = icone do botao
     const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb';
     const [kf, kl, ks, kz] = dev === 'pad' ? ['LB ', 'RB ', '▲ ', '► '] : dev === 'touch' ? ['', '', '★ ', ''] : ['G ', 'F ', 'X ', 'Z '];
-    const fld = p.g?.field, fcd = Math.ceil(p.g?.fieldCd || 0);
-    const key = (fld || '') + fcd + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev + '/' + (ready.length && snap.sLock ? snap.sLock.kind + snap.sLock.t : '');
+    const fld = p.g?.field, fpc = Math.floor((p.g?.fieldK ?? 0) * 100), fcd = fpc < 100 ? 1 : 0; // barra por pontos (%)
+    const key = (fld || '') + fpc + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev + '/' + (ready.length && snap.sLock ? snap.sLock.kind + snap.sLock.t : '');
     if (key !== this.kitKey) {
       this.kitKey = key;
       let el = document.getElementById('kit');
       if (!el) { el = document.createElement('div'); el.id = 'kit'; el.className = 'kit'; document.getElementById('hud').appendChild(el); }
       el.hidden = p.g?.mode === 'br' && !p.nades.frag && !p.nades.flash && !fld; // battle royale: so aparece quando tiver granada ou equipamento
       el.innerHTML = `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
-        (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fcd + 's' : ''}</span>` : '') +
+        (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fpc + '%' : ''}</span>` : '') +
         // sequencia pronta mas outra no ar: fica apagada com a contagem ate liberar
         (ready.length && snap.sLock && ready[0] !== 'uav' ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
     }
@@ -532,20 +536,23 @@ export class Hud {
     this.el.obj.innerHTML = html;
   }
 
-  board(show, snap, players, meId) {
+  board(show, snap, players, meId, chs = null) {
     const b = this.el.board;
     b.hidden = !show;
     if (!show || !snap) return;
     const cfg = MODES[snap.mode];
     const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
     const bomb = snap.mode === 'bomb';
-    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
+    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
     let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.mode)}</h3>`;
     if (cfg.teams) {
       for (const tm of ['red', 'blue']) html += `<table><caption style="text-align:left;font-family:var(--display);padding:6px 0 2px;color:var(--${tm})">${t(TEAM[tm])} · ${snap.teamScore[tm]}</caption>${head}${rows(sort(players.filter(p => p.team === tm)))}</table>`;
     } else html += `<table>${head}${rows(sort(players))}</table>`;
-    b.innerHTML = html;
+    // desafios acompanhados ao lado do placar (embaixo na tela estreita), progresso ao vivo
+    b.classList.toggle('has-ch', !!chs?.length);
+    if (chs?.length) html = `<div class="bd-main">${html}</div><aside class="bd-ch"><h3>${t('challenges')}</h3><ul>${chs.map(c => `<li class="${c.done ? 'done' : ''}${c.elite ? ' elite' : ''}"><small>${esc(c.tag)}${c.pin ? ' ·  ★' : ''}</small><b>${esc(c.name)}</b>${c.rw ? `<em>${esc(c.rw)}</em>` : ''}<span class="bd-bar"><i style="width:${Math.round(Math.min(1, c.prog / c.n) * 100)}%"></i></span><span class="bd-n">${c.done ? t('chDoneStamp') : `${Math.min(c.prog, c.n)}/${c.n}`}</span></li>`).join('')}</ul></aside>`;
+    if (b._h !== html) { b._h = html; b.innerHTML = html; } // so redesenha quando muda (antes era todo quadro)
   }
 }

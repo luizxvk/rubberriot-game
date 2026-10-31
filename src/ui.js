@@ -13,6 +13,9 @@ import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battl
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
 import { LOOKS } from '../shared/looks.js';
 import { getLook, saveLook, lookOpen } from './lookstore.js';
+import { syncOpen, isNew, anyNew, markSeen, newPill } from './newstuff.js';
+import { TIERS, badgeSvg, myTier, peakTier } from './rank.js';
+import { rankData } from './progress.js';
 import { freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
@@ -39,18 +42,18 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'ranked'];
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
   ui.go = (name, fromGame = false, startCat = null) => {
-    fromLobby = fromGame === 'lobby' && name === 'arsenal';
+    fromLobby = (fromGame === 'lobby' || fromGame === 'game') && name === 'arsenal'; // 'game' = aberto da pausa, aplica na hora
     settingsFromGame = fromGame === true;
     // abre na arma principal equipada (antes ficava presa na ultima aba aberta)
     if (name === 'arsenal' && !startCat && PRIMARIES.includes(S.primary)) startCat = S.primary;
     if (startCat) { cat = startCat; slot = 'body'; preview = null; }
     $('smithDone').hidden = !fromLobby;
-    if (fromLobby) $('smithDone').textContent = t(o.lobbyHost() ? 'lbSmithBack' : 'lbSmithReady');
+    if (fromLobby) $('smithDone').textContent = t(fromGame === 'game' ? 'smithNow' : o.lobbyHost() ? 'lbSmithBack' : 'lbSmithReady');
     for (const s of screens) $('scr-' + s).hidden = s !== name;
     ui.screen = name;
     $('menu').classList.toggle('smithing', name === 'arsenal' || name === 'look');
@@ -61,7 +64,8 @@ export function initMenus(o) {
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
     if (name === 'controls') renderKeys();
     if (name === 'look') renderLook();
-    if (name === 'home') markNewChallenges();
+    if (name === 'ranked') renderRanked();
+    if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); }
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
   };
@@ -97,7 +101,7 @@ export function initMenus(o) {
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const newCode = () => Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   const cleanCode = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-  const mpName = () => rovex.me?.name || $('mpName').value.trim() || 'Inkblot';
+  const mpName = () => rovex.me?.name || $('mpName').value.trim() || (rovex.isGuest() ? rovex.guestName() : 'Inkblot');
   ui.refreshRooms = () => {
     $('mpWho').textContent = rovex.me ? t('playingAs', { n: rovex.me.name }) : t('guestHint');
     $('mpNameField').hidden = !!rovex.me;
@@ -246,6 +250,49 @@ export function initMenus(o) {
     try { localStorage.setItem(SEEN_KEY, JSON.stringify(currentChallengeKeys())); } catch { /* sem storage */ }
     markNewChallenges();
   }
+  // ---------- rankeada ----------
+  const rkReward = (R) => R.slot === 'camo' ? t('camo_' + R.id) : R.tab === 'hat' ? t('lk_hat_' + R.id) + ' + ' + t('camo_' + R.camo) : t('lkt_' + R.tab) + ' ' + t('rk_' + TIERS.find(x => x.reward === R).id);
+  function rankMini() { const k = myTier(); $('rkMini').innerHTML = k >= 0 ? badgeSvg(k, 20) : ''; }
+  ui.rankMini = rankMini;
+  function renderRanked() {
+    const r = rankData(), k = myTier(), peak = peakTier(), nx = TIERS[k + 1];
+    $('rkMe').innerHTML = k < 0 ? `<span class="rk-big none">${badgeSvg(0, 72)}</span><div><b>${t('rkUnranked')}</b></div>`
+      : `<span class="rk-big">${badgeSvg(k, 72)}</span><div><b>${t('rk_' + TIERS[k].id)}</b><small>${t('rkPts', { n: r.rp })}</small>`
+        + (nx ? `<span class="xpbar"><i style="width:${Math.round((r.rp - TIERS[k].rp) / (nx.rp - TIERS[k].rp) * 100)}%"></i></span><small>${t('rkNext', { n: nx.rp - r.rp, t: t('rk_' + nx.id) })}</small>` : `<small>${t('rkTop')}</small>`) + '</div>';
+    $('rkTiers').innerHTML = TIERS.map((T, i) => `<li class="${i === k ? 'cur' : ''} ${peak >= i ? 'got' : ''}">${badgeSvg(i, 34)}<span><b>${t('rk_' + T.id)}</b><small>${T.rp}+</small></span><em><small>${t(peak >= i ? 'rkGot' : 'rkReward')}</small>${rkReward(T.reward)}</em></li>`).join('');
+    $('rkFind').onclick = () => { audio.play('ui_click', { ui: true }); goMp({ ranked: true }); };
+  }
+  rankMini();
+
+  // ---------- pill NOVO: tudo que esta aberto agora (o newstuff compara com o que ja estava) ----------
+  function openKeys() {
+    const out = [];
+    for (const c of CATS) {
+      const C = CATEGORY[c], A = 'arsenal|' + c + '|';
+      C.bodies.forEach((id, i) => { if (partUnlocked(c, i, id)) out.push(A + 'body|' + id); });
+      for (const [sl, list] of [['scope', C.scopes], ['handle', C.handles], ['laser', c === 'melee' ? [] : LASERS]]) list.forEach((id, i) => { if (partUnlocked(c, i + 1, id)) out.push(A + sl + '|' + id); });
+      for (const cm of CAMOS) if (camoUnlocked(c, cm)) out.push(A + 'camo|' + cm.id);
+      if (c !== 'melee') {
+        for (const id of AMMO_IDS) if (partUnlocked(c, 1, 'am:' + id)) out.push(A + 'ammo|' + id);
+        for (const id of TRACER_STYLES) if (partUnlocked(c, 1, 'tr:' + id)) out.push(A + 'tracer|' + id);
+      }
+      for (const id of BP_ORDER) if (BLUEPRINTS[id].wpn === c && bpUnlocked(id)) out.push(A + 'bp|' + id);
+    }
+    for (const tab of Object.keys(LOOKS)) for (const it of LOOKS[tab]) if (lookOpen(tab, it.id)) out.push('look|' + tab + '|' + it.id);
+    return out;
+  }
+  function markNewStuff() {
+    syncOpen(openKeys());
+    for (const [go, pre] of [['arsenal', 'arsenal|'], ['look', 'look|']]) {
+      const btn = document.querySelector(`.bill-item[data-go="${go}"]`);
+      if (!btn) continue;
+      btn.querySelector('.nw')?.remove();
+      if (anyNew(pre)) btn.insertAdjacentHTML('beforeend', newPill(t('chNew')));
+    }
+  }
+  ui.markNewStuff = markNewStuff;
+  onProgress(() => { if (ui.screen === 'home') markNewStuff(); });
+
   // selo no botao "Desafios" do menu enquanto houver desafio que o jogador nao viu
   function markNewChallenges() {
     const btn = document.querySelector('.bill-item[data-go="challenges"]');
@@ -277,20 +324,22 @@ export function initMenus(o) {
   let lookTab = 'hat', lookTeam = 'red', lookPeek = null;
   function renderLook() {
     const cur = getLook();
-    $('lookTabs').innerHTML = LOOK_TABS.map(k => `<button role="tab" aria-selected="${k === lookTab}" data-lt="${k}">${t('lkt_' + k)}</button>`).join('');
+    syncOpen(openKeys());
+    $('lookTabs').innerHTML = LOOK_TABS.map(k => `<button role="tab" aria-selected="${k === lookTab}" data-lt="${k}">${t('lkt_' + k)}${k !== lookTab && anyNew('look|' + k + '|') ? newPill(t('chNew')) : ''}</button>`).join('');
     document.querySelectorAll('#scr-look [data-team]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.team === lookTeam)));
     const swatch = lookTab === 'gloveCol' || lookTab === 'shirt';
     $('lookGrid').classList.toggle('swatches', swatch);
     $('lookGrid').innerHTML = LOOKS[lookTab].map(it => {
       const open = lookOpen(lookTab, it.id), on = cur[lookTab] === it.id, peek = lookPeek === it.id;
-      const lock = open ? '' : `<small class="lk-lock">${it.elite ? t('lookElite') : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
-      const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>`;
-      if (swatch) return `<button class="lk-it sw ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}" style="--c:${it.id}" aria-label="${it.id}">${it.elite ? '<i class="lk-r r2">Elite</i>' : ''}${lock}</button>`;
+      const lock = open ? '' : `<small class="lk-lock">${it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
+      const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>` + (isNew('look|' + lookTab + '|' + it.id) ? newPill(t('chNew')) : '');
+      if (swatch) return `<button class="lk-it sw ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}" style="--c:${it.id}" aria-label="${it.id}">${it.elite ? '<i class="lk-r r2">Elite</i>' : it.acct ? '<i class="lk-r r2">Rovex</i>' : ''}${lock}</button>`;
       return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}"><b>${t('lk_' + lookTab + '_' + it.id)}</b>${rar}${lock}</button>`;
     }).join('');
+    markSeen('look|' + lookTab + '|');
     const show = lookPeek ? { ...cur, [lookTab]: lookPeek } : cur;
     const pk = lookPeek && LOOKS[lookTab].find(i => i.id === lookPeek);
-    $('lookNote').textContent = !pk ? t('lookTeamNote') : pk.elite ? t('lookPeekElite') : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
+    $('lookNote').textContent = !pk ? t('lookTeamNote') : pk.elite ? t('lookPeekElite') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
     o.onLook?.(show, lookTeam);
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; renderLook(); });
     $('lookGrid').querySelectorAll('.lk-it').forEach(b => b.onclick = () => {
@@ -353,13 +402,25 @@ export function initMenus(o) {
   setInterval(checkInvites, 12000);
   setTimeout(checkInvites, 2500);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkInvites(); });
-  setInterval(refreshFriendRooms, 30000);
+  // amigo abriu/fechou sala: aparece em ate ~6 s no menu e no lobby (antes 30 s, so via ao voltar pro lobby).
+  // Na partida nao consulta; volta a consultar na hora que sai dela.
+  setInterval(refreshFriendRooms, 6000);
+  addEventListener('focus', () => refreshFriendRooms());
   setTimeout(refreshFriendRooms, 1500);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFriendRooms(); });
   markNewChallenges();
 
   // texto do desafio de desbloqueio e o nome do premio
   function chName(u) { return t('ch_' + u.id, { n: u.n }); }
+  // Tab da partida: desafios acompanhados com o progresso de agora (os do dia, o elite e os desbloqueios ativos)
+  ui.chRows = () => {
+    const el = eliteToday();
+    return [
+      ...dailyToday().map(c => ({ name: t('ch_' + c.id, { n: c.n, w: c.wpn ? wName(c.wpn) : '' }), prog: c.prog, n: c.n, done: c.done, tag: t('chDaily') })),
+      ...(el.done ? [] : [{ name: t('el_' + el.id, { n: el.n }), prog: el.prog, n: el.n, tag: t('elTitle'), elite: true }]),
+      ...unlockState().active.map(u => ({ name: chName(u), prog: u.prog, n: u.n, tag: t('chCareerU'), rw: rewardName(u.reward), pin: unlockPinned(u.id) })),
+    ];
+  };
   function rewardName(r) { if (r.slot === 'look') return t('look') + ': ' + t('lk_' + r.id.replace(':', '_')); if (r.slot === 'tracer') return t('s_tracer') + ' ' + t('tr_' + r.id.slice(3)); if (r.slot === 'ammo') return t('slot_ammo') + ' ' + t('am_' + r.id.slice(3)); return r.slot === 'camo' ? t('camo_' + r.id) : `${partName(r.slot, r.id)} (${t('cat_' + r.wpn)})`; }
 
   // previa de item bloqueado: aparece no modelo e nos status, mas nao vai pro loadout
@@ -373,7 +434,8 @@ export function initMenus(o) {
       $('picker').innerHTML = ''; $('statBars').innerHTML = '';
       return;
     }
-    $('catTabs').innerHTML = CATS.map(c => `<button role="tab" aria-selected="${c === cat}" data-c="${c}">${t('cat_' + c)}</button>`).join('');
+    syncOpen(openKeys());
+    $('catTabs').innerHTML = CATS.map(c => `<button role="tab" aria-selected="${c === cat}" data-c="${c}">${t('cat_' + c)}${anyNew('arsenal|' + c + '|') ? newPill(t('chNew')) : ''}</button>`).join('');
     $('catTabs').querySelectorAll('button').forEach(b => b.onclick = () => { cat = b.dataset.c; slot = 'body'; picking = false; preview = null; audio.play('ui_click', { ui: true }); renderSmith(); });
     // equipar: principal escolhida aqui, pistola sempre como secundaria
     const isPrimary = PRIMARIES.includes(cat);
@@ -408,7 +470,7 @@ export function initMenus(o) {
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
       else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s]}` : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
-      return `<button class="slot slot-${s} ${s === 'bp' && lo.bp ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}</small><span>${val}</span></button>`;
+      return `<button class="slot slot-${s} ${s === 'bp' && lo.bp ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew('arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
     }).join('');
     $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
     // blocos de pecas OU a lista de opcoes do slot escolhido (o painel troca, nao empilha)
@@ -420,6 +482,15 @@ export function initMenus(o) {
       : { ...lo, [preview.k]: preview.v, ...(preview.k === 'body' ? { charger: null } : {}) };
     if (preview) $('equipBar').insertAdjacentHTML('beforeend', `<p class="peek-note">${t('peekNote')}</p>`);
     renderPicker(lo, C);
+    if (picking) {
+      // NOVO nos itens da lista aberta; depois de vistos, saem
+      const pre = 'arsenal|' + cat + '|' + slot + '|';
+      $('picker').querySelectorAll('[data-id],[data-camo],[data-bp],[data-am],[data-tr]').forEach(b => {
+        const id = b.dataset.id ?? b.dataset.camo ?? b.dataset.bp ?? b.dataset.am ?? b.dataset.tr;
+        if (id && isNew(pre + id)) b.insertAdjacentHTML('beforeend', newPill(t('chNew')));
+      });
+      markSeen(pre);
+    }
     renderStats(view);
     o.onSmith(buildGun(cat, view));
   }
@@ -444,7 +515,7 @@ export function initMenus(o) {
     const fOpen = (id) => lv.unlockAll || lv.unlockLevel >= FIELD[id].lvl, fCur = FIELD[S.field] && fOpen(S.field) ? S.field : null;
     const fIcon = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[FIELD[id].icon] || ''}</svg>`;
     const fcard = (id) => { const ok = fOpen(id), on = fCur === id;
-      return `<button class="sk-card fd ${on ? 'on' : ''} ${ok ? '' : 'locked'}" data-fd="${id}" ${ok ? '' : 'aria-disabled="true"'} ${on ? `title="${t('skOff')}"` : ''}><span class="sk-ico">${fIcon(id)}</span>${ok ? '' : `<span class="sk-lock"><svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS.lock}</svg></span>`}<b>${t('fd_' + id)}</b><small>${ok ? t('fdd_' + id) + ' ' + t('fdCd', { n: FIELD[id].cd }) : t('skLvl', { n: FIELD[id].lvl })}</small></button>`; };
+      return `<button class="sk-card fd ${on ? 'on' : ''} ${ok ? '' : 'locked'}" data-fd="${id}" ${ok ? '' : 'aria-disabled="true"'} ${on ? `title="${t('skOff')}"` : ''}><span class="sk-ico">${fIcon(id)}</span>${ok ? '' : `<span class="sk-lock"><svg viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS.lock}</svg></span>`}<b>${t('fd_' + id)}</b><small>${ok ? t('fdd_' + id) + ' ' + t('fdCd', { n: FIELD[id].need }) : t('skLvl', { n: FIELD[id].lvl })}</small></button>`; };
     $('skillPane').innerHTML = `<div class="sk-medals">${eq.map(medal).join('')}</div><div class="sk-grid">${Object.keys(SKILLS).map(card).join('')}</div>` +
       `<div class="sk-field"><h3>${t('skField')}</h3><p class="sk-hint">${t('skFieldHint')}</p><div class="sk-grid">${FIELD_IDS.map(fcard).join('')}</div></div>`;
     $('skillPane').querySelectorAll('[data-fd]').forEach(b => b.onclick = () => {
@@ -539,8 +610,8 @@ export function initMenus(o) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
         // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
-        const req = c.elite && !open ? t('eliteOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
-        const bar = open || c.legend || c.elite || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
+        const req = c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const bar = open || c.legend || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {

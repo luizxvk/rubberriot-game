@@ -93,6 +93,25 @@ export function buildHat(id, teamCol) {
       add(ink(new THREE.SphereGeometry(0.04, 8, 6), PAL.white, 0.01), 0, 0.31);
       g.position.set(0, 0.2, 0); g.rotation.x = -0.12; break;
     }
+    case 'laurel': {
+      // coroa de louros (faixa Mestre): aro dourado + folhas verdes em volta + pedra violeta na testa
+      const ring = add(ink(new THREE.TorusGeometry(0.3, 0.035, 6, 24), 0xf2c94c, 0.012)); ring.rotation.x = Math.PI / 2;
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2; if (Math.abs(Math.sin(a)) < 0.2 && Math.cos(a) > 0) continue; // vao na nuca
+        const leaf = add(ink(new THREE.SphereGeometry(0.07, 6, 4), 0x7fb069, 0.01), Math.sin(a) * 0.31, 0.03, -Math.cos(a) * 0.31);
+        leaf.scale.set(0.55, 0.5, 1.4); leaf.rotation.y = a; leaf.rotation.x = 0.5;
+      }
+      add(ink(new THREE.OctahedronGeometry(0.06), 0xc084fc, 0.01), 0, 0.05, -0.33);
+      g.position.set(0, 0.24, 0); break;
+    }
+    case 'rovexcap': {
+      // bone violeta da Rovex: copa violeta, aba preta, hexagono claro na testa
+      add(ink(new THREE.SphereGeometry(0.31, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0x6d3df5, 0.02));
+      const vis = add(ink(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 16, 1, false, 0, Math.PI), PAL.ink, 0.015), 0, 0.01, -0.22); vis.rotation.y = Math.PI / 2; vis.scale.set(1, 1, 1.4);
+      const hex = add(ink(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 6), PAL.paper, 0.012), 0, 0.15, -0.26); hex.rotation.x = Math.PI / 2 - 0.5;
+      add(ink(new THREE.SphereGeometry(0.04, 8, 6), PAL.white, 0.01), 0, 0.31);
+      g.position.set(0, 0.2, 0); g.rotation.x = -0.12; break;
+    }
     case 'beanie': {
       add(ink(new THREE.SphereGeometry(0.33, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), teamCol, 0.02));
       { const b = band(0.335, 0.03, 0.09); b.material = toon(PAL.paper); g.add(b); }

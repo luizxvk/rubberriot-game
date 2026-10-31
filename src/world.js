@@ -6,6 +6,7 @@ import { buildGun } from './arsenal.js';
 export const BEAT = 2.2; // batidas por segundo da danca da cidade
 
 const THEME = {
+  bonde: { sky: 0xd6d2c6, ground: ['#cdc6b6', '#7a7366'], trees: [] }, // Ladeira do Bonde: a rua vem do trilho (escortview)
   vila: { sky: 0xd8d4ca, ground: ['#cfc9bd', '#7e786e'], roads: true, trees: [[-12, -12], [12, 12], [-40, 14], [40, -14], [-30, 30], [30, -30]] },
   fabrica: { sky: 0xc9c4ba, ground: ['#bdb7ab', '#6e6a63'], hazard: true, trees: [] },
   fronteira: { sky: 0xdcd8cc, ground: ['#d3cdb8', '#8a8470'], paths: true, trees: [[-40, -36], [40, 36], [-62, 10], [62, -10], [-14, 50], [14, -50], [-56, -50], [56, 50]] },

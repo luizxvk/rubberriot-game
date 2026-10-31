@@ -1,6 +1,6 @@
 // Visual do boneco: catalogo unico (jogo e servidor). O servidor so aceita o que esta aqui.
 // A COR DO TIME nunca sai daqui: short e fita do chapeu continuam vermelho/azul; o resto e' livre.
-// lvl = nivel do jogador que libera; elite = so com o Elite da Rovex; r = raridade (0 comum, 1 raro, 2 lendario).
+// lvl = nivel do jogador que libera; elite = so com o Elite da Rovex; acct = so quem tem conta Rovex; rank = faixa da rankeada ja alcancada; r = raridade (0 comum, 1 raro, 2 lendario).
 
 export const LOOK_SLOTS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx'];
 
@@ -27,6 +27,8 @@ export const LOOKS = {
     { id: 'tvhead', lvl: 1, r: 2, elite: true },  // televisao de valvula no lugar do chapeu
     { id: 'jester', lvl: 1, r: 2, elite: true },  // chapeu de bobo da corte
     { id: 'plunger', lvl: 1, r: 1, ch: 'u_lk_plunger' }, // desentupidor grudado (desafio)
+    { id: 'rovexcap', lvl: 1, r: 2, acct: true },
+    { id: 'laurel', lvl: 1, r: 2, rank: 4 },      // coroa de louros: faixa Mestre da rankeada (31/10)  // bone violeta com o hexagono: so quem tem conta Rovex (31/10)
   ],
   eyes: [
     { id: 'classic', lvl: 1, r: 0 },     // olho de torta
@@ -56,13 +58,13 @@ export const LOOKS = {
   gloveCol: [
     { id: '#faf8f2', lvl: 1, r: 0 }, { id: '#e8d9a8', lvl: 1, r: 0 }, { id: '#141210', lvl: 3, r: 0 },
     { id: '#f2c94c', lvl: 4, r: 0 }, { id: '#7fb069', lvl: 6, r: 1 }, { id: '#b07cc6', lvl: 8, r: 1 },
-    { id: '#ef8a5b', lvl: 10, r: 1 }, { id: '#7fd1d8', lvl: 12, r: 1 },
+    { id: '#ef8a5b', lvl: 10, r: 1 }, { id: '#7fd1d8', lvl: 12, r: 1 }, { id: '#6d3df5', lvl: 1, r: 2, acct: true }, { id: '#c9cdd2', lvl: 1, r: 2, rank: 1 },
   ],
   // camisa: so tons que nao confundem com o time (nada de vermelho nem azul)
   shirt: [
     { id: '#141210', lvl: 1, r: 0 }, { id: '#ece9e1', lvl: 1, r: 0 }, { id: '#5a544d', lvl: 2, r: 0 },
     { id: '#7a4a2a', lvl: 3, r: 0 }, { id: '#55603a', lvl: 5, r: 0 }, { id: '#4a2f4f', lvl: 7, r: 1 },
-    { id: '#2b5f5a', lvl: 9, r: 1 }, { id: '#b8913a', lvl: 1, r: 2, elite: true },
+    { id: '#2b5f5a', lvl: 9, r: 1 }, { id: '#b8913a', lvl: 1, r: 2, elite: true }, { id: '#6d3df5', lvl: 1, r: 2, acct: true }, { id: '#a8692f', lvl: 1, r: 1, rank: 0 },
   ],
   // estampa do short (o fundo continua a cor do time)
   pattern: [

@@ -30,6 +30,10 @@ export const CAMOS = [
   { id: 'chrome', code: 22, anim: true, req: { wpn: 19 } },
   { id: 'phantom', code: 23, anim: true, req: { player: 30 } },
   // 30/10 (noite, pedido dele): eter obscuro (escuro de verdade) e carbono animado
+  // rankeada (31/10): premio da faixa (vale pra sempre depois de alcancar); shader conhecido + particulas
+  { id: 'rk_ouro', code: 5, anim: true, rank: 2, fx: 'stars' },
+  { id: 'rk_diamante', code: 6, anim: true, rank: 3, fx: 'storm' },
+  { id: 'rk_mestre', code: 12, anim: true, rank: 4, fx: 'flame' },
   { id: 'darkaether', code: 42, anim: true, req: { player: 45 } },
   { id: 'carbon', code: 43, anim: true, req: { wpn: 12 } },
   // reativas: mudam de estagio a cada 2 abates na mesma vida (2, 4, 6)
@@ -61,6 +65,9 @@ export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
 // cor de amostra pra lista do arsenal (css)
 export const CAMO_SWATCH = {
+  rk_ouro: 'radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),linear-gradient(120deg,#8a6312,#f6d36b 45%,#fff4c4 50%,#c9952b 60%,#7a5410)',
+  rk_diamante: 'radial-gradient(circle at 70% 30%,#fff 1.5px,transparent 2.5px),linear-gradient(135deg,#9fe3f0,#e6fbff 45%,#3a7d9c)',
+  rk_mestre: 'radial-gradient(circle at 50% 80%,#ff8a3d 20%,transparent 45%),radial-gradient(circle at 50% 50%,#5b3fd6,#1b0f3d 55%,#05030d)',
   none: 'repeating-linear-gradient(45deg,#ece9e1 0 6px,#dcd7cb 6px 12px)',
   tiger: 'repeating-linear-gradient(115deg,#d9822b 0 7px,#1b1916 7px 11px)',
   digital: 'conic-gradient(#5d6b4e 25%,#8a937a 0 50%,#3f4a32 0 75%,#b5b89f 0)',

@@ -8,11 +8,13 @@ import { hasLOS } from './map.js';
 let seq = 0;
 const near = (a, b, r) => (a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2 < r * r && Math.abs(a[1] - b[1]) < 1.6;
 
-export function fieldReset(c) { c.springs = []; c.holes = []; }
+export function fieldReset(c) { c.springs = []; c.holes = []; for (const p of c.players.values()) { p.fieldCharge = 0; p.fieldScore = p.score || 0; } }
+// barra do equipamento: enche com os pontos que a pessoa faz na partida (abate, assistencia, objetivo)
+export const fieldReady = (p) => (p.fieldCharge || 0) >= 1;
 
 export function fieldUse(c, p, m) {
   const F = FIELD[p.field];
-  if (!F || !p.alive || p.inRing || p.down > 0 || m.kind !== p.field || (p.fieldCd || 0) > 0) return; // ringue = so soco
+  if (!F || !p.alive || p.inRing || p.down > 0 || m.kind !== p.field || !fieldReady(p)) return; // ringue = so soco
   const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
   // ponto mirado (mola, buraco, bigorna): dentro do alcance, em chao de verdade e a vista
   let at = null;
@@ -24,8 +26,8 @@ export function fieldUse(c, p, m) {
   else if (p.field === 'spring') c.springs.push({ id: ++seq, pos: at && Math.hypot(at[0] - p.pos[0], at[2] - p.pos[2]) < 5 ? at : [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], t: F.dur });
   else if (p.field === 'hole') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.holes.push({ id: ++seq, a: [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], b: at, t: F.dur, owner: p.id }); }
   else if (p.field === 'anvil') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.anvils.push({ owner: p.id, pos: at, t: F.fall }); c.event({ k: 'anvilWarn', list: [at] }); }
-  p.fieldCd = F.cd;
-  c.event({ k: 'field', id: p.id, kind: p.field, cd: F.cd, at });
+  p.fieldCharge = 0;
+  c.event({ k: 'field', id: p.id, kind: p.field, at });
 }
 
 // guarda-chuva aberto: bloqueia o que vem da frente (tiro, soco, faca); explosao e iris passam
@@ -40,7 +42,10 @@ export function fieldBlocks(c, v, a, wpn) {
 
 export function fieldTick(c, dt) {
   for (const p of c.players.values()) {
-    if (p.fieldCd > 0) { p.fieldCd -= dt; if (p.fieldCd <= 0 && !p.bot) c.event({ k: 'fieldReady', id: p.id }); }
+    // pontos novos desde a ultima conferida viram barra (nunca passa de cheia); encheu = aviso
+    const sc = p.score || 0, gain = sc - (p.fieldScore ?? sc); p.fieldScore = sc;
+    const F = FIELD[p.field];
+    if (F && gain > 0 && !fieldReady(p)) { p.fieldCharge = Math.min(1, (p.fieldCharge || 0) + gain / F.need); if (fieldReady(p) && !p.bot) c.event({ k: 'fieldReady', id: p.id }); }
     if (p.shieldT > 0) p.shieldT -= dt;
   }
   for (const list of [c.springs, c.holes]) for (let i = list.length - 1; i >= 0; i--) if ((list[i].t -= dt) <= 0) list.splice(i, 1);
@@ -67,7 +72,7 @@ export function fieldSnap(c) {
   return { springs: c.springs.map(s => [s.id, ...s.pos.map(r)]), holes: c.holes.map(h => [h.id, ...h.a.map(r), ...h.b.map(r)]) };
 }
 
-// bots: cada um sai com um equipamento sorteado e usa com criterio (sem spam: so quando a cena pede)
+// bots: cada um sai com um equipamento sorteado e usa com criterio, so com a barra cheia (como todo mundo)
 export const botPickField = () => FIELD_IDS[Math.floor(Math.random() * FIELD_IDS.length)];
 export function botField(c, p, t) {
   const hpK = p.hp / (p.maxHp || 80), d = t ? Math.hypot(t.pos[0] - p.pos[0], t.pos[2] - p.pos[2]) : 99;
@@ -82,7 +87,6 @@ export function botField(c, p, t) {
     if (q) { at = q; go = true; }
   }
   if (!go) return;
-  const before = p.fieldCd || 0;
   fieldUse(c, p, { kind: p.field, at });
-  if (p.field === 'hole' && (p.fieldCd || 0) > before) { const h = c.holes[c.holes.length - 1]; p.pos = [h.b[0] + 1.2, h.b[1], h.b[2]]; p.holeCd = 1.5; p.ai.path = null; c.event({ k: 'slurp', id: p.id, from: h.a, to: h.b }); } // entra na hora
+  if (p.field === 'hole' && !fieldReady(p)) { const h = c.holes[c.holes.length - 1]; p.pos = [h.b[0] + 1.2, h.b[1], h.b[2]]; p.holeCd = 1.5; p.ai.path = null; c.event({ k: 'slurp', id: p.id, from: h.a, to: h.b }); } // entra na hora
 }

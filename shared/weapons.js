@@ -118,12 +118,13 @@ export const AMMO = {
 };
 export const AMMO_IDS = Object.keys(AMMO);
 // Equipamento de campo: um por jogador (escolhido na secao Skills), tecla Z / direcional direita / botao
-// de toque. cd = recarga (s); lvl = nivel que libera.
+// de toque. need = pontos de partida pra encher a barra (31/10, pedido dele: estilo especialista do Black Ops 3,
+// enche so com pontuacao e abate; abate = 100); lvl = nivel que libera.
 export const FIELD = {
-  umbrella: { lvl: 2, cd: 30, dur: 5, icon: 'beach_access' },            // escudo na frente: bloqueia tiro e soco que vem de frente
-  spring: { lvl: 5, cd: 25, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
-  hole: { lvl: 9, cd: 35, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
-  anvil: { lvl: 13, cd: 40, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
+  umbrella: { lvl: 2, need: 300, dur: 5, icon: 'beach_access' },            // escudo na frente: bloqueia tiro e soco que vem de frente
+  spring: { lvl: 5, need: 250, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
+  hole: { lvl: 9, need: 350, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
+  anvil: { lvl: 13, need: 400, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
 };
 export const FIELD_IDS = Object.keys(FIELD);
 export const BLAST = ['frag', 'anvil', 'blimp', 'bomb'];
@@ -141,6 +142,8 @@ export const MODES = {
   tdm:      { name: 'Mata-Mata',         teams: true,  limit: 40,  desc: 'Vermelhos contra azuis. 40 nocautes do time vencem.' },
   gungame:  { name: 'Escada de Armas',   teams: false, limit: GUN_LADDER.length, desc: 'Cada nocaute troca sua arma, da pistola ao canhao de mao.' },
   ctf:      { name: 'Captura a Bandeira', teams: true, limit: 3,   desc: 'Roube a bandeira deles e traga pra sua base. 3 capturas.' },
+  // vermelho empurra o bonde (fica no circulo em volta dele), azul segura; limit = % do caminho (placar)
+  escort:   { name: 'Escolta',           teams: true,  limit: 100, time: 210, desc: 'Ataque empurra o Bonde da Tinta ate a garagem ficando perto dele; defesa segura ate o tempo acabar.' },
   dom:      { name: 'Dominacao',         teams: true,  limit: 150, desc: 'Segure os pontos A, B e C. Cada ponto rende pontos por segundo.' },
   // vermelho ataca (planta), azul defende (desarma); sem renascer na rodada; limit = rodadas pra vencer
   bomb:     { name: 'Plantar a Bomba',   teams: true,  limit: 4,   desc: 'Ataque planta a bomba no ponto A ou B, defesa desarma. Sem renascer na rodada.' },

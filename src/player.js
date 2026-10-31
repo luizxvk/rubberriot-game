@@ -83,7 +83,7 @@ export class Player {
     this.yaw = ev.yaw; this.pitch = 0;
     this.alive = true; this.hp = 100;
     this.nades = this.g.mode === 'br' ? { frag: 0, flash: 0 } : { frag: 1, flash: 1 }; this.patIdx = 0;
-    this.owned = []; this.ammo = {};
+    this.owned = []; this.ammo = {}; this.stash = {};
     // escada de armas e infectado: o servidor decide o kit (infectado = so a lamina)
     if (this.g.mode === 'gungame') { this.give(ev.wpn, false); this.equip(ev.wpn, true); }
     else if ((this.g.mode === 'infect' || this.g.mode === 'br') && ev.owned?.length) { // infectado e battle royale: o servidor decide o kit
@@ -95,7 +95,26 @@ export class Player {
       this.give('pistol', false); this.give(primary, false); this.give('melee', false);
       this.equip(primary, true);
     }
-    this.crouch = false; this.tacFuel = 3.5; this.slideT = 0; this.slideDir = null; this.slideCd = 0;
+    this.crouch = false; this.tacFuel = 3.5; this.slideT = 0; this.slideDir = null; this.slideCd = 0; this.cook = null;
+  }
+
+  // arsenal aberto na partida: as pecas novas valem na hora e a principal trocada entra no lugar da velha.
+  // A municao nao enche de graca: a arma que sai guarda o que tinha e volta com isso se for escolhida de novo.
+  rearm() {
+    if (!this.alive) return;
+    if (this.g.mode !== 'gungame' && this.g.mode !== 'infect' && this.g.mode !== 'br') {
+      const primary = PRIMARIES.includes(this.g.settings.primary) ? this.g.settings.primary : 'smg';
+      const old = this.owned.find(w => PRIMARIES.includes(w) && w !== primary);
+      if (old) { this.stash[old] = this.ammo[old]; this.owned = this.owned.filter(w => w !== old); delete this.ammo[old]; }
+      if (!this.owned.includes(primary)) {
+        this.give(primary, false);
+        if (this.stash[primary]) this.ammo[primary] = this.stash[primary];
+      }
+      if (this.wpn === old || !this.owned.includes(this.wpn)) this.wpn = primary;
+    }
+    // pente maior ou menor: o que esta no pente nao passa da capacidade nova
+    for (const id of this.owned) { const a = this.ammo[id]; if (a && Number.isFinite(a.mag)) a.mag = Math.min(a.mag, this.stats(id).mag); }
+    this.equip(this.wpn, true);
   }
 
   give(id, announce = true, force = false) {
@@ -351,7 +370,9 @@ export class Player {
     if (inp.adsPressed && canAds) audio.play('ads', { vol: 0.35 });
 
     // trocas
-    if (!this.forced) {
+    // trava de troca so vale no modo que a ligou (escada de armas / infectado): o jogador vive a sala inteira e
+    // a trava vazava pra partida seguinte em outro modo (nao trocava mais de arma)
+    if (!this.forced || (this.g.mode !== 'gungame' && this.g.mode !== 'infect')) {
       if (inp.slot >= 0 && this.owned[inp.slot]) this.equip(this.owned[inp.slot]);
       if (inp.wheel) this.cycle(inp.wheel > 0 ? 1 : -1);
       if (inp.lastPressed) this.equip(this.lastWpn);
@@ -366,15 +387,28 @@ export class Player {
     if (inp.fieldPressed) this.useField();
     this.fieldPhysics(dt);
     if (inp.inspectPressed && this.reloadT <= 0 && this.adsK < 0.1 && !this.sprint) this.g.vm.inspect();
-    // granadas (G frag, F flash) e sequencia de abates (X)
+    // granadas (G frag, F flash) e sequencia de abates (X). Apertou = puxa o pino e o pavio comeca a correr;
+    // soltou = arremessa com o pavio que sobrou; segurou demais = estoura na mao (main.js desenha o tracejado)
     this.throwT -= dt;
-    for (const kind of ['frag', 'flash']) {
+    if (this.cook) {
+      const c = this.cook, fuse = NADES[c.kind].fuse;
+      c.t += dt;
+      if (c.t >= fuse) {
+        this.cook = null; this.throwT = 0.6;
+        this.g.net.send({ t: 'nade', kind: c.kind, d: [0, 0, -1], hand: true });
+      } else if (!inp[c.kind + 'Held'] || !this.alive) {
+        this.cook = null; this.throwT = 0.6;
+        const f = new THREE.Vector3(); this.g.camera.getWorldDirection(f);
+        this.g.net.send({ t: 'nade', kind: c.kind, d: f.toArray(), cook: c.t });
+        this.g.vm.throwNade();
+        audio.play('whoosh', { vol: 0.5, rate: 0.9 });
+      } else if (Math.floor(c.t * 2) !== Math.floor((c.t - dt) * 2)) audio.play('ui_click', { vol: 0.35, rate: 1 + c.t / fuse, ui: true }); // tique do pavio, cada meio segundo
+    } else for (const kind of ['frag', 'flash']) {
       if (!inp[kind + 'Pressed'] || this.throwT > 0 || this.nades[kind] <= 0) continue;
-      this.nades[kind]--; this.throwT = 0.6;
-      const f = new THREE.Vector3(); this.g.camera.getWorldDirection(f);
-      this.g.net.send({ t: 'nade', kind, d: f.toArray() });
-      this.g.vm.throwNade();
-      audio.play('whoosh', { vol: 0.5, rate: 0.9 });
+      this.nades[kind]--;
+      this.cook = { kind, t: 0 };
+      audio.play('pickup', { vol: 0.45, rate: 1.5 }); // pino
+      break;
     }
     if (inp.streakPressed && this.g.me?.ready?.length) {
       // outra sequencia no ar (ou o intervalo depois dela): avisa na hora, sem ir ao servidor
@@ -451,7 +485,7 @@ export class Player {
   useField() {
     const g = this.g, F = FIELD[g.field];
     if (!F || !this.alive || g.inRing || g.down) return; // ringue = so soco; caido nao usa
-    if ((g.fieldCd || 0) > 0) { audio.play('empty', { vol: 0.4 }); return; }
+    if ((g.fieldK ?? 0) < 1) { audio.play('empty', { vol: 0.4 }); return; } // barra ainda nao encheu (pontos/abates)
     const o = this.eyePos(), cp = Math.cos(this.pitch);
     const d = [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp];
     const range = F.range || 4, hit = raycast(g.M, o, d, range);

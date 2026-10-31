@@ -105,6 +105,13 @@
       <!-- XP em dobro no fim de semana: carimbo de borracha no cartaz; clicar explica (sabado e domingo, hora local) -->
       <button class="wknd" id="wknd" type="button" aria-expanded="false" aria-controls="wkndNote" hidden><b>2x</b><span>XP</span><small data-i18n="wkndStamp">fim de semana</small></button>
       <p class="wknd-note" id="wkndNote" role="status" hidden><b data-i18n="wkndTitle">XP em dobro no fim de semana</b><span data-i18n="wkndBody">Sabado e domingo, todo XP vale o dobro: abates, partidas e desafios. Soma com o XP do Elite.</span></p>
+      <!-- guest (site proprio sem conta): banner fixo pra criar a conta Rovex e nao perder o progresso. Icone: Material Icons (Apache 2.0) -->
+      <a class="elite-promo guest-promo" id="guestPromo" href="#" target="_top" rel="noopener" hidden>
+        <svg class="ep-hex" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        <span class="ep-txt"><b id="gpName">guest</b><small data-i18n="gpSub">Crie sua conta Rovex: salva o progresso e libera 3 itens exclusivos</small></span>
+        <em class="ep-chip" data-i18n="gpChip">Criar conta</em>
+        <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+      </a>
       <!-- Elite da Rovex: beneficios no jogo; leva pra pagina do Elite (quem ja e Elite ve o selo ativo) -->
       <a class="elite-promo" id="elitePromo" href="https://tryrovex.com/elite" target="_top" rel="noopener">
         <!-- logo oficial do Elite (EliteHexIcon do template-magazine): hexagono + estrela -->
@@ -118,6 +125,7 @@
         <button id="goSolo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
         <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span></button>
         <button id="goTutorial" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg><span data-i18n="tutorial">Treino</span></button>
+        <button data-go="ranked" class="bill-item ranked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.43V2H7v8.43c0 .35.18.68.49.86l4.18 2.51-.99 2.34-3.41.29 2.59 2.24L9.07 22 12 20.23 14.93 22l-.78-3.33 2.59-2.24-3.41-.29-.99-2.34 4.18-2.51c.3-.18.48-.5.48-.86zm-4 1.8-1 .6-1-.6V3h2v9.23z"/></svg><span data-i18n="ranked">Rankeada</span><i class="rk-mini" id="rkMini"></i></button>
         <button data-go="arsenal" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><span data-i18n="arsenal">Arsenal</span></button>
         <button data-go="look" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 18.2 13 11.75v-.91a3.496 3.496 0 0 0-.18-6.75A3.51 3.51 0 0 0 8.5 7.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5c0 .84-.69 1.52-1.53 1.5-.54-.01-.97.45-.97.99v1.76L2.4 18.2c-.77.58-.36 1.8.6 1.8h18c.96 0 1.37-1.22.6-1.8zM6 18l6-4.5 6 4.5H6z"/></svg><span data-i18n="look">Visual</span></button>
         <button data-go="skills" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 8.57a1.43 1.43 0 1 0 0 2.86 1.43 1.43 0 0 0 0-2.86z"/><path d="M13 3C9.25 3 6.2 5.94 6.02 9.64L4.1 12.2a.5.5 0 0 0 .4.8H6v3c0 1.1.9 2 2 2h1v3h7v-4.68A6.999 6.999 0 0 0 13 3zm3 7c0 .13-.01.26-.02.39l.83.66c.08.06.1.16.05.25l-.8 1.39c-.05.09-.16.12-.24.09l-.99-.4c-.21.16-.43.29-.67.39L14 13.83c-.01.1-.1.17-.2.17h-1.6c-.1 0-.18-.07-.2-.17l-.15-1.06c-.25-.1-.47-.23-.68-.39l-.99.4c-.09.03-.2 0-.25-.09l-.8-1.39a.19.19 0 0 1 .05-.25l.84-.66c-.01-.13-.02-.26-.02-.39s.02-.27.04-.39l-.85-.66c-.08-.06-.1-.16-.05-.26l.8-1.38c.05-.09.15-.12.24-.09l1 .4c.2-.15.43-.29.67-.39L12 6.17c.02-.1.1-.17.2-.17h1.6c.1 0 .18.07.2.17l.15 1.06c.24.1.46.23.67.39l1-.4c.09-.03.2 0 .24.09l.8 1.38a.2.2 0 0 1-.05.26l-.85.66c.03.12.04.25.04.39z"/></svg><span data-i18n="skTab">Skills</span></button>
@@ -165,6 +173,14 @@
     <p class="err" id="mpErr" role="alert"></p>
   </section>
 
+  <!-- rankeada (31/10): badge atual, pontos, as 5 faixas com premio e o botao de procurar partida -->
+  <section class="card" id="scr-ranked" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="ranked">Rankeada</h2></header>
+    <div class="rk-me" id="rkMe"></div>
+    <p class="rk-sub" data-i18n="rkSub">Captura a Bandeira, Dominacao e Escolta.</p>
+    <ol class="rk-tiers" id="rkTiers"></ol>
+    <button class="big rk-find" id="rkFind" data-i18n="rkFind">Procurar partida</button>
+  </section>
   <section class="card" id="scr-challenges" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="challenges">Desafios</h2></header>
     <div class="elite-card" id="chElite"></div>
@@ -277,6 +293,10 @@
 </section>
 
 <div id="hud" hidden>
+  <!-- efeito das balas especiais na tela de quem levou (fogo, rastreada, explosiva, perfurante) -->
+  <div class="ammo-fx" id="ammoFx" aria-hidden="true"><i class="af-fire"></i><i class="af-trace"></i><i class="af-boom"></i><b class="af-txt" id="afTxt"></b></div>
+  <!-- escolta: caminho do bonde com os pontos de controle, quem esta no circulo e o estado -->
+  <div class="esc-bar" id="escBar" hidden><div class="eb-track"><i class="eb-fill" id="ebFill"></i><span id="ebCps"></span><b class="eb-tram" id="ebTram"></b></div><p class="eb-st"><span class="eb-n red" id="ebRed">0</span><em id="ebState"></em><span class="eb-n blue" id="ebBlue">0</span></p><p class="eb-role" id="ebRole"></p></div>
   <div class="chute-canopy" aria-hidden="true"><svg viewBox="0 0 400 90" preserveAspectRatio="none"><path d="M0 0H400V40Q375 70 350 40Q325 70 300 40Q275 70 250 40Q225 70 200 40Q175 70 150 40Q125 70 100 40Q75 70 50 40Q25 70 0 40Z" fill="#a83a2c" stroke="#141210" stroke-width="5"/><path d="M50 0V40M100 0V40M150 0V40M200 0V40M250 0V40M300 0V40M350 0V40" stroke="#ece9e1" stroke-width="22" opacity=".9"/><path d="M0 0H400V40Q375 70 350 40Q325 70 300 40Q275 70 250 40Q225 70 200 40Q175 70 150 40Q125 70 100 40Q75 70 50 40Q25 70 0 40Z" fill="none" stroke="#141210" stroke-width="5"/></svg><i class="cord l"></i><i class="cord r"></i></div>
   <div class="chute-hud" id="chuteHud" hidden><b id="chuteAlt">0 m</b><span id="chuteTxt"></span></div>
   <div class="hud-top">
@@ -361,6 +381,7 @@
     <h2 data-i18n="intermission">Intervalo</h2>
     <div class="pk" id="pausePick" role="radiogroup" aria-labelledby="pkLbl"><p class="pk-lbl" id="pkLbl" data-i18n="pickNext">Arma no proximo renascimento</p><div class="pk-list" id="pkList"></div></div>
     <button class="big" id="resume" data-i18n="resume">Voltar pro tiroteio</button>
+    <button class="plain" id="pauseSmith" data-i18n="lbSmith">Montar arma</button>
     <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botoes</button>
     <button class="plain" id="pauseFs" data-i18n="fsOn" hidden>Tela cheia</button>
     <button class="plain" id="pauseSettings" data-i18n="settings">Ajustes</button>
@@ -381,6 +402,8 @@
       </section>
       <section class="end-panel end-prog" aria-labelledby="endProgTitle">
         <h3 id="endProgTitle" data-i18n="endProg">Seu progresso</h3>
+        <!-- rankeada: badge, pontos contando e o bonus da vitoria -->
+        <div class="end-rank" id="endRank" hidden><span class="er-badge" id="erBadge"></span><div><small data-i18n="ranked">Rankeada</small><b id="erPts">+0</b><em id="erWhy"></em></div><span class="er-total" id="erTotal"></span><p class="er-up" id="erUp" hidden></p></div>
         <div class="end-lvl"><b id="endLvl">1</b><span><small id="endLvlTxt"></small><span class="xpbar"><i id="endBar"></i></span></span><em id="endXpNum">+0 XP</em></div>
         <ul class="end-xplist" id="endXpList"></ul>
         <h4 id="endUnlTitle" data-i18n="endUnl">Liberado nesta partida</h4>

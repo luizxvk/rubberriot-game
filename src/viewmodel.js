@@ -405,6 +405,14 @@ export class ViewModel {
     }
     this.akSpinR = spinR; // giro no dedo da arma da direita (akimbo e revolver)
     if (st.crouch) ty -= 0.01 * (1 - st.ads); // agachado a arma desce um pouco, mas mirando fica no centro (a mira da arma batia abaixo da cruz)
+    // deslize (31/10, pedido dele, estilo BO3): a direita segura a arma tombada pra esquerda com o cano subindo
+    // e a mao esquerda solta e desce ate o chao, raspando. Mirando deslizando a pose some (atira normal)
+    this.fSlide = damp(this.fSlide || 0, st.slide && st.ads < 0.3 && this.wpn !== 'fists' ? 1 : 0, st.slide ? 14 : 9, dt);
+    if (this.fSlide > 0.001) {
+      const f = this.fSlide;
+      tx += (0.13 - tx) * f; ty += (-0.15 - ty) * f; tz += (-0.42 - tz) * f;
+      trx += (0.1 - trx) * f; tryy += (0.12 - tryy) * f; trz += (0.34 - trz) * f; // fica na direita, tomba pra esquerda e o cano sobe
+    }
 
     // depois de uma volta inteira, a rotacao volta pra faixa normal sem desenrolar
     if (!insp && Math.abs(s.ry) > Math.PI) s.ry -= Math.sign(s.ry) * Math.PI * 2;
@@ -571,6 +579,12 @@ export class ViewModel {
         pL.y -= dipQ * 0.6;
       }
     }
+    // deslize: a direita continua no cabo e a esquerda solta da arma e vai pro chao, embaixo a esquerda
+    const fs = this.fSlide || 0;
+    if (fs > 0.001 && !fists) {
+      const drag = Math.sin((this.slideTT = (this.slideTT || 0) + dt) * 38) * 0.006;
+      pL.lerp(new THREE.Vector3(-0.15 + drag, -0.21, -0.44 + drag * 2), fs); // canto de baixo a esquerda, dentro do quadro
+    } else this.slideTT = 0;
     this.gloveR.position.copy(pR);
     this.gloveL.position.copy(pL);
     this.gloveR.quaternion.copy(this.rig.quaternion);
@@ -582,6 +596,10 @@ export class ViewModel {
     if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); } // punho gira com a passada
     else if (this.akimbo) this.gloveL.quaternion.copy(this.akimbo.quaternion); // akimbo: a esquerda segue a 2a pistola
     else this.gloveL.rotateZ(-0.9);
+    if (fs > 0.001 && !fists) { // palma da esquerda virada pro chao, dedos pra frente
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.25, -0.25, 0.3, 'YXZ'));
+      this.gloveL.quaternion.slerp(q, fs);
+    }
     // guarda-chuva aberto: a mao esquerda segura o cabo, cupula na frente-esquerda tampando o tronco
     if (this.umbOn) {
       if (!this.umb) { this.umb = umbrellaMesh(); this.umb.scale.setScalar(0.3); this.scene.add(this.umb); }

@@ -1,5 +1,6 @@
 // Lobby antes da partida (o mapa gira atras) e a tela de carregamento com dicas.
 import { t, modeName, modeDesc, eliteTag } from './i18n.js';
+import { badgeSvg } from './rank.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { TEAM_MAX, MODES } from '../shared/weapons.js';
@@ -146,7 +147,7 @@ export class Lobby {
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     const rows = [
       ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha')], br ? 'ilha' : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['map', br ? ['ilha'] : raw === 'escort' ? ['bonde'] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde')], br ? 'ilha' : raw === 'escort' ? 'bonde' : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       ['players', Array.from({ length: 15 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)],
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
       ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
@@ -208,7 +209,7 @@ export class Lobby {
     $('lbPlayers').innerHTML = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="lv">${t('lvlShort', { n: p.lvl })}</span><span class="stamp">${t('lbReadyStamp')}</span></li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="lv">${t('lvlShort', { n: p.lvl })}</span><span class="stamp">${t('lbReadyStamp')}</span></li>`;
     }).join('');
     // carimbo so anima em quem acabou de ficar pronto
     const now = new Set(list.filter(p => p.ready).map(p => p.id));

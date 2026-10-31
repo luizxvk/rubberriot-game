@@ -403,12 +403,90 @@ function ilha() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha };
+
+// ---------- Ladeira do Bonde (so Escolta, 31/10) ----------
+// Rua em zigue-zague com o trilho do bonde no meio: casas e lojas coladas dos dois lados (nunca em cima do
+// trilho), praca com chafariz no 1o ponto de controle, viaduto passando por cima dos trilhos, mirantes com
+// escada pra quem defende de cima e muita cobertura baixa na beira da rua. Tudo sorteado com semente fixa
+// (servidor e navegador montam o mesmo mapa).
+function bonde() {
+  const A = 64, { boxes, box, stairs, walls } = builder(A);
+  walls(8);
+  const track = [[-36, -56], [-36, -32], [-12, -24], [12, -24], [24, -6], [24, 12], [0, 24], [-18, 34], [-18, 48], [4, 58]];
+  let seed = 7; const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // distancia de um ponto ate o trilho
+  const dTrack = (x, z) => { let m = 1e9; for (let i = 1; i < track.length; i++) { const [ax, az] = track[i - 1], [bx, bz] = track[i], vx = bx - ax, vz = bz - az, L = vx * vx + vz * vz, k = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L)); m = Math.min(m, Math.hypot(x - ax - vx * k, z - az - vz * k)); } return m; };
+  // caixa (w x d) longe do trilho: confere o centro e os 4 cantos
+  const clear = (x, z, w, d, gap) => [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].every(([a, b]) => dTrack(x + a * w / 2, z + b * d / 2) > gap);
+  const solid = [];
+  const free = (x, z, w, d, pad = 1) => Math.abs(x) + w / 2 < A - 2 && Math.abs(z) + d / 2 < A - 2 && solid.every(o => Math.abs(o[0] - x) > (o[2] + w) / 2 + pad || Math.abs(o[1] - z) > (o[3] + d) / 2 + pad);
+  const put = (x, z, w, d, h, y0, kind, extra) => { solid.push([x, z, w, d]); box(x, z, w, d, h, y0, kind, extra); };
+
+  // viaduto sobre o trilho (entre os pontos 2 e 3): tabuleiro alto + pilares fora da rua + escadas
+  put(-28, -29, 4, 16, 0.5, 5, 'bridge'); solid.pop();
+  put(-28, -38.5, 4, 3, 5, 0, 'house', { roof: 'flat', seed: 41 }); put(-28, -19.5, 4, 3, 5, 0, 'house', { roof: 'flat', seed: 42 });
+  stairs(-30, -42, 0, -1, 3, 10, 0.5, 0.8); solid.push([-30, -46, 3, 8]);
+  // praca do chafariz (1o ponto de controle fica do lado): bacia, mureta baixa e bancos
+  put(0, -38, 6, 6, 1.1, 0, 'vat'); box(-5.5, -38, 1, 5, 0.6, 0, 'crate'); box(5.5, -38, 1, 5, 0.6, 0, 'crate');
+  // mirantes (plataforma alta com escada), um em cada metade
+  for (const [x, z, sx] of [[40, -18, -1], [-4, 40, 1], [-46, 10, 1]]) {
+    if (!free(x, z, 7, 7)) continue;
+    put(x, z, 7, 7, 0.5, 3.5, 'platform');
+    for (const [px, pz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) box(x + px, z + pz, 0.6, 0.6, 3.5, 0, 'pillar');
+    stairs(x + sx * 3.5, z + 2, sx, 0, 2.4, 7, 0.5, 0.75); solid.push([x + sx * 6.5, z + 2, 6, 3]);
+  }
+  // fileiras de casas e lojas dos dois lados da rua (uma a cada ~11 m do trilho)
+  const T = []; for (let i = 1; i < track.length; i++) T.push([track[i - 1], track[i]]);
+  let n = 0;
+  for (const [a, b] of T) {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+    // fileira da rua (casas e lojas) e, atras dela, os predios mais altos fechando a vista
+    for (const [o0, o1, h0, h1, st] of [[10.5, 13, 5.5, 10, 9], [21, 25, 8, 14, 11]]) for (let s = 4; s < L; s += st + rng() * 3) for (const side of [-1, 1]) {
+      const w = 7 + rng() * 4, d = 7 + rng() * 3, h = h0 + rng() * (h1 - h0), off = o0 + rng() * (o1 - o0);
+      const x = a[0] + ux * s + uz * side * off, z = a[1] + uz * s - ux * side * off;
+      const W = Math.abs(ux) > 0.7 ? w : d, D = Math.abs(ux) > 0.7 ? d : w;
+      if (!clear(x, z, W, D, 6) || !free(x, z, W, D, 1.2)) continue;
+      put(x, z, W, D, h, 0, 'house', { roof: rng() < 0.55 ? 'peak' : 'flat', seed: 100 + n++, team: z < -30 ? 'red' : z > 40 ? 'blue' : undefined });
+    }
+  }
+  // cobertura baixa na beira da rua (caixote, carrinho de feira, barril), sempre fora do trilho
+  for (let k = 0; k < 70; k++) {
+    const [a, b] = T[Math.floor(rng() * T.length)], s = rng(), side = rng() < 0.5 ? -1 : 1, off = 4 + rng() * 3.5;
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+    const x = a[0] + (b[0] - a[0]) * s + uz * side * off, z = a[1] + (b[1] - a[1]) * s - ux * side * off;
+    const big = rng() < 0.3, w = big ? 3.2 : 1.6 + rng() * 0.8, d = big ? 1.2 : w, h = big ? 1.2 : 1.1 + rng() * 0.7;
+    if (!clear(x, z, w, d, 3.3) || !free(x, z, w, d, 1.6)) continue;
+    put(x, z, w, d, h, 0, rng() < 0.25 ? 'post' : 'crate');
+    if (!big && rng() < 0.3) box(x, z, w * 0.7, d * 0.7, 0.9, h, 'crate');
+  }
+  // postes de luz ao longo do trilho
+  for (const [a, b] of T) for (const side of [-1, 1]) {
+    const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+    const x = mx + uz * side * 3.6, z = mz - ux * side * 3.6;
+    if (clear(x, z, 0.4, 0.4, 3) && free(x, z, 0.4, 0.4, 0.5)) put(x, z, 0.4, 0.4, 4.5, 0, 'post');
+  }
+  // garagem do bonde (fim do trilho, azul) e estacao (comeco, vermelho)
+  put(4, 62.3, 14, 1.4, 8, 0, 'wall'); put(-36, -61.5, 12, 1.4, 6, 0, 'wall');
+  const sp = (d0, side) => { const out = []; for (let i = 0; i < 8; i++) { const t = track[d0], o = (i % 4 - 1.5) * 3, r = 5 + Math.floor(i / 4) * 3; out.push([t[0] + side * r, t[1] + o]); } return out; };
+  return {
+    id: 'bonde', arena: A, boxes, theme: 'bonde', track, checks: [0.36, 0.7],
+    spawns: { red: sp(0, 1), blue: sp(9, -1), ffa: [...sp(0, 1), ...sp(9, -1)] },
+    flagBase: { red: [-36, 0, -56], blue: [4, 0, 58] },
+    zones: [{ id: 'A', pos: [-36, 0, -32], r: 5 }, { id: 'B', pos: [24, 0, -6], r: 5 }, { id: 'C', pos: [-18, 0, 40], r: 5 }],
+    pickups: [
+      { kind: 'hp', pos: [0, 0, -33] }, { kind: 'hp', pos: [40, 4, -18] }, { kind: 'hp', pos: [-4, 4, 40] }, { kind: 'hp', pos: [30, 0, 18] },
+      { kind: 'hp', pos: [-24, 0, 26] }, { kind: 'hp', pos: [-28, 5.5, -29] },
+      { kind: 'wpn', wpn: 'sniper', pos: [-46, 4, 10] }, { kind: 'wpn', wpn: 'shotgun', pos: [12, 0, -32] },
+    ],
+  };
+}
+
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde };
 // mapas que aparecem na escolha do lobby (a ilha e so do battle royale)
 export const PICK_MAPS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria'];
 export const MAP_IDS = Object.keys(BUILDERS);
 // mapa sugerido por modo
-export const MODE_MAP = { br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
+export const MODE_MAP = { escort: 'bonde', br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
 // pontos de bomba (x, z) perto do lado da defesa (azul nasce em +z); a altura sai da grade
 export const BOMB_SITES = {
   vila: { A: [-20, 27], B: [20, 27] },
@@ -418,7 +496,7 @@ export const BOMB_SITES = {
   refinaria: { A: [-17, 21], B: [24, 15] },
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
-const MINIGUN_AT = { vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+const MINIGUN_AT = { bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 // mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
 // So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
 const MAP_PACE = { estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
@@ -451,6 +529,13 @@ export function moveBody(M, pos, vel, dt, rad, height) {
       if (!overlap(pos, rad, height, b)) continue;
       const climb = b.max[1] - pos[1];
       if (climb > 0 && climb <= STEP && !blockedAbove(boxes, pos, rad, height, b.max[1])) { pos[1] = b.max[1]; continue; }
+      // redondo: empurra pra fora pela borda do circulo (desliza em volta do tanque, sem canto invisivel)
+      const rr = roundR(b);
+      if (rr) {
+        const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2, dx = pos[0] - cx, dz = pos[2] - cz, L = Math.hypot(dx, dz) || 1e-6, R = rr + rad + 1e-4;
+        pos[0] = cx + dx / L * R; pos[2] = cz + dz / L * R;
+        continue;
+      }
       // sai pelo lado de onde veio; se ja estava dentro (degrau, pulo), pelo lado mais perto. Antes saia pelo
       // sentido da velocidade e, ja dentro, atravessava a caixa inteira num tick (bot "teletransportando")
       const o = ax === 0 ? 0 : 2, lo = b.min[o] - rad - 1e-4, hi = b.max[o] + rad + 1e-4;
@@ -497,7 +582,16 @@ function blockedAbove(boxes, pos, rad, height, newY) {
   return false;
 }
 
+// peca redonda em pe (tanque, silo, tonel, pilar, poste, pedra): raio no chao; 0 = caixa comum
+const ROUND_BODY = { pillar: 1, post: 1, vat: 1, tank: 1, silo: 1, rock: 1.05 };
+function roundR(b) { const k = ROUND_BODY[b.kind]; return k ? Math.min(b.max[0] - b.min[0], b.max[2] - b.min[2]) / 2 * k : 0; }
 function overlap(pos, rad, height, b) {
+  const r = roundR(b);
+  if (r) {
+    if (!(pos[1] + height > b.min[1] + 1e-3 && pos[1] < b.max[1] - 1e-3)) return false;
+    const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+    return (pos[0] - cx) ** 2 + (pos[2] - cz) ** 2 < (r + rad) ** 2;
+  }
   return pos[0] + rad > b.min[0] && pos[0] - rad < b.max[0] &&
     pos[2] + rad > b.min[2] && pos[2] - rad < b.max[2] &&
     pos[1] + height > b.min[1] + 1e-3 && pos[1] < b.max[1] - 1e-3;
@@ -511,8 +605,8 @@ export function clampArena(M, pos, rad = 0.4) {
 
 // Raio contra o mapa. Devolve distancia (Infinity se nada) e normal.
 // Forma de verdade dentro da caixa (30/10: a bala batia no canto invisivel da caixa do pilar redondo).
-// So vale pra tiro e linha de visao; o corpo continua batendo na caixa.
-const ROUND = { pillar: 1.15, post: 1, vat: 1 }; // cilindro em pe (pilar afina pra cima: raio medio)
+// 31/10: o corpo tambem bate no cilindro de verdade (antes o canto da caixa do tanque segurava a 1 m do desenho).
+const ROUND = { pillar: 1.15, post: 1, vat: 1, tank: 1, silo: 1 }; // cilindro em pe (pilar afina pra cima: raio medio)
 function shapeHit(b, o, d, tmin, tmax) {
   const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, cz = (b.min[2] + b.max[2]) / 2;
   const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], dd = b.max[2] - b.min[2];

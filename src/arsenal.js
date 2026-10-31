@@ -1211,13 +1211,15 @@ function buildMinigun() {
 // Perfis de pente e de mira (pedido dele 30/10): toda peca tem um ganho e uma perda propria.
 // Distribuidos em sequencia pela lista global de pecas (vizinhas nunca repetem); somam com a regra de tamanho.
 // rate e' o intervalo entre tiros (maior = mais lento); zoomK multiplica o zoom da mira.
+// Pentes (31/10, pedido dele, estilo COD): dois pentes de troca rapida (rapido e leve) e o resto com a recarga
+// subindo em linha reta com a bala a mais (+10% de pente ~ +9% de tempo de recarga).
 const MAG_STYLES = [
-  { reload: 0.84, mag: 0.9 },                // rapido: troca ligeiro, leva menos bala
-  { mag: 1.14, adsTime: 1.06, move: 0.98 },  // estendido: mais bala, pesa
-  { adsTime: 0.91, move: 1.03, kick: 1.07 }, // leve: mira e anda solto, a arma pula mais
-  { kick: 0.88, reload: 1.12 },              // estavel: peso embaixo segura o recuo, troca devagar
-  { mag: 1.22, reload: 1.2, move: 0.97 },    // duplo: muita bala, recarga lenta
-  { spread: 0.93, rate: 1.05 },              // mola dura: bala mais certa, cadencia um pouco menor
+  { reload: 0.82, mag: 0.9 },                              // rapido: troca bem ligeiro, leva menos bala
+  { mag: 1.14, reload: 1.12, adsTime: 1.06 },              // estendido: mais bala, pesa e troca mais devagar
+  { reload: 0.9, adsTime: 0.93, move: 1.03, kick: 1.07 },  // leve: troca rapido, mira e anda solto, a arma pula mais
+  { kick: 0.88, reload: 1.08 },                            // estavel: peso embaixo segura o recuo, troca um pouco devagar
+  { mag: 1.22, reload: 1.2, move: 0.97 },                  // duplo: muita bala, recarga lenta
+  { spread: 0.93, rate: 1.05 },                            // mola dura: bala mais certa, cadencia um pouco menor
 ];
 const SCOPE_STYLES = [
   { adsTime: 0.88, zoomK: 0.9 },             // rapida: entra na mira ligeiro, menos zoom

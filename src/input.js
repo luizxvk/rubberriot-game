@@ -125,6 +125,9 @@ export class Input {
       reloadPressed: edge('KeyR') || edge('RELOAD'),
       fragPressed: edge('KeyG') || edge('FRAG'),
       flashPressed: edge('KeyF') || edge('FLASH'),
+      // segurando a granada = cozinhando o pavio (solta = arremessa)
+      fragHeld: has('KeyG') || !!t.frag || !!pd.frag,
+      flashHeld: has('KeyF') || !!t.flash || !!pd.flash,
       streakPressed: edge('KeyX') || edge('STREAK'),
       inspectPressed: edge('KeyI') || edge('INSPECT'),
       pingPressed: edge('KeyB') || edge('PING'), // marcar (battle royale): B, botao do meio, direcional esquerdo, botao de toque
@@ -135,7 +138,7 @@ export class Input {
       lastPressed: edge('KeyQ'),
       slot: this.slotReq,
       wheel: this.wheelAcc + (edge('NEXT') ? 1 : 0),
-      board: has('Tab') || !!pd.board,
+      board: has('Tab') || !!pd.board || !!this.touchBoard, // celular: tocou no placar de cima (main.js)
       pause: edge('Escape') || edge('KeyP'),
     };
     this.lookX = this.lookY = 0; this.wheelAcc = 0; this.slotReq = -1;
@@ -197,8 +200,8 @@ export function buildTouch(input, root) {
   btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
   btn(t('t_reload'), 'reload', at(94, 96, 58), () => input.edges.add('RELOAD'));
   btn(t('t_swap'), 'swap', at(12, 184, 58), () => input.edges.add('NEXT'));
-  btn(t('t_frag'), 'frag', at(148, 12, 50), () => input.edges.add('FRAG'));
-  btn(t('t_flash'), 'flash', at(206, 12, 50), () => input.edges.add('FLASH'));
+  btn(t('t_frag'), 'frag', at(148, 12, 50), () => { input.edges.add('FRAG'); input.touch.frag = true; }, () => { input.touch.frag = false; });
+  btn(t('t_flash'), 'flash', at(206, 12, 50), () => { input.edges.add('FLASH'); input.touch.flash = true; }, () => { input.touch.flash = false; });
   btn(t('t_streak'), 'streak', at(156, 176, 48), () => input.edges.add('STREAK'));
   btn(t('t_melee'), 'melee', at(162, 84, 50), () => input.edges.add('MELEE'));
   // equipamento de campo: o icone troca pelo equipado e o aro mostra a recarga
