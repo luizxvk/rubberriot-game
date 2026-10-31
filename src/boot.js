@@ -2,6 +2,9 @@
 // No site proprio (rubberriot.tryrovex.com) da pra jogar sem conta, como guest (banner no menu pede a conta).
 import { pullSave, STANDALONE } from './rovex.js';
 import * as rovex from './rovex.js';
+import { funil } from './funil.js';
+
+funil('visita');
 
 const limite = new Promise(res => setTimeout(res, 4500));
 Promise.race([pullSave(), limite]).catch(() => {}).finally(async () => {

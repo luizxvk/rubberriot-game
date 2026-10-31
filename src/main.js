@@ -25,6 +25,7 @@ import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
 import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
+import { funil } from './funil.js';
 import { track, grantTutorial } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
 import { BrView } from './brview.js';
@@ -1002,6 +1003,7 @@ async function makeClip() {
 $('endClip').onclick = () => { audio.play('ui_click', { ui: true }); makeClip(); };
 
 function showEnd(winner) {
+  funil('terminou');
   const inf = G.mode === 'infect';
   const won = inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
   $('endWin').textContent = won;
@@ -1255,6 +1257,7 @@ async function beginMatch(join) {
   await warmGuns();
   hideLoading();
   G.state = 'game';
+  funil('jogou');
   audio.music(true, G.mode === 'br' || G.duo ? 'music_br' : 'music_m' + (1 + Math.floor(Math.random() * 4)));
   G.plafts = 0; G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); G.countEnd = 0; G.spec = { i: 0, map: false };
   input.mode = G.mode;
@@ -1924,6 +1927,7 @@ const BOOT_T = performance.now();
   $('splash').remove();
   await iris(150, 1200);
   $('menu').classList.remove('intro');
+  funil('carregou');
   // primeira vez no jogo: tour do cartaz mostrando o que cada botao faz (convite direto pra sala pula)
   if (!homeTourSeen() && !inviteRoom) setTimeout(() => { if (G.state === 'menu' && ui.screen === 'home' && !$('menu').hidden) startHomeTour({ touch: isTouch }); }, 900);
   const wake = () => { audio.init(); audio.music(true, 'music'); removeEventListener('pointerdown', wake); removeEventListener('keydown', wake); };
