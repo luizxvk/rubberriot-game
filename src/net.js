@@ -35,9 +35,10 @@ export class WsNet {
       // so resolve quando o servidor confirma a sala; codigo que nao existe volta como erro
       let inRoom = false;
       const fail = (code, msg) => { clearTimeout(to); const e = new Error(msg); e.code = code; rej(e); };
-      ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, quick: this.quick, ranked: this.ranked, token: token() })); };
+      ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, quick: this.quick, ranked: this.ranked, token: token(), sid: sessionId() })); };
       ws.onerror = () => { if (!opened) fail('down', 'Nao deu pra conectar em ' + this.url); };
       ws.onmessage = (e) => {
+        this.lastMsg = performance.now();
         let m; try { m = JSON.parse(e.data); } catch { return; }
         if (!inRoom) {
           if (m.t === 'err') { fail(m.code, m.code); ws.close(); return; }
@@ -50,6 +51,24 @@ export class WsNet {
     });
   }
   send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }
-  update() {}
-  close() { this.onclose = () => {}; this.ws && this.ws.close(); }
+  // o servidor manda algo pelo menos 4x por segundo; 5 s mudo = conexao morta sem aviso (wifi desligado).
+  // Larga o socket velho e avisa como se tivesse fechado (o jogo tenta voltar pro mesmo boneco)
+  update() {
+    if (!this.lastMsg || performance.now() - this.lastMsg < 5000 || this.dropped) return;
+    this.dropped = true;
+    const ws = this.ws; ws.onmessage = ws.onclose = ws.onerror = null;
+    try { ws.close(); } catch { /* */ }
+    this.onclose();
+  }
+  // saiu de proposito: avisa antes, pro servidor tirar o boneco na hora (sem esperar a volta)
+  close() { this.onclose = () => {}; this.send({ t: 'bye' }); this.ws && this.ws.close(); }
+}
+
+// chave desta aba: o servidor reconhece quem voltou depois de cair e devolve o mesmo boneco
+let sid = null;
+function sessionId() {
+  if (sid) return sid;
+  try { sid = sessionStorage.getItem('rr_sid'); } catch { /* */ }
+  if (!sid) { sid = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join(''); try { sessionStorage.setItem('rr_sid', sid); } catch { /* */ } }
+  return sid;
 }

@@ -60,9 +60,19 @@ function getRoom(code, mode, map, bots, quick = false, ranked = false) {
   return room;
 }
 
+// quem cai (wifi, troca de rede) tem GRACE ms pra voltar pro mesmo boneco pela chave da sessao (sid)
+const GRACE = 20000;
+// conexao morta sem aviso (wifi desligado): ping a cada 5 s, sem resposta derruba
+setInterval(() => { for (const ws of wss.clients) { if (ws.vivo === false) { ws.terminate(); continue; } ws.vivo = false; try { ws.ping(); } catch { /* */ } } }, 5000);
+function closeIfEmpty(room) {
+  if (room.clients.size || room.away?.size) return;
+  for (const [code, r] of rooms) if (r === room) { rooms.delete(code); console.log(`sala ${code} fechada`); }
+}
+
 wss.on('connection', (ws) => {
-  const id = 'p' + seq++;
+  let id = 'p' + seq++;
   let room = null, joining = false;
+  ws.vivo = true; ws.on('pong', () => { ws.vivo = true; });
   ws.on('message', (buf) => {
     let m;
     try { m = JSON.parse(buf); } catch { return; }
@@ -79,23 +89,39 @@ wss.on('connection', (ws) => {
         if (m.quick || m.ranked) code = quickRoom(!!m.ranked);
         const target = getRoom(code, m.mode, m.map, Math.max(0, Math.min(15, Number(m.bots) || 0)));
         // sala com 16 pessoas: recusa (bots abrem vaga sozinhos, gente nao)
+        const sid = typeof m.sid === 'string' && /^[a-z0-9]{8,40}$/i.test(m.sid) ? m.sid : null;
+        target.sids ||= new Map(); target.away ||= new Map();
+        // voltando pro mesmo boneco: a conexao velha (se ainda nao caiu) e' trocada pela nova
+        const old = sid && target.sids.get(sid);
+        if (old && target.core.players.has(old)) {
+          room = target; id = old;
+          clearTimeout(room.away.get(id)); room.away.delete(id);
+          const prev = room.clients.get(id);
+          room.clients.set(id, ws);
+          if (prev && prev !== ws) prev.terminate();
+          room.core.resume(id);
+          ws.send(JSON.stringify({ t: 'room', code, mode: room.core.duo ? 'duo' : room.core.mode }));
+          return;
+        }
         if (target.core.full()) { ws.send(JSON.stringify({ t: 'err', code: 'full' })); joining = false; return; }
         room = target;
         room.clients.set(id, ws);
+        if (sid) room.sids.set(sid, id);
         room.core.join(id, name);
         ws.send(JSON.stringify({ t: 'room', code, mode: room.core.duo ? 'duo' : room.core.mode }));
       });
       return;
     }
+    if (room && m.t === 'bye') { for (const [s, v] of room.sids || []) if (v === id) room.sids.delete(s); return; }
     if (room) room.core.handle(id, m);
   });
   ws.on('close', () => {
-    if (!room) return;
+    if (!room || room.clients.get(id) !== ws) return; // trocada por uma conexao nova do mesmo jogador
     room.clients.delete(id);
-    room.core.leave(id);
-    if (room.clients.size === 0) {
-      for (const [code, r] of rooms) if (r === room) { rooms.delete(code); console.log(`sala ${code} fechada`); }
-    }
+    const sid = [...(room.sids || new Map())].find(([, v]) => v === id)?.[0];
+    const leave = () => { room.away?.delete(id); if (sid) room.sids.delete(sid); room.core.leave(id); closeIfEmpty(room); };
+    if (!sid) { leave(); return; }
+    room.away.set(id, setTimeout(leave, GRACE));
   });
 });
 

@@ -268,8 +268,14 @@ export class Character {
     if (lz) lz.beam.material.uniforms.uOn.value = alive && anim !== 'sprint' && anim !== 'tac' ? 1 : 0;
     this.phase += dt * (anim === 'tac' ? 15 : anim === 'sprint' ? 12.5 : 10) * Math.min(1, speed / 6 + 0.15);
     const ph = this.phase;
+    // deslize e agachar entram e saem amaciados (01/11: o boneco pulava de pe pro deslize num quadro so)
+    const ease = (v, to, k) => v + (to - v) * (1 - Math.exp(-k * dt));
+    this.slideK = ease(this.slideK || 0, anim === 'slide' ? 1 : 0, anim === 'slide' ? 16 : 9);
+    this.crouchK = ease(this.crouchK || 0, anim === 'crouch' || anim === 'slide' ? 0.45 : 0, 14);
+    this.leanK = ease(this.leanK || 0, anim === 'sprint' || anim === 'tac' ? -0.25 : anim === 'slide' ? 0.35 : 0, 12);
     const moving = speed > 0.8 && anim !== 'jump' && anim !== 'slide';
-    const crouch = anim === 'crouch' || anim === 'slide' ? 0.45 : 0;
+    this.walkK = ease(this.walkK || 0, moving ? 1 : 0, 12); // passada some aos poucos (deslize, parar)
+    const crouch = this.crouchK;
 
     if (!alive) {
       // panqueca: achata e gira, depois some numa nuvem (o FX faz a nuvem)
@@ -293,7 +299,7 @@ export class Character {
     const sq = anim === 'jump' ? 1.12 : 1 + (bounce - 0.5) * 0.08;
     this.body.scale.set(1 / Math.sqrt(sq), sq * (1 - crouch * 0.35), 1 / Math.sqrt(sq));
     this.body.position.y = moving ? bounce * 0.12 : 0;
-    this.body.rotation.x = (anim === 'sprint' || anim === 'tac' ? -0.25 : anim === 'slide' ? 0.35 : 0) + fl * 0.35;
+    this.body.rotation.x = this.leanK + fl * 0.35;
     if (fl) this.body.scale.multiplyScalar(1 - fl * 0.06);
     // dupla: caido de barriga no chao, se arrastando (balanca de leve pra ler de longe)
     if (anim === 'down') { this.body.rotation.x = 1.35 + Math.sin(t * 3 + this.phase) * 0.06; this.body.position.y = 0.32; this.body.rotation.z = Math.sin(t * 2.2) * 0.08; }
@@ -303,16 +309,17 @@ export class Character {
 
     const hip = 0.72;
     for (const [leg, shoe, side, off] of [[this.legR, this.shoeR, 1, 0], [this.legL, this.shoeL, -1, Math.PI]]) {
-      const sw = moving ? Math.sin(ph + off) : 0;
-      const lift = moving ? Math.max(0, Math.cos(ph + off)) * 0.25 : 0;
+      const sk = this.slideK, walk = this.walkK * (1 - sk);
+      const sw = Math.sin(ph + off) * walk;
+      const lift = Math.max(0, Math.cos(ph + off)) * 0.25 * walk;
       const a = new THREE.Vector3(side * 0.17, hip, 0);
-      const footZ = anim === 'slide' ? -0.5 : -sw * 0.5;
+      const footZ = -sw * 0.5 * walk - 0.5 * sk;
       const b = new THREE.Vector3(side * 0.22, 0.1 + lift + (anim === 'jump' ? 0.25 : 0), footZ);
       // joelho de mangueira dobra pra frente
       const c = new THREE.Vector3(side * 0.24, (a.y + b.y) / 2, (a.z + b.z) / 2 - 0.18 - lift * 0.4);
       leg.set(a, c, b);
       shoe.position.set(b.x, b.y - 0.02, b.z - 0.1);
-      shoe.rotation.x = moving ? sw * 0.3 : 0;
+      shoe.rotation.x = sw * 0.3;
     }
 
     // braco com arma (pose de quem segura de verdade, sobe/desce com o pitch)

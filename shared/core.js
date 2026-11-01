@@ -336,6 +336,18 @@ export class Core {
     this.event({ k: 'msg', key: 'joined', name: p.name });
   }
 
+  // voltou depois de cair a conexao (01/11): mesmo boneco, mesmo time e mesmos abates; so reenvia o que o
+  // cliente precisa (antes entrava como jogador novo e o antigo ficava parado na sala levando os abates)
+  resume(id) {
+    const p = this.players.get(id);
+    if (!p) return false;
+    this.send(id, { t: 'welcome', id, mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, team: p.team, phase: this.phase, resume: true });
+    for (const o of this.players.values()) if (o.los && o.id !== id) this.send(id, { t: 'ev', k: 'lo', id: o.id, los: o.los, tracer: o.tracer });
+    for (const o of this.players.values()) if (o.look && o.id !== id) this.send(id, { t: 'ev', k: 'look', id: o.id, look: o.look });
+    if (this.gg) this.send(id, { t: 'ev', k: 'ladder', id: this.gg.id, list: this.gg.list.map(u => u.body) });
+    return true;
+  }
+
   leave(id) {
     const p = this.players.get(id);
     if (!p) return;
@@ -795,7 +807,7 @@ export class Core {
   startCountdown() {
     this.waitLoad = null;
     this.freezeT = COUNT_IN;
-    this.event({ k: 'countdown', t: COUNT_IN });
+    this.event({ k: 'countdown', s: COUNT_IN }); // 's' e nao 't': o evento vai como { t: 'ev', ...ev } e o 't' apagava o tipo (01/11)
   }
 
   // ---------- granadas ----------

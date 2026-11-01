@@ -55,8 +55,95 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Grandstander:wght@400;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./src/style.css">
+<!-- tela de entrada leve (01/11): so no celular, aparece antes do jogo pesado baixar. CSS aqui dentro pra pintar
+     no primeiro quadro, sem esperar nada. O pavio queima ate a bomba conforme o jogo carrega. -->
+<style>
+.boot { display: none; position: fixed; inset: 0; z-index: 90; place-items: center; padding: 18px; background: #141210;
+  background-image: radial-gradient(circle at 1px 1px, rgba(236,233,225,.09) 1.2px, transparent 1.6px); background-size: 9px 9px;
+  font-family: 'Grandstander', 'Trebuchet MS', sans-serif; color: #141210; transition: opacity .35s ease; }
+html.touch-boot .boot { display: grid; }
+.boot.out { opacity: 0; pointer-events: none; }
+.boot-card { width: min(380px, 100%); text-align: center; background: #ece9e1; border: 4px solid #141210; border-radius: 26px; padding: 22px 22px 18px;
+  box-shadow: 0 0 0 6px #ece9e1, 0 0 0 10px #141210; }
+.boot-title { margin: 0; font-family: 'Bowlby One', 'Arial Black', sans-serif; font-weight: 400; line-height: .86; font-size: clamp(50px, 15vw, 70px);
+  color: #ece9e1; -webkit-text-stroke: 3px #141210; paint-order: stroke fill; text-shadow: 5px 5px 0 #141210; }
+.boot-title span { display: block; transform-origin: 50% 100%; animation: bootBounce .4545s ease-in-out infinite alternate; }
+.boot-title span + span { font-size: 1.12em; animation-delay: .227s; }
+@keyframes bootBounce { from { transform: scale(1.04, .95); } to { transform: scale(.97, 1.05) translateY(-3px); } }
+.boot-sub { margin: 12px 0 16px; font-weight: 700; font-size: 15px; line-height: 1.35; color: #6e6a63; }
+.boot-go { display: block; width: 100%; padding: 12px 18px; border: 4px solid #141210; border-radius: 16px; background: #a83a2c; color: #ece9e1;
+  font-family: 'Bowlby One', 'Arial Black', sans-serif; font-size: 26px; letter-spacing: .5px; box-shadow: 5px 5px 0 #141210; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.boot-go:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #141210; }
+.boot-go:focus-visible { outline: 3px solid #2f5b8a; outline-offset: 3px; }
+.boot-fuse { position: relative; height: 34px; margin: 18px 4px 4px; }
+.boot-rope { position: absolute; right: 28px; top: 15px; height: 5px; width: calc((100% - 28px) * var(--left, 1)); border-radius: 3px;
+  background: repeating-linear-gradient(-55deg, #141210 0 3px, #8a7f6e 3px 6px); transition: width .25s linear; }
+.boot-spark { position: absolute; left: -9px; top: -7px; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #f2c94c 0 30%, #a83a2c 31% 55%, transparent 56%);
+  animation: bootSpark .12s steps(2) infinite; }
+@keyframes bootSpark { 50% { transform: scale(1.35) rotate(40deg); } }
+.boot-bomb { position: absolute; right: 0; top: 2px; width: 32px; height: 32px; }
+.boot.ready .boot-fuse { display: none; }
+.boot.ready .boot-state { margin-top: 14px; color: #a83a2c; font-size: 16px; animation: bootPop .35s ease-out; }
+@keyframes bootPop { from { transform: scale(1.4); } }
+.boot-state { margin: 4px 0 0; min-height: 1.3em; font-weight: 800; font-size: 14px; }
+.boot-tip { display: none; align-items: center; gap: 10px; margin: 12px 0 0; padding-top: 12px; border-top: 3px dotted #bdb7ac; font-weight: 700; font-size: 14px; line-height: 1.35; color: #6e6a63; text-align: left; }
+.boot-tip svg { flex: none; width: 34px; height: 34px; }
+@media (orientation: portrait) { .boot-tip { display: flex; } }
+@media (max-height: 460px) and (orientation: landscape) {
+  .boot-card { width: min(640px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; align-items: center; padding: 14px 20px; text-align: left; }
+  .boot-title { grid-row: span 2; text-align: center; font-size: clamp(44px, 12vh, 60px); }
+  .boot-sub { margin: 0 0 10px; font-size: 14px; }
+  .boot-fuse { grid-column: 1 / -1; margin: 12px 4px 0; }
+  .boot-state { grid-column: 1 / -1; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) { .boot-title span, .boot-spark, .boot.ready .boot-state { animation: none; } .boot-rope { transition: none; } }
+</style>
 </head>
 <body>
+<!-- tela de entrada leve (so celular). Celular desenhado igual ao do aviso de girar -->
+<div id="boot" class="boot" role="dialog" aria-labelledby="bootTitle">
+  <div class="boot-card">
+    <h1 class="boot-title" id="bootTitle"><span>Rubber</span><span>Riot</span></h1>
+    <p class="boot-sub" id="bootSub">Tiroteio de desenho dos anos 30, grátis no navegador.</p>
+    <button class="boot-go" id="bootGo" type="button">Jogar</button>
+    <div class="boot-fuse" aria-hidden="true">
+      <div class="boot-rope"><i class="boot-spark"></i></div>
+      <svg class="boot-bomb" viewBox="0 0 32 32"><circle cx="15" cy="18" r="12" fill="#141210"/><rect x="12" y="3" width="8" height="6" rx="2" fill="#141210"/><circle cx="10" cy="14" r="3" fill="#ece9e1" opacity=".55"/></svg>
+    </div>
+    <p class="boot-state" id="bootState" role="status">Acendendo o pavio...</p>
+    <p class="boot-tip" id="bootTip"><svg viewBox="0 0 120 120" aria-hidden="true"><g transform="rotate(-90 60 60)"><rect x="38" y="14" width="44" height="80" rx="9" fill="#ece9e1" stroke="#141210" stroke-width="7"/></g><path d="M96 64a36 36 0 0 1-30 34" fill="none" stroke="#a83a2c" stroke-width="7" stroke-linecap="round"/></svg><span id="bootTipTxt">Ligue a rotação automática e deite o celular: o jogo é na horizontal.</span></p>
+  </div>
+</div>
+<script>
+// roda antes de tudo: mostra a tela so no celular, ajusta o idioma e prepara o toque (tela cheia + deitado)
+(function () {
+  // so no celular e fora da Rovex (la a pagina do jogo ja tem o botao de jogar)
+  if (!matchMedia('(pointer: coarse)').matches || window.top !== window.self) return;
+  document.documentElement.classList.add('touch-boot');
+  var lang = ''; try { lang = localStorage.getItem('rr_lang') || ''; } catch (e) {}
+  var en = !/^pt/i.test(lang || navigator.language || 'pt');
+  var ig = /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
+  var T = en
+    ? { sub: '1930s cartoon shootout, free in your browser.', go: 'Play', fuse: 'Lighting the fuse...', wait: 'Almost there, the fuse is burning...', ready: 'Ready! Tap Play.', tip: 'Turn on auto-rotate and lay your phone sideways: the game is played in landscape.', ig: 'Inside Instagram? Tap the three dots at the top and open it in your browser for full screen.' }
+    : { sub: 'Tiroteio de desenho dos anos 30, grátis no navegador.', go: 'Jogar', fuse: 'Acendendo o pavio...', wait: 'Já vai, o pavio tá queimando...', ready: 'Pronto! Toque em Jogar.', tip: 'Ligue a rotação automática e deite o celular: o jogo é na horizontal.', ig: 'No Instagram? Toque nos três pontinhos lá em cima e abra no navegador pra tela cheia.' };
+  var $ = function (id) { return document.getElementById(id); };
+  $('bootSub').textContent = T.sub; $('bootGo').textContent = T.go; $('bootState').textContent = T.fuse;
+  $('bootTipTxt').textContent = ig ? T.tip + ' ' + T.ig : T.tip;
+  var B = window.__rrBoot = { p: 0, tapped: false, ready: false, T: T, wait: null };
+  B.set = function (p) { B.p = Math.max(B.p, Math.min(1, p)); $('boot').style.setProperty('--left', String(1 - B.p)); };
+  $('bootGo').onclick = function () {
+    B.tapped = true;
+    try {
+      var r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      if (r && r.then) r.then(function () { return screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'); }).catch(function () {});
+    } catch (e) {}
+    if (!B.ready) $('bootState').textContent = T.wait;
+    if (B.wait) B.wait();
+  };
+  // o pavio anda sozinho devagar enquanto baixa; os marcos de verdade vem do boot.js e do main.js
+  (function creep() { if (B.ready) return; B.set(Math.min(0.85, B.p + 0.004)); setTimeout(creep, 120); })();
+})();
+</script>
 <canvas id="gl"></canvas>
 <noscript>
   <h1>Rubber Riot</h1>

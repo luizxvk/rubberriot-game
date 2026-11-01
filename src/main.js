@@ -25,7 +25,7 @@ import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
 import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
-import { funil } from './funil.js';
+import { funil, reportaErro } from './funil.js';
 import { track, grantTutorial } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
 import { BrView } from './brview.js';
@@ -59,6 +59,9 @@ function saveSettings() { try { localStorage.setItem('rr_settings', JSON.stringi
 // ---------- render ----------
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
+// celular sem memoria de video perde o contexto do WebGL (tela fica branca/preta): segura o contexto pro
+// navegador devolver (o three refaz tudo na volta) e manda o aviso pro servidor
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); reportaErro(new Error('webgl contexto perdido'), 'gl ' + G.state + '/' + G.mode); });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 // distancia de desenho (Ajustes > Graficos): curta/media/longa, em metros
@@ -429,7 +432,11 @@ function onSnap(s) {
         hud.hp(p.hp);
         hud.armor(p.armor || 0, s.mode === 'br');
         document.body.classList.toggle('mode-br', s.mode === 'br');
-        if (!p.alive && G.player.alive) G.player.alive = false;
+        if (!p.alive && G.player.alive) {
+          G.player.alive = false;
+          // caiu enquanto a conexao estava fora (o aviso do abate se perdeu): abre a tela de espera do mesmo jeito
+          if ($('dead').hidden) { G.deathPos = [...G.player.pos]; G.killer = null; $('dead').hidden = false; document.body.classList.add('is-dead'); $('deadBy').textContent = ''; }
+        }
         G.myTeam = p.team;
         // dupla: caido (rasteja, sem atirar) ate o parceiro encher a bomba
         const down = G.duo && p.alive && p.dn > 0;
@@ -875,7 +882,9 @@ function onEvent(e) {
       break;
     // todo mundo carregou: 3, 2, 1
     case 'countdown':
-      G.countEnd = performance.now() + e.t * 1000;
+      G.countEnd = performance.now() + (e.s ?? 3.5) * 1000;
+      // apresentacao do time na contagem (so modos de equipe, fora do treino)
+      if (inGame && INTRO_MODES.includes(G.mode) && !G.duo && !G.tutorial && !G.cineCam) G.intro = { t: 0, dur: Math.max(1.6, Math.min(3.3, (e.s ?? 3.5) - 0.2)) };
       break;
     case 'infected': {
       if (!inGame) break;
@@ -1294,6 +1303,54 @@ function backToLobby() {
   syncLobbyPick(G.duo ? 'duo' : G.bounce ? 'bounce' : G.mode);
 }
 
+// Apresentacao do time (01/11): na contagem de inicio dos modos de equipe a camera passa pela frente de cada
+// colega (do mais longe pro mais perto) numa curva so, sem parar em ninguem, e pousa exatamente na sua primeira
+// pessoa. Todo mundo esta parado na contagem, entao os pontos da curva ficam firmes. Atirar/pular pula a cena.
+const INTRO_MODES = ['tdm', 'escort', 'bomb', 'ctf', 'dom'];
+const introQ = new THREE.Quaternion(), introE = new THREE.Euler(0, 0, 0, 'YXZ'), introM = new THREE.Matrix4();
+const introP = new THREE.Vector3(), introUp = new THREE.Vector3(0, 1, 0);
+function introCam(dt, p, inp) {
+  const I = G.intro;
+  if (G.state !== 'game' || inp.firePressed || inp.jumpPressed || performance.now() > G.countEnd + 300) { G.intro = null; return; }
+  if (!p.alive) return; // nasce um instante depois da contagem comecar: o relogio da cena so anda com voce em pe
+  I.t += dt;
+  if (I.t >= I.dur) { G.intro = null; return; }
+  // pontos da curva: na frente de cada colega, um pouco acima, olhando pro peito dele; o ultimo e' a sua cabeca
+  const mates = [...G.remotes.values()].filter(r => r.alive && r.pos && !G.isEnemy(r));
+  mates.sort((a, b) => Math.hypot(b.pos[0] - p.pos[0], b.pos[2] - p.pos[2]) - Math.hypot(a.pos[0] - p.pos[0], a.pos[2] - p.pos[2]));
+  const keys = mates.slice(-5).map(r => {
+    const fx = -Math.sin(r.yaw || 0), fz = -Math.cos(r.yaw || 0);
+    const pos = new THREE.Vector3(r.pos[0] + fx * 2.4, r.pos[1] + 1.7, r.pos[2] + fz * 2.4);
+    introM.lookAt(pos, new THREE.Vector3(r.pos[0], r.pos[1] + 1.15, r.pos[2]), introUp);
+    return { pos, q: new THREE.Quaternion().setFromRotationMatrix(introM) };
+  });
+  // comeca alto e aberto atras do time (da pra ver a formacao) e termina na primeira pessoa
+  const eye = new THREE.Vector3(p.pos[0], p.pos[1] + p.eye, p.pos[2]);
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+  const open = new THREE.Vector3(p.pos[0] - fx * 9, p.pos[1] + 6.5, p.pos[2] - fz * 9);
+  introM.lookAt(open, new THREE.Vector3(p.pos[0] + fx * 4, p.pos[1] + 1, p.pos[2] + fz * 4), introUp);
+  const first = { pos: open, q: new THREE.Quaternion().setFromRotationMatrix(introM) };
+  introE.set(p.pitch, p.yaw, 0);
+  const last = { pos: eye, q: new THREE.Quaternion().setFromEuler(introE) };
+  const pts = [first, ...keys, last];
+  // tempo: anda devagar no comeco e desacelera no pouso (sem parada no meio)
+  const k = I.t / I.dur, e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+  const n = pts.length - 1, f = e * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+  const P = (j) => pts[Math.max(0, Math.min(n, j))].pos;
+  // Catmull-Rom: passa por todos os pontos com a velocidade continua
+  const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2), u2 = u * u, u3 = u2 * u;
+  introP.set(0, 0, 0)
+    .addScaledVector(p0, -0.5 * u3 + u2 - 0.5 * u)
+    .addScaledVector(p1, 1.5 * u3 - 2.5 * u2 + 1)
+    .addScaledVector(p2, -1.5 * u3 + 2 * u2 + 0.5 * u)
+    .addScaledVector(p3, 0.5 * u3 - 0.5 * u2);
+  introQ.copy(pts[i].q).slerp(pts[i + 1].q, u * u * (3 - 2 * u));
+  camera.position.copy(introP);
+  camera.quaternion.copy(introQ);
+  camera.fov = settings.fov; camera.updateProjectionMatrix();
+  vmPass.enabled = k > 0.9; // a arma entra so no pouso
+}
+
 // conexao caiu: tenta voltar pra mesma sala algumas vezes antes de desistir
 async function reconnect(name, mpArgs) {
   if (G.state !== 'game' || !mpArgs) return;
@@ -1315,6 +1372,7 @@ async function reconnect(name, mpArgs) {
 }
 
 async function quitGame() {
+  G.flashT = 0; G.hurtFlash = 0;
   await iris(0, 450);
   if (G.tutorial) { if (G.tutorial.finished) try { localStorage.setItem('rr_tutorial_done', '1'); } catch { /* */ } G.tutorial.dispose(); G.tutorial = null; }
   G.state = 'menu';
@@ -1489,11 +1547,19 @@ function nadeArc(p) {
   arcRing.position.set(n.pos[0], n.pos[1] + 0.06, n.pos[2]);
   arcRing.scale.setScalar(c.kind === 'frag' ? NADES.frag.radius / 6.5 : 1);
 }
+// erro dentro do quadro nao pode congelar a tela: o clarao (Torta, flash) apaga ANTES de tudo, o erro vai
+// pro servidor com o estado da partida e o proximo quadro roda normal (01/11: tela branca da Torta da Nyx)
 function frame() {
   requestAnimationFrame(frame);
   const now = performance.now();
   const realDt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  if (!Number.isFinite(G.flashT)) G.flashT = 0;
+  G.flashT = Math.max(0, G.flashT - realDt);
+  film.uniforms.flash.value = G.state === 'game' ? Math.min(1, G.flashT) : 0;
+  try { frameBody(now, realDt); } catch (e) { reportaErro(e, 'frame ' + G.state + '/' + G.mode + '/' + (ui.screen || '')); }
+}
+function frameBody(now, realDt) {
   // camera lenta no abate final
   if (G.slowT > 0) G.slowT -= realDt;
   G.timeScale += ((G.slowT > 0 ? 0.25 : 1) - G.timeScale) * Math.min(1, realDt * 8);
@@ -1725,6 +1791,7 @@ function frame() {
     } else if (G.chuteK) { G.chuteK = ''; document.body.classList.remove('chute-open'); }
     // camera de cinema (so gravacao de video, definida pelo console/gravador): comanda a camera e tira a arma da mao
     if (G.cineCam) { G.cineCam(camera, realDt, G); vmPass.enabled = false; }
+    if (G.intro) introCam(realDt, p, inp);
     if (replay.on) { replay.camera(camera, realDt, G); vmPass.enabled = false; }
     const ru = vm.gun?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0;
     // ponto do laser no mundo: onde o centro da mira bate
@@ -1764,8 +1831,6 @@ function frame() {
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
     const low = p.alive ? Math.max(0, (40 - p.hp) / 40) * 0.5 : 0.4;
     film.uniforms.hurt.value = Math.min(1, G.hurtFlash + low);
-    G.flashT = Math.max(0, G.flashT - realDt);
-    film.uniforms.flash.value = Math.min(1, G.flashT);
     if (big && p.adsK > 0.3 && p.alive && !replay.on) {
       scopeOn = true;
       camera.updateMatrixWorld();
@@ -1782,7 +1847,6 @@ function frame() {
     camera.fov = 55; camera.updateProjectionMatrix();
     vmPass.enabled = false;
     film.uniforms.hurt.value = 0;
-    film.uniforms.flash.value = 0;
   }
   if (scopeOn) {
     renderer.setRenderTarget(scopeRT);
@@ -1912,8 +1976,19 @@ const BOOT_T = performance.now();
   setLang(getLang());
   ui.markNewChallenges?.(); // a traducao reescreve o texto do botao e levava o selo de "novo" junto
   applySettings();
+  const B = window.__rrBoot;
+  B?.set(0.6);
   await Promise.race([loadArsenal(), new Promise(r => setTimeout(r, 6000))]);
   await document.fonts.ready.catch(() => {});
+  // celular: o pavio chega na bomba e a tela de entrada espera o toque em Jogar (o toque ja pediu tela cheia
+  // e deitado); so ai sai e a abertura de sempre continua
+  if (B && $('boot')) {
+    B.set(1); B.ready = true;
+    $('boot').classList.add('ready'); $('bootState').textContent = B.T.ready;
+    if (!B.tapped) await new Promise(r => { B.wait = r; });
+    $('boot').classList.add('out'); setTimeout(() => $('boot')?.remove(), 400);
+    audio.init();
+  }
   fx = new FX(scene);
   G.fx = fx;
   startAttract();
