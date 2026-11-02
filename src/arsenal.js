@@ -106,6 +106,7 @@ const LONG_SCOPE = { shotgun_1: ['sniper_scope_0', 'sniper_scope_1', 'sniper_sco
 export const CONV_KITS = {
   shotgun_2: { auto: { mode: 'auto', rate: 0.55, dmg: 0.78, spread: 1.15, kick: 1.25, reload: 1.1 } },
   subfusil_8: { auto: { mode: 'auto', kick: 1.08 } },
+  fusil_7: { auto: { mode: 'auto', rate: 0.62, dmg: 0.72, spread: 1.1, kick: 1.2 } }, // Relampago automatica (02/11, pedido dele): cadencia de fuzil comum, cada tiro bem mais fraco que o semi
   sniper_0: { charge: { adsTime: 1.1, move: 0.95 } }, // Luneta: Canhao de Carga (01/11): segura 3 s = abate na hora, qualquer distancia // Dois Toques (SCAR-L) automatica: mesmo dano e cadencia da rajada, so o modo muda (pedido dele 01/11); libera no nivel do modelo
 };
 export const convOptions = (body) => Object.keys(CONV_KITS[body] || {});
@@ -466,11 +467,11 @@ function addIrons(id, body, inner, origin, partMat) {
 
 // bocais (01/11, pedido dele): toda arma de fogo (lamina nao). Entram no lugar da ponta do cano.
 // Cada um com ganho e perda (estilo COD). flash = quanto do clarao sobra; quiet = tiro abafado.
-export const MUZZLES = {
-  silencer: { spread: 0.96, kick: 0.95, adsTime: 1.08, move: 0.98, dmg: 0.94, flash: 0.15, quiet: true }, // silenciador: quase sem clarao e abafado; dano e mira mais lentos
-  brake: { kick: 0.8, adsTime: 1.05 },                                                                  // freio de boca: segura o coice, pesa na mira
+export const MUZZLES = { // na ordem do nivel da arma que abre (progress.js MUZZLE_LVL)
   comp: { kick: 0.88, spread: 0.94, hip: 1.06 },                                                         // compensador: cano sobe menos, quadril um pouco pior
   flash: { hip: 0.92, spread: 0.97, kick: 1.04, flash: 0.35 },                                           // quebra-chama: pouco clarao, coice um tico maior
+  brake: { kick: 0.8, adsTime: 1.05 },                                                                  // freio de boca: segura o coice, pesa na mira
+  silencer: { spread: 0.96, kick: 0.95, adsTime: 1.08, move: 0.98, dmg: 0.94, flash: 0.15, quiet: true }, // silenciador: quase sem clarao e abafado; dano e mira mais lentos
 };
 const MUZZLE_BAN = ['sniper_0', 'sniper_2', 'sniper_3', 'pistol_5']; // Luneta, Marretao, Ping Velho e Bico Longo: sem bocal (pedido dele 01/11)
 export const muzzleFits = (body) => !!body && !body.startsWith('melee') && !!parts[body] && !MUZZLE_BAN.includes(body);
@@ -1668,6 +1669,7 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   if (out.handle && (!ok([null, ...C.handles], out.handle) || !handleFits(out.body, cat, out.handle))) out.handle = null;
   if (out.conv && !CONV_KITS[out.body]?.[out.conv]) out.conv = null; // trocou de corpo: o kit era do outro
   if (out.muzzle && !muzzleOptions(out.body).includes(out.muzzle)) out.muzzle = null; // bocal so onde existe
+  if (out.muzzle && !partOpen(cat, 0, 'mz:' + out.muzzle)) out.muzzle = null; // bocal que o nivel da arma ainda nao abriu
   if (out.scope?.startsWith('iron_') && !IRONS[out.scope]) out.scope = null; // mira de ferro antiga (trocada pelas de trilho)
   if (out.laser && !ok([null, ...LASERS], out.laser)) out.laser = null;
   if (out.tracer && !partOpen(cat, 1, 'tr:' + out.tracer)) out.tracer = null;

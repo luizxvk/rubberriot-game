@@ -544,7 +544,7 @@ function apito() {
   // ---- viaduto: o bonde sobe 3 m na rampa (x -10..2), cruza o tabuleiro (x 2..18) e desce (x 18..30)
   const zv = -5, wv = 7;
   for (let i = 0; i < 12; i++) { box(-10 + i + 0.5, zv, 1, wv, (i + 1) * 0.25, 0, 'step'); box(18 + i + 0.5, zv, 1, wv, 3 - i * 0.25, 0, 'step'); }
-  box(10, zv, 16, wv, 0.4, 2.6, 'bridge'); mark(10, zv, 40, wv + 1);
+  box(10, zv, 16, wv, 0.4, 2.6, 'bridge', { deck: true }); mark(10, zv, 40, wv + 1); // deck: o trilho passa EM CIMA (bot anda nele)
   for (const x of [4, 10, 16]) for (const s of [-1, 1]) box(x, zv + s * 3.1, 0.6, 0.6, 2.6, 0, 'pillar');
   for (const s of [-1, 1]) box(10, zv + s * 3.35, 16, 0.3, 0.8, 3.0, 'crate'); // guarda-corpo (a bala passa por cima)
   // estrada que passa por baixo do viaduto (norte-sul em x = 10) com barreiras de concreto na beira

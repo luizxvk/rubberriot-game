@@ -328,6 +328,7 @@ export class ViewModel {
   // uav = luneta de pirata, anvil = detonador de TNT, blimp = campainha de balcao
   callStreak(kind) {
     if (this.prop) this.scene.remove(this.prop);
+    kind = kind === 'anvline' ? 'anvil' : kind; // Linha de Bigornas: mesmo detonador
     this.prop = makeProp(kind); this.propKind = kind;
     this.scene.add(this.prop);
     this.streakT = STREAK_DUR; this.inspectT = 0;

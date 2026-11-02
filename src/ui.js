@@ -1,5 +1,6 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
-import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS } from '../shared/weapons.js';
+import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
+import { STREAK_SVG } from './hud.js';
 import { SKILL_ICONS } from './skillicons.js';
 import { tip } from './tips.js';
 import { UNLOCKS, dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState, togglePick, unlockPinned, pendingUnlocks } from './challenges.js';
@@ -9,7 +10,7 @@ import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
 import { stats as pStats } from './progress.js';
-import { BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
+import { MUZZLE_LVL, BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { kbBinds, padBinds, setKb, setPad, resetBinds, keyName, padName, ACTIONS, PAD_BTN, FIXED_KEYS } from './binds.js';
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
@@ -49,7 +50,7 @@ export function initMenus(o) {
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
   ui.go = (name, fromGame = false, startCat = null) => {
-    fromLobby = (fromGame === 'lobby' || fromGame === 'game') && name === 'arsenal'; // 'game' = aberto da pausa, aplica na hora
+    fromLobby = ((fromGame === 'lobby' || fromGame === 'game') && name === 'arsenal') || (fromGame === 'lobby' && (name === 'skills' || name === 'challenges')); // 'game' = aberto da pausa, aplica na hora; skills e desafios tambem abrem da sala (02/11)
     settingsFromGame = fromGame === true;
     // abre na arma principal equipada (antes ficava presa na ultima aba aberta)
     if (name === 'arsenal' && !startCat && PRIMARIES.includes(S.primary)) startCat = S.primary;
@@ -93,13 +94,14 @@ export function initMenus(o) {
   };
   // campo de treino: leva o modelo aberto agora (ate o que esta so em previa e bloqueado)
   $('smithRange').onclick = () => {
+    if (!CATEGORY[cat]) return; // aba Sequencias: nao tem arma pra testar
     audio.play('ui_click', { ui: true });
     const body = preview?.k === 'body' ? preview.v : unlockedLoadout(cat, getLoadouts()[cat], partUnlocked, camoUnlocked, CAMOS).body;
     o.onRange?.(cat, body);
   };
   ui.fromLobby = () => fromLobby;
   addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && fromLobby && ui.screen === 'arsenal') { audio.play('ui_back', { ui: true }); fromLobby = false; o.onBackToLobby(false); return; }
+    if (e.key === 'Escape' && fromLobby && ['arsenal', 'skills', 'challenges'].includes(ui.screen)) { audio.play('ui_back', { ui: true }); fromLobby = false; o.onBackToLobby(false); return; }
     if (e.key === 'Escape' && !o.inGame() && ui.screen !== 'home') { audio.play('ui_back', { ui: true }); ui.go('home'); }
     if (e.key === 'Escape' && settingsFromGame && o.inGame() && ui.screen === 'settings') { o.onBackFromSettingsInGame(); settingsFromGame = false; }
   });
@@ -296,6 +298,7 @@ export function initMenus(o) {
       if (c !== 'melee') {
         for (const id of AMMO_IDS) if ((!AMMO[id].only || AMMO[id].only === c) && partUnlocked(c, 1, 'am:' + id)) out.push(A + 'ammo|' + id);
         for (const id of TRACER_STYLES) if (partUnlocked(c, 1, 'tr:' + id)) out.push(A + 'tracer|' + id);
+        for (const id of Object.keys(MUZZLE_LVL)) if (partUnlocked(c, 0, 'mz:' + id)) out.push(A + 'muzzle|' + id);
       }
       for (const id of BP_ORDER) if (BLUEPRINTS[id].wpn === c && bpUnlocked(id)) out.push(A + 'bp|' + id);
     }
@@ -503,8 +506,13 @@ export function initMenus(o) {
       return;
     }
     syncOpen(openKeys());
-    $('catTabs').innerHTML = CATS.map(c => `<button role="tab" aria-selected="${c === cat}" data-c="${c}">${t('cat_' + c)}${anyNew('arsenal|' + c + '|') ? newPill(t('chNew')) : ''}</button>`).join('');
+    $('catTabs').innerHTML = CATS.map(c => `<button role="tab" aria-selected="${c === cat}" data-c="${c}">${t('cat_' + c)}${anyNew('arsenal|' + c + '|') ? newPill(t('chNew')) : ''}</button>`).join('')
+      + `<button role="tab" class="cat-stk" aria-selected="${cat === 'streaks'}" data-c="streaks">${t('stkTab')}</button>`;
     $('catTabs').querySelectorAll('button').forEach(b => b.onclick = () => { cat = b.dataset.c; slot = 'body'; picking = false; preview = null; audio.play('ui_click', { ui: true }); renderSmith(); });
+    // aba Sequencias (02/11, pedido dele): troca o gunsmith pela escolha das sequencias de abate
+    const stk = cat === 'streaks';
+    $('equipBar').hidden = stk; $('smith').hidden = stk; $('stkPane').hidden = !stk;
+    if (stk) { renderStreakPick(); return; }
     // equipar: principal escolhida aqui, pistola sempre como secundaria
     const isPrimary = PRIMARIES.includes(cat);
     const equipped = isPrimary ? S.primary === cat || (!S.primary && cat === 'smg') : true;
@@ -739,17 +747,35 @@ export function initMenus(o) {
     p.innerHTML = opts.map((id, i0) => {
       const i = slot === 'scope' ? [null, ...C.scopes].indexOf(id) : i0; // nivel da mira pelo lugar na lista original (as de trilho entraram na frente)
       if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
-      const open = slot === 'muzzle' || IRONS[id] || partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
+      const open = slot === 'muzzle' ? !id || partUnlocked(cat, i, 'mz:' + id) : IRONS[id] || partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
       const lockCh = !open && id && (LOCKED_BY[cat + ':' + id] || LOCKED_BY[id]);
       // pros e contras da peca (estilo COD), so em pente e empunhadura
       const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser' || slot === 'conv' || slot === 'muzzle') && id ? partEffects(cat, lo, slot, id) : [];
       const fxHtml = fx.length ? `<span class="fx">${fx.slice(0, 4).map(([k, v]) => `<b class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '+' : '−'} ${t(k)}</b>`).join('')}</span>` : '';
       const pill = slot === 'body' ? modePill(id) + (open ? `<small class="blv">${t('lvlShort', { n: wpnLevel(cat, id) })}</small>` : '') : '';
-      return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : `<small>${t('reqWpn', { n: partReq(i) })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: partReq(i) }) * 100)}%"></i></span>`}</button>`;
+      return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : (() => { const rq = slot === 'muzzle' ? MUZZLE_LVL[id] : partReq(i); return `<small>${t('reqWpn', { n: rq })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: rq }) * 100)}%"></i></span>`; })()}</button>`;
     }).join('');
     p.querySelectorAll('.opt').forEach(b => {
       b.onclick = () => { if (b.classList.contains('locked')) { peek(slot, b.dataset.id || null); return; } setPart(slot, b.dataset.id || null); };
       b.onpointerenter = () => audio.play('ui_hover', { ui: true, vol: 0.3, key: 'hover', max: 1 });
+    });
+  }
+
+  // sequencias de abate: cartas com selo, abates e o que faz; tocar liga/desliga (no maximo STREAK_PICK)
+  function renderStreakPick() {
+    const mine = pickStreaks(S.streaks), pav = 0;
+    $('stkPane').innerHTML = `<p class="stk-hint">${t('stkHint', { n: STREAK_PICK })} <b>${t('stkPicked', { n: mine.length, m: STREAK_PICK })}</b></p>`
+      + `<div class="stk-cards" role="group" aria-label="${t('stkTab')}">` + Object.entries(STREAKS).map(([id, st]) => {
+        const on = mine.includes(id);
+        return `<button class="stk-card ${on ? 'on' : ''}" data-s="${id}" aria-pressed="${on}"><svg class="stk-ico" viewBox="0 0 48 48" aria-hidden="true">${STREAK_SVG[id] || ''}</svg>`
+          + `<b class="stk-name">${t('s_' + id)}</b><small class="stk-k">${t('stkKills', { n: st.kills - pav })}</small><span class="stk-d">${t('sd_' + id)}</span></button>`;
+      }).join('') + `</div>`;
+    $('stkPane').querySelectorAll('.stk-card').forEach(b => b.onclick = () => {
+      const id = b.dataset.s, cur = pickStreaks(S.streaks);
+      if (cur.includes(id)) { if (cur.length <= 1) return; S.streaks = cur.filter(k => k !== id); }
+      else if (cur.length >= STREAK_PICK) { audio.play('ui_back', { ui: true }); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); $('stkPane').querySelector('.stk-hint b').textContent = t('stkFull'); return; }
+      else S.streaks = [...cur, id];
+      o.saveSettings(); audio.play('ui_click', { ui: true }); renderStreakPick();
     });
   }
 

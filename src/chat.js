@@ -31,6 +31,10 @@ export class Chat {
       if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyT') { e.preventDefault(); e.stopImmediatePropagation(); this.open(); }
     }, true);
     addEventListener('keyup', (e) => { if (this.isOpen) e.stopImmediatePropagation(); }, true);
+    // o cartao do canto cresce (sequencia pronta, colete) ou a janela muda: o chat acompanha
+    const bl = document.querySelector('.hud-bl');
+    if (bl && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.on && this.place()).observe(bl);
+    addEventListener('resize', () => this.on && this.place());
   }
 
   relabel() {
@@ -49,9 +53,19 @@ export class Chat {
     document.body.classList.toggle('chat-on', on);
   }
 
+  // nunca em cima do cartao do canto (sequencias, vida, colete, folego): o chat sobe ate o topo dele + folga
+  // (02/11, regra dele: popup do chat nao sobrescreve nada). No celular o chat fica em cima (CSS).
+  place() {
+    const el = $('chat'), bl = document.querySelector('.hud-bl');
+    if (!el || !bl || document.body.classList.contains('touchmode')) { if (el) el.style.bottom = ''; return; }
+    const r = bl.getBoundingClientRect();
+    if (r.height) el.style.bottom = Math.round(innerHeight - r.top + 12) + 'px';
+  }
+
   open() {
     if (!this.on || this.isOpen) return;
     this.isOpen = true;
+    this.place();
     this.input.keys.clear(); this.input.mouse.fire = this.input.mouse.ads = false;
     this.box.hidden = false; this.log.classList.add('open');
     this.box.classList.toggle('touch', isTouch);
@@ -76,6 +90,7 @@ export class Chat {
   // mensagem do servidor: nome na cor do time (vermelho = inimigo, azul = seu time, sem time = tinta)
   add(e, mine, enemy) {
     if (!this.on) return;
+    this.place();
     const li = document.createElement('li');
     li.className = mine ? 'me' : enemy ? 'foe' : e.team ? 'mate' : '';
     li.innerHTML = `<b>${esc(e.name)}</b> ${esc(e.text)}`;

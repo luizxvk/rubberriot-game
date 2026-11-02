@@ -1,6 +1,6 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
 import { getMap, MODE_MAP, ESCORT_MAPS, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
 import { cleanLook } from './looks.js';
@@ -30,6 +30,7 @@ const STREAK_GAP = 4; // s de folga entre uma sequencia acabar e a proxima poder
 export const LIMIT_MODES = ['ffa', 'tdm', 'ctf', 'dom', 'bomb'];
 export const TIME_MODES = ['ffa', 'tdm', 'gungame', 'ctf', 'dom', 'infect'];
 export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha'];
+const MAP_OK = (m) => typeof m === 'string' && m !== 'ilha' && (MAP_IDS.includes(m) || ESCORT_MAPS.includes(m)); // escolha valida da sala (a lista de cima nao tem os mapas de trilho: 02/11 a escolta nunca trocava)
 
 // granada: saida da mao e um passo da fisica. O servidor e a linha tracejada do cliente usam os mesmos,
 // entao o tracejado cai onde a granada cai de verdade
@@ -72,7 +73,8 @@ export class Core {
     this.cfg = MODES[this.duo ? 'duo' : this.bounce ? 'bounce' : this.mode];
     // battle royale so na ilha (e a ilha so no battle royale)
     this.M = getMap(this.mode === 'br' ? 'ilha' : map && map !== 'auto' && map !== 'ilha' ? map : MODE_MAP[this.mode]);
-    this.mapPick = this.mode === 'br' ? 'ilha' : map && MAP_IDS.includes(map) && map !== 'ilha' ? map : 'auto';
+    this.mapPick = this.mode === 'br' ? 'ilha' : MAP_OK(map) ? map : 'auto';
+    this.mapRaw = this.mapPick;
     this.wantBots = Math.max(0, Math.min(MAX_PLAYERS - 1, bots | 0));
     this.difficulty = difficulty;
     this.skill = botSkill(difficulty);
@@ -116,7 +118,7 @@ export class Core {
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
     if (this.mode === 'br') brInit(this);
     this.esc = null; if (this.mode === 'escort') escInit(this);
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; fieldReset(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.talcs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; fieldReset(this);
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {};
       this.spawn(p);
@@ -145,7 +147,7 @@ export class Core {
     const atk = [...this.players.values()].filter(p => p.team === 'red');
     const carrier = atk.length ? atk[Math.floor(Math.random() * atk.length)] : null;
     this.bomb = { state: carrier ? 'carried' : 'dropped', carrier: carrier ? carrier.id : null, pos: carrier ? [...carrier.pos] : [0, 0, 0], site: null, t: 0, prog: 0, actor: null, goal: Math.random() < 0.5 ? 'A' : 'B' };
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; fieldReset(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.talcs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; fieldReset(this);
     if (this.roundN > 1) this.freezeT = COUNT_IN;
     this.event({ k: 'round', n: this.roundN, carrier: this.bomb.carrier });
   }
@@ -291,13 +293,13 @@ export class Core {
     this.bounce = mode === 'bounce';
     this.mode = this.duo || this.bounce ? 'br' : mode;
     this.cfg = MODES[mode];
-    const map = typeof m.map === 'string' && MAP_IDS.includes(m.map) && m.map !== 'ilha' ? m.map : 'auto';
+    const map = MAP_OK(m.map) ? m.map : 'auto';
     // escolta so roda na Ladeira do Bonde, e a Ladeira so serve pra escolta (o mapa precisa do trilho)
     // escolta: Ladeira ou Vale do Apito (auto sorteia); fora da escolta os mapas de trilho nao entram
     const map2 = this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : ESCORT_MAPS.includes(map) ? 'auto' : map;
     // mesmo modo e mesma escolha de mapa (so trocou evento, bots, tempo...): o mapa fica (01/11: trocar o evento
     // sorteava outro mapa da escolta no 'auto')
-    if (!(mode === prevMode && map === prevRaw && this.M)) {
+    if (!(mode === prevMode && map === prevRaw && this.M)) { // escolta: o lobby recebe a ESCOLHA (auto), nao o sorteado (02/11: a seta caia em auto = auto e nao trocava)
       this.mapPick = this.mode === 'br' ? 'ilha' : map2;
       this.M = getMap(this.mode === 'br' ? 'ilha' : map2 !== 'auto' ? map2 : MODE_MAP[this.mode]);
     }
@@ -522,7 +524,7 @@ export class Core {
     p.fuse = E?.fuse || 0; // bomba-relogio: pavio no peito
     p.maxHp = p.hp;
     p.owned.add(p.wpn);
-    if (p.bot) { p.field ||= botPickField(); this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; }
+    if (p.bot) { p.field ||= botPickField(); this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; p.ai.route = null; p.ai.departT = rnd(0, 1.6); p.ai.lane = rnd(-1, 1); } // departT/lane: cada um sai numa hora e num corredor (02/11: saiam em fila)
     // mode vai junto: na troca de modo da sala o 'spawn' chega antes do 'start' e o cliente montava o kit do modo
     // velho (saindo da escada de armas ficava so com uma arma e nao trocava mais)
     this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team, air: !!p.air, mode: this.mode, mut: this.mut });
@@ -599,15 +601,17 @@ export class Core {
         break;
       }
       case 'loadout': {
-        if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(99, Math.round(m.lvl)));
+        if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(99, Math.round(m.lvl))); // nivel de verdade (o que aparece)
+        p.ulvl = Number.isFinite(m.ul) ? Math.max(1, Math.min(99, Math.round(m.ul))) : p.lvl; // nivel de desbloqueio (prestigiado = maximo): so valida skill/equipamento
         if (typeof m.elite === 'boolean') p.elite = m.elite; // selo Elite da Rovex (so visual)
         p.rk = Number.isInteger(m.rk) && m.rk >= 0 && m.rk <= 4 ? m.rk : -1; // badge da rankeada (so visual)
         p.prest = Math.max(0, Math.min(10, m.prest | 0)); // estrelas de prestigio (so visual)
         if (PRIMARIES.includes(m.primary)) p.primary = m.primary;
         // skills passivas: so ids conhecidos, sem repetir, ate SKILL_SLOTS e liberadas pro nivel informado
-        p.skills = Array.isArray(m.skills) ? [...new Set(m.skills.filter(s => SKILLS[s] && (p.lvl || 1) >= SKILLS[s].lvl))].slice(0, SKILL_SLOTS) : [];
+        p.skills = Array.isArray(m.skills) ? [...new Set(m.skills.filter(s => SKILLS[s] && (p.ulvl || p.lvl || 1) >= SKILLS[s].lvl))].slice(0, SKILL_SLOTS) : [];
         p.los = cleanLoadouts(m.los);
-        p.field = FIELD[m.field] && (p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null; // equipamento de campo
+        p.field = FIELD[m.field] && (p.ulvl || p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null;
+        p.streaks = pickStreaks(m.streaks); // sequencias que ele escolheu no Arsenal (02/11) // equipamento de campo
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
         // mexeu na classe/armas no lobby depois de dar pronto: volta pra nao pronto (tem que confirmar de novo)
         const sig = JSON.stringify([p.primary, p.los, p.skills, p.field, p.tracer]);
@@ -788,7 +792,7 @@ export class Core {
   }
 
   kill(v, a, wpn, head) {
-    v.alive = false; v.hp = 0; v.down = 0; v.reviveT = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : this.mode === 'ctf' ? 5 : RESPAWN; // bandeira: 5 s (gente e bot, pedido dele 01/11) v.deaths++; v.streak = 0;
+    v.alive = false; v.hp = 0; v.down = 0; v.reviveT = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : this.mode === 'ctf' ? 5 : RESPAWN; v.deaths++; v.streak = 0; // bandeira: 5 s (gente e bot, pedido dele 01/11); morreu = sequencia zera
     this.dropFlag(v);
     const suicide = !a || a === v;
     if (!suicide) {
@@ -809,7 +813,8 @@ export class Core {
         if (a.gunLvl >= this.ladder.length) { a.gunLvl = this.ladder.length - 1; this.end(a.name); }
         else { a.wpn = this.ladder[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
       }
-      if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
+      if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && wpn !== 'nuke') for (const kind of a.streaks || pickStreaks(null)) {
+        const s = STREAKS[kind];
         if (a.streak === s.kills - (hasSkill(a, 'pavio') && s.kills > 3 ? SKILLS.pavio.streak : 0)) {
           // bot e Torta Atomica (01/11, pedido dele): so 30% das vezes e no maximo uma por partida (pegavam toda hora)
           if (kind === 'nuke' && a.bot && ((this.botNukes || 0) >= 1 || Math.random() > 0.3)) continue;
@@ -997,6 +1002,19 @@ export class Core {
       for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5), streak: true });
       this.event({ k: 'anvilWarn', list });
     }
+    if (kind === 'milk') { p.hp = p.maxHp || 100; p.armor = Math.max(p.armor || 0, STREAKS.milk.armor); } // Leite Turbinado: vida cheia + colete
+    if (kind === 'talc') { const mine = this.talcs.find(u => (this.cfg.teams ? u.team === p.team : u.owner === p.id)); if (mine) mine.t += STREAKS.talc.time; else this.talcs.push({ owner: p.id, team: p.team, t: STREAKS.talc.time }); }
+    if (kind === 'anvline') {
+      // Linha de Bigornas: reta que passa pelo meio dos inimigos vivos (ou pelo centro), na direcao em que eles estao mais espalhados
+      const en = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o));
+      const cx = en.length ? en.reduce((s, o) => s + o.pos[0], 0) / en.length : rnd(-A / 3, A / 3), cz = en.length ? en.reduce((s, o) => s + o.pos[2], 0) / en.length : rnd(-A / 3, A / 3);
+      let ang = rnd(0, Math.PI);
+      if (en.length > 1) { let sxx = 0, szz = 0, sxz = 0; for (const o of en) { const dx = o.pos[0] - cx, dz = o.pos[2] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; } ang = 0.5 * Math.atan2(2 * sxz, sxx - szz); }
+      const S = STREAKS.anvline, list = [];
+      for (let j = 0; j < S.n; j++) { const off = (j - (S.n - 1) / 2) * S.gap, x = cx + Math.cos(ang) * off + rnd(-0.8, 0.8), z = cz + Math.sin(ang) * off + rnd(-0.8, 0.8); if (Math.abs(x) < A - 1 && Math.abs(z) < A - 1) list.push([x, 0, z]); }
+      list.forEach((pos, j) => this.anvils.push({ owner: p.id, pos, t: 1.6 + j * 0.12, streak: true })); // cai em sequencia, de uma ponta a outra
+      this.event({ k: 'anvilWarn', list });
+    }
     if (kind === 'blimp') this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, owner: p.id, team: p.team, t: STREAKS.blimp.time, hp: STREAKS.blimp.hp, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
     if (kind === 'nuke') this.nukes.push({ owner: p.id, t: STREAKS.nuke.delay });
     this.event({ k: 'streak', id: p.id, kind, team: p.team, delay: kind === 'nuke' ? STREAKS.nuke.delay : undefined });
@@ -1025,6 +1043,8 @@ export class Core {
     }
     this.nukes = this.nukes.filter(n => n.t > 0 && this.players.has(n.owner) && !this.over);
     for (const u of this.uavs) u.t -= dt;
+    for (const u of this.talcs) u.t -= dt;
+    this.talcs = this.talcs.filter(u => u.t > 0 && this.players.has(u.owner));
     this.uavs = this.uavs.filter(u => u.t > 0 && this.players.has(u.owner));
     for (let i = this.anvils.length - 1; i >= 0; i--) {
       const a = this.anvils[i];
@@ -1181,7 +1201,7 @@ export class Core {
       ai.cover = best && p.hp < (p.maxHp || BOT_HP) * 0.35 ? this.coverSpot(p, best) : null;
       ai.target = best;
       if (p.field && fieldReady(p) && !(this.freezeT > 0)) botField(this, p, best);
-      ai.goal = this.botGoal(p);
+      ai.goal = this.spreadGoal(p, this.botGoal(p));
     }
     const w = WEAPONS[p.wpn];
     // papel fixo de cada bot (01/11, pedido dele: movimento mais tatico e previsivel): 0 = ponta (chega perto,
@@ -1266,15 +1286,16 @@ export class Core {
     if (!t) ai.crouch = false;
     if (!t && ai.holdT > 0 && !p.using) { ai.holdT -= dt; moveDir = null; ai.holdYaw ??= p.yaw; wantYaw = ai.holdYaw + Math.sin(ai.holdT * 1.3) * 0.6; ai.crouch = true; }
     else ai.holdYaw = null;
-    // nada de bolo: colega a menos de 3,5 m empurra pro lado (cada um segue sua rota)
+    if (ai.departT > 0) { ai.departT -= dt; if (!t) moveDir = null; } // acabou de nascer: sai na sua vez
+    // nada de bolo: colega a menos de 6 m empurra pro lado (cada um segue sua rota; 3,5 m deixava a fila indiana)
     if (moveDir && !p.using) {
       let sx = 0, sz = 0;
       for (const o of this.players.values()) {
         if (o === p || !o.alive || this.enemies(p, o)) continue;
         const ox = p.pos[0] - o.pos[0], oz = p.pos[2] - o.pos[2], od = Math.hypot(ox, oz);
-        if (od < 3.5 && od > 0.01) { const k = (3.5 - od) / 3.5; sx += ox / od * k; sz += oz / od * k; }
+        if (od < 6 && od > 0.01) { const k = (6 - od) / 6; sx += ox / od * k; sz += oz / od * k; }
       }
-      if (sx || sz) moveDir = [moveDir[0] + sx * 0.9, moveDir[1] + sz * 0.9];
+      if (sx || sz) moveDir = [moveDir[0] + sx * 1.5, moveDir[1] + sz * 1.5];
       const ml = Math.hypot(moveDir[0], moveDir[1]); if (ml > 1) moveDir = [moveDir[0] / ml, moveDir[1] / ml];
     }
     if (p.using) moveDir = null;
@@ -1357,6 +1378,17 @@ export class Core {
     if (B.state === 'carried' && B.carrier === p.id) return this.sites.some(s => Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]) < s.r - 0.6);
     if (B.state === 'planted' && p.team === 'blue') return dist2(p.pos, B.pos) < (BOMB.defuseR - 0.4) ** 2;
     return false;
+  }
+
+  // objetivo longe: cada bot mira um ponto de lado do alvo (o corredor dele, fixo ate morrer) e a folga encolhe
+  // chegando perto; sem isso o time inteiro saia do nascimento em fila indiana pro mesmo lugar (02/11)
+  spreadGoal(p, g) {
+    if (!g || !p.ai || this.mode === 'br') return g;
+    const dx = g[0] - p.pos[0], dz = g[2] - p.pos[2], d = Math.hypot(dx, dz);
+    if (d < 8) return g;
+    const lane = p.ai.lane ?? 0, off = lane * Math.min(7, (d - 8) * 0.35);
+    const x = g[0] - dz / d * off, z = g[2] + dx / d * off;
+    return standable(this.M, x, z) ? [x, g[1], z] : g;
   }
 
   botGoal(p) {
@@ -1457,13 +1489,14 @@ export class Core {
   patrolPoi(p) {
     const ai = p.ai, pts = this.poiList();
     const mates = this.cfg.teams ? [...this.players.values()].filter(o => o !== p && o.bot && o.alive && o.team === p.team && o.ai?.route?.length) : [];
+    const near = this.cfg.teams ? [...this.players.values()].filter(o => o !== p && o.alive && o.team === p.team && Math.hypot(o.pos[0] - p.pos[0], o.pos[2] - p.pos[2]) < 10).length : 0; // nasceu junto: patrulha mais longe uns dos outros
     let best = null, bs = -Infinity;
     for (const q of pts) {
       const d = Math.hypot(q[0] - p.pos[0], q[2] - p.pos[2]);
       if (d < 8) continue;
       let sc = Math.min(d, 45) - Math.max(0, d - 45) * 0.5 + rnd(0, 25);
       if ((ai.visited || []).some(v => Math.hypot(v[0] - q[0], v[2] - q[2]) < 6)) sc -= 30;
-      for (const o of mates) { const g = o.ai.route[o.ai.route.length - 1]; if (Math.hypot(g[0] - q[0], g[2] - q[2]) < 10) sc -= 18; }
+      for (const o of mates) { const g = o.ai.route[o.ai.route.length - 1]; if (Math.hypot(g[0] - q[0], g[2] - q[2]) < 14) sc -= 18 + near * 4; }
       if (sc > bs) { bs = sc; best = q; }
     }
     return best || pts[Math.floor(Math.random() * pts.length)] || [0, 0, 0];
@@ -1472,7 +1505,7 @@ export class Core {
   // nao alonga demais o caminho; assim os bots chegam por flancos diferentes
   routeTo(p, target) {
     const d0 = Math.hypot(target[0] - p.pos[0], target[2] - p.pos[2]);
-    if (d0 < 14 || Math.random() < 0.3) return [target];
+    if (d0 < 14 || Math.random() < 0.15) return [target];
     const dir = Math.atan2(target[0] - p.pos[0], target[2] - p.pos[2]);
     let via = null, bs = -Infinity;
     for (const q of this.poiList()) {
@@ -1673,8 +1706,8 @@ export class Core {
     this.lobbyT = 0.25;
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, host: this.hostId(),
-      cfg: { mut: this.mut, mode: this.modeId(), map: this.mapPick || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), elite: !!p.elite, rk: p.rk ?? -1 })),
+      cfg: { mut: this.mut, mode: this.modeId(), map: (this.mode === 'escort' ? this.mapRaw : this.mapPick) || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), pr: p.prest || 0, elite: !!p.elite, rk: p.rk ?? -1 })),
     });
   }
 
@@ -1707,6 +1740,7 @@ export class Core {
       nades: this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos.map(r2) })),
       blimps: this.blimps.map(b => ({ id: b.id, pos: b.pos.map(r2), team: b.team, owner: b.owner, hp: Math.max(0, Math.round(b.hp / STREAKS.blimp.hp * 100)) })),
       uavs: this.uavs.map(u => ({ owner: u.owner, team: u.team })),
+      talcs: this.talcs.map(u => ({ owner: u.owner, team: u.team })),
       sLock: (() => { const l = this.streakLock(); return l ? { kind: l.kind, t: Math.ceil(l.t) } : null; })(),
       br: this.mode === 'br' && this.zone ? brSnap(this) : null,
       esc: this.esc ? escSnap(this) : null,

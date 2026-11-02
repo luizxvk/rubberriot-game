@@ -75,6 +75,8 @@ export class EscortView {
     this.ringMat = new THREE.MeshBasicMaterial({ color: PAL.red, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
     this.ring = new THREE.Mesh(new THREE.RingGeometry(ESCORT.r - 0.3, ESCORT.r, 48), this.ringMat); this.ring.rotation.x = -Math.PI / 2; this.root.add(this.ring);
     this.d = 0; this.spin = 0;
+    // ja nasce na largada do trilho (no lobby nao tem estado da escolta e ele ficava largado no meio do mapa, em 0,0)
+    const p0 = trackAt(M, 0), y0 = trackY(M, p0.x, p0.z); this.tram.position.set(p0.x, y0, p0.z); this.tram.rotation.y = p0.yaw; this.ring.position.set(p0.x, y0 + 0.06, p0.z);
   }
   update(t, dt, esc) {
     if (!esc) return;

@@ -225,7 +225,7 @@ export class Lobby {
     $('lbPlayers').innerHTML = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${t('lvlShort', { n: p.lvl })}</span></li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span></li>`;
     }).join('');
     // carimbo so anima em quem acabou de ficar pronto
     const now = new Set(list.filter(p => p.ready).map(p => p.id));

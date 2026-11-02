@@ -37,7 +37,7 @@ const defOf = (E) => (E.atk === 'red' ? 'blue' : 'red');
 function escSwap(c) {
   const E = c.esc;
   E.r1 = { d: E.d, done: E.d >= E.len, used: E.used };
-  Object.assign(E, { round: 2, atk: 'blue', d: 0, next: 0, state: 'wait', idleT: 0, ot: false, used: 0 });
+  Object.assign(E, { round: 2, atk: 'blue', d: 0, next: 0, state: 'wait', idleT: 0, ot: false, used: 0, passed: false });
   c.time = ESCORT.time;
   for (const p of c.players.values()) c.spawn(p); // todo mundo renasce na hora do lado novo (sem tela de morte)
   c.freezeT = 5;
@@ -53,7 +53,7 @@ function escFinish(c, reached) {
 }
 // caixa do bonde pro mapa (bala e boneco nao atravessam): mesma medida do modelo (2,36 x 5,4 x 3 m)
 // altura do trilho: rampa e tabuleiro de viaduto (a grade do chao ignora piso suspenso e o bonde passava por baixo)
-export function trackY(M, x, z) { let y = 0; for (const b of M.boxes) if ((b.kind === 'bridge' || b.kind === 'step') && x >= b.min[0] && x <= b.max[0] && z >= b.min[2] && z <= b.max[2]) y = Math.max(y, b.max[1]); return y; }
+export function trackY(M, x, z) { let y = 0; for (const b of M.boxes) if ((b.deck || b.kind === 'step') && x >= b.min[0] && x <= b.max[0] && z >= b.min[2] && z <= b.max[2]) y = Math.max(y, b.max[1]); return y; }
 export function trainBox(M, d) { const p = trackAt(M, d), y = trackY(M, p.x, p.z); return { x: p.x, y, z: p.z, yaw: p.yaw, hw: 1.18, hl: 2.7, h: 3.0 }; }
 export const escPos = (c) => { const p = trackAt(c.M, c.esc.d); return [p.x, trackY(c.M, p.x, p.z), p.z]; };
 
@@ -62,7 +62,7 @@ export function escTick(c, dt) {
   let red = 0, blue = 0;
   for (const p of c.players.values()) {
     if (!p.alive) continue;
-    if ((p.pos[0] - at[0]) ** 2 + (p.pos[2] - at[2]) ** 2 > ESCORT.r * ESCORT.r || Math.abs(p.pos[1] - at[1]) > 3) continue;
+    if ((p.pos[0] - at[0]) ** 2 + (p.pos[2] - at[2]) ** 2 > ESCORT.r * ESCORT.r || Math.abs(p.pos[1] - at[1]) > 1.8) continue; // 1,8 m: quem esta embaixo do viaduto nao empurra nem contesta (02/11)
     if (p.team === 'red') red++; else if (p.team === 'blue') blue++;
   }
   E.red = red; E.blue = blue;
@@ -90,8 +90,8 @@ export function escTick(c, dt) {
   // placar: % do trilho de cada time (o do round 1 fica guardado)
   const pct = Math.floor(E.d / E.len * 100);
   if (E.round === 1) { c.teamScore.red = pct; c.teamScore.blue = 0; } else { c.teamScore.red = Math.floor(E.r1.d / E.len * 100); c.teamScore.blue = pct; }
-  // round 2: passou a marca do round 1 (que nao chegou na garagem) = venceu na hora
-  if (E.round === 2 && !E.r1.done && E.d > E.r1.d) { c.end('blue'); return; }
+  // round 2: passou a marca do round 1 (que nao chegou na garagem) = esta vencendo; segue ate garagem ou tempo
+  if (E.round === 2 && !E.r1.done && E.d > E.r1.d && !E.passed) { E.passed = true; c.event({ k: 'escPass' }); } // passou a marca: so avisa, o round vai ate o fim (02/11, pedido dele)
   if (E.d >= E.len) { const w = escFinish(c, true); if (w) c.end(w); return; }
   // prorrogacao: tempo acabou com atacante no bonde, segue enquanto tiver gente encostada (ate overtime s)
   if (c.time <= 0.05 && atkN && !E.ot) { E.ot = true; c.time = ESCORT.overtime; c.event({ k: 'escOt' }); }

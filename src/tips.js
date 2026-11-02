@@ -34,4 +34,6 @@ export function tip(id) {
   seen[id] = 1; try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch { /* */ }
   queue.push(id); show();
 }
+// fecha a dica aberta (saiu da tela dela: a dica de Skills ficava por cima do lobby, 02/11)
+export const tipClose = () => { if (el && !el.hidden) hide(); };
 export const tipsReset = () => { seen = {}; try { localStorage.removeItem(KEY); } catch { /* */ } };

@@ -140,13 +140,23 @@ export const BLAST = ['frag', 'anvil', 'blimp', 'bomb'];
 export const hasSkill = (p, id) => !!p?.skills?.includes(id);
 
 // fora da fila (01/11, pedido dele): radar, bigorna e torta chamam na hora; so o dirigivel espera a vez
-export const STREAK_FREE = ['uav', 'anvil', 'nuke'];
+export const STREAK_FREE = ['milk', 'uav', 'talc', 'anvil', 'anvline', 'nuke'];
+// 02/11 (pedido dele): mais sequencias no clima do jogo; cada um leva STREAK_PICK (escolhe na aba do Arsenal).
+// Leite Turbinado = vida cheia + colete; Nuvem de Talco = apaga o minimapa do inimigo; Linha de Bigornas =
+// fileira de bigornas cruzando onde o inimigo esta. Ordem aqui = ordem na tela (por abates)
 export const STREAKS = {
+  milk: { kills: 2, armor: 60 },
   uav: { kills: 3, time: 25 },
+  talc: { kills: 4, time: 20 },
   anvil: { kills: 5 },
   blimp: { kills: 7, time: 22, dmg: 14, hp: 1200 }, // da pra derrubar a tiro (hp)
-  nuke: { kills: 15, delay: 6 },
+  anvline: { kills: 9, n: 12, gap: 3.2 },
+  nuke: { kills: 25, delay: 6 }, // 25 abates sem morrer (02/11, pedido dele)
 };
+export const STREAK_PICK = 4;
+export const STREAK_DEFAULT = ['uav', 'anvil', 'blimp', 'nuke'];
+// lista que vale: so sequencia que existe, sem repetir, no maximo STREAK_PICK, na ordem de abates; vazia = padrao
+export const pickStreaks = (list) => { const ok = Array.isArray(list) ? [...new Set(list.filter(k => STREAKS[k]))].slice(0, STREAK_PICK) : []; return (ok.length ? ok : STREAK_DEFAULT).sort((a, b) => STREAKS[a].kills - STREAKS[b].kills); };
 
 export const MODES = {
   ffa:      { name: 'Contra Todos',      teams: false, limit: 20,  desc: 'Cada um por si. Quem chegar a 20 nocautes leva.' },

@@ -108,6 +108,8 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
 
 // ---------- desbloqueios ----------
 // peca na posicao i da lista da categoria abre no nivel da arma 1 + i*1.5 (a primeira ja vem aberta)
+// bocal (02/11, pedido dele): entra no nivel da arma como as outras pecas (antes vinha tudo aberto)
+export const MUZZLE_LVL = { comp: 3, flash: 6, brake: 9, silencer: 13 };
 export function partReq(i) { return i <= 0 ? 1 : Math.min(MAX_WPN_LEVEL, 1 + Math.ceil(i * 1.5)); }
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 // modelo que so abre num nivel de JOGADOR (01/11, pedido dele): Liquidificador no 40
@@ -120,6 +122,7 @@ export function partUnlocked(wpn, i, id) {
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
   if (id && id.startsWith('am:')) return true;  // bala normal
+  if (id && id.startsWith('mz:')) return wpnLevel(wpn) >= (MUZZLE_LVL[id.slice(3)] || 1);
   if (id && bodiesOf(wpn).includes(id)) return catLevel(wpn) >= partReq(i); // corpo novo: pelo melhor corpo
   return wpnLevel(wpn) >= partReq(i);
 }

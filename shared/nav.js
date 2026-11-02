@@ -23,7 +23,7 @@ function grid(M) {
     let f = 0;
     for (const b of boxes) {
       if (x < b.min[0] || x > b.max[0] || z < b.min[2] || z > b.max[2]) continue;
-      if (b.min[1] <= f + 0.05 && b.max[1] > f) f = b.max[1];
+      if ((b.min[1] <= f + 0.05 || b.deck) && b.max[1] > f) f = b.max[1]; // deck: tabuleiro de viaduto que o trilho cruza (sobe pela rampa)
     }
     floor[cz * N + cx] = f;
   }

@@ -19,23 +19,23 @@ import { LocalNet, WsNet, SplitNet } from './net.js';
 import { SS } from './ssboot.js';
 import { Chat } from './chat.js';
 import { audio } from './audio.js';
-import { MODES, WEAPONS, STREAKS, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES } from '../shared/weapons.js';
+import { MODES, WEAPONS, STREAKS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES } from '../shared/weapons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
 import { EV, currentEvent, META, metaWeek } from '../shared/events.js';
 import { wantedPoster, shareFile, ClipRec } from './share.js';
 import { updateCamoFx } from './camofx.js';
 import { getMap, hasLOS, raycast } from '../shared/map.js';
-import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions } from './arsenal.js';
+import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
-import { BODY_MIN_LVL, addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
+import { MUZZLE_LVL, BODY_MIN_LVL, addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
 import { track, grantTutorial } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
 import { BrView } from './brview.js';
-import { tip } from './tips.js';
+import { tip, tipClose } from './tips.js';
 import { wornLook } from './lookstore.js';
 import { botLook } from '../shared/looks.js';
 import { floorAt } from '../shared/nav.js';
@@ -312,6 +312,7 @@ function unlocksAt(wpn, wLevel, pLevel, only = null) {
     const all = { body: C.bodies, scope: [null, ...C.scopes], charger: C.chargers, handle: [null, ...C.handles], laser: [null, ...LASERS] };
     const lists = only === 'body' ? { body: all.body } : only === 'parts' ? (({ body, ...rest }) => rest)(all) : all;
     for (const [slot, list] of Object.entries(lists)) list.forEach((id, i) => { if (id && i > 0 && partReq(i) === wLevel) out.push({ slot, id, wpn, name: partName(slot, id) }); });
+    if (only !== 'body') for (const [id, lv] of Object.entries(MUZZLE_LVL)) if (lv === wLevel && CATEGORY[wpn].bodies.some(b => muzzleOptions(b).includes(id))) out.push({ slot: 'muzzle', id, wpn, name: partName('muzzle', id) });
     if (only !== 'body') for (const c of CAMOS) if (c.req && c.req.wpn === wLevel && !c.req.player) out.push({ slot: 'camo', id: c.id, wpn, name: t('camo_' + c.id) });
   }
   const cur = wpn || G.player?.wpn || 'smg';
@@ -911,6 +912,9 @@ function onEvent(e) {
     case 'escCp':
       if (inGame) { hud.message(t('es_cp', { n: e.n, o: e.of, b: e.bonus }), 3); audio.play('capture', { vol: 0.7, ui: true }); if (G.myTeam === 'red') gainXp('zone'); }
       break;
+    case 'escPass': // round 2 passou a marca do round 1: so aviso, a partida segue
+      if (inGame) { hud.message(t('es_pass'), 3); audio.play('capture', { vol: 0.7, ui: true }); }
+      break;
     case 'escOt':
       if (inGame) { hud.message(t('es_ot'), 3); audio.play('ringbell', { vol: 0.6, ui: true }); }
       break;
@@ -1216,11 +1220,12 @@ function sendLoadout() {
   const los = {};
   for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee']) { const { saved, ...lo } = G.loadouts[w] || {}; los[w] = lo; } // a memoria por modelo nao vai pro servidor
   // skills passivas equipadas (so as que o nivel ja abriu); o jogador aplica as de mao, o servidor as de regra
+  G.streaks = pickStreaks(settings.streaks); // escolhidas na aba Sequencias do Arsenal (02/11)
   G.skills = (settings.skills || []).filter(s => SKILLS[s] && unlockLevel() >= SKILLS[s].lvl).slice(0, SKILL_SLOTS);
   // equipamento de campo (um so; o nivel tem que ter liberado). O botao de toque mostra o icone dele.
   G.field = G.tutorial?.fieldOverride || (FIELD[settings.field] && unlockLevel() >= FIELD[settings.field].lvl ? settings.field : null); // treino: a Mola emprestada vale
   setFieldHud(G.field);
-  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field });
+  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: progressInfo().level, ul: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field, streaks: G.streaks });
   if (G.tutorial?.fieldOverride) { const me = G.net.core?.players.get(G.myId); if (me) me.field = G.tutorial.fieldOverride; } // o servidor local checa o nivel; no treino passa
   G.net.send({ t: 'look', look: wornLook() }); // visual do boneco (os outros veem)
   G.net.send({ t: 'dev', v: devNow() });
@@ -1523,8 +1528,15 @@ function openLobbySmith() {
   $('lobby').hidden = true; $('menu').hidden = false;
   ui.go('arsenal', 'lobby', PRIMARIES.includes(settings.primary) ? settings.primary : PRIMARIES[0]);
 }
+// skills e desafios da sala (02/11, pedido dele): mesma tela do menu, por cima do lobby; voltar devolve pra sala
+function openLobbyScreen(name) {
+  audio.play('ui_click', { ui: true });
+  $('lobby').hidden = true; $('menu').hidden = false;
+  ui.go(name, 'lobby');
+}
 function closeLobbySmith(ready) {
   if ($('menu').hidden) return;
+  tipClose(); // dica da tela de cima (skills) nao fica em cima da sala
   $('menu').hidden = true; ui.go('home');
   if (G.state === 'game') { // aberto da pausa: a arma montada vale na hora e volta pro tiroteio
     G.loadouts = matchLoadouts(); sendLoadout(); G.player?.rearm();
@@ -1541,6 +1553,8 @@ function renderLobbyPick() {
   const list = PRIMARIES;
   if (!list.includes(settings.primary)) { settings.primary = list[0]; saveSettings(); sendLoadout(); }
   $('lbSmith').onclick = openLobbySmith;
+  $('lbSkills').onclick = () => openLobbyScreen('skills');
+  $('lbCh').onclick = () => openLobbyScreen('challenges');
   // nome proprio do modelo montado em cada principal
   $('lbPickList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
   $('lbPickList').querySelectorAll('button').forEach(b => b.onclick = () => {

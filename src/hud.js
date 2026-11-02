@@ -2,7 +2,7 @@
 import { bindLabel } from './binds.js';
 import * as THREE from 'three';
 import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
-import { STREAKS, BR, STREAK_FREE } from '../shared/weapons.js';
+import { STREAKS, BR, STREAK_FREE, pickStreaks } from '../shared/weapons.js';
 // proxima sequencia pra chamar: a primeira que pode agora; se nenhuma pode (dirigivel esperando), a primeira guardada
 const callNext = (ready, lock) => ready.find(k => STREAK_FREE.includes(k) || !lock) || ready[0];
 const callLocked = (ready, lock) => !!ready.length && !!lock && !ready.some(k => STREAK_FREE.includes(k));
@@ -24,12 +24,15 @@ const TEAM = { red: 'h_red', blue: 'h_blue' };
 // pavio curto: as sequencias a partir da bigorna custam 1 abate a menos (igual ao servidor)
 // selos das sequencias: desenho proprio (tinta + papel), viewBox 48. ink = traco, cor = currentColor do selo
 export const STREAK_SVG = {
+  milk: `<path d="M18 5h12v6l4 6v24a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3V17l4-6z" fill="#ece9e1" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M14 24h20v17a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M26 22l-6 10h5l-3 8 8-11h-5l3-7z" fill="#ece9e1" stroke="#141210" stroke-width="2" stroke-linejoin="round"/><path d="M17 11h14" stroke="#141210" stroke-width="2.5"/>`,
+  talc: `<path d="M12 30c-5 0-8-3-8-7s3-7 8-6c1-5 6-8 11-7 3-3 10-2 12 3 5 0 9 3 9 8s-4 9-9 9z" fill="#ece9e1" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><circle cx="18" cy="22" r="4" fill="currentColor" stroke="#141210" stroke-width="2"/><circle cx="30" cy="20" r="5" fill="currentColor" stroke="#141210" stroke-width="2"/><path d="M10 36l2 2M20 38l1 3M30 37l-1 3M39 35l2 3" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
+  anvline: `<g transform="translate(0 2) scale(.46)"><path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="5" stroke-linejoin="round"/></g><g transform="translate(13 13) scale(.46)"><path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="5" stroke-linejoin="round"/></g><g transform="translate(26 24) scale(.46)"><path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="5" stroke-linejoin="round"/></g><path d="M4 44l40-40" stroke="#141210" stroke-width="2" stroke-dasharray="3 4"/>`,
   uav: `<circle cx="24" cy="25" r="15" fill="#ece9e1" stroke="#141210" stroke-width="3"/><path d="M24 25V10a15 15 0 0 1 13 7.5z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><circle cx="24" cy="25" r="7" fill="none" stroke="#141210" stroke-width="1.6" stroke-dasharray="3 3"/><circle cx="31" cy="20" r="2.6" fill="#141210"/><circle cx="17" cy="31" r="2" fill="#141210"/><circle cx="24" cy="25" r="2" fill="#141210"/>`,
   anvil: `<path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M11 18h20" stroke="#ece9e1" stroke-width="2" stroke-linecap="round"/><path d="M8 8l4 3M17 5l1 4M27 6l-2 4" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
   blimp: `<path d="M35 22l9-7v15z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="21" cy="22" rx="17" ry="9" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M8 19c6-2 20-2 27 0" stroke="#ece9e1" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M18 31v3M25 31v3" stroke="#141210" stroke-width="2.5"/><rect x="15" y="33" width="13" height="6" rx="2" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/>`,
   nuke: `<path d="M13 23c-5 0-7-3-7-6 0-4 4-6 7-5 1-4 5-6 9-5 3-3 10-2 12 3 4 0 7 3 7 6 0 4-3 7-7 7z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M20 23h8l1.5 9h-11z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M6 33h36l-4 9H10z" fill="#e0a33a" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M9 33c2-3 5-3 7 0 2-3 5-3 7 0 2-3 5-3 7 0 2-3 5-3 7 0 2-3 3-2 4 0" fill="none" stroke="#141210" stroke-width="2"/>`,
 };
-const nextStreak = (n, pavio) => { for (const s of Object.values(STREAKS)) { const k = s.kills - (pavio && s.kills > 3 ? 1 : 0); if (k > n) return k - n; } return 0; };
+const nextStreak = (n, pavio, mine) => { for (const s of pickStreaks(mine).map(k => STREAKS[k])) { const k = s.kills - (pavio && s.kills > 3 ? 1 : 0); if (k > n) return k - n; } return 0; };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Hud {
@@ -444,6 +447,8 @@ export class Hud {
     const g = cv.getContext('2d'), R = 90, span = Math.min(M.arena, 46), k = R / span, wk = 128 / (M.arena + 2);
     const uav = (snap.uavs || []).some(u => u.owner === G.myId || (u.team && u.team === G.myTeam));
     const enemyUav = (snap.uavs || []).some(u => u.owner !== G.myId && !(u.team && u.team === G.myTeam));
+    // Nuvem de Talco do inimigo: minimapa vira poeira (so voce no meio e o aviso), ate acabar
+    const jam = (snap.talcs || []).some(u => u.owner !== G.myId && !(u.team && u.team === G.myTeam));
     g.clearRect(0, 0, 180, 180);
     g.save();
     g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.clip();
@@ -473,6 +478,12 @@ export class Hud {
     g.lineWidth = 5; g.strokeStyle = enemyUav ? '#e0301e' : '#141210';
     g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.stroke();
     if (uav) { g.fillStyle = '#141210'; g.font = '800 12px Grandstander'; g.textAlign = 'center'; g.fillText('UAV', R, 172); }
+    if (jam) { // por cima de tudo: o mapa some, o resto do HUD segue
+      g.clearRect(0, 0, 180, 180); g.save(); g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.clip(); g.fillStyle = '#d9d4c8'; g.fillRect(0, 0, 180, 180);
+      for (let i = 0; i < 260; i++) { const a = Math.random(); g.fillStyle = a < 0.5 ? '#ece9e1' : '#a39b8e'; g.fillRect(Math.random() * 180, Math.random() * 180, 2 + a * 3, 2 + a * 3); }
+      g.restore(); g.lineWidth = 5; g.strokeStyle = '#141210'; g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#141210'; g.font = '800 13px Grandstander'; g.textAlign = 'center'; g.fillText(t('talcJam'), R, R + 5);
+    }
     // granadas e sequencias prontas
     const me = snap.players.find(o => o.id === G.myId);
     const ready = me?.ready || [];
@@ -491,7 +502,7 @@ export class Hud {
         `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
         (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fpc + '%' : ''}</span>` : '') +
         // sequencia pronta mas outra no ar: fica apagada com a contagem ate liberar
-        (p.g?.mode !== 'br' && p.g?.mode !== 'gungame' ? '' : callLocked(ready, snap.sLock) ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + callNext(ready, snap.sLock))}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
+        (p.g?.mode !== 'br' && p.g?.mode !== 'gungame' ? '' : callLocked(ready, snap.sLock) ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + callNext(ready, snap.sLock))}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio'), p.g?.streaks) })}</span>`);
     }
   }
 
@@ -504,13 +515,14 @@ export class Hud {
     if (!on) return;
     const ready = me.ready || [], n = me.streak || 0, pavio = G.skills?.includes('pavio');
     // celular: a fileira nao cabe la em cima (pausa, vida, minimapa, avisos); o selo vira o proprio botao da estrela
-    if (isTouch) { el.hidden = true; this.streakBtn(ready, n, pavio, snap); return; }
+    if (isTouch) { el.hidden = true; this.streakBtn(ready, n, pavio, snap, G.streaks); return; }
     const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb', bind = dev === 'pad' ? '▲' : dev === 'touch' ? '' : 'X';
     const lock = callLocked(ready, snap.sLock) ? snap.sLock.t : 0, nx = callNext(ready, snap.sLock);
-    const key = ready.join(',') + '/' + n + '/' + dev + '/' + lock + '/' + (pavio ? 1 : 0) + '/' + nx + (snap.sLock ? 1 : 0);
+    const mine = pickStreaks(G.streaks);
+    const key = ready.join(',') + '/' + n + '/' + dev + '/' + lock + '/' + (pavio ? 1 : 0) + '/' + nx + (snap.sLock ? 1 : 0) + '/' + mine.join(',');
     if (key === this.stkKey) return;
     this.stkKey = key;
-    el.innerHTML = Object.entries(STREAKS).map(([id, S]) => {
+    el.innerHTML = mine.map(id => [id, STREAKS[id]]).map(([id, S]) => { // so as escolhidas no Arsenal (02/11)
       const need = S.kills - (pavio && S.kills > 3 ? 1 : 0), got = ready.includes(id), next = nx === id;
       const k = got ? 1 : Math.min(1, n / need), C = 2 * Math.PI * 22;
       const cls = got ? (lock && next ? 'stk got wait' : next ? 'stk got next' : 'stk got') : 'stk';
@@ -521,10 +533,10 @@ export class Hud {
     }).join('');
   }
 
-  streakBtn(ready, n, pavio, snap) {
+  streakBtn(ready, n, pavio, snap, mine) {
     const b = document.querySelector('#touch .tbtn.streak');
     if (!b) return;
-    const list = Object.entries(STREAKS).map(([id, S]) => [id, S.kills - (pavio && S.kills > 3 ? 1 : 0)]);
+    const list = pickStreaks(mine).map(id => [id, STREAKS[id].kills - (pavio && STREAKS[id].kills > 3 ? 1 : 0)]);
     const id = (ready.length && callNext(ready, snap.sLock)) || (list.find(([, k]) => k > n) || list[list.length - 1])[0];
     const need = list.find(([x]) => x === id)[1], lock = callLocked(ready, snap.sLock);
     const key = id + '/' + ready.length + '/' + n + '/' + (lock ? 1 : 0);
