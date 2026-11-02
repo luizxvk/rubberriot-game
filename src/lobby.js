@@ -3,7 +3,7 @@ import { t, modeName, modeDesc, eliteTag } from './i18n.js';
 import { badgeSvg } from './rank.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
-import { TEAM_MAX, MODES } from '../shared/weapons.js';
+import { TEAM_MAX, MODES, BR } from '../shared/weapons.js';
 import { LIMIT_MODES, TIME_MODES, MAP_IDS } from '../shared/core.js';
 import { currentEvent } from '../shared/events.js';
 
@@ -24,7 +24,7 @@ export class Lobby {
     // host solta a contagem; os outros so marcam pronto
     $('lbReady').onclick = () => {
       if (this.isHost) { if (!this.counting) { audio.play('ui_click', { ui: true }); onStart(); } return; }
-      this.setReady(!this.ready); onReady(this.ready);
+      this.tapT = performance.now(); this.setReady(!this.ready); onReady(this.ready);
     };
     $('lbLeave').onclick = () => { this.closeFriends(); onLeave(); };
     $('lbCopy').onclick = async () => {
@@ -40,7 +40,13 @@ export class Lobby {
       this.sideOpen = false; $('lbSide').hidden = true;
       onTeam(b.dataset.side);
     };
-    $('lbSwap').onclick = () => { this.closeFriends(); this.sideOpen = true; audio.play('ui_click', { ui: true }); if (this.lastMsg) this.renderSide(this.lastMsg, this.myId); };
+    // trocar time direto (01/11, pedido dele): sem popup, vai pro outro lado se tiver vaga
+    $('lbSwap').onclick = () => {
+      this.closeFriends(); audio.play('ui_click', { ui: true });
+      const m = this.lastMsg, me = m?.players.find(p => p.id === this.myId); if (!me) return;
+      const to = me.team === 'red' ? 'blue' : 'red', n = m.players.filter(p => !p.bot && p.id !== this.myId && p.team === to).length;
+      if (n < TEAM_MAX) onTeam(to);
+    };
   }
 
   // sala com codigo (multiplayer): mostra o codigo e libera o convite
@@ -80,7 +86,7 @@ export class Lobby {
     this.lastCount = -1;
     this.okIds.clear();
     this.cfgPrev = null; this.cfgSig = null; this.hostSeen = null; this.hostNote = null;
-    this.sideOpen = true; // bomba: o popup do lado abre toda vez que o lobby aparece
+    this.sideOpen = false; // o popup de time nao abre mais (01/11): o Trocar time do elenco troca direto
     $('lbLeader').hidden = true;
     $('lobby').hidden = false;
   }
@@ -143,13 +149,14 @@ export class Lobby {
     const c = m.cfg, el = $('lbCfg');
     el.hidden = !c || m.phase !== 'lobby';
     if (el.hidden) return;
-    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br';
+    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce';
     const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     const rows = [
       ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : raw === 'escort' ? ['bonde'] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde')], br ? 'ilha' : raw === 'escort' ? 'bonde' : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
-      ['players', Array.from({ length: 15 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)],
+      ['map', br ? ['ilha'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito')], br ? 'ilha' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
+      br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: 15 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)],
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
       ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
       ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
@@ -162,7 +169,7 @@ export class Lobby {
     this.cfgSig = sig;
     const prev = this.cfgPrev; this.cfgPrev = { ...c };
     // virou Plantar a Bomba: o popup de escolher o lado abre pra todo mundo da sala
-    if (prev && prev.mode !== c.mode && c.mode === 'bomb') { this.sideOpen = true; queueMicrotask(() => this.lastMsg && this.renderSide(this.lastMsg, this.myId)); }
+    if (prev && prev.mode !== c.mode && c.mode === 'bomb') queueMicrotask(() => this.lastMsg && this.renderSide(this.lastMsg, this.myId));
     if (!host) this.closeModes();
     $('lbCfgWho').textContent = host ? t('cfgYouHost') : t('cfgHostOnly');
     el.classList.toggle('host', host);
@@ -206,6 +213,10 @@ export class Lobby {
     const host = m.host === myId;
     this.counting = m.phase === 'count';
     if (host !== this.isHost) { this.isHost = host; this.setReady(this.ready); }
+    // o servidor zera o pronto quando o host muda a partida ou ela acaba: o botao segue o servidor (antes ficava
+    // "pronto" so na tela e o 1o toque desmarcava, 01/11)
+    const mine = m.players.find(p => p.id === myId);
+    if (mine && !host && !!mine.ready !== this.ready && performance.now() - (this.tapT || 0) > 1500) { this.ready = !!mine.ready; this.setReady(this.ready); }
     // host so inicia com todo humano pronto (regra dele 30/10): o botao conta quem falta
     const waitN = m.players.filter(p => !p.bot && !p.ready && p.id !== m.host).length;
     if (waitN !== this.waitN) { this.waitN = waitN; this.setReady(this.ready); }
@@ -214,7 +225,7 @@ export class Lobby {
     $('lbPlayers').innerHTML = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="lv">${t('lvlShort', { n: p.lvl })}</span><span class="stamp">${t('lbReadyStamp')}</span></li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${t('lvlShort', { n: p.lvl })}</span></li>`;
     }).join('');
     // carimbo so anima em quem acabou de ficar pronto
     const now = new Set(list.filter(p => p.ready).map(p => p.id));

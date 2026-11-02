@@ -87,6 +87,16 @@ const AKIMBO_INSPECT = { dur: 3.2, spinR: [0.27, 0.46], spinL: [0.5, 0.69], keys
   [0.8, -0.03, 0.04, 0, 0.2, 0.15, 0.55, 0.03, 0.04, 0, 0.2, -0.15, -0.55],   // mostram o outro lado
   [0.92, -0.01, 0.01, 0, 0.05, 0.04, 0.12, 0.01, 0.01, 0, 0.05, -0.04, -0.12],
   [1, ...AK0]] };
+// Inspect do akimbo comprido (Cuspideira/Espirro): sem giro no dedo (arma grande); as duas deitam pra dentro,
+// sobem mostrando o lado de fora, cruzam um instante e voltam
+const AKIMBO_LONG_INSPECT = { dur: 3.0, spinR: [9, 10], spinL: [9, 10], keys: [ // giro fora do tempo = nunca gira
+  [0, ...AK0],
+  [0.14, 0.01, 0.03, 0, 0.12, 0.1, -0.55, -0.01, 0.03, 0, 0.12, -0.1, 0.55],
+  [0.36, 0.02, 0.06, 0.02, 0.25, -0.25, -0.2, -0.02, 0.06, 0.02, 0.25, 0.25, 0.2],
+  [0.56, -0.02, 0.05, 0, 0.18, 0.2, 0.5, 0.02, 0.05, 0, 0.18, -0.2, -0.5],
+  [0.78, -0.04, 0.02, 0.02, 0.1, 0.3, 0.35, 0.04, 0.02, 0.02, 0.1, -0.3, -0.35],
+  [0.92, -0.01, 0.01, 0, 0.04, 0.05, 0.08, 0.01, 0.01, 0, 0.04, -0.05, -0.08],
+  [1, ...AK0]] };
 // Inspect do revolver (Bang-Bang): deita mostrando o tambor, a esquerda da um tapa e ele gira 3 voltas,
 // sobe e da um giro de cauboi no dedo. Mesmo formato do INSPECTS (x, y, z, rx, ry, rz, mao esquerda x, y, z).
 const REV_INSPECT = { dur: 3.0, spinR: [0.67, 0.86], keys: [
@@ -113,7 +123,22 @@ function inspectPose(k, p) {
   }
   return out;
 }
-const STREAK_DUR = 1.3;
+const STREAK_DUR = 1.8; // chamar a sequencia: a arma sai de cena, o objeto aparece e a arma volta (01/11)
+const STIM_DUR = 1.15;
+// seringa de desenho: tubo de vidro com o liquido verde, agulha, embolo e as abas de apoiar os dedos
+function syringeMesh() {
+  const g = new THREE.Group();
+  const tube = ink(new THREE.CylinderGeometry(0.022, 0.022, 0.13, 12), 0xd8e6ea, 0.006); g.add(tube);
+  const juice = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.11, 10), new THREE.MeshBasicMaterial({ color: 0x5ee86a }));
+  juice.position.y = 0; g.add(juice); g.userData.juice = juice;
+  const tip = ink(new THREE.CylinderGeometry(0.008, 0.022, 0.02, 10), PAL.ink, 0.004); tip.position.y = -0.075; g.add(tip);
+  const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.07, 6), new THREE.MeshBasicMaterial({ color: 0xcfd4d6 })); needle.position.y = -0.12; g.add(needle);
+  const wings = ink(new THREE.BoxGeometry(0.075, 0.008, 0.02), PAL.ink, 0.004); wings.position.y = 0.066; g.add(wings);
+  const plunger = new THREE.Group(); plunger.position.y = 0.07; g.add(plunger); g.userData.plunger = plunger;
+  const rod = ink(new THREE.CylinderGeometry(0.006, 0.006, 0.06, 6), PAL.ink, 0.003); rod.position.y = 0.03; plunger.add(rod);
+  const cap = ink(new THREE.CylinderGeometry(0.02, 0.02, 0.008, 12), PAL.red || 0xa83a2c, 0.004); cap.position.y = 0.062; plunger.add(cap);
+  return g;
+}
 // golpe com a faca na mao (BO3): prepara a direita, corta atravessando pra esquerda e volta.
 // Chave: [t, x, y, z, rx, ry, rz] somado a pose da faca.
 const SLASH = [
@@ -186,40 +211,44 @@ export class ViewModel {
     this.armL = new Hose(0.042, PAL.ink, 0.012);
     this.scene.add(this.armR.mesh, this.armL.mesh);
     // luva com duas maos: aberta (segurando arma de fogo) e fechada (punho: soco e cabo da faca)
+    // luva estilo Mickey (01/11, pedido dele): mao mais quadrada (menos bola), 3 dedos gordos + polegar = 4,
+    // 3 costuras pretas nas costas da mao e punho largo em sino com a borda dobrada
+    const stitch = (parent, xs, y, z, len, rx = 0) => { for (const x of xs) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.003, len), new THREE.MeshBasicMaterial({ color: PAL.ink })); l.position.set(x, y, z); l.rotation.x = rx; parent.add(l); } };
     const glove = () => {
       const g = new THREE.Group(), open = new THREE.Group(), fist = new THREE.Group();
       const palm = ink(new THREE.SphereGeometry(0.05, 12, 10), PAL.white, 0.008);
-      palm.scale.set(1, 0.85, 1.25); open.add(palm);
+      palm.scale.set(1.12, 0.62, 1.1); open.add(palm);
       for (let i = 0; i < 3; i++) {
-        const f = ink(new THREE.CapsuleGeometry(0.016, 0.04, 3, 6), PAL.white, 0.006);
-        f.position.set(-0.03 + i * 0.03, 0.02, -0.05); f.rotation.x = -1.2; f.userData.finger = true;
+        const f = ink(new THREE.CapsuleGeometry(0.019, 0.05, 3, 8), PAL.white, 0.006);
+        f.position.set(-0.036 + i * 0.036, 0.008, -0.062); f.rotation.x = -1.25; f.userData.finger = true;
         open.add(f);
       }
-      const th = ink(new THREE.CapsuleGeometry(0.016, 0.03, 3, 6), PAL.white, 0.006);
-      th.position.set(0.045, 0.03, -0.01); th.rotation.z = -0.8; open.add(th);
-      // punho: bola fechada, 4 nos dos dedos dobrados na frente e o polegar cruzando por baixo
+      const th = ink(new THREE.CapsuleGeometry(0.018, 0.035, 3, 8), PAL.white, 0.006);
+      th.position.set(0.05, 0.018, -0.018); th.rotation.z = -0.85; th.userData.finger = true; open.add(th);
+      stitch(open, [-0.018, 0, 0.018], 0.031, 0.008, 0.045);
+      // punho fechado: bloco arredondado, 3 nos grandes na frente e o polegar cruzando por baixo
       const ball = ink(new THREE.SphereGeometry(0.052, 12, 10), PAL.white, 0.008);
-      ball.scale.set(1.05, 0.95, 1.1); fist.add(ball);
-      for (let i = 0; i < 4; i++) {
-        const k = ink(new THREE.CapsuleGeometry(0.018, 0.026, 3, 6), PAL.white, 0.007);
-        k.position.set(-0.036 + i * 0.024, 0.03, -0.042); k.rotation.x = 0.9; // crista dos nos em cima (a camera ve o punho por tras)
+      ball.scale.set(1.12, 0.86, 1.05); fist.add(ball);
+      for (let i = 0; i < 3; i++) {
+        const k = ink(new THREE.CapsuleGeometry(0.021, 0.024, 3, 8), PAL.white, 0.007);
+        k.position.set(-0.034 + i * 0.034, 0.026, -0.044); k.rotation.x = 0.9; // crista dos nos em cima (a camera ve o punho por tras)
         fist.add(k);
       }
-      const tf = ink(new THREE.CapsuleGeometry(0.015, 0.04, 3, 6), PAL.white, 0.006);
+      const tf = ink(new THREE.CapsuleGeometry(0.016, 0.04, 3, 6), PAL.white, 0.006);
       tf.position.set(-0.035, -0.005, -0.035); tf.rotation.z = Math.PI / 2; tf.rotation.y = 0.5; fist.add(tf); // polegar por dentro, dobrado sobre os dedos
-      // linhas dos dedos (riscos de tinta entre os nos)
-      for (let i = 0; i < 3; i++) {
-        const l = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.03, 0.006), new THREE.MeshBasicMaterial({ color: PAL.ink }));
-        l.position.set(-0.024 + i * 0.024, 0.045, -0.05); l.rotation.x = 0.9; fist.add(l);
-      }
-      const cuff = ink(new THREE.CylinderGeometry(0.045, 0.06, 0.05, 10), PAL.white, 0.008);
-      cuff.position.set(0, -0.01, 0.06); cuff.rotation.x = Math.PI / 2; g.add(cuff);
+      stitch(fist, [-0.017, 0.017], 0.044, -0.05, 0.03, 0.9); // riscos entre os nos
+      stitch(fist, [-0.018, 0, 0.018], 0.044, 0.01, 0.04);    // costuras nas costas da mao
+      // punho em sino: estreito no pulso, abre pro braco, com a borda enrolada
+      const cuff = ink(new THREE.CylinderGeometry(0.056, 0.04, 0.045, 14), PAL.white, 0.008);
+      cuff.position.set(0, -0.008, 0.058); cuff.rotation.x = Math.PI / 2; g.add(cuff);
+      const rim = ink(new THREE.TorusGeometry(0.054, 0.008, 6, 16), PAL.white, 0.006);
+      rim.position.set(0, -0.008, 0.08); cuff.userData.rim = rim; g.add(rim);
       fist.visible = false;
       g.add(open, fist); g.userData = { open, fist, cuff };
       return g;
     };
     this.gloveR = glove(); this.gloveL = glove();
-    this.gloveR.scale.setScalar(0.8); this.gloveL.scale.setScalar(0.8);
+    this.gloveR.scale.setScalar(0.72); this.gloveL.scale.setScalar(0.72);
     this.scene.add(this.gloveR, this.gloveL);
 
     // clarao respeita a profundidade: nunca passa por cima da propria arma
@@ -245,8 +274,8 @@ export class ViewModel {
     this.holder.add(this.gun);
     // akimbo: segunda pistola na mao esquerda, espelhando a pose da direita
     if (this.akimbo) { this.scene.remove(this.akimbo); this.akimbo = null; this.gun2 = null; }
-    if (id === 'pistol' && loadout?.handle === 'akimbo') {
-      this.gun2 = buildGun('pistol', { ...loadout, handle: null }); this.gun2.scale.setScalar(VM_SCALE);
+    if (loadout?.handle === 'akimbo' && id !== 'melee') { // pistola, Cuspideira e Espirro
+      this.gun2 = buildGun(id, { ...loadout, handle: null }); this.gun2.scale.setScalar(VM_SCALE);
       this.akimbo = new THREE.Group(); this.akimbo.add(this.gun2); this.scene.add(this.akimbo);
       this.kick2 = 0; this.akSide = false;
     }
@@ -256,11 +285,13 @@ export class ViewModel {
   }
 
   fire(kick) {
+    // akimbo: a mao da vez. PC/controle escolhem (forceSide: gatilho esquerdo = arma esquerda); no toque alterna
+    const next = this.akimbo ? (this.forceSide ? this.forceSide === 'L' : !this.akSide) : false;
+    this.forceSide = null;
     // revolver: o tambor da 1/6 de volta e o cao bate (na mao da vez, no akimbo)
-    const rv = (this.akimbo && !this.akSide ? this.gun2 : this.gun)?.userData;
+    const rv = (this.akimbo && next ? this.gun2 : this.gun)?.userData;
     if (rv?.drum) { rv.drumA = (rv.drumA || 0) + Math.PI / 3; rv.hamT = 1; }
-    // akimbo: um tiro em cada mao, alternando
-    if (this.akimbo) { this.akSide = !this.akSide; if (this.akSide) { this.kick2 += kick * 1.6; this.flashT = 0.05; return; } }
+    if (this.akimbo) { this.akSide = next; if (next) { this.kick2 += kick * 1.6; this.flashT = 0.05; return; } }
     this.kick += kick * 1.6;
     this.kickR += kick * 3.2 + Math.random() * kick;
     this.flashT = 0.05;
@@ -269,6 +300,8 @@ export class ViewModel {
 
   reload(dur) { this.reloadT = dur; this.reloadDur = dur; }
   throwNade() { this.throwT = 0.5; }
+  // estimulante (01/11): a mao esquerda sobe com a seringa, crava, o liquido desce e ela some (estilo COD)
+  stim() { this.stimT = STIM_DUR; }
   // golpe de lamina: com arma na mao = faca rapida (a arma desce e a lamina entra pela direita);
   // com a lamina na mao = ela mesma corta
   meleeSwing(dur, lo) {
@@ -285,7 +318,11 @@ export class ViewModel {
     }
   }
   // ferrolho: depois do tiro a mao puxa e empurra o ferrolho
+  // escopeta de bomba (01/11): depois do tiro a mao esquerda puxa a bomba pra tras e empurra de volta
+  pump(t) { this.pumpDur = Math.max(0.32, Math.min(0.55, t * 0.7)); this.pumpT = this.pumpDur + 0.06; }
   bolt(t) { this.boltDur = Math.max(0.45, Math.min(1, t * 0.8)); this.boltT = this.boltDur + 0.12; }
+  // escalada (01/11): a arma desce pro lado e a mao esquerda agarra a borda e empurra o corpo pra cima
+  mantle(dur) { this.mantleDur = Math.max(0.3, dur); this.mantleT = this.mantleDur; this.inspectT = 0; }
 
   // chamar sequencia: a mao esquerda entra com um objeto de desenho antigo
   // uav = luneta de pirata, anvil = detonador de TNT, blimp = campainha de balcao
@@ -296,7 +333,7 @@ export class ViewModel {
     this.streakT = STREAK_DUR; this.inspectT = 0;
   }
 
-  inspectDef() { return this.akimbo ? AKIMBO_INSPECT : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
+  inspectDef() { return this.akimbo ? (this.wpn === 'pistol' ? AKIMBO_INSPECT : AKIMBO_LONG_INSPECT) : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
   inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = this.inspectDef().dur; }
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
   // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
@@ -328,7 +365,7 @@ export class ViewModel {
       }
       if (style === 'claw') for (const x of [-0.03, 0, 0.03]) { const c = add(ink(new THREE.ConeGeometry(0.011, 0.07, 6), PAL.paper, 0.004), null); c.position.set(x, 0.04, -0.075); c.rotation.x = -Math.PI / 2 - 0.25; }
       if (style === 'golden') { const ring = add(ink(new THREE.TorusGeometry(0.019, 0.006, 6, 12), 0xffe28a, 0), null); ring.position.set(0, 0.024, -0.058); ring.rotation.x = -1.2; }
-      g.scale.setScalar(0.8 * (style === 'boxing' ? 1.3 : style === 'oven' ? 1.12 : style === 'mitten' ? 1.06 : 1));
+      g.scale.setScalar(0.72 * (style === 'boxing' ? 1.3 : style === 'oven' ? 1.12 : style === 'mitten' ? 1.06 : 1));
     }
   }
 
@@ -342,6 +379,8 @@ export class ViewModel {
     // pistola de braco esticado (MW 2019): mais longe do rosto
     const pistol = this.wpn === 'pistol';
     if (pistol) { tx = 0.16; ty = -0.17; tz = -0.52; }
+    // akimbo de arma comprida: cada uma mais pro seu lado e mais longe (no meio as duas se batiam)
+    if (this.akimbo && !pistol) { tx = 0.25; ty = -0.2; tz = -0.5; }
     // faca na mao (pegada invertida): punho mais alto a direita pra lamina aparecer deitada
     if (this.wpn === 'melee') { tx = 0.19; ty = -0.17; tz = -0.44; trx = 0.18; tryy = 0.32; trz = 0.22; }
     // variante de elite: a corrida normal usa a pose de arma levantada (MW 2019); as outras armas correm normal
@@ -349,14 +388,20 @@ export class ViewModel {
     if (st.tac || bpRun) {
       // disparada estilo MW 2019: arma erguida de lado, cano pra cima, afastada a direita (o meio da tela fica livre)
       tx = 0.3; ty = -0.1; tz = -0.72; trx = 1.3; tryy = 0.25; trz = -0.4;
+    } else if (st.sprint && this.akimbo) {
+      // akimbo correndo (estilo COD): cada arma do seu lado, baixa, cano pra frente e pra cima; os bracos sobem e
+      // descem alternando no ritmo do passo (abaixo). Antes cruzavam no meio da tela.
+      tx = pistol ? 0.2 : 0.27; ty = -0.3; tz = pistol ? -0.4 : -0.46; trx = 0.45; tryy = -0.12; trz = -0.1;
     } else if (st.sprint && pistol) {
       // corrida de pistola (BO3): pistola erguida perto do peito, cano pra cima
       tx = 0.13; ty = -0.17; tz = -0.4; trx = 1.05; tryy = -0.12; trz = -0.28;
     } else if (st.sprint && this.wpn === 'melee') {
       tx = 0.2; ty = -0.27; tz = -0.42; trx = 0.6; tryy = 0.2; trz = 0.3;
     } else if (st.sprint) {
-      // corrida estilo COD: arma baixa no canto, cano caido pra esquerda
+      // corrida estilo COD: arma baixa no canto, cano caido pra esquerda (a do BO2 foi revertida 01/11, pedido dele)
       tx = 0.15; ty = -0.23; tz = -0.4; trx = -0.42; tryy = 0.72; trz = 0.36;
+      // sniper: a mesma pose, so mais pro canto direito e mais baixa (inteira tampava a tela; a de 01/11 sumia dela)
+      if (this.wpn === 'sniper') { tx = 0.22; ty = -0.27; tz = -0.42; trx = -0.38; tryy = 0.62; trz = 0.3; }
     } else if (st.ads > 0) {
       const eye = ((g.scope && g.scope.eye) || g.iron || new THREE.Vector3(0, 0.08, -0.1)).clone().multiplyScalar(VM_SCALE);
       // luneta: a lente ocupa ~55% da altura da tela; red dot: olho um pouco atras da janela
@@ -422,7 +467,7 @@ export class ViewModel {
     s.rx = damp(s.rx, trx, rk, dt); s.ry = damp(s.ry, tryy, rk, dt); s.rz = damp(s.rz, trz, rk, dt);
 
     // balanco: andar = suave, corrida = oito, disparada = bombeado forte
-    const rate = st.tac ? 15 : st.sprint ? 12.5 : 9.5;
+    const rate = st.tac ? 12 : st.sprint ? 10 : 9.5; // igual a passada do jogador: cada quique da arma cai num passo
     if (st.moving && !st.air) this.bobT += dt * rate * Math.min(1.2, st.speed / 7);
     const adsK = 1 - st.ads * 0.9;
     let bx = 0, by = 0, brz = 0, brx = 0;
@@ -477,23 +522,33 @@ export class ViewModel {
     let sk = 0, skp = 0;
     if (this.streakT > 0) { this.streakT -= dt; skp = 1 - Math.max(0, this.streakT) / STREAK_DUR; sk = Math.min(1, skp / 0.18, (1 - skp) / 0.18); }
     const kickAds = st.ads > 0.5 ? 0.45 : 1;
+    // injecao (01/11, pedido dele): a arma sai de cena inteira e so volta quando a seringa termina
+    let stp = 0, stD = 0;
+    if (this.stimT > 0) { this.stimT -= dt; stp = 1 - Math.max(0, this.stimT) / STIM_DUR; stD = Math.min(1, stp / 0.15, (1 - stp) / 0.2); }
+    this.stimP = stp; this.stimD = stD;
+    let mlp = 0, mlD = 0;
+    if (this.mantleT > 0) { this.mantleT -= dt; mlp = 1 - Math.max(0, this.mantleT) / this.mantleDur; mlD = Math.min(1, mlp / 0.15, (1 - mlp) / 0.3); }
     const c = cut || [0, 0, 0, 0, 0, 0];
     this.rig.position.set(
       s.x + bx + this.swayX * adsK + c[0],
-      s.y + by - this.land - sw * 0.35 - rl * 0.06 - th * 0.22 + this.swayY * adsK - dipQ * 0.75 - sk * 0.12 + c[1],
+      s.y + by - this.land - sw * 0.35 - rl * 0.06 - th * 0.22 + this.swayY * adsK - dipQ * 0.75 - sk * 0.7 - stD * 0.75 + c[1],
       s.z + this.kick * kickAds + c[2]);
     this.rig.rotation.set(
-      s.rx + brx + this.kickR * kickAds * 0.5 - sw * 0.9 + rl * 0.35 - dipQ * 1.1 + c[3],
+      s.rx + brx + this.kickR * kickAds * 0.5 - sw * 0.9 + rl * 0.35 - dipQ * 1.1 - sk * 0.9 - stD * 0.9 + c[3],
       s.ry + this.swayX * 2 * adsK + c[4],
       s.rz + brz + rl * 0.7 + bo * 0.22 + c[5], 'YXZ');
     if (this.akSpinR) this.rig.rotation.x -= this.akSpinR; // giro de cauboi
+    // corrida com duas: direita sobe enquanto a esquerda desce (e troca), no compasso do passo
+    const akRun = this.akimbo && st.sprint && !st.tac ? Math.sin(this.bobT) * 0.055 : 0;
+    if (akRun) { this.rig.position.y += akRun; this.rig.rotation.x += akRun * 1.6; }
+    if (mlD > 0) { this.rig.position.x += mlD * 0.07; this.rig.position.y -= mlD * 0.2; this.rig.rotation.x -= mlD * 0.45; this.rig.rotation.z -= mlD * 0.55; }
     if (this.akimbo) { // espelho da direita, com o recuo proprio
       this.kick2 = damp(this.kick2 || 0, 0, 12, dt);
       const a = this.akL || [0, 0, 0, 0, 0, 0], r = this.rig;
       // a pose de inspect da direita sai do espelho (cada mao tem a sua); o giro no dedo e por cima
       const ri = insp ? [insp[0], insp[1], insp[2], insp[3], insp[4], insp[5]] : [0, 0, 0, 0, 0, 0];
-      this.akimbo.position.set(-(r.position.x - ri[0]) + a[0], r.position.y - ri[1] + a[1], r.position.z - ri[2] + a[2] + this.kick2);
-      this.akimbo.rotation.set(r.rotation.x + (this.akSpinR || 0) - ri[3] + a[3] + this.kick2 * 0.5 - (this.akSpinL || 0), -(r.rotation.y - ri[4]) + a[4], -(r.rotation.z - ri[5]) + a[5], 'YXZ');
+      this.akimbo.position.set(-(r.position.x - ri[0]) + a[0], r.position.y - ri[1] + a[1] - akRun * 2, r.position.z - ri[2] + a[2] + this.kick2);
+      this.akimbo.rotation.set(r.rotation.x + (this.akSpinR || 0) - ri[3] + a[3] + this.kick2 * 0.5 - (this.akSpinL || 0) - akRun * 3.2, -(r.rotation.y - ri[4]) + a[4], -(r.rotation.z - ri[5]) + a[5], 'YXZ');
     }
     // mirando, o recuo e o balanco giram a arma EM VOLTA DO OLHO: o ponto da mira fica onde o tiro
     // vai. Antes girava em volta do punho e o ponto subia dezenas de pixels a cada rajada.
@@ -512,6 +567,10 @@ export class ViewModel {
     const pR = new THREE.Vector3(), pL = new THREE.Vector3();
     if (g.gripR) g.gripR.getWorldPosition(pR);
     if (g.gripL) g.gripL.getWorldPosition(pL);
+    // bomba: a mao (e o guarda-mao junto) vai pra tras e volta; a arma da um tranco pequeno
+    let pk = 0;
+    if (this.pumpT > 0) { this.pumpT -= st.dt; const u = 1 - Math.min(1, Math.max(0, this.pumpT) / this.pumpDur); pk = u > 0 ? Math.sin(Math.min(1, u) * Math.PI) : 0; }
+    if (pk > 0) { pL.z += pk * 0.085; pL.y -= pk * 0.01; this.rig.rotation.x += pk * 0.05; }
     if (st.sprint && pistol) pL.set(-0.24 + Math.sin(this.bobT) * 0.04, -0.4 + Math.cos(this.bobT) * 0.06, -0.3 + Math.sin(this.bobT) * 0.08);
     if (st.tac || (st.sprint && this.isBp && this.wpn !== 'melee' && this.wpn !== 'fists')) pL.set(-0.2 + Math.sin(this.bobT) * 0.05, -0.2 + Math.cos(this.bobT) * 0.08, -0.35 + Math.sin(this.bobT) * 0.1);
     if (insp) pL.add(new THREE.Vector3(insp[6], insp[7], insp[8]).applyQuaternion(this.rig.quaternion));
@@ -545,18 +604,24 @@ export class ViewModel {
       // no ar: maos sobem um pouco (equilibrio)
       pR.y += 0.05 * this.fAir; pL.y += 0.06 * this.fAir;
       this.fPump = sw * r;
+      this.punchK = 0;
       if (this.swingT > 0) {
-        const j = Math.sin(Math.min(1, sp / 0.45) * Math.PI / 2) * (sp < 0.45 ? 1 : Math.max(0, 1 - (sp - 0.45) / 0.55));
-        const hand = this.punchLeft ? pL : pR;
-        hand.x += (this.punchLeft ? 0.08 : -0.08) * j; hand.y += 0.03 * j; hand.z -= 0.2 * j;
+        // soco de desenho (01/11): puxa pra tras (preparo), estoca rapido passando um pouco do ponto, segura e volta.
+        // Jab (esquerda) vai reto; direto (direita) cruza pro meio. A outra mao recua de guarda.
+        const wind = sp < 0.2 ? Math.sin(sp / 0.2 * Math.PI / 2) : Math.max(0, 1 - (sp - 0.2) / 0.1);
+        const hit = sp < 0.2 ? 0 : sp < 0.36 ? 1 - (1 - (sp - 0.2) / 0.16) ** 3 : sp < 0.5 ? 1 + Math.sin((sp - 0.36) / 0.14 * Math.PI) * 0.12 : Math.max(0, 1 - (sp - 0.5) / 0.5) ** 1.6;
+        const L = this.punchLeft, hand = L ? pL : pR, other = L ? pR : pL;
+        hand.z += 0.06 * wind - 0.24 * hit; hand.y += -0.02 * wind + 0.04 * hit; hand.x += (L ? 0.05 : -0.12) * hit;
+        other.z += 0.04 * hit; other.y -= 0.015 * hit;
+        this.punchK = hit; // a luva estica no impacto (abaixo)
       }
     }
     if (this.prop) {
       this.prop.visible = this.streakT > 0;
       if (this.prop.visible) {
         // entra de baixo a esquerda, faz a acao e sai
-        const base = new THREE.Vector3(-0.1, -0.1 + (sk - 1) * 0.4, -0.34);
-        this.prop.scale.setScalar(1.35);
+        const base = new THREE.Vector3(-0.05, -0.14 + (sk - 1) * 0.4, -0.42); // mais pro meio: a arma saiu de cena
+        this.prop.scale.setScalar(1.05);
         this.prop.position.copy(base);
         const act = Math.max(0, Math.min(1, (skp - 0.25) / 0.45)), beat = Math.sin(act * Math.PI);
         if (this.propKind === 'uav') { this.prop.position.y += 0.06 * sk; this.prop.rotation.set(0.1 + beat * 0.15, 0.7, 0.2 - beat * 0.2); }
@@ -566,6 +631,8 @@ export class ViewModel {
         this.prop.userData.hand.getWorldPosition(pL);
       }
     }
+    // escalada: a esquerda bate na borda la na frente e vai empurrando pra baixo enquanto o corpo sobe
+    if (mlD > 0 && !this.akimbo) pL.lerp(new THREE.Vector3(-0.2, -0.1 - Math.min(1, mlp / 0.7) * 0.16, -0.48 + Math.min(1, mlp / 0.7) * 0.1), mlD);
     if (bo > 0) pR.add(new THREE.Vector3(0.03 * bo, 0.04 * bo, 0.1 * bo));
     if (this.knife) {
       this.knife.visible = this.swingQuick && this.swingT > 0;
@@ -589,11 +656,17 @@ export class ViewModel {
     this.gloveL.position.copy(pL);
     this.gloveR.quaternion.copy(this.rig.quaternion);
     this.gloveL.quaternion.copy(this.rig.quaternion);
+    if (mlD > 0 && !this.akimbo) this.gloveL.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.35, 0.2, 0.1, 'YXZ')), mlD); // palma deitada na borda
     // punho fechado: no soco e segurando a faca (na mao ou no golpe rapido); aberta segurando arma
     const fistR = fists || this.wpn === 'melee' || (this.knife?.visible ?? false), fistL = fists;
     this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR;
     this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL;
-    if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); } // punho gira com a passada
+    if (fists) { // impacto: luva estica pra frente e gira um pouco (rola no direto)
+      const k = this.punchK || 0, g2 = this.punchLeft ? this.gloveL : this.gloveR;
+      for (const gg of [this.gloveL, this.gloveR]) gg.userData.fist.scale.set(1, 1, 1);
+      if (k > 0) { g2.userData.fist.scale.set(1 + k * 0.12, 1 + k * 0.12, 1 + k * 0.45); }
+    }
+    if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); if (this.punchK && !this.punchLeft) this.gloveR.rotateZ(-0.5 * this.punchK); } // punho gira com a passada; o direto rola no impacto
     else if (this.akimbo) this.gloveL.quaternion.copy(this.akimbo.quaternion); // akimbo: a esquerda segue a 2a pistola
     else this.gloveL.rotateZ(-0.9);
     if (fs > 0.001 && !fists) { // palma da esquerda virada pro chao, dedos pra frente
@@ -610,6 +683,47 @@ export class ViewModel {
       pL.set(-0.2, -0.13, -0.42);
       this.gloveL.position.copy(pL);
     } else if (this.umb) this.umb.visible = false;
+    // seringa na mao esquerda: sobe de baixo, vira a agulha pro peito, crava, empurra o embolo e desce
+    if (this.stimD > 0.001) {
+      if (!this.syr) { this.syr = syringeMesh(); this.syr.scale.setScalar(0.62); this.scene.add(this.syr); }
+      const p = this.stimP, d = this.stimD;
+      const stab = THREE.MathUtils.smoothstep(p, 0.28, 0.4), push = THREE.MathUtils.smoothstep(p, 0.42, 0.78);
+      // agulha virada pra VOCE (01/11, pedido dele: estava de lado): sobe na frente com a ponta pra tras e pra baixo,
+      // e no golpe vem em direcao a camera e crava no peito
+      const hx = -0.08 + stab * 0.03, hy = -0.36 + d * 0.16 - stab * 0.03, hz = -0.5 + stab * 0.1;
+      this.syr.visible = true;
+      this.syr.position.set(hx, hy + 0.05, hz);
+      this.syr.rotation.set(-1.05 - stab * 0.25, 0, 0.3 - stab * 0.1);
+      this.syr.userData.plunger.position.y = 0.07 - push * 0.09;
+      const j = this.syr.userData.juice; j.scale.y = Math.max(0.02, 1 - push); j.position.y = -0.055 * push;
+      this.syr.updateMatrixWorld(true);
+      this.gloveL.position.set(hx + 0.01, hy, hz + 0.03);
+      this.gloveL.quaternion.setFromEuler(new THREE.Euler(-0.25 - stab * 0.2, 0.35, -0.25, 'YXZ'));
+    } else if (this.syr) this.syr.visible = false;
+    // carga do Canhao de Carga: 8 bolinhas girando em volta do cano, mais rapidas e juntas conforme enche; cheia = vermelho pulsando
+    const ch = this.charge || 0;
+    if (ch > 0.001) {
+      if (!this.chargeFx) {
+        this.chargeFx = new THREE.Group();
+        for (let i = 0; i < 8; i++) this.chargeFx.add(new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true })));
+        this.scene.add(this.chargeFx);
+      }
+      const mz = g.muzzle; this.chargeFx.visible = !!mz;
+      if (mz) {
+        mz.getWorldPosition(this.chargeFx.position); this.chargeFx.quaternion.copy(this.rig.quaternion);
+        this.chargeT2 = (this.chargeT2 || 0) + dt * (4 + ch * 18);
+        const full = ch >= 0.999, R = 0.06 - ch * 0.03;
+        this.chargeFx.children.forEach((b, i) => {
+          const a = this.chargeT2 + i / 8 * Math.PI * 2, back = (i % 2) * 0.05 + ch * 0.02;
+          b.position.set(Math.cos(a) * R, Math.sin(a) * R, back);
+          b.scale.setScalar(0.6 + ch * 1.2 + (full ? Math.sin(this.chargeT2 * 3) * 0.4 : 0));
+          b.material.color.setHex(full ? 0xff3a2a : 0xffd23a); b.material.opacity = 0.35 + ch * 0.65;
+        });
+      }
+      // treme carregando: vibracao lisa e fraca (o chacoalho aleatorio, ampliado pela luneta, tremia demais; 01/11), menor ainda mirando
+      const tq = 0.0007 * ch * ch * (1 - 0.6 * st.ads), tt = performance.now() / 1000;
+      this.rig.position.x += Math.sin(tt * 31) * tq; this.rig.position.y += Math.sin(tt * 23 + 1.3) * tq;
+    } else if (this.chargeFx) this.chargeFx.visible = false;
     const hideHands = false;
     if (g.scope?.lens) {
       g.scope.lens.material.uniforms.uOn.value = g.scope.big ? THREE.MathUtils.smoothstep(st.ads, 0.55, 0.9) : 1;
@@ -651,7 +765,7 @@ export class ViewModel {
       // um tico a frente da boca do cano, na direcao que a arma aponta
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.rig.quaternion);
       this.flash.position.addScaledVector(fwd, 0.06);
-      const sc = (0.07 + Math.random() * 0.04) * (st.ads > 0.5 ? 0.55 : 1);
+      const sc = (0.07 + Math.random() * 0.04) * (st.ads > 0.5 ? 0.55 : 1) * (0.25 + 0.75 * (g.muzzleDev?.flash ?? 1)); // bocal: silenciador e quebra-chama abafam o clarao
       this.flash.scale.set(sc, sc, 1);
       this.flash.material.rotation = Math.random() * 6;
       this.flash.visible = !(g.scope && st.ads > 0.85);

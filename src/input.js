@@ -1,5 +1,7 @@
+import { kbBinds } from './binds.js';
 import { t } from './i18n.js';
 // Entrada unificada: teclado + mouse (pointer lock) e controles de toque no celular.
+// Teclas e botoes do mouse vem dos comandos remapeaveis (binds.js); botao do mouse vira o codigo 'MouseN'.
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
 // Sliders em aparelho de toque: o range nativo pula pro dedo assim que encosta na trilha, entao rolar a tela
@@ -47,8 +49,12 @@ function touchRanges() {
 }
 if (isTouch) touchRanges();
 
-// trava o mouse pedindo o movimento cru (sem aceleracao do sistema; no Chrome tambem some o salto falso)
+// trava o mouse pedindo o movimento cru (sem aceleracao do sistema; no Chrome tambem some o salto falso).
+// Ajuste "Entrada crua" desligado = usa o mouse do jeito que o Windows entrega (com a aceleracao dele).
+let rawMouse = true;
+export function setRawMouse(v) { rawMouse = v !== false; }
 export function lockPointer(el) {
+  if (!rawMouse) { el.requestPointerLock?.(); return; }
   try { const r = el.requestPointerLock?.({ unadjustedMovement: true }); if (r?.catch) r.catch(() => el.requestPointerLock?.()); }
   catch { el.requestPointerLock?.(); }
 }
@@ -58,6 +64,7 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.lookX = 0; this.lookY = 0;
+    this.mx = 0; this.my = 0; this.mHist = []; // mouse separado do toque/controle: suavizacao e aceleracao so nele
     this.mouse = { fire: false, ads: false };
     this.edges = new Set();
     this.wheelAcc = 0;
@@ -90,16 +97,18 @@ export class Input {
       if (!this.enabled || document.pointerLockElement !== canvas) return;
       if (skipNext) { skipNext = false; return; }
       if (Math.abs(e.movementX) > 600 || Math.abs(e.movementY) > 300) return;
-      this.lookX += e.movementX; this.lookY += e.movementY;
+      // aceleracao do mouse (ajuste, padrao 0): puxada rapida gira mais que a mesma distancia devagar
+      const acc = this.settings?.mouseAccel || 0;
+      const f = acc > 0 ? 1 + acc * Math.min(2, Math.hypot(e.movementX, e.movementY) / 25) : 1;
+      this.mx += e.movementX * f; this.my += e.movementY * f;
     });
     canvas.addEventListener('mousedown', (e) => {
       if (!this.enabled) return;
       if (document.pointerLockElement !== canvas) { if (!isTouch) lockPointer(canvas); return; }
-      if (e.button === 0) { this.mouse.fire = true; this.edges.add('FIRE'); }
-      if (e.button === 2) { this.mouse.ads = true; this.edges.add('ADS'); }
-      if (e.button === 1) { e.preventDefault(); this.edges.add('PING'); }
+      if (e.button === 1) e.preventDefault();
+      this.keys.add('Mouse' + e.button); this.edges.add('Mouse' + e.button);
     });
-    addEventListener('mouseup', (e) => { if (e.button === 0) this.mouse.fire = false; if (e.button === 2) this.mouse.ads = false; });
+    addEventListener('mouseup', (e) => this.keys.delete('Mouse' + e.button));
     addEventListener('contextmenu', (e) => e.preventDefault());
     addEventListener('wheel', (e) => { if (this.enabled) this.wheelAcc += Math.sign(e.deltaY); }, { passive: true });
   }
@@ -108,36 +117,47 @@ export class Input {
   read() {
     const k = this.keys, t = this.touch, pd = this.pad || {};
     const has = (c) => k.has(c);
+    const KB = this.kbMap || (this.kbMap = kbBinds(this.settings)); // refeito quando os comandos mudam (bindsChanged)
+    const A = (id) => KB[id].some(has), E = (id) => KB[id].some(c => this.edges.has(c));
     const edge = (c) => this.edges.has(c);
-    let mx = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0) + t.mx + (pd.mx || 0);
-    let mz = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0) + t.mz + (pd.mz || 0);
+    let mx = (A('right') ? 1 : 0) - (A('left') ? 1 : 0) + t.mx + (pd.mx || 0);
+    let mz = (A('fwd') ? 1 : 0) - (A('back') ? 1 : 0) + t.mz + (pd.mz || 0);
     mx = Math.max(-1, Math.min(1, mx)); mz = Math.max(-1, Math.min(1, mz));
+    // suavizacao do mouse (ajuste, padrao desligada = cru): media dos ultimos quadros, igual a opcao do COD
+    const sm = { low: 2, high: 4 }[this.settings?.mouseSmooth] || 1;
+    this.mHist.push([this.mx, this.my]); while (this.mHist.length > sm) this.mHist.shift();
+    let smx = this.mx, smy = this.my;
+    if (sm > 1) { smx = 0; smy = 0; for (const [a, b] of this.mHist) { smx += a / this.mHist.length; smy += b / this.mHist.length; } }
+    this.mx = this.my = 0;
     const s = {
       moveX: mx, moveZ: mz,
-      lookX: this.lookX, lookY: this.lookY,
-      fire: this.mouse.fire || t.fire || !!pd.fire, firePressed: edge('FIRE'),
-      ads: this.mouse.ads || t.ads || !!pd.ads, adsPressed: edge('ADS'),
-      sprint: has('ShiftLeft') || has('ShiftRight') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
+      lookX: this.lookX + smx, lookY: this.lookY + smy,
+      fire: A('fire') || t.fire || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
+      ads: A('ads') || t.ads || !!pd.ads, adsPressed: E('ads') || edge('ADS'),
+      sprint: A('sprint') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
       tacPressed: edge('TAC'),
-      jumpPressed: edge('Space') || edge('JUMP'),
-      crouchPressed: edge('KeyC') || edge('ControlLeft') || edge('CROUCH'),
-      crouchHeld: has('KeyC') || has('ControlLeft') || t.crouchHeld || !!pd.crouchHeld,
-      reloadPressed: edge('KeyR') || edge('RELOAD'),
-      fragPressed: edge('KeyG') || edge('FRAG'),
-      flashPressed: edge('KeyF') || edge('FLASH'),
+      jumpPressed: E('jump') || edge('JUMP'),
+      crouchPressed: E('crouch') || edge('CROUCH'),
+      crouchHeld: A('crouch') || t.crouchHeld || !!pd.crouchHeld,
+      reloadPressed: E('reload') || edge('RELOAD'),
+      fragPressed: E('frag') || edge('FRAG'),
+      flashPressed: E('flash') || edge('FLASH'),
       // segurando a granada = cozinhando o pavio (solta = arremessa)
-      fragHeld: has('KeyG') || !!t.frag || !!pd.frag,
-      flashHeld: has('KeyF') || !!t.flash || !!pd.flash,
-      streakPressed: edge('KeyX') || edge('STREAK'),
-      inspectPressed: edge('KeyI') || edge('INSPECT'),
-      pingPressed: edge('KeyB') || edge('PING'), // marcar (battle royale): B, botao do meio, direcional esquerdo, botao de toque
-      use: has('KeyE') || t.use || !!pd.use,
-      mapPressed: edge('KeyM') || edge('MAP'),
-      meleePressed: edge('KeyV') || edge('MELEE'),
-      fieldPressed: edge('KeyZ') || edge('FIELD'), // equipamento de campo
-      lastPressed: edge('KeyQ'),
+      fragHeld: A('frag') || !!t.frag || !!pd.frag,
+      flashHeld: A('flash') || !!t.flash || !!pd.flash,
+      streakPressed: E('streak') || edge('STREAK'),
+      inspectPressed: E('inspect') || edge('INSPECT'),
+      pingPressed: E('ping') || edge('PING'), // marcar (battle royale): B, botao do meio, direcional esquerdo, botao de toque
+      use: A('use') || t.use || !!pd.use,
+      mapPressed: E('map') || edge('MAP'),
+      meleePressed: E('melee') || edge('MELEE'),
+      fieldPressed: E('field') || edge('FIELD'), // equipamento de campo
+      lastPressed: E('last'),
+      // inclinar (plantar a bomba): segurando; no toque, os dois botoes de inclinar
+      leanL: A('leanL') || !!t.leanL, leanR: A('leanR') || !!t.leanR,
+      leanLPressed: E('leanL') || edge('LEANL'), leanRPressed: E('leanR') || edge('LEANR'),
       slot: this.slotReq,
-      wheel: this.wheelAcc + (edge('NEXT') ? 1 : 0),
+      wheel: this.wheelAcc + (edge('NEXT') || E('cycle') ? 1 : 0),
       board: has('Tab') || !!pd.board || !!this.touchBoard, // celular: tocou no placar de cima (main.js)
       pause: edge('Escape') || edge('KeyP'),
     };
@@ -149,6 +169,7 @@ export class Input {
 
 // Material Icons (Google, Apache 2.0): caminhos SVG oficiais
 const ICON = {
+  more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
   field: 'm13.127 14.56 1.43-1.43 6.44 6.443L19.57 21zm4.293-5.73 2.86-2.86c-3.95-3.95-10.35-3.96-14.3-.02 3.93-1.3 8.31-.25 11.44 2.88zM5.95 5.98c-3.94 3.95-3.93 10.35.02 14.3l2.86-2.86C5.7 14.29 4.65 9.91 5.95 5.98zm.02-.02-.01.01c-.38 3.01 1.17 6.88 4.3 10.02l5.73-5.73c-3.13-3.13-7.01-4.68-10.02-4.3z',
   fire: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   ads: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z',
@@ -158,6 +179,11 @@ const ICON = {
   swap: 'M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z',
   tac: 'M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9 1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z',
   pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z',
+  // north_west / north_east (Material Icons): inclinar pra esquerda / direita
+  leanL: 'M5 15h2V8.41L18.59 20 20 18.59 8.41 7H15V5H5z',
+  leanR: 'M9 5v2h6.59L4 18.59 5.41 20 17 8.41V15h2V5z',
+  // chat_bubble (Material Icons): chat da partida online
+  chat: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z',
   frag: 'M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z',
   flash: 'M7 11H1v2h6v-2zm2.17-3.24L7.05 5.64 5.64 7.05l2.12 2.12 1.41-1.41zM13 1h-2v6h2V1zm5.36 6.05l-1.41-1.41-2.12 2.12 1.41 1.41 2.12-2.12zM17 11v2h6v-2h-6zm-5-2c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm2.83 7.24l2.12 2.12 1.41-1.41-2.12-2.12-1.41 1.41zm-9.19.71l1.41 1.41 2.12-2.12-1.41-1.41-2.12 2.12zM11 23h2v-6h-2v6z',
   // gavel (Material Icons): golpe de lamina
@@ -211,6 +237,8 @@ export function buildTouch(input, root) {
   btn(t('t_inspect'), 'inspect', at(220, 84, 44), () => input.edges.add('INSPECT'));
   // marcar (so no battle royale): acima do equipamento de campo
   input.pingBtn = btn(t('t_ping'), 'ping', at(214, 206, 44), () => input.edges.add('PING'));
+  // HUD simples (01/11): granadas, faca, sequencia, inspecionar, equipamento e marcar ficam guardados aqui; toca e abre, toca de novo e fecha
+  btn(t('t_more'), 'more', at(96, 248, 46), (e, b) => { const on = document.body.classList.toggle('hud-more'); b.classList.toggle('lit', on); });
 
   // analogico: empurrar ate a borda = corre
   let sid = null, cx = 0, cy = 0;
@@ -244,6 +272,11 @@ export function buildTouch(input, root) {
   // pausa
   const p = btn(t('t_pause'), 'pause', { left: 'max(12px, env(safe-area-inset-left))', top: 'max(12px, env(safe-area-inset-top))', width: '48px', height: '40px', borderRadius: '12px' }, () => input.edges.add('Escape'));
   void p;
+  // inclinar (so plantar a bomba): dois botoes em cima do analogico, segurando
+  const lean = (side) => btn(t(side === 'L' ? 't_leanL' : 't_leanR'), 'lean' + side + ' lean', { left: 'calc(max(24px, env(safe-area-inset-left)) + ' + (side === 'L' ? 0 : 104) + 'px)', bottom: 'calc(max(24px, env(safe-area-inset-bottom)) + 162px)', width: '46px', height: '46px' }, () => { input.touch['lean' + side] = true; input.edges.add('LEAN' + side); }, () => { input.touch['lean' + side] = false; });
+  input.leanBtns = [lean('L'), lean('R')];
+  // chat (so partida online: some pelo CSS sem body.chat-on), embaixo da pausa
+  btn(t('chat_open'), 'chat', { left: 'max(12px, env(safe-area-inset-left))', top: 'calc(max(12px, env(safe-area-inset-top)) + 48px)', width: '48px', height: '40px', borderRadius: '12px' }, () => input.onChat?.());
   applyHudLayout(root, input.settings);
   setFireButton(input);
 }
@@ -254,6 +287,7 @@ export function setFireButton(input) {
   if (input.useBtn) {
     input.useBtn.hidden = input.mode !== 'bomb' && input.mode !== 'br'; // br: trocar arma no chao
     if (input.pingBtn) input.pingBtn.hidden = input.mode !== 'br';
+    for (const b of input.leanBtns || []) b.hidden = input.mode !== 'bomb';
     // a mao (plantar/desarmar) vai pro lugar do botao de atirar quando ele some: e onde o polegar ja esta.
     // Com tiro manual, fica acima do recarregar, fora do meio da tela. Posicao salva no editor de HUD manda.
     if (!input.settings?.hudLayout?.pos?.use) {

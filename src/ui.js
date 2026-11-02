@@ -9,15 +9,16 @@ import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
 import { stats as pStats } from './progress.js';
-import { DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
+import { BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
+import { kbBinds, padBinds, setKb, setPad, resetBinds, keyName, padName, ACTIONS, PAD_BTN, FIXED_KEYS } from './binds.js';
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
 import { LOOKS } from '../shared/looks.js';
 import { getLook, saveLook, lookOpen } from './lookstore.js';
 import { syncOpen, isNew, anyNew, markSeen, newPill } from './newstuff.js';
 import { TIERS, badgeSvg, myTier, peakTier } from './rank.js';
 import { rankData } from './progress.js';
-import { freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
+import { handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 // mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
@@ -54,6 +55,7 @@ export function initMenus(o) {
     if (name === 'arsenal' && !startCat && PRIMARIES.includes(S.primary)) startCat = S.primary;
     if (startCat) { cat = startCat; slot = 'body'; preview = null; }
     $('smithDone').hidden = !fromLobby;
+    $('smithRange').hidden = fromLobby; // campo de treino so do menu (da sala/partida nao)
     if (fromLobby) $('smithDone').textContent = t(fromGame === 'game' ? 'smithNow' : o.lobbyHost() ? 'lbSmithBack' : 'lbSmithReady');
     for (const s of screens) $('scr-' + s).hidden = s !== name;
     ui.screen = name;
@@ -63,7 +65,7 @@ export function initMenus(o) {
     if (name === 'skills') { renderSkills(); tip('skills'); }
     if (name === 'mp') ui.refreshRooms && ui.refreshRooms();
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
-    if (name === 'controls') renderKeys();
+    if (name === 'controls') renderKeys(); else if (binding) stopBinding();
     if (name === 'look') renderLook();
     if (name === 'ranked') renderRanked();
     if (name === 'profile') renderProfile();
@@ -88,6 +90,12 @@ export function initMenus(o) {
     if (PRIMARIES.includes(cat) && S.primary !== cat) { S.primary = cat; o.saveSettings(); }
     audio.play('pickup', { ui: true, vol: 0.6 });
     fromLobby = false; o.onBackToLobby(true);
+  };
+  // campo de treino: leva o modelo aberto agora (ate o que esta so em previa e bloqueado)
+  $('smithRange').onclick = () => {
+    audio.play('ui_click', { ui: true });
+    const body = preview?.k === 'body' ? preview.v : unlockedLoadout(cat, getLoadouts()[cat], partUnlocked, camoUnlocked, CAMOS).body;
+    o.onRange?.(cat, body);
   };
   ui.fromLobby = () => fromLobby;
   addEventListener('keydown', (e) => {
@@ -128,6 +136,9 @@ export function initMenus(o) {
     goMp({ room, join: true });
   };
   $('goTutorial').onclick = () => { audio.play('ui_click', { ui: true }); o.onTutorial(); };
+  // tela dividida (01/11): so PC, 2 a 4 controles; abre a pagina ?split (ela hospeda uma tela por controle)
+  $('goSplit').hidden = isTouch;
+  $('goSplit').onclick = () => { audio.play('ui_click', { ui: true }); const q = new URLSearchParams(location.search); q.set('split', '1'); location.href = location.pathname + '?' + q; };
   $('goSolo').onclick = () => {
     audio.play('ui_click', { ui: true });
     // primeira vez que o jogador comeca: o treino abre no lugar (so uma vez; depois fica em Treino e Desafios)
@@ -162,6 +173,8 @@ export function initMenus(o) {
     ['seg', 'draw', 's_draw', [['near', 'draw_near'], ['mid', 'draw_mid'], ['far', 'draw_far']]],
     ['toggle', 'invertY', 's_invert'],
     ['toggle', 'holdCrouch', 's_hold'],
+    ['seg', 'leanMode', 's_leanMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]],
+    ['seg', 'hudMode', 's_hudMode', [['simple', 'hm_simple'], ['full', 'hm_full']]],
     ['toggle', 'autoSprint', 's_auto'],
     ['toggle', 'showFps', 's_fps'],
     ['toggle', 'threatRing', 's_threat'],
@@ -169,6 +182,12 @@ export function initMenus(o) {
     ['xhair'],
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
+  // mouse (so no PC, igual as opcoes do COD): suavizacao, aceleracao, entrada crua e a arma acompanhando o giro
+  if (!isTouch) defs.splice(defs.findIndex(d => d[1] === 'adsSens') + 1, 0,
+    ['seg', 'mouseSmooth', 's_mSmooth', [['off', 'ms_off'], ['low', 'ms_low'], ['high', 'ms_high']]],
+    ['range', 'mouseAccel', 's_mAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
+    ['toggle', 'rawMouse', 's_rawMouse'],
+    ['toggle', 'gunSway', 's_gunSway']);
   // mira assistida: toque e controle; tiro automatico so no toque (os dois ligados por padrao)
   if (isTouch) defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssist'], ['toggle', 'autoFire', 's_autoFire']);
   else defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssistPad']);
@@ -212,8 +231,8 @@ export function initMenus(o) {
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee'];
-  const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
-  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
+  const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
+  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   let chPickOpen = false;
@@ -315,11 +334,58 @@ export function initMenus(o) {
       ['▲ ▼ ◀ ▶', 'k_menu'], ['A / ✕', 'k_confirm'], ['B / ○', 'k_back']],
     touch: [['t_stick', 'k_move'], ['t_drag', 'k_look'], ['t_auto', 'k_fire'], ['t_ping', 'k_ping']],
   };
+  // comandos remapeaveis (01/11): teclado/mouse e controle. Clica na acao e aperta a tecla/botao novo;
+  // quem usava ela troca de lugar com a antiga. Toque e os fixos (olhar, pausa, placar) so mostram.
+  const FIXED_ROWS = {
+    kb: [['Mouse', 'k_look'], ['1 2 3 / key_wheel', 'k_swap'], ['Tab', 'k_board'], ['Esc', 'k_pause']],
+    pad: [['L', 'k_move'], ['R', 'k_look'], ['Select', 'k_board'], ['Start', 'k_pause'], ['▲ ▼ ◀ ▶', 'k_menu'], ['A / ✕', 'k_confirm'], ['B / ○', 'k_back']],
+  };
+  let binding = null;
+  function stopBinding() {
+    if (!binding) return;
+    removeEventListener('keydown', binding.key, true); removeEventListener('mousedown', binding.mouse, true);
+    cancelAnimationFrame(binding.raf); binding = null; document.body.classList.remove('binding');
+  }
+  function bound(apply) { apply(); o.saveSettings(); o.bindsChanged?.(); audio.play('pickup', { ui: true, vol: 0.5 }); stopBinding(); renderKeys(); }
+  function startBinding(id) {
+    stopBinding();
+    document.body.classList.add('binding'); // o controle para de navegar o menu enquanto espera o botao
+    binding = { id };
+    if (keyTab === 'kb') {
+      binding.key = (e) => { e.preventDefault(); e.stopPropagation(); if (e.code === 'Escape') { stopBinding(); renderKeys(); return; } if (FIXED_KEYS.includes(e.code)) return; bound(() => setKb(S, id, e.code)); };
+      binding.mouse = (e) => { if (!e.target.closest('#keyList')) { stopBinding(); renderKeys(); return; } if (e.button === 0 && e.target.closest(`[data-bind="${id}"]`)) return; e.preventDefault(); e.stopPropagation(); bound(() => setKb(S, id, 'Mouse' + e.button)); };
+      setTimeout(() => { if (binding?.id !== id) return; addEventListener('keydown', binding.key, true); addEventListener('mousedown', binding.mouse, true); }, 0);
+    } else {
+      const was = new Set();
+      const poll = () => {
+        const g = [...(navigator.getGamepads?.() || [])].find(Boolean);
+        if (g) for (const [name, i] of Object.entries(PAD_BTN)) {
+          const on = !!g.buttons[i]?.pressed || (g.buttons[i]?.value || 0) > 0.5;
+          if (on && !was.has(i) && binding.armed) { if (name === 'START') { stopBinding(); renderKeys(); return; } if (setPad(S, id, name) !== false) { bound(() => {}); return; } }
+          if (on) was.add(i); else was.delete(i);
+        }
+        binding.armed = true; // o botao que abriu a escuta (A) nao conta: so o proximo aperto
+        binding.raf = requestAnimationFrame(poll);
+      };
+      binding.raf = requestAnimationFrame(poll);
+    }
+    renderKeys();
+  }
   function renderKeys() {
     document.querySelectorAll('[data-kt]').forEach(b => b.setAttribute('aria-selected', b.dataset.kt === keyTab));
-    $('keyList').innerHTML = KEYS[keyTab].map(([k, d]) => `<dt>${k.startsWith('key_') || k.startsWith('t_') ? t(k) : k}</dt><dd>${t(d)}</dd>`).join('');
+    if (keyTab === 'touch') { $('keyList').innerHTML = KEYS.touch.map(([k, d]) => `<dt>${k.startsWith('key_') || k.startsWith('t_') ? t(k) : k}</dt><dd>${t(d)}</dd>`).join(''); return; }
+    const kb = keyTab === 'kb', map = kb ? kbBinds(S) : padBinds(S);
+    const rows = ACTIONS.filter(a => kb || a[3]).map(([id, label]) => {
+      const cur = kb ? (map[id] || []).map(keyName).join(' / ') || '—' : padName(map[id]);
+      const wait = binding?.id === id;
+      return `<dt><button class="bind ${wait ? 'wait' : ''}" data-bind="${id}" aria-label="${t(label)}">${wait ? t(kb ? 'bindPress' : 'bindPressPad') : cur}</button></dt><dd>${t(label)}</dd>`;
+    }).join('');
+    const fixed = FIXED_ROWS[keyTab].map(([k, d]) => `<dt class="fixed">${k.replace('key_wheel', t('key_wheel'))}</dt><dd>${t(d)}</dd>`).join('');
+    $('keyList').innerHTML = `<p class="bind-hint">${t('bindHint')}</p>` + rows + fixed + `<p class="bind-foot"><button class="plain" id="bindReset">${t('bindReset')}</button></p>`;
+    $('keyList').querySelectorAll('[data-bind]').forEach(b => b.onclick = () => { if (binding?.id === b.dataset.bind) return; audio.play('ui_click', { ui: true, vol: 0.6 }); startBinding(b.dataset.bind); });
+    $('bindReset').onclick = () => { stopBinding(); resetBinds(S, keyTab); o.saveSettings(); o.bindsChanged?.(); audio.play('ui_back', { ui: true }); renderKeys(); };
   }
-  document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
+  document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { stopBinding(); keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
 
   // ---------- visual do boneco: abas, itens com raridade e cadeado; o 3D gira ao lado (main.js) ----------
   const LOOK_TABS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx'];
@@ -460,10 +526,10 @@ export function initMenus(o) {
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
-    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp));
+    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp) && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
-      const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && !lo.scope);
+      const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && (!lo.scope || IRONS[lo.scope]));
       let val;
       if (s === 'bp') val = lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
       else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')) || CAMOS[0]; val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
@@ -559,7 +625,7 @@ export function initMenus(o) {
     if (k === 'body' && v !== lo.body) swapBody(lo, v);
     lo[k] = v;
     // mexeu numa peca na mao: deixa de ser a variante (camo, cor e tracado podem trocar sem perder)
-    if (['body', 'scope', 'charger', 'handle', 'laser'].includes(k)) delete lo.bp;
+    if (['body', 'scope', 'charger', 'handle', 'laser', 'conv', 'muzzle'].includes(k)) delete lo.bp;
     if (k === 'body' && cat === 'sniper' && !lo.scope) lo.scope = nativePart(v, 'scope');
     saveLoadouts(loadouts);
     o.loadoutsChanged(loadouts);
@@ -663,20 +729,23 @@ export function initMenus(o) {
     }
     let opts;
     if (slot === 'body') opts = C.bodies;
-    else if (slot === 'scope') opts = [null, ...C.scopes];
+    else if (slot === 'scope') opts = cat === 'sniper' ? [null, ...C.scopes] : [...ironOptions(cat), null, ...C.scopes].filter(x => x !== null); // sem 'Mira de ferro': o padrao e a de trilho
     else if (slot === 'charger') opts = chargerOptions(lo.body, cat);
     else if (slot === 'laser') opts = [null, ...LASERS];
-    else opts = [null, ...C.handles];
-    const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[slot];
-    p.innerHTML = opts.map((id, i) => {
+    else if (slot === 'conv') opts = [null, ...convOptions(lo.body)];
+    else if (slot === 'muzzle') opts = [null, ...muzzleOptions(lo.body)];
+    else opts = [null, ...C.handles.filter(h => handleFits(lo.body, cat, h))];
+    const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : slot === 'scope' && !lo.scope && cat !== 'sniper' ? 'iron_flip' : lo[slot];
+    p.innerHTML = opts.map((id, i0) => {
+      const i = slot === 'scope' ? [null, ...C.scopes].indexOf(id) : i0; // nivel da mira pelo lugar na lista original (as de trilho entraram na frente)
       if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
-      const open = partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
-      const lockCh = !open && id && LOCKED_BY[id];
+      const open = slot === 'muzzle' || IRONS[id] || partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
+      const lockCh = !open && id && (LOCKED_BY[cat + ':' + id] || LOCKED_BY[id]);
       // pros e contras da peca (estilo COD), so em pente e empunhadura
-      const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser') && id ? partEffects(cat, lo, slot, id) : [];
+      const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser' || slot === 'conv' || slot === 'muzzle') && id ? partEffects(cat, lo, slot, id) : [];
       const fxHtml = fx.length ? `<span class="fx">${fx.slice(0, 4).map(([k, v]) => `<b class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '+' : '−'} ${t(k)}</b>`).join('')}</span>` : '';
       const pill = slot === 'body' ? modePill(id) + (open ? `<small class="blv">${t('lvlShort', { n: wpnLevel(cat, id) })}</small>` : '') : '';
-      return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : `<small>${t('reqWpn', { n: partReq(i) })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: partReq(i) }) * 100)}%"></i></span>`}</button>`;
+      return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : `<small>${t('reqWpn', { n: partReq(i) })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: partReq(i) }) * 100)}%"></i></span>`}</button>`;
     }).join('');
     p.querySelectorAll('.opt').forEach(b => {
       b.onclick = () => { if (b.classList.contains('locked')) { peek(slot, b.dataset.id || null); return; } setPart(slot, b.dataset.id || null); };

@@ -1,3 +1,5 @@
+import { padBinds } from './binds.js';
+import { SS } from './ssboot.js';
 // Controle (Gamepad API, layout "standard" do Xbox/PlayStation). Mapa igual ao do COD:
 // LT mira, RT atira, A pula, B agacha, X recarrega, Y troca, LB granada, RB flash,
 // L3 corre, R3 faca, cima no direcional = sequencia, baixo = inspecionar, Start pausa, Select placar.
@@ -20,16 +22,22 @@ export class Pad {
     addEventListener('keydown', () => this.setActive(false));
     // celular: usou o controle, os botoes de toque somem; tocou na tela de novo, voltam
     addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.setActive(false); }, true);
-    addEventListener('gamepaddisconnected', () => { if (!this.first()) this.setActive(false); });
+    addEventListener('gamepaddisconnected', () => { if (!this.first()) this.setActive(false); this.onConn?.(false); });
+    addEventListener('gamepadconnected', () => this.onConn?.(true));
+    if (SS) queueMicrotask(() => this.setActive(true)); // tela dividida: dicas e botoes do controle desde o comeco
   }
 
   setActive(v) {
+    if (SS) v = true; // tela dividida: cada tela e so controle
     if (this.active === v) return;
     this.active = v;
     document.body.classList.toggle('pad', v);
+    this.onActive?.(v);
   }
 
   first() {
+    // tela dividida: o controle desta tela, lido pela pagina de cima (ela tem o foco; o iframe pode nao ter)
+    if (SS) { const g = window.parent.navigator.getGamepads?.()[SS.pad]; return g && g.connected ? g : null; }
     for (const g of navigator.getGamepads?.() || []) if (g && g.connected) return g;
     return null;
   }
@@ -52,31 +60,27 @@ export class Pad {
       I.lookX += curve(rx) * LOOK * dt;
       I.lookY += curve(ry) * LOOK * 0.72 * dt;
       // L3 trava a corrida ate parar de andar pra frente (igual COD)
-      if (down(B.L3)) this.sprintLatch = !this.sprintLatch;
+      // botoes vem dos comandos remapeaveis (binds.js); Start e Select ficam fixos
+      const P = I.padMap || (I.padMap = padBinds(I.settings)), bi = (id) => B[P[id]] ?? -1;
+      if (down(bi('sprint'))) this.sprintLatch = !this.sprintLatch;
       if (-ly < 0.3) this.sprintLatch = false;
-      I.pad = { mx: lx, mz: -ly, fire: now[B.RT], ads: now[B.LT], sprint: this.sprintLatch, crouchHeld: now[B.B], board: now[B.SELECT], use: now[B.X], frag: now[B.LB], flash: now[B.RB] };
-      if (down(B.RT)) I.edges.add('FIRE');
-      if (down(B.LT)) I.edges.add('ADS');
-      if (down(B.A)) I.edges.add('JUMP');
-      if (down(B.B)) I.edges.add('CROUCH');
-      if (down(B.X)) I.edges.add('RELOAD');
-      if (down(B.Y)) I.edges.add('NEXT');
-      if (down(B.LB)) I.edges.add('FRAG');
-      if (down(B.RB)) I.edges.add('FLASH');
-      if (down(B.R3)) I.edges.add('MELEE');
-      if (down(B.UP)) I.edges.add('STREAK');
-      if (down(B.DOWN)) I.edges.add('INSPECT');
-      if (down(B.RIGHT)) I.edges.add('FIELD');
-      if (down(B.LEFT)) I.edges.add('PING'); // marcar (battle royale)
+      I.pad = { mx: lx, mz: -ly, fire: now[bi('fire')], ads: now[bi('ads')], sprint: this.sprintLatch, crouchHeld: now[bi('crouch')], board: now[B.SELECT], use: now[bi('reload')], frag: now[bi('frag')], flash: now[bi('flash')] };
+      for (const [id, ev] of [['fire', 'FIRE'], ['ads', 'ADS'], ['jump', 'JUMP'], ['crouch', 'CROUCH'], ['reload', 'RELOAD'], ['cycle', 'NEXT'], ['frag', 'FRAG'], ['flash', 'FLASH'], ['melee', 'MELEE'], ['streak', 'STREAK'], ['inspect', 'INSPECT'], ['field', 'FIELD'], ['ping', 'PING']]) if (down(bi(id))) I.edges.add(ev);
       if (down(B.START)) I.edges.add('Escape');
     } else {
+      if (document.body.classList.contains('binding')) { this.prev = now; return; } // tela de comandos esperando um botao
       // menus: anda pelo foco com direcional ou analogico (repete segurando)
       this.navT -= dt;
       const dir = now[B.UP] || ly < -0.6 ? 'up' : now[B.DOWN] || ly > 0.6 ? 'down' : now[B.LEFT] || lx < -0.6 ? 'left' : now[B.RIGHT] || lx > 0.6 ? 'right' : null;
       const fresh = [B.UP, B.DOWN, B.LEFT, B.RIGHT].some(down);
       const cur = document.activeElement;
-      // foco sumiu (trocou de tela, fechou popup): volta pro primeiro botao da tela
-      if (this.active && (!cur || cur === document.body || !isShown(cur))) { const f0 = focusables(); if (f0.length) setPadFocus(preferred(f0)); }
+      // foco sumiu: a tela se redesenhou depois do clique (arsenal, ajustes, lobby...) ou trocou de tela. Primeiro
+      // procura o mesmo botao (ou o que ficou no lugar dele) na mesma tela; so volta pro inicio se a tela mudou (01/11)
+      if (cur && cur !== document.body && isShown(cur) && cur !== this.lastEl) { this.lastEl = cur; this.lastSig = sigOf(cur); }
+      if (this.active && (!cur || cur === document.body || !isShown(cur))) {
+        const f0 = focusables();
+        if (f0.length) { const back = this.lastSig && refind(this.lastSig, f0); setPadFocus(back || preferred(f0)); }
+      }
       if (dir && (fresh || this.navT <= 0)) {
         // controle deslizante focado: esquerda/direita mexe no valor
         if (cur?.type === 'range' && (dir === 'left' || dir === 'right')) { const st = Number(cur.step) || 1; cur.value = String(Number(cur.value) + (dir === 'right' ? st : -st)); cur.dispatchEvent(new Event('input', { bubbles: true })); cur.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -98,6 +102,24 @@ export class Pad {
 
 const isShown = (el) => el.offsetParent !== null && !el.closest('[hidden], #hud, #touch') && getComputedStyle(el).visibility !== 'hidden';
 // foco do controle: classe propria (o :focus-visible do navegador nem sempre aparece com foco por codigo)
+// assinatura do botao focado: id, data-*, texto, tela onde esta e o lugar na tela
+function sigOf(el) {
+  const r = el.getBoundingClientRect();
+  return { id: el.id, key: dataKey(el), txt: el.textContent.trim().slice(0, 40), scr: screenOf(el), x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+const dataKey = (el) => [...el.attributes].filter(a => a.name.startsWith('data-')).map(a => a.name + '=' + a.value).join('&');
+const screenOf = (el) => el.closest('[id^="scr-"], .overlay, #lobby, [role="dialog"], .modal')?.id || '';
+function refind(s, list) {
+  if (s.id) { const e = document.getElementById(s.id); if (e && list.includes(e)) return e; }
+  const same = list.filter(e => screenOf(e) === s.scr);
+  if (!same.length) return null; // trocou de tela: comeca do botao principal
+  if (s.key) { const e = same.find(x => dataKey(x) === s.key) ; if (e) return e; }
+  const t = same.find(x => x.textContent.trim().slice(0, 40) === s.txt && s.txt); if (t) return t;
+  // o que ficou mais perto de onde ele estava
+  let best = null, bd = 160;
+  for (const e of same) { const r = e.getBoundingClientRect(), d = Math.hypot(r.left + r.width / 2 - s.x, r.top + r.height / 2 - s.y); if (d < bd) { bd = d; best = e; } }
+  return best;
+}
 function setPadFocus(el) {
   document.querySelectorAll('.pad-focus').forEach(e => e.classList.remove('pad-focus'));
   el.focus({ preventScroll: true }); el.classList.add('pad-focus');

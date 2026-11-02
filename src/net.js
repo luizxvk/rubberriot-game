@@ -19,6 +19,19 @@ export class LocalNet {
   close() {}
 }
 
+// tela dividida: a Core roda na pagina que hospeda as telas (splithost.js); cada tela fala com ela como se
+// fosse o servidor (mensagem vai e volta em JSON, igual ao multiplayer: nada de objeto de outra janela)
+export class SplitNet {
+  constructor(slot) { this.id = 'ss' + slot; this.host = window.parent.__ssHost; this.inbox = []; this.onmsg = () => {}; this.onclose = () => {}; }
+  connect(name) { this.host.join(this.id, name, this.inbox); return Promise.resolve(); }
+  send(m) { this.host.handle(this.id, JSON.stringify(m)); }
+  update() {
+    const q = this.inbox.splice(0);
+    for (const raw of q) this.onmsg(JSON.parse(raw));
+  }
+  close() { this.host.quit(); }
+}
+
 export class WsNet {
   constructor({ url, room, mode, map, bots, join = false, quick = false, ranked = false }) {
     Object.assign(this, { url, room, mode, map, bots, join, quick, ranked });

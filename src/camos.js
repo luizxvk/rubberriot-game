@@ -41,8 +41,8 @@ export const CAMOS = [
   { id: 'inkreact', code: 25, anim: true, react: true, req: { player: 42, wpn: 20 } },
   // Elite da Rovex: reativa exclusiva de quem assina (gratis enquanto a assinatura estiver ativa)
   { id: 'hexelite', code: 30, anim: true, react: true, elite: true },
-  // prestigio: laca preta com estrelas douradas (so de quem fez o 1o prestigio)
-  { id: 'prestigio', code: 31, anim: true, prestige: 1 },
+  // prestigio: plasma violeta e carmim com veios de ouro, estrelas e faiscas douradas (so de quem fez o 1o prestigio)
+  { id: 'prestigio', code: 31, anim: true, prestige: 1, fx: 'stars' },
   // lendarias: shader proprio + efeito FORA da arma (fx, ver camofx.js). So vem com a variante de elite.
   { id: 'hellfire', code: 26, anim: true, legend: true, fx: 'flame' },
   { id: 'tesla', code: 27, anim: true, legend: true, fx: 'storm' },
@@ -95,7 +95,7 @@ export const CAMO_SWATCH = {
   phantom: 'radial-gradient(circle at 50% 40%,#e9f7ff 20%,#9fc4dd 50%,#56708a)',
   ember: 'linear-gradient(135deg,#5a5652 30%,#ff6a1a 48%,#ffd23a 52%,#3a3633 70%)',
   inkreact: 'radial-gradient(circle at 35% 45%,#141210 22%,transparent 24%),radial-gradient(circle at 70% 65%,#a83a2c 14%,transparent 16%),#ece9e1',
-  prestigio: 'radial-gradient(circle at 30% 35%,#ffd36b 6%,transparent 8%) 0 0/14px 14px,radial-gradient(circle at 70% 70%,#ffd36b 5%,transparent 7%) 0 0/11px 11px,#16130f',
+  prestigio: 'radial-gradient(circle at 72% 28%,#ffe08a 3%,transparent 6%) 0 0/15px 15px,linear-gradient(125deg,#3a0866 0 30%,#d8a018 38%,#b8102a 46%,#3a0866 70%,#b8102a 100%)',
   hexelite: 'radial-gradient(circle at 50% 50%,#b48cff 8%,transparent 10%) 0 0/12px 12px,linear-gradient(135deg,#2a1150,#6d3fd6 55%,#e3c14a)',
   hellfire: 'repeating-radial-gradient(circle at 50% 110%,#120806 0 5px,#ff6a1a 5px 6px,#120806 6px 9px),#120806',
   tesla: 'repeating-linear-gradient(90deg,#c9783f 0 4px,#7a3a18 4px 5px,#7fe6ff 5px 6px,#7a3a18 6px 7px)',
@@ -513,14 +513,21 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     glow = gold * sweep * 0.8 + burst * star * 0.15 * (0.5 + 0.5 * sin(t * 4.0 + rnd * 6.0));
     return col * (0.6 + lum * 0.55) + sweep * 0.35;
   }
-  if (k == 31) { // prestigio: laca preta, estrelas douradas piscando e um filete de ouro correndo
-    vec3 q = p * 5.0, id = floor(q), f = fract(q) - 0.5;
-    float h = c_h(id);
-    float star = smoothstep(0.2, 0.0, length(f.xy + (vec2(h, c_h(id + 3.1)) - 0.5) * 0.4)) * step(0.55, h);
-    float tw = 0.55 + 0.45 * sin(t * 3.0 + h * 20.0);
-    float band = smoothstep(0.95, 1.0, sin((p.x + p.y) * 3.0 - t * 1.8));
-    glow = vec3(1.0, 0.82, 0.35) * (star * tw * 0.9 + band * 0.6);
-    return mix(vec3(0.05, 0.045, 0.04), vec3(1.0, 0.8, 0.3), star * tw) + band * vec3(0.5, 0.38, 0.1);
+  if (k == 31) { // prestigio (refeita 01/11, pedido dele "igual a plasma, com mais efeito"): plasma real violeta e
+    // carmim se dobrando, veios de ouro correndo pelas ondas, estrelas douradas piscando e um brilho varrendo a arma
+    vec3 q = p * 1.6;
+    vec3 w = q + vec3(c_fbm(q + t * 0.15), c_fbm(q * 1.3 - t * 0.12 + 4.0), c_fbm(q * 0.8 + t * 0.1 + 8.0)) * 1.4;
+    float v = sin(w.z * 3.0 + t * 1.1) + sin((w.y + w.z) * 2.4 - t * 1.4) + c_fbm(w * 1.7) * 2.2;
+    float m = 0.5 + 0.5 * sin(v * 1.5);
+    vec3 col = mix(vec3(0.22, 0.03, 0.4), vec3(0.72, 0.04, 0.12), m); // violeta real -> carmim
+    float vein = smoothstep(0.9, 1.0, sin(v * 3.2)); // veio de ouro no meio das ondas
+    vec3 gold = vec3(0.85, 0.55, 0.06);
+    col = mix(col, gold, vein);
+    vec3 sq = p * 6.0, sid = floor(sq); float h = c_h(sid);
+    float star = step(0.84, h) * smoothstep(0.18, 0.0, length(fract(sq.yz) - 0.5)) * (0.3 + 0.7 * (0.5 + 0.5 * sin(t * 3.0 + h * 30.0)));
+    float sweep = smoothstep(0.92, 1.0, sin((p.z - p.y) * 2.2 - t * 2.2));
+    glow = col * 0.45 + vec3(1.0, 0.72, 0.2) * (vein * 0.8 + star * 1.1 + sweep * 0.5);
+    return col * (0.55 + lum * 0.6) + vec3(1.0, 0.75, 0.3) * (vein * 0.3 + star * 0.6 + sweep * 0.3);
   }
   if (k == 30) { // favo elite (reativa, assinante Elite da Rovex): favo violeta; bordas acendem, pulsam e douram
     vec2 q = vec2(p.z, p.y) * 4.0, rr = vec2(1.0, 1.732), hh = rr * 0.5;

@@ -481,7 +481,119 @@ function bonde() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde };
+
+// ---------- Vale do Apito (so Escolta, 01/11) ----------
+// Segundo mapa da escolta, maior que a Ladeira: estacao (vermelho), galpao que o bonde atravessa (com portas
+// do lado), rua de garagens abertas, VIADUTO (o bonde sobe a rampa e passa por cima de uma estrada que da pra
+// atravessar por baixo), patio de conteineres com caixa d'agua, rua de casas que DA PRA ENTRAR (porta, janelas,
+// telhado andavel por escada) e a garagem final (azul). Trechos retos (o trilho so vira em 90 graus).
+function apito() {
+  const A = 80, { boxes, box, stairs, walls } = builder(A);
+  walls(9);
+  const track = [[-60, -62], [-60, -40], [-20, -40], [-20, -5], [30, -5], [30, 35], [-10, 35], [-10, 62]];
+  let seed = 23; const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const dTrack = (x, z) => { let m = 1e9; for (let i = 1; i < track.length; i++) { const [ax, az] = track[i - 1], [bx, bz] = track[i], vx = bx - ax, vz = bz - az, L = vx * vx + vz * vz, k = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L)); m = Math.min(m, Math.hypot(x - ax - vx * k, z - az - vz * k)); } return m; };
+  const clear = (x, z, w, d, gap) => [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].every(([a, b]) => dTrack(x + a * w / 2, z + b * d / 2) > gap);
+  const solid = [];
+  const free = (x, z, w, d, pad = 1) => Math.abs(x) + w / 2 < A - 2 && Math.abs(z) + d / 2 < A - 2 && solid.every(o => Math.abs(o[0] - x) > (o[2] + w) / 2 + pad || Math.abs(o[1] - z) > (o[3] + d) / 2 + pad);
+  const put = (x, z, w, d, h, y0, kind, extra) => { solid.push([x, z, w, d]); box(x, z, w, d, h, y0, kind, extra); };
+  const mark = (x, z, w, d) => solid.push([x, z, w, d]); // so reserva o lugar (estrutura feita de varias pecas)
+
+  // casa oca que da pra entrar: 4 paredes finas de tijolo, porta virada pro lado `door` (+x, -x, +z, -z),
+  // uma janela em cada parede lateral, laje de concreto e escada externa pro telhado
+  const hut = (x, z, w, d, h, door) => {
+    mark(x, z, w, d);
+    const t = 0.4, dw = 2.2, dh = 2.8, wy0 = 1.1, wy1 = 2.2, ww = 1.6;
+    // parede com abertura (porta ou janela) no meio. horiz = parede ao longo de x
+    const wallWith = (cx, cz, len, horiz, gapW, gy0, gy1) => {
+      const half = (len - gapW) / 2, off = gapW / 2 + half / 2;
+      for (const s of [-1, 1]) box(cx + (horiz ? s * off : 0), cz + (horiz ? 0 : s * off), horiz ? half : t, horiz ? t : half, h, 0, 'wall');
+      if (gy0 > 0) box(cx, cz, horiz ? gapW : t, horiz ? t : gapW, gy0, 0, 'wall');          // peitoril da janela
+      box(cx, cz, horiz ? gapW : t, horiz ? t : gapW, h - gy1, gy1, 'wall');                  // verga em cima da abertura
+    };
+    const sides = { '+x': [x + w / 2 - t / 2, z, d, false], '-x': [x - w / 2 + t / 2, z, d, false], '+z': [x, z + d / 2 - t / 2, w, true], '-z': [x, z - d / 2 + t / 2, w, true] };
+    for (const [k, [cx, cz, len, horiz]] of Object.entries(sides)) {
+      if (k === door) wallWith(cx, cz, len, horiz, dw, 0, dh);
+      else if ((door[1] === 'x') !== (k[1] === 'x')) wallWith(cx, cz, len, horiz, ww, wy0, wy1); // laterais com janela
+      else box(cx, cz, horiz ? len : t, horiz ? t : len, h, 0, 'wall');                          // fundo inteiro
+    }
+    box(x, z, w + 0.4, d + 0.4, 0.35, h, 'concrete'); // laje (da pra andar em cima)
+    // escada colada no fundo, por fora, ate a laje
+    const back = door === '+z' ? '-z' : door === '-z' ? '+z' : door === '+x' ? '-x' : '+x';
+    const n = Math.round(h / 0.5);
+    if (back === '-z') stairs(x - w / 2 + 1.2, z - d / 2 - n * 0.6, 0, 1, 1.6, n, 0.5, 0.6);
+    else if (back === '+z') stairs(x + w / 2 - 1.2, z + d / 2 + n * 0.6, 0, -1, 1.6, n, 0.5, 0.6);
+    else if (back === '-x') stairs(x - w / 2 - n * 0.6, z + d / 2 - 1.2, 1, 0, 1.6, n, 0.5, 0.6);
+    else stairs(x + w / 2 + n * 0.6, z - d / 2 + 1.2, -1, 0, 1.6, n, 0.5, 0.6);
+  };
+
+  // ---- estacao (inicio, vermelho): plataforma de embarque e cobertura
+  put(-52, -60, 6, 16, 1.0, 0, 'step'); put(-52, -60, 7, 18, 0.4, 4.6, 'concrete');
+  for (const z of [-67, -53]) box(-50, z, 0.5, 0.5, 4.6, 0, 'pillar');
+  put(-60, -69.5, 14, 1.4, 6, 0, 'wall');
+  // ---- galpao que o bonde atravessa (z = -40, x -50..-34): paredes de concreto com porta no meio de cada lado
+  for (const zs of [-46, -34]) { for (const s of [-1, 1]) put(-42 + s * 5, zs, 6, 0.8, 6, 0, 'concrete'); box(-42, zs, 4, 0.8, 2.5, 3.5, 'concrete'); }
+  box(-42, -40, 16.5, 13, 0.5, 6, 'concrete'); mark(-42, -40, 16.5, 13);
+  // ---- rua das garagens (trilho em x = -20, z -40..-5): tres garagens abertas viradas pro trilho, com carro
+  for (const z of [-33, -22, -11]) {
+    const gx = -31; mark(gx, z, 8, 7.5);
+    box(gx - 3.8, z, 0.4, 7.5, 3.6, 0, 'concrete'); for (const s of [-1, 1]) box(gx, z + s * 3.55, 8, 0.4, 3.6, 0, 'concrete');
+    box(gx, z, 8.4, 7.9, 0.3, 3.6, 'concrete');
+    box(gx - 0.5, z, 3.6, 1.8, 1.3, 0, 'container'); // carro guardado (cobertura pra quem entra)
+  }
+  // ---- viaduto: o bonde sobe 3 m na rampa (x -10..2), cruza o tabuleiro (x 2..18) e desce (x 18..30)
+  const zv = -5, wv = 7;
+  for (let i = 0; i < 12; i++) { box(-10 + i + 0.5, zv, 1, wv, (i + 1) * 0.25, 0, 'step'); box(18 + i + 0.5, zv, 1, wv, 3 - i * 0.25, 0, 'step'); }
+  box(10, zv, 16, wv, 0.4, 2.6, 'bridge'); mark(10, zv, 40, wv + 1);
+  for (const x of [4, 10, 16]) for (const s of [-1, 1]) box(x, zv + s * 3.1, 0.6, 0.6, 2.6, 0, 'pillar');
+  for (const s of [-1, 1]) box(10, zv + s * 3.35, 16, 0.3, 0.8, 3.0, 'crate'); // guarda-corpo (a bala passa por cima)
+  // estrada que passa por baixo do viaduto (norte-sul em x = 10) com barreiras de concreto na beira
+  for (const z of [-26, -16, 6, 16]) if (free(13, z, 1.2, 3)) put(13, z, 1.2, 3, 1.1, 0, 'concrete');
+  // ---- patio de conteineres (entre o viaduto e o 2o ponto) e a caixa d'agua
+  for (const [x, z, w, d, h, y0] of [[44, -14, 3, 9, 3, 0], [44, -2, 3, 9, 3, 0], [48, -8, 3, 9, 3, 0], [44, -8, 3, 9, 3, 3], [40, 12, 3, 9, 3, 0], [44, 26, 9, 3, 3, 0], [58, 4, 3, 9, 3, 0]])
+    if (y0 > 0 || free(x, z, w, d, 0.8)) { if (y0 === 0) put(x, z, w, d, h, y0, 'container'); else box(x, z, w, d, h, y0, 'container'); }
+  if (free(52, 20, 6, 6)) { put(52, 20, 6, 6, 0.5, 6, 'platform'); for (const [px, pz] of [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]]) box(52 + px, 20 + pz, 0.6, 0.6, 6, 0, 'pillar'); box(52, 20, 4.5, 4.5, 3, 6.5, 'vat'); stairs(50, 23 + 12 * 0.6, 0, -1, 1.6, 12, 0.5, 0.6); }
+  // ---- rua das casas (trilho em z = 35, x 30..-10): casas ocas dos dois lados, portas viradas pra rua
+  for (const [x, z, door] of [[22, 23, '+z'], [8, 23, '+z'], [-4, 22, '+z'], [24, 47, '-z'], [10, 47, '-z'], [-24, 26, '+x'], [-24, 44, '+x']]) {
+    const w = 9, d = 8, h = 4.2 + rng() * 0.6;
+    if (clear(x, z, w, d, 5) && free(x, z, w + 3, d + 3, 0.5)) hut(x, z, w, d, h, door);
+  }
+  // ---- garagem final do bonde (azul): galpao comprido em volta do fim do trilho
+  for (const s of [-1, 1]) put(-10 + s * 6.2, 58, 0.8, 16, 7, 0, 'concrete');
+  put(-10, 66.4, 13.2, 0.8, 7, 0, 'concrete'); box(-10, 58, 13.6, 17, 0.5, 7, 'concrete');
+  // ---- predios fechando a vista (fora do caminho) e cobertura baixa na beira do trilho
+  for (let k = 0; k < 40; k++) {
+    const x = (rng() * 2 - 1) * (A - 10), z = (rng() * 2 - 1) * (A - 10), w = 8 + rng() * 6, d = 8 + rng() * 6;
+    if (!clear(x, z, w, d, 11) || !free(x, z, w, d, 2)) continue;
+    put(x, z, w, d, 6 + rng() * 8, 0, 'house', { roof: rng() < 0.5 ? 'peak' : 'flat', seed: 300 + k, team: z < -50 ? 'red' : z > 55 ? 'blue' : undefined });
+  }
+  const T = []; for (let i = 1; i < track.length; i++) T.push([track[i - 1], track[i]]);
+  for (let k = 0; k < 90; k++) {
+    const [a, b] = T[Math.floor(rng() * T.length)], s = rng(), side = rng() < 0.5 ? -1 : 1, off = 4.2 + rng() * 4;
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+    const x = a[0] + (b[0] - a[0]) * s + uz * side * off, z = a[1] + (b[1] - a[1]) * s - ux * side * off;
+    const big = rng() < 0.3, w = big ? 3.2 : 1.6 + rng() * 0.8, d = big ? 1.2 : w, h = big ? 1.2 : 1.1 + rng() * 0.7;
+    if (!clear(x, z, w, d, 3.4) || !free(x, z, w, d, 1.6)) continue;
+    put(x, z, w, d, h, 0, rng() < 0.2 ? 'post' : 'crate');
+    if (!big && rng() < 0.3) box(x, z, w * 0.7, d * 0.7, 0.9, h, 'crate');
+  }
+  const red = [], blue = [];
+  for (let i = 0; i < 8; i++) { red.push([-66 + (i % 4) * 2.5, -66 + Math.floor(i / 4) * 3]); blue.push([-14 + (i % 4) * 2.8, 70 + Math.floor(i / 4) * 2.5]); }
+  return {
+    id: 'apito', arena: A, boxes, theme: 'bonde', track, checks: [0.38, 0.74],
+    spawns: { red, blue, ffa: [...red, ...blue] },
+    flagBase: { red: [-60, 0, -62], blue: [-10, 0, 62] },
+    zones: [{ id: 'A', pos: [-20, 0, -5], r: 5 }, { id: 'B', pos: [30, 0, 35], r: 5 }, { id: 'C', pos: [-10, 0, 50], r: 5 }],
+    pickups: [
+      { kind: 'hp', pos: [-31, 0, -22] }, { kind: 'hp', pos: [10, 0, -5] }, { kind: 'hp', pos: [44, 6, -8] }, { kind: 'hp', pos: [8, 0, 23] },
+      { kind: 'hp', pos: [-24, 0, 26] }, { kind: 'hp', pos: [52, 6.5, 20] }, { kind: 'hp', pos: [-42, 0, -40] },
+      { kind: 'wpn', wpn: 'sniper', pos: [52, 6.5, 20] }, { kind: 'wpn', wpn: 'shotgun', pos: [22, 0, 23] },
+    ],
+  };
+}
+
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito };
+export const ESCORT_MAPS = ['bonde', 'apito']; // mapas com trilho (so a escolta usa)
 // mapas que aparecem na escolha do lobby (a ilha e so do battle royale)
 export const PICK_MAPS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria'];
 export const MAP_IDS = Object.keys(BUILDERS);
@@ -496,7 +608,7 @@ export const BOMB_SITES = {
   refinaria: { A: [-17, 21], B: [24, 15] },
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
-const MINIGUN_AT = { bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+const MINIGUN_AT = { apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 // mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
 // So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
 const MAP_PACE = { estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
@@ -519,6 +631,35 @@ export function getMap(id) {
 const STEP = 0.6;
 
 // Move um corpo AABB (pes em pos) com degrau automatico. Muta pos e vel.
+
+// obstaculos que andam (01/11): o bonde da escolta. Caixa girada no chao: M.dyn = [{ x, y, z, yaw, hw, hl, h }]
+// (meia largura, meio comprimento ao longo do trilho, altura). raycast, moveBody e hasLOS respeitam (bala e boneco nao atravessam).
+function toLocal(B, p) { const dx = p[0] - B.x, dz = p[2] - B.z, c = Math.cos(B.yaw), s = Math.sin(B.yaw); return [dx * c - dz * s, p[1] - B.y, dx * s + dz * c]; }
+function dirLocal(B, d) { const c = Math.cos(B.yaw), s = Math.sin(B.yaw); return [d[0] * c - d[2] * s, d[1], d[0] * s + d[2] * c]; }
+function rayDyn(B, o, d, best) {
+  const lo = toLocal(B, o), ld = dirLocal(B, d), mn = [-B.hw, 0, -B.hl], mx = [B.hw, B.h, B.hl];
+  let tmin = 0, tmax = best;
+  for (let a = 0; a < 3; a++) {
+    if (Math.abs(ld[a]) < 1e-9) { if (lo[a] < mn[a] || lo[a] > mx[a]) return Infinity; continue; }
+    let t1 = (mn[a] - lo[a]) / ld[a], t2 = (mx[a] - lo[a]) / ld[a];
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    if (tmin > tmax) return Infinity;
+  }
+  return tmin > 0 ? tmin : Infinity;
+}
+function pushDyn(B, pos, vel, rad, height) {
+  const l = toLocal(B, pos);
+  if (pos[1] + height <= B.y || pos[1] >= B.y + B.h) return false;
+  const px = B.hw + rad - Math.abs(l[0]), pz = B.hl + rad - Math.abs(l[2]);
+  if (px <= 0 || pz <= 0) return false;
+  if (pos[1] > B.y + B.h - 0.55 && vel[1] <= 0) { pos[1] = B.y + B.h; vel[1] = 0; return true; } // em cima do teto: anda nele
+  if (px < pz) l[0] += Math.sign(l[0] || 1) * px; else l[2] += Math.sign(l[2] || 1) * pz;
+  const c = Math.cos(B.yaw), s = Math.sin(B.yaw); // volta pro mundo
+  pos[0] = B.x + l[0] * c + l[2] * s; pos[2] = B.z - l[0] * s + l[2] * c;
+  return false;
+}
+
 export function moveBody(M, pos, vel, dt, rad, height) {
   const boxes = M.boxes;
   let onGround = false;
@@ -558,6 +699,7 @@ export function moveBody(M, pos, vel, dt, rad, height) {
     const probe = [pos[0], pos[1] - 0.05, pos[2]];
     for (const b of boxes) if (overlap(probe, rad, 0.06, b)) { onGround = true; break; }
   }
+  if (M.dyn) for (const B of M.dyn) if (pushDyn(B, pos, vel, rad, height)) onGround = true; // bonde: empurra pra fora (ou anda no teto)
   // muro de borda tem altura finita: mola, pulo de cima de caixa ou empurrao pra fora da parede nao tiram ninguem da arena
   const [lo0, hi0, lo2, hi2] = bounds(M, pos, rad);
   if (pos[0] < lo0 || pos[0] > hi0) { pos[0] = Math.max(lo0, Math.min(hi0, pos[0])); vel[0] = 0; }
@@ -662,6 +804,7 @@ export function raycast(M, o, d, maxDist = 250) {
     }
     if (nAxis >= 0) { best = tmin; normal = [0, 0, 0]; normal[nAxis] = nSign; }
   }
+  if (M.dyn) for (const B of M.dyn) { const t = rayDyn(B, o, d, best); if (t < best) { best = t; normal = [-d[0], 0, -d[2]]; } } // bonde para a bala
   return { dist: best >= maxDist ? Infinity : best, normal };
 }
 

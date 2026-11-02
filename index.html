@@ -217,6 +217,7 @@ html.touch-boot .boot { display: grid; }
         <button id="goSolo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
         <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span></button>
         <button id="goTutorial" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg><span data-i18n="tutorial">Treino</span></button>
+        <button id="goSplit" class="bill-item split" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg><span data-i18n="splitGo">Tela dividida</span><em class="ch-new beta">beta</em></button>
         <button data-go="ranked" class="bill-item ranked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.43V2H7v8.43c0 .35.18.68.49.86l4.18 2.51-.99 2.34-3.41.29 2.59 2.24L9.07 22 12 20.23 14.93 22l-.78-3.33 2.59-2.24-3.41-.29-.99-2.34 4.18-2.51c.3-.18.48-.5.48-.86zm-4 1.8-1 .6-1-.6V3h2v9.23z"/></svg><span data-i18n="ranked">Rankeada</span><i class="rk-mini" id="rkMini"></i></button>
         <button data-go="arsenal" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><span data-i18n="arsenal">Arsenal</span></button>
         <button data-go="look" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 18.2 13 11.75v-.91a3.496 3.496 0 0 0-.18-6.75A3.51 3.51 0 0 0 8.5 7.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5c0 .84-.69 1.52-1.53 1.5-.54-.01-.97.45-.97.99v1.76L2.4 18.2c-.77.58-.36 1.8.6 1.8h18c.96 0 1.37-1.22.6-1.8zM6 18l6-4.5 6 4.5H6z"/></svg><span data-i18n="look">Visual</span></button>
@@ -283,7 +284,7 @@ html.touch-boot .boot { display: grid; }
   </section>
 
   <section class="card wide" id="scr-arsenal" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="arsenal">Arsenal</h2><button class="big gs-done" id="smithDone" hidden></button></header>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="arsenal">Arsenal</h2><button class="gs-range" id="smithRange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg><span data-i18n="rangeGo">Campo de treino</span></button><button class="big gs-done" id="smithDone" hidden></button></header>
     <div class="cats" id="catTabs" role="tablist"></div>
     <div class="equip" id="equipBar"></div>
     <!-- gunsmith: pecas em blocos; tocou numa, o painel vira a lista de opcoes (com status ao lado) -->
@@ -417,6 +418,8 @@ html.touch-boot .boot { display: grid; }
   <!-- equipamento de campo (estilo BO3): selo no centro de baixo com o icone, recarga em pizza e a tecla; no celular o selo e' o botao -->
   <div class="field-hud" id="fieldHud" hidden><button type="button" class="fh-badge" id="fhBadge" data-i18n-aria="t_field" aria-label="Equipamento"><span class="fh-ico" id="fhIco"></span><b class="fh-cd" id="fhCd"></b></button><small class="fh-key" id="fhKey"></small></div>
   <div class="hud-bl">
+    <!-- sequencias de abate (01/11): um selo desenhado por sequencia; pronto = colorido, pulsando, com a tecla -->
+    <div class="streaks" id="streaks"></div>
     <div class="hp"><span class="hp-num" id="hpNum">100</span><span class="hp-bar"><i id="hpBar"></i></span></div>
     <!-- colete (battle royale): fica embaixo da vida -->
     <div class="armor" id="armorBox" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><span class="armor-bar"><i id="armorBar"></i></span></div>
@@ -478,12 +481,14 @@ html.touch-boot .boot { display: grid; }
   <div class="card small">
     <h2 data-i18n="intermission">Intervalo</h2>
     <div class="pk" id="pausePick" role="radiogroup" aria-labelledby="pkLbl"><p class="pk-lbl" id="pkLbl" data-i18n="pickNext">Arma no proximo renascimento</p><div class="pk-list" id="pkList"></div></div>
+    <div class="pk rg" id="rangePick" hidden><p class="pk-lbl" data-i18n="rangeLbl">Testar arma (todas, ate as bloqueadas)</p><div class="rg-tabs" id="rgTabs" role="tablist"></div><div class="pk-list rg-list" id="rgList" role="radiogroup"></div></div>
     <button class="big" id="resume" data-i18n="resume">Voltar pro tiroteio</button>
     <button class="plain" id="pauseSmith" data-i18n="lbSmith">Montar arma</button>
     <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botoes</button>
     <button class="plain" id="pauseFs" data-i18n="fsOn" hidden>Tela cheia</button>
     <button class="plain" id="pauseSettings" data-i18n="settings">Ajustes</button>
     <button class="plain" id="quit" data-i18n="quit">Sair pro menu</button>
+    <button class="plain" id="rangeBack" data-i18n="rangeBack" hidden>Voltar ao Arsenal</button>
   </div>
 </div>
 
@@ -515,6 +520,7 @@ html.touch-boot .boot { display: grid; }
       <button class="end-sh" id="endPoster" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg><span data-i18n="endPoster">Cartaz de Procurado</span></button>
       <button class="end-sh" id="endClip" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg><span data-i18n="endClip">Clipe da jogada</span></button>
     </div>
+    <button class="big end-lobby" id="endLobby" type="button" hidden></button>
     <p class="end-next" id="endNext"></p>
   </div>
 </div>
@@ -531,6 +537,16 @@ html.touch-boot .boot { display: grid; }
   </div>
 </div>
 <div id="touch" hidden></div>
+<!-- controle conectado / desconectado: aviso no canto de baixo -->
+<div class="pad-toast" id="padToast" role="status" hidden></div>
+<!-- chat da partida online: mensagens no canto, somem sozinhas; Enter/T no PC, balao no celular (chat.js) -->
+<div id="chat">
+  <ol class="chat-log" id="chatLog" aria-live="polite"></ol>
+  <div class="chat-box" id="chatBox" hidden>
+    <div class="chat-quick" id="chatQuick" hidden></div>
+    <div class="chat-row"><input id="chatField" type="text" maxlength="80" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat"><button type="button" class="chat-send" id="chatSend"></button><button type="button" class="chat-x" id="chatClose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></div>
+  </div>
+</div>
 
 <script type="module" src="./src/boot.js"></script>
 </body>

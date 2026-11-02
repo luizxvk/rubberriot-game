@@ -33,6 +33,7 @@ if (!origem) { origem = descobre(); try { sessionStorage.setItem('rr_funil_orige
 export function funil(etapa) {
   // no dev nao conta (?funil liga pra testar)
   if (!ETAPAS.includes(etapa) || (import.meta.env.DEV && !location.search.includes('funil'))) return;
+  if (/[?&](ss|split)=/.test(location.search)) return; // tela dividida: as telas nao sao visitas novas
   const k = 'rr_funil_' + etapa;
   try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch { /* */ }
   try {

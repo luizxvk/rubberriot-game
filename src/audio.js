@@ -1,3 +1,4 @@
+import { SS } from './ssboot.js';
 // Audio fluido: todo sample e' aparado (silencio da ponta), normalizado e ganha
 // micro-fade nas pontas; vozes da mesma chave saem com fade em vez de corte seco.
 const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload',
@@ -7,7 +8,8 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt', // momentos que eram mudos (contagem, rodada, fim, assist, renascer) e o ferrolho
   'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
   'ringbell', 'crowd', 'pump', 'balloon', // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
-  'chute', 'wind', 'splat', 'revolver', 'aa12', 'laser']; // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
+  'chute', 'wind', 'splat', 'revolver', 'aa12', 'laser',
+  'nukealarm', 'chargeup', 'megashot']; // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
 function soundEdges(b) {
@@ -34,7 +36,9 @@ class Audio {
     comp.attack.value = 0.004; comp.release.value = 0.18;
     this.master = ctx.createGain();
     this.master.gain.value = this.vol.master;
-    this.master.connect(comp).connect(ctx.destination);
+    // tela dividida: 2-4 telas tocando o mesmo tiroteio ao mesmo tempo; cada uma mais baixa pra soma nao estourar
+    const ssG = ctx.createGain(); ssG.gain.value = SS ? 1 / Math.sqrt(SS.n) : 1;
+    this.master.connect(comp).connect(ssG).connect(ctx.destination);
     this.sfxBus = ctx.createGain(); this.sfxBus.connect(this.master);
     this.uiBus = ctx.createGain(); this.uiBus.gain.value = 0.7; this.uiBus.connect(this.master);
     // musica passa por um "gramofone": passa-faixa + chiado de vinil
@@ -46,12 +50,21 @@ class Audio {
     for (const n of NAMES) this.load(n);
   }
 
+  // som proprio do modelo (01/11): g_<corpo>.mp3 carrega na primeira vez que a arma aparece; ate la (ou sem arquivo) usa o da categoria
+  gunSound(body, fallback) {
+    if (!body) return fallback;
+    const n = 'g_' + body;
+    if (this.buf[n]) return n;
+    if (this.ctx && !this.failed?.has(n)) this.load(n);
+    return fallback;
+  }
+
   async load(name) {
-    if (this.loading?.has(name)) return;
+    if (this.buf[name] || this.loading?.has(name) || this.failed?.has(name)) return;
     (this.loading ||= new Set()).add(name);
     try {
       const r = await fetch(`./sfx/${name}.mp3`);
-      if (!r.ok) return;
+      if (!r.ok) { (this.failed ||= new Set()).add(name); this.loading.delete(name); return; }
       const raw = await this.ctx.decodeAudioData(await r.arrayBuffer());
       const pol = name.startsWith('music') ? raw : this.polish(raw);
       // arquivo mudo (veio vazio do gerador) = usa o sintetizado
@@ -187,7 +200,8 @@ class Audio {
     } else {
       src = this.synth(name);
     }
-    src.connect(g);
+    if (o.muffle) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1300; f.Q.value = 0.6; src.connect(f); f.connect(g); g.gain.linearRampToValueAtTime(vol * 0.42, t + 0.004); } // silenciador: tiro abafado
+    else src.connect(g);
     src.start(t);
     if (o.dur) { g.gain.setTargetAtTime(0, t + o.dur, 0.03); src.stop(t + o.dur + 0.2); }
     // vozes da mesma chave: a mais velha sai com fade, nunca corta seco
@@ -232,6 +246,7 @@ class Audio {
   // track: 'music' (menu/lobby), 'music_m1..4' (partida), 'music_br' (battle royale/dupla).
   // As da partida baixam so quando vao tocar; trocar de faixa faz uma ponte curta entre as duas.
   music(on, track) {
+    if (SS && SS.slot > 0) on = false; // tela dividida: musica so na primeira tela
     if (track) this.track = track;
     this.wantMusic = on;
     if (!this.ctx) return;

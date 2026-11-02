@@ -25,6 +25,8 @@ export function fieldUse(c, p, m) {
   if (p.field === 'umbrella') { p.shieldT = F.dur; p.umbHp = F.hp; }
   else if (p.field === 'spring') c.springs.push({ id: ++seq, pos: at && Math.hypot(at[0] - p.pos[0], at[2] - p.pos[2]) < 5 ? at : [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], t: F.dur });
   else if (p.field === 'hole') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.holes.push({ id: ++seq, a: [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], b: at, t: F.dur, owner: p.id }); }
+  else if (p.field === 'stim') { if (p.hp >= (p.maxHp || 100) && !(p.burn)) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } p.stimT = F.dur; p.burn = null; }
+  else if (p.field === 'vest') { if ((p.armor || 0) >= F.armor) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } p.armor = F.armor; }
   else if (p.field === 'anvil') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.anvils.push({ owner: p.id, pos: at, t: F.fall }); c.event({ k: 'anvilWarn', list: [at] }); }
   p.fieldCharge = 0;
   c.event({ k: 'field', id: p.id, kind: p.field, at });
@@ -50,6 +52,8 @@ export function fieldTick(c, dt) {
     const F = FIELD[p.field];
     if (F && gain > 0 && !fieldReady(p)) { p.fieldCharge = Math.min(1, (p.fieldCharge || 0) + gain / F.need); if (fieldReady(p) && !p.bot) c.event({ k: 'fieldReady', id: p.id }); }
     if (p.shieldT > 0) p.shieldT -= dt;
+    // estimulante: a vida volta aos poucos enquanto o remedio corre
+    if (p.stimT > 0 && p.alive) { p.stimT -= dt; p.hp = Math.min(p.maxHp || 100, p.hp + FIELD.stim.heal / FIELD.stim.dur * dt); }
   }
   for (const list of [c.springs, c.holes]) for (let i = list.length - 1; i >= 0; i--) if ((list[i].t -= dt) <= 0) list.splice(i, 1);
   // bots: mola joga pra cima, buraco leva pro outro lado (humano faz isso no proprio cliente)
@@ -81,6 +85,8 @@ export function botField(c, p, t) {
   const hpK = p.hp / (p.maxHp || 80), d = t ? Math.hypot(t.pos[0] - p.pos[0], t.pos[2] - p.pos[2]) : 99;
   let at = null, go = false;
   if (p.field === 'umbrella') go = !!t && d < 35 && hpK < 0.7 && Math.random() < 0.35;           // trocando tiro e apanhando
+  else if (p.field === 'stim') go = hpK < 0.45 && Math.random() < 0.5;                                // machucado: injeta
+  else if (p.field === 'vest') go = (p.armor || 0) < FIELD.vest.armor * 0.3;                          // colete quebrado: conserta
   else if (p.field === 'anvil') { go = !!t && d > 8 && d < FIELD.anvil.range && Math.random() < 0.25; at = t && [...t.pos]; } // alvo a vista, longe do proprio pe
   else if (p.field === 'spring') { go = !!t && d < 9 && hpK < 0.8 && Math.random() < 0.4; at = [...p.pos]; } // pula fora do aperto
   else if (p.field === 'hole' && t && hpK < 0.45 && Math.random() < 0.5) {

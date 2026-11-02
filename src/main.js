@@ -5,25 +5,31 @@ import { rankResult, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
 import { Character } from './character.js';
 import { ViewModel } from './viewmodel.js';
 import { makePipeline } from './post.js';
-import { Tutorial } from './tutorial.js';
+import { Tutorial, keyLabel } from './tutorial.js';
+import { Range } from './range.js';
+import { trainBox } from '../shared/escort.js';
+import { useBinds } from './binds.js';
+import * as ARS from './arsenal.js'; // so pro atalho de depuracao window.__A
 import { Player } from './player.js';
 import { metaGet, metaPost, pushSoon, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
-import { Hud } from './hud.js';
-import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer } from './input.js';
+import { Hud, STREAK_SVG } from './hud.js';
+import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer, setRawMouse } from './input.js';
 import { Pad } from './gamepad.js';
-import { LocalNet, WsNet } from './net.js';
+import { LocalNet, WsNet, SplitNet } from './net.js';
+import { SS } from './ssboot.js';
+import { Chat } from './chat.js';
 import { audio } from './audio.js';
 import { MODES, WEAPONS, STREAKS, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES } from '../shared/weapons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
 import { EV, currentEvent, META, metaWeek } from '../shared/events.js';
 import { wantedPoster, shareFile, ClipRec } from './share.js';
 import { updateCamoFx } from './camofx.js';
-import { getMap, hasLOS } from '../shared/map.js';
-import { loadArsenal, getLoadouts, scopeTarget } from './arsenal.js';
+import { getMap, hasLOS, raycast } from '../shared/map.js';
+import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
-import { addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
+import { BODY_MIN_LVL, addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
 import { track, grantTutorial } from './challenges.js';
@@ -38,13 +44,13 @@ import { Replay } from './replay.js';
 import { startHomeTour, homeTourSeen } from './hometour.js';
 import { FieldView } from './fieldview.js';
 import { SKILL_ICONS } from './skillicons.js';
-import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun, buildPartPreview, bpLoadout } from './arsenal.js';
+import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun, buildPartPreview, bpLoadout, defaultLoadout } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------- ajustes ----------
-const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, draw: isTouch ? 'mid' : 'far' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, draw: isTouch ? 'mid' : 'far', hudMode: 'full' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -73,6 +79,23 @@ const scopeRT = new THREE.WebGLRenderTarget(isTouch ? 384 : 640, isTouch ? 384 :
 scopeRT.texture.colorSpace = THREE.SRGBColorSpace;
 scopeTarget.texture = scopeRT.texture;
 const scopeCam = new THREE.PerspectiveCamera(20, 1, 0.05, 500);
+// luneta termica: mascara de quem esta na lente (branco) por cima do mundo em preto. O mundo escreve a
+// profundidade antes, entao parede tapa o calor (nada de ver atraves de parede); fumaca nao escreve, entao nao tapa.
+const maskRT = new THREE.WebGLRenderTarget(isTouch ? 192 : 320, isTouch ? 192 : 320);
+scopeTarget.mask = maskRT.texture;
+const CHAR_LAYER = 2;
+const maskBlack = new THREE.MeshBasicMaterial({ color: 0x000000 }), maskWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const maskBg = new THREE.Color(0);
+function thermalMask() {
+  for (const r of G.remotes.values()) if (r.alive && r.char.root.visible) r.char.root.traverse(o => { if (!o.isSprite) o.layers.enable(CHAR_LAYER); });
+  const bg = scene.background, fog = scene.fog;
+  scene.background = maskBg; scene.fog = null;
+  renderer.setRenderTarget(maskRT);
+  scene.overrideMaterial = maskBlack; renderer.render(scene, scopeCam);
+  scene.overrideMaterial = maskWhite; scopeCam.layers.set(CHAR_LAYER);
+  renderer.autoClear = false; renderer.render(scene, scopeCam); renderer.autoClear = true;
+  scopeCam.layers.set(0); scene.overrideMaterial = null; scene.background = bg; scene.fog = fog;
+}
 const vm = new ViewModel();
 const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onCfg: (cfg) => { try { localStorage.setItem('rr_lastcfg', JSON.stringify(cfg)); } catch { /* */ } G.net && G.net.send({ t: 'cfg', ...cfg }); }, onLeave: () => quitGame() });
 const laserDot = (() => {
@@ -101,12 +124,14 @@ let bombBeep = 0;
 const { composer, film, vmPass } = makePipeline(renderer, scene, camera, vm);
 
 function applySettings() {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * settings.res);
+  document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1)); // tela dividida: 2-4 desenhos por quadro
   resize();
   film.uniforms.grain.value = settings.grain;
   film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
   audio.setVolumes({ master: settings.master, music: settings.music, sfx: settings.sfx });
-  input.settings = settings;
+  input.settings = settings; useBinds(settings);
+  setRawMouse(settings.rawMouse);
   setFireButton(input);
   applyCrosshair($('cross'), settings);
 }
@@ -149,7 +174,19 @@ function setLookPreview(look, team) {
 }
 
 const input = new Input(canvas);
+// chat da partida online (Enter/T no PC, balao no celular); o solo nao tem
+const chat = new Chat({ input, canvas, send: (m) => G.net?.send(m), canPlay: () => G.state === 'game' && !G.paused && !replay.on });
+input.onChat = () => (chat.isOpen ? chat.close() : chat.open());
 const pad = new Pad(input);
+// controle ligou/desligou: aviso no canto de baixo; e o placar mostra com o que cada um joga
+const devNow = () => (pad.active ? 'pad' : isTouch ? 'mob' : 'pc');
+pad.onActive = () => { if (G.state === 'game' || G.state === 'lobby') G.net?.send({ t: 'dev', v: devNow() }); };
+pad.onConn = (on) => {
+  const el = $('padToast'); el.textContent = t(on ? 'padOn' : 'padOff'); el.classList.toggle('off', !on);
+  el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(el.hideT); el.hideT = setTimeout(() => { el.hidden = true; }, 3200);
+  audio.play('ui_click', { ui: true, vol: 0.5 });
+};
 const hud = new Hud();
 let world, objectives, fx, brView = null, fieldView = null;
 
@@ -217,7 +254,7 @@ $('evPlay').onclick = () => {
 evBadge(); setInterval(evBadge, 60000);
 
 function chEvent(e) {
-  if (G.state !== 'game' || G.tutorial) return; // treino nao conta desafio
+  if (G.state !== 'game' || G.tutorial || G.range) return; // treino e campo de tiro nao contam desafio
   for (const c of track(e)) {
     // elite rastreado: cada avanco aparece na tela (sem XP ainda)
     if (c.kind === 'eliteProg') { hud.eliteTrack(t('el_' + c.id, { n: c.n }), c.prog, c.n); continue; }
@@ -256,7 +293,7 @@ function tutorialReward() {
 }
 
 function gainXp(kind, wpn = null, mult = 1) {
-  if (G.state !== 'game' || G.tutorial) return; // treino nao da XP
+  if (G.state !== 'game' || G.tutorial || G.range) return; // treino e campo de tiro nao dao XP
   const amount = Math.round((XP[kind] || 0) * mult * xpMult());
   if (!amount) return;
   if (onlyBots() && !G.botXpWarned) { G.botXpWarned = true; hud.message(t('botsOnlyXp', { n: Math.round(BOTS_ONLY_XP * 100) }), 3); }
@@ -292,9 +329,10 @@ function unlockShot(u) {
     shotScene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); shotScene.add(dl);
     shotCam = new THREE.OrthographicCamera(-1, 1, 0.5, -0.5, 0.01, 10); shotCam.position.set(3, 0.6, 0); shotCam.lookAt(0, 0, 0);
   }
-  let lo = { ...(G.loadouts[u.wpn] || {}) };
-  if (u.slot === 'bp') lo = bpLoadout(u.id);
-  else if (u.slot === 'body') { lo.body = u.id; lo.charger = null; } else lo[u.slot] = u.id;
+  let lo = { ...(u.lo || G.loadouts[u.wpn] || {}) };
+  if (u.lo) { /* arma de outra pessoa (tela de morte): do jeito que ela montou */ }
+  else if (u.slot === 'bp') lo = bpLoadout(u.id);
+  else if (u.slot === 'body') { lo.body = u.id; lo.charger = null; } else { if (u.onBody) { lo.body = u.onBody; lo.charger = null; } lo[u.slot] = u.id; } // peca de um modelo so: foto nele
   // mira, pente e empunhadura: a foto e' so da peca nova, sozinha (nao montada na arma)
   const gun = (u.slot === 'scope' || u.slot === 'charger' || u.slot === 'handle') && buildPartPreview(u.id, lo) || buildGun(u.wpn, lo);
   const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();
@@ -321,12 +359,32 @@ onProgress((e) => {
   for (let n = (e.catFrom || 0) + 1; e.catUp && n <= e.catUp; n++) got.push(...unlocksAt(e.wpn, n, 0, 'body'));
   for (let n = (e.levelFrom || 0) + 1; e.levelUp && n <= e.levelUp; n++) got.push(...unlocksAt(e.wpn, 0, n));
   // tudo vai pra tela de fim; na hora, banner estilo COD um por vez (ate 3)
+  // so o que existe de verdade (01/11): peca de um modelo so (akimbo, kit) mostra nele e com o nome dele; modelo travado por nivel de jogador nao entra
+  for (let i = got.length - 1; i >= 0; i--) { const u = got[i]; if (u.slot === 'body' && BODY_MIN_LVL[u.id] && unlockLevel() < BODY_MIN_LVL[u.id]) got.splice(i, 1); }
+  for (const u of got) {
+    const fits = u.slot === 'handle' ? CATEGORY[u.wpn]?.bodies.filter(b => handleFits(b, u.wpn, u.id)) : u.slot === 'conv' ? CATEGORY[u.wpn]?.bodies.filter(b => convOptions(b).includes(u.id)) : null;
+    if (fits && fits.length && fits.length < CATEGORY[u.wpn].bodies.length) { u.onBody = fits[0]; u.name += ' (' + fits.map(b => partName('body', b)).join(', ') + ')'; }
+  }
   const shots = got.map(u => unlockShot(u));
   got.forEach((u, i) => logUnlock(t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), u.name, shots[i]));
-  got.slice(0, 3).forEach((u, i) => hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 }));
+  got.slice(0, 3).forEach((u, i) => hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 })); // entram em fila no hud
   if (got.length) audio.play('unlock', { vol: 0.8, ui: true, jitter: 0 });
 });
-window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
+// nome da arma de alguem (01/11, pedido dele): o do MODELO montado (o mesmo do HUD), nunca o da categoria antiga.
+// Eu = minha classe/variante; outro jogador = a classe que ele mandou; bot = o modelo padrao da categoria.
+function gunName(id, wpn) {
+  if (!WEAPONS[wpn]) return t('w_' + wpn);
+  if (wpn === 'fists' || wpn === 'minigun') return wName(wpn);
+  if (G.mode === 'gungame') { const pl = G.snap?.players?.find(x => x.id === id); const b = G.ladder[Math.min(pl?.gunLvl || 0, G.ladder.length - 1)]?.body; if (b) return partName('body', b); }
+  const bp = id === G.myId ? G.player?.brBp?.[wpn] : G.remoteBp.get(id)?.[wpn];
+  if (bp) return t(bp);
+  const lo = id === G.myId ? G.player?.lo?.(wpn) : G.remoteLo.get(id)?.[wpn];
+  const body = lo?.body || defaultLoadout(wpn)?.body;
+  return body ? partName('body', body) : wName(wpn);
+}
+G.gunName = gunName;
+G.vmScopeKind = () => vm.gun?.userData?.scope?.kind || null; // luneta na mao (variavel: a rodinha troca o zoom)
+window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
 
@@ -376,8 +434,9 @@ function escHud(E) {
   const st = E.ot ? t('es_ot') : t('es_' + E.state);
   if ($('ebState').textContent !== st) $('ebState').textContent = st;
   bar.dataset.st = E.state;
-  // seu papel: vermelho ataca (empurra), azul defende (encosta pra parar)
-  const role = G.myTeam === 'red' ? t('es_atk') : G.myTeam === 'blue' ? t('es_def') : '';
+  // seu papel: quem ataca no round empurra; o outro lado defende (no round 2 os lados trocam)
+  const atk = E.atk || 'red';
+  const role = (G.myTeam === atk ? t('es_atk') : G.myTeam ? t('es_def') : '') + (E.round === 2 ? ' · ' + t('es_r2') : '');
   if ($('ebRole').textContent !== role) { $('ebRole').textContent = role; $('ebRole').className = 'eb-role ' + (G.myTeam || ''); }
 }
 // troca o cenario quando a sala usa outro mapa
@@ -430,7 +489,7 @@ function onSnap(s) {
       if (G.player) {
         G.player.hp = p.hp;
         hud.hp(p.hp);
-        hud.armor(p.armor || 0, s.mode === 'br');
+        hud.armor(p.armor || 0, s.mode === 'br' || p.armor > 0); // colete de campo aparece em todo modo
         document.body.classList.toggle('mode-br', s.mode === 'br');
         if (!p.alive && G.player.alive) {
           G.player.alive = false;
@@ -451,6 +510,7 @@ function onSnap(s) {
     // trocou de time (infectado): o boneco e' refeito na cor nova
     if (p.team !== r.team) { scene.remove(r.char.root); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
     if (!r.alive && p.alive) r.pos = [...p.pos];
+    r.leanT = p.ln || 0;
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team;
     r.kills = p.kills; r.hp = p.hp; r.dn = p.dn || 0; r.rv = p.rv || 0;
     const rbp = G.mode === 'br' ? G.remoteBp.get(p.id)?.[p.wpn] : null;
@@ -493,7 +553,7 @@ function posOf(id) {
 
 function onEvent(e) {
   const inGame = G.state === 'game';
-  G.tutorial?.onEvent(e);
+  G.tutorial?.onEvent(e); G.range?.onEvent(e);
   switch (e.k) {
     case 'spawn':
       if (e.id === G.myId && G.player) {
@@ -524,8 +584,8 @@ function onEvent(e) {
       const r = G.remotes.get(e.id);
       if (G.specVm && G.specVm.startsWith(e.id + '|') && !G.player?.alive) vm.fire((WEAPONS[e.wpn]?.kick || 1) * 1.3);
       const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && rBody === 'pistol_10', aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
-      const rTr = lzBody ? 'laser' : G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk', rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : aaBody ? 'aa12' : e.wpn;
-      audio.play(rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2 });
+      const rTr = lzBody ? 'laser' : G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk', rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : aaBody ? 'aa12' : audio.gunSound(rBody, e.wpn); // som proprio do modelo
+      audio.play(rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2, muffle: G.remoteLo.get(e.id)?.[e.wpn]?.muzzle === 'silencer' });
       const rg = r?.char.gun?.userData; if (rg?.drum) rg.drum.rotation.z += Math.PI / 3; // tambor do revolver gira no boneco tambem
       if (e.e) {
         const mz = r?.char.gun?.userData.muzzle;
@@ -536,6 +596,7 @@ function onEvent(e) {
       }
       break;
     }
+    case 'swing': { const r = G.remotes.get(e.id); r?.char.swing?.(); break; } // golpe visto de fora (01/11)
     case 'hurt':
       if (e.v === G.myId && G.player) {
         audio.play('hit', { vol: 0.7, key: 'hurt', max: 2 });
@@ -561,7 +622,7 @@ function onEvent(e) {
       if (e.id === G.myId) { gainXp('assist'); chEvent({ type: 'assist' }); audio.play('ding', { ui: true, vol: 0.35, key: 'ding', max: 1 }); }
       break;
     case 'kill': {
-      if (inGame && !G.tutorial) { if (e.v === G.myId) statAdd('deaths'); if (e.a === G.myId && e.streak) statMax('bestStreak', e.streak); } // Perfil
+      if (inGame && !G.tutorial && !G.range) { if (e.v === G.myId) statAdd('deaths'); if (e.a === G.myId && e.streak) statMax('bestStreak', e.streak); } // Perfil
       if (e.v === G.myId && (G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { $('specBar').hidden = false; $('dead').classList.add('spec'); } // sem renascer: assiste
       if (e.v === G.myId) G.inRing = false; // perdeu no ringue: a parede da iris volta pra quem assiste
       const vPos = e.pos || posOf(e.v);
@@ -573,7 +634,7 @@ function onEvent(e) {
         fx.word(['PLAFT!', 'SPLASH!', 'CATAPLOFT!'][Math.floor(Math.random() * 3)], [vPos[0], vPos[1] + 2, vPos[2]], 2.2, 0.9);
         audio.play('death', { pos: [vPos[0], vPos[1] + 1, vPos[2]], vol: 0.8, key: 'death', max: 3 });
       }
-      const wn = WEAPONS[e.wpn] ? wName(e.wpn) : t('w_' + e.wpn);
+      const wn = gunName(e.a, e.wpn);
       const html = e.a ? `<span class="${teamCls(e.a)}">${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
       if (inGame) hud.feed(html, e.a === G.myId || e.v === G.myId);
       if (e.a === G.myId && inGame) {
@@ -611,8 +672,12 @@ function onEvent(e) {
         cm.hidden = true;
         if (kr?.pos && inGame) {
           const imgs = shootPanels(renderer, scene, { pos: kr.pos, yaw: kr.yaw || 0 }, G.deathPos);
-          const wn = WEAPONS[e.wpn] ? wName(e.wpn) : t('w_' + e.wpn);
-          cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, dist: Math.round(Math.hypot(kr.pos[0] - G.deathPos[0], kr.pos[2] - G.deathPos[2])), head: e.head, t });
+          const wn = gunName(e.a, e.wpn);
+          // quadro do meio: a arma de quem te pegou, inteira e de lado, com o nome do modelo (pedido dele 01/11)
+          const kbp = G.remoteBp.get(e.a)?.[e.wpn];
+          const klo = kbp ? bpLoadout(kbp) : G.mode === 'gungame' ? { body: G.ladder[Math.min(G.snap?.players?.find(x => x.id === e.a)?.gunLvl || 0, G.ladder.length - 1)]?.body } : G.remoteLo.get(e.a)?.[e.wpn] || defaultLoadout(e.wpn);
+          imgs[1] = CATEGORY[e.wpn] ? unlockShot({ wpn: e.wpn, lo: klo }) : null;
+          cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, dist: Math.round(Math.hypot(kr.pos[0] - G.deathPos[0], kr.pos[2] - G.deathPos[2])), head: e.head, t, icon: STREAK_SVG[e.wpn] || null });
           cm.hidden = false; cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
           audio.play('comic', { ui: true, vol: 0.55 });
         }
@@ -677,6 +742,8 @@ function onEvent(e) {
       if (inGame) { hud.message(t(e.kind === 'gap' ? 'streakGap' : 'streakWait', { s: t('s_' + e.kind), n: e.n }), 1.8); audio.play('empty', { ui: true, vol: 0.5 }); }
       break;
     case 'streakReady':
+      // Torta Atomica na mao de alguem (01/11): alarme comico pra sala inteira + aviso de quem pegou
+      if (e.kind === 'nuke' && inGame) { audio.play('nukealarm', { ui: true, vol: 0.7, jitter: 0 }); if (e.id !== G.myId) hud.message(t('nukeGot', { n: nameOf(e.id) }), 3); }
       if (e.id === G.myId && inGame) { hud.message(t('streakReady', { s: t('s_' + e.kind), k: t(pad.active ? 'how_pad' : isTouch ? 'how_touch' : 'how_kb') }), 2.4); audio.play('pickup', { vol: 0.7, ui: true, rate: 0.8 }); }
       break;
     case 'blimpDown': // dirigivel estourado a tiro: explode, some e a sala pode chamar outra sequencia
@@ -713,10 +780,12 @@ function onEvent(e) {
     // ---------- equipamento de campo ----------
     case 'field': {
       const pos = e.id === G.myId ? G.player?.pos : posOf(e.id);
-      if (e.id === G.myId) { G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } }
-      if (inGame) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
+      if (e.id === G.myId) { G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
+      // estimulante = chiado da bomba de ar; colete = o som de pegar item (sem som proprio ainda)
+      if (inGame) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind === 'stim' ? 'pump' : e.kind === 'vest' ? 'pickup' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
       break;
     }
+    case 'vestBreak': if (e.id === G.myId && inGame) { hud.message(t('vestBreak'), 1.6); audio.play('balloon', { ui: true, vol: 0.5, rate: 1.3 }); } break;
     case 'fieldFail': if (e.id === G.myId && inGame) { hud.message(t('fieldFail'), 1.6); audio.play('empty', { vol: 0.4 }); } break;
     case 'fieldReady': if (e.id === G.myId && inGame) { G.fieldK = 1; audio.play('fieldready', { ui: true, vol: 0.5 }); hud.message(t('fieldReady', { w: t('fd_' + G.field) }), 1.6); } break;
     case 'umbBreak': { // guarda-chuva levou tiro demais: estoura e some
@@ -734,6 +803,8 @@ function onEvent(e) {
     case 'slurp': if (inGame) { audio.play('hole', { pos: e.to, vol: 0.6 }); fx.puff([e.to[0], e.to[1] + 0.5, e.to[2]], 6, 0.6, 0x141210, 0.5); } break;
     // ---------- battle royale ----------
     case 'loot': G.brLoot = e.list; brView?.setLoot(e.list, G.loadouts); G.brCrates = e.list.filter(l => l[1] === 'crate').map(l => [l[3], l[5]]); break;
+    case 'chat': chat.add(e, e.id === G.myId, !!(MODES[G.mode]?.teams || G.duo) && G.isEnemy({ id: e.id, team: e.team })); if (e.id !== G.myId) audio.play('ui_click', { ui: true, vol: 0.35 }); break;
+    case 'escRound': if (inGame) { const mine = G.myTeam === e.atk; hud.alert(t('es_round2'), t(e.done ? 'es_r2SubDone' : 'es_r2Sub', { n: e.mark }) + ' ' + t(mine ? 'es_youAtk' : 'es_youDef'), mine ? 'red' : 'blue'); audio.play('ringbell', { ui: true, vol: 0.6 }); } break;
     case 'ping': // marcacao (minha ou do parceiro)
       if (e.off) { G.pings.delete(e.id); break; }
       G.pings.set(e.id, { pos: e.pos, kind: e.kind, label: e.label, t: G.t + 10 });
@@ -816,7 +887,7 @@ function onEvent(e) {
         G.player.give(e.wpn, true, !!e.force);
         hud.weapon(G.player);
         audio.play('pickup', { vol: 0.6, ui: true });
-        hud.message(t(e.force ? 'newGun' : 'gotGun', { w: wName(e.wpn) }), 1.6);
+        hud.message(t(e.force ? 'newGun' : 'gotGun', { w: gunName(G.myId, e.wpn) }), 1.6);
       }
       break;
     case 'pickup':
@@ -884,7 +955,7 @@ function onEvent(e) {
     case 'countdown':
       G.countEnd = performance.now() + (e.s ?? 3.5) * 1000;
       // apresentacao do time na contagem (so modos de equipe, fora do treino)
-      if (inGame && INTRO_MODES.includes(G.mode) && !G.duo && !G.tutorial && !G.cineCam) G.intro = { t: 0, dur: Math.max(1.6, Math.min(3.3, (e.s ?? 3.5) - 0.2)) };
+      if (inGame && INTRO_MODES.includes(G.mode) && !G.duo && !G.tutorial && !G.range && !G.cineCam) G.intro = { t: 0, dur: Math.max(1.6, Math.min(3.3, (e.s ?? 3.5) - 0.2)) };
       break;
     case 'infected': {
       if (!inGame) break;
@@ -961,9 +1032,9 @@ function metaClaim(m) {
 }
 async function sendMeta() {
   const mine = Math.min(G.plafts || 0, META.perMatch);
-  if (!G.tutorial) statAdd('plafts', G.plafts || 0); // Perfil
+  if (!G.tutorial && !G.range) statAdd('plafts', G.plafts || 0); // Perfil
   G.plafts = 0;
-  if (G.tutorial) { $('endMeta').hidden = true; return; }
+  if (G.tutorial || G.range) { $('endMeta').hidden = true; return; }
   const m = mine ? await metaPost(mine) || await metaGet() : await metaGet();
   metaShow(m, mine); metaClaim(m);
 }
@@ -1039,6 +1110,10 @@ function showEnd(winner) {
   sendMeta();
   showRankEnd();
   audio.play('flag', { vol: 0.8, ui: true });
+  // sala com lobby (solo e de amigos): nada de contagem, o botao leva de volta pro lobby
+  const lob = !!G.snap?.lob;
+  $('endLobby').hidden = !lob; $('endLobby').disabled = false; $('endLobby').textContent = t('endToLobby');
+  if (lob) { $('endNext').textContent = ''; return; }
   const endAt = performance.now() + Math.max(1, (G.snap?.overT ?? 9) - 1) * 1000;
   const tick = () => { if ($('theend').hidden) return; const n = Math.max(0, Math.round((endAt - performance.now()) / 1000)); $('endNext').textContent = t('nextIn', { n }); if (n > 0) setTimeout(tick, 1000); };
   tick();
@@ -1148,6 +1223,7 @@ function sendLoadout() {
   G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field });
   if (G.tutorial?.fieldOverride) { const me = G.net.core?.players.get(G.myId); if (me) me.field = G.tutorial.fieldOverride; } // o servidor local checa o nivel; no treino passa
   G.net.send({ t: 'look', look: wornLook() }); // visual do boneco (os outros veem)
+  G.net.send({ t: 'dev', v: devNow() });
   vm.setGloves?.(wornLook());
 }
 
@@ -1165,7 +1241,7 @@ function makePing(p) {
       const v = [x - o[0], y + 0.9 - o[1], z - o[2]], along = v[0] * d[0] + v[1] * d[1] + v[2] * d[2];
       if (along <= 0 || along > bt + 2) continue;
       const perp = Math.hypot(v[0] - d[0] * along, v[1] - d[1] * along, v[2] - d[2] * along);
-      if (perp < 0.9 + along * 0.012 && (!best || along < best.along)) best = { along, pos: [x, y, z], label: kind === 'wpn' ? (bp ? t(bp) : wName(wpn)) : t('pg_' + kind) };
+      if (perp < 0.9 + along * 0.012 && (!best || along < best.along)) best = { along, pos: [x, y, z], label: kind === 'wpn' ? (bp ? t(bp) : G.loadouts[wpn]?.body ? partName('body', G.loadouts[wpn].body) : wName(wpn)) : t('pg_' + kind) };
     }
     ping = best ? { kind: 'item', pos: best.pos, label: best.label } : { kind: 'spot', pos: hit.point, label: '' };
   }
@@ -1280,11 +1356,12 @@ async function beginMatch(join) {
     if (Object.values(G.loadouts || {}).some(l => l?.ammo)) tip('ammo');
   }, 2500);
   document.body.classList.add('ingame');
+  chat.enable(G.net instanceof WsNet);
   $('hud').hidden = false;
   input.enabled = true;
   document.body.classList.toggle('bombmode', G.mode === 'bomb');
   if (isTouch) { buildTouch(input, $('touch')); try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); await screen.orientation?.lock?.('landscape'); } catch { /* sem tela cheia */ } }
-  else lockPointer(canvas); // sem gesto: a pausa pede o clique
+  else if (!SS) lockPointer(canvas); // sem gesto: a pausa pede o clique
   iris(150, 500);
 }
 
@@ -1294,7 +1371,7 @@ function backToLobby() {
   audio.music(true, 'music');
   G.paused = false;
   input.enabled = false;
-  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead');
+  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead'); chat.enable(false);
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   if (document.pointerLockElement) document.exitPointerLock();
   clearRemotes();
@@ -1309,46 +1386,81 @@ function backToLobby() {
 const INTRO_MODES = ['tdm', 'escort', 'bomb', 'ctf', 'dom'];
 const introQ = new THREE.Quaternion(), introE = new THREE.Euler(0, 0, 0, 'YXZ'), introM = new THREE.Matrix4();
 const introP = new THREE.Vector3(), introUp = new THREE.Vector3(0, 1, 0);
+// tomada com parede/telhado entre a camera e o time: sobe a camera ate ver (no maximo +12 m)
+function clearShot(pos, at) {
+  for (let up = 0; up <= 12; up += 2) {
+    const o = [pos.x, pos.y + up, pos.z], d = [at.x - o[0], at.y - o[1], at.z - o[2]], L = Math.hypot(...d);
+    if (raycast(G.M, o, d.map(v => v / L), L).dist >= L - 0.5) return new THREE.Vector3(o[0], o[1], o[2]);
+  }
+  return pos;
+}
+// voce na cena de inicio (01/11): o jogador local so tem a arma da primeira pessoa, entao nas tomadas do time
+// aparecia um buraco no seu lugar. Boneco temporario com o seu visual e a sua arma, some no pouso.
+let introMe = null, introMeKey = '';
+function introMeSync(dt, p, show) {
+  if (!show) { if (introMe) introMe.root.visible = false; return; }
+  const look = wornLook(), lo = p.lo?.(p.wpn) || null, key = (G.myTeam || '') + JSON.stringify(look);
+  if (!introMe || introMeKey !== key) {
+    if (introMe) scene.remove(introMe.root);
+    introMe = new Character(G.myTeam || 'red', '', look); introMe.tag.visible = false; introMe.wpnKey = '';
+    scene.add(introMe.root); introMeKey = key;
+  }
+  const wk = p.wpn + JSON.stringify(lo);
+  if (introMe.wpnKey !== wk) { try { introMe.setWeapon(p.wpn, lo); } catch { /* arma ainda carregando */ } introMe.wpnKey = wk; }
+  introMe.root.visible = true;
+  introMe.root.position.set(p.pos[0], p.pos[1], p.pos[2]);
+  introMe.root.rotation.y = p.yaw;
+  introMe.update(dt, { anim: 'idle', pitch: p.pitch, alive: true, speed: 0, t: G.t });
+}
 function introCam(dt, p, inp) {
   const I = G.intro;
-  if (G.state !== 'game' || inp.firePressed || inp.jumpPressed || performance.now() > G.countEnd + 300) { G.intro = null; return; }
+  if (G.state !== 'game' || inp.firePressed || inp.jumpPressed || performance.now() > G.countEnd + 300) { G.intro = null; document.body.classList.remove('intro-cam'); return; }
   if (!p.alive) return; // nasce um instante depois da contagem comecar: o relogio da cena so anda com voce em pe
   I.t += dt;
-  if (I.t >= I.dur) { G.intro = null; return; }
-  // pontos da curva: na frente de cada colega, um pouco acima, olhando pro peito dele; o ultimo e' a sua cabeca
-  const mates = [...G.remotes.values()].filter(r => r.alive && r.pos && !G.isEnemy(r));
-  mates.sort((a, b) => Math.hypot(b.pos[0] - p.pos[0], b.pos[2] - p.pos[2]) - Math.hypot(a.pos[0] - p.pos[0], a.pos[2] - p.pos[2]));
-  const keys = mates.slice(-5).map(r => {
-    const fx = -Math.sin(r.yaw || 0), fz = -Math.cos(r.yaw || 0);
-    const pos = new THREE.Vector3(r.pos[0] + fx * 2.4, r.pos[1] + 1.7, r.pos[2] + fz * 2.4);
-    introM.lookAt(pos, new THREE.Vector3(r.pos[0], r.pos[1] + 1.15, r.pos[2]), introUp);
-    return { pos, q: new THREE.Quaternion().setFromRotationMatrix(introM) };
-  });
-  // comeca alto e aberto atras do time (da pra ver a formacao) e termina na primeira pessoa
-  const eye = new THREE.Vector3(p.pos[0], p.pos[1] + p.eye, p.pos[2]);
+  if (I.t >= I.dur) { G.intro = null; document.body.classList.remove('intro-cam'); return; }
+  // 3 tomadas numa curva so (pedido dele 01/11: nada de pular de colega em colega): plano aberto alto do mapa
+  // atras da base, desce pra um angulo de frente pro time inteiro (o time nasce junto) e pousa na sua primeira pessoa
+  const team = [...G.remotes.values()].filter(r => r.alive && r.pos && !G.isEnemy(r));
+  const all = [p.pos, ...team.map(r => r.pos)];
+  const cx = all.reduce((a, q) => a + q[0], 0) / all.length, cz = all.reduce((a, q) => a + q[2], 0) / all.length;
   const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
-  const open = new THREE.Vector3(p.pos[0] - fx * 9, p.pos[1] + 6.5, p.pos[2] - fz * 9);
-  introM.lookAt(open, new THREE.Vector3(p.pos[0] + fx * 4, p.pos[1] + 1, p.pos[2] + fz * 4), introUp);
-  const first = { pos: open, q: new THREE.Quaternion().setFromRotationMatrix(introM) };
-  introE.set(p.pitch, p.yaw, 0);
-  const last = { pos: eye, q: new THREE.Quaternion().setFromEuler(introE) };
-  const pts = [first, ...keys, last];
+  const center = new THREE.Vector3(cx, p.pos[1] + 1.1, cz);
+  const spread = Math.max(4, ...all.map(q => Math.hypot(q[0] - cx, q[2] - cz)));
+  const shot = (pos, at) => ({ pos, at });
+  // 1) plano do mapa: alto e longe, atras e de lado do time, olhando por cima dele pro campo
+  const first = shot(clearShot(new THREE.Vector3(cx - fx * 20 + fz * 14, p.pos[1] + 13, cz - fz * 20 - fx * 14), center), new THREE.Vector3(cx + fx * 24, p.pos[1] + 2, cz + fz * 24));
+  // 2) o time inteiro de frente, um pouco de cima, na distancia que cabe todo mundo
+  const tk = Math.min(6.5, Math.max(4.5, spread * 1.2 + 2.5));
+  const teamShot = shot(clearShot(new THREE.Vector3(cx + fx * tk - fz * 3, p.pos[1] + 1.9, cz + fz * tk + fx * 3), center), center);
+  // travelling curto de lado, ainda de frente pro time (o time fica mais tempo na tela)
+  const teamShot2 = shot(clearShot(new THREE.Vector3(cx + fx * (tk - 1) + fz * 3, p.pos[1] + 1.7, cz + fz * (tk - 1) - fx * 3), center), center);
+  // 3) atras do seu ombro, ja quase na sua altura (prepara o pouso sem girar de uma vez)
+  const eye = new THREE.Vector3(p.pos[0], p.pos[1] + p.eye, p.pos[2]);
+  const over = shot(new THREE.Vector3(p.pos[0] - fx * 2.4 + fz * 0.8, p.pos[1] + p.eye + 0.6, p.pos[2] - fz * 2.4 - fx * 0.8), new THREE.Vector3(p.pos[0] + fx * 12, p.pos[1] + p.eye, p.pos[2] + fz * 12));
+  const look = new THREE.Vector3(-Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch), -Math.cos(p.yaw) * Math.cos(p.pitch));
+  const last = { pos: eye, at: eye.clone().addScaledVector(look, 12) };
+  const pts = [first, teamShot, teamShot2, over, last];
   // tempo: anda devagar no comeco e desacelera no pouso (sem parada no meio)
   const k = I.t / I.dur, e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-  const n = pts.length - 1, f = e * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
-  const P = (j) => pts[Math.max(0, Math.min(n, j))].pos;
-  // Catmull-Rom: passa por todos os pontos com a velocidade continua
-  const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2), u2 = u * u, u3 = u2 * u;
-  introP.set(0, 0, 0)
-    .addScaledVector(p0, -0.5 * u3 + u2 - 0.5 * u)
-    .addScaledVector(p1, 1.5 * u3 - 2.5 * u2 + 1)
-    .addScaledVector(p2, -1.5 * u3 + 2 * u2 + 0.5 * u)
-    .addScaledVector(p3, 0.5 * u3 - 0.5 * u2);
-  introQ.copy(pts[i].q).slerp(pts[i + 1].q, u * u * (3 - 2 * u));
-  camera.position.copy(introP);
-  camera.quaternion.copy(introQ);
+  // tempo de cada trecho: chega no time em 40% da cena, fica nele, e pousa (o ultimo trecho e curto)
+  const TK = [0, 0.28, 0.58, 0.86, 1], n = pts.length - 1;
+  let i = 0; while (i < n - 1 && e > TK[i + 1]) i++;
+  const u = Math.min(1, Math.max(0, (e - TK[i]) / (TK[i + 1] - TK[i])));
+  // Catmull-Rom na posicao E no ponto olhado: a camera nunca para nem gira aos trancos entre as tomadas
+  const cr = (key, out) => {
+    const P = (j) => pts[Math.max(0, Math.min(n, j))][key];
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2), u2 = u * u, u3 = u2 * u;
+    return out.set(0, 0, 0).addScaledVector(p0, -0.5 * u3 + u2 - 0.5 * u).addScaledVector(p1, 1.5 * u3 - 2.5 * u2 + 1)
+      .addScaledVector(p2, -1.5 * u3 + 2 * u2 + 0.5 * u).addScaledVector(p3, 0.5 * u3 - 0.5 * u2);
+  };
+  camera.position.copy(cr('pos', introP));
+  camera.up.set(0, 1, 0); camera.lookAt(cr('at', tmpV));
+  // pouso exato na sua mira (o ultimo trecho termina olhando pro mesmo lugar, isso so tira qualquer sobra)
+  if (k > 0.97) { introE.set(p.pitch, p.yaw, 0); introQ.setFromEuler(introE); camera.quaternion.slerp(introQ, (k - 0.97) / 0.03); }
   camera.fov = settings.fov; camera.updateProjectionMatrix();
   vmPass.enabled = k > 0.9; // a arma entra so no pouso
+  introMeSync(dt, p, k <= 0.9); // o seu boneco nas tomadas; no pouso a camera entra nele e ele some
+  document.body.classList.toggle('intro-cam', k < 0.9); // cena de cinema: o HUD some (menos a contagem)
 }
 
 // conexao caiu: tenta voltar pra mesma sala algumas vezes antes de desistir
@@ -1372,8 +1484,10 @@ async function reconnect(name, mpArgs) {
 }
 
 async function quitGame() {
+  if (SS) { G.net?.close(); return; } // tela dividida: sair encerra a sessao de todo mundo (a pagina de cima volta pra escolha)
   G.flashT = 0; G.hurtFlash = 0;
   await iris(0, 450);
+  const fromRange = G.range; if (fromRange) { G.range.dispose(); G.range = null; if (fromRange.primary !== undefined && settings.primary !== fromRange.primary) { settings.primary = fromRange.primary; saveSettings(); } }
   if (G.tutorial) { if (G.tutorial.finished) try { localStorage.setItem('rr_tutorial_done', '1'); } catch { /* */ } G.tutorial.dispose(); G.tutorial = null; }
   G.state = 'menu';
   G.paused = false;
@@ -1381,7 +1495,7 @@ async function quitGame() {
   n && n.close();
   G.player = null; G.myId = null; G.me = null;
   clearRemotes();
-  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead');
+  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead'); chat.enable(false);
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   lobby.hide(); hideLoading();
   $('menu').hidden = false;
@@ -1390,7 +1504,7 @@ async function quitGame() {
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
   audio.music(true, 'music');
   startAttract();
-  ui.go('home');
+  if (fromRange) ui.go('arsenal', false, fromRange.cat); else ui.go('home'); // campo de treino volta pro Arsenal (o que estava bloqueado continua)
   iris(150, 700);
 }
 
@@ -1447,15 +1561,17 @@ function renderPausePick() {
   // escada de armas nao escolhe; infectado (vermelho) so tem a lamina; sobrevivente nao pega sniper
   const off = G.mode === 'gungame' || G.mode === 'infect' || !!EV(G.snap?.mut)?.kit; // evento com armas fixas tambem
   $('pausePick').hidden = off || G.mode === 'br'; // battle royale: a principal vem do chao, mas as pecas valem
-  $('pauseSmith').hidden = off || !!G.tutorial;
+  $('pauseSmith').hidden = off || !!G.tutorial || !!G.range;
+  $('rangePick').hidden = !G.range; $('rangeBack').hidden = !G.range; $('quit').hidden = !!G.range;
+  if (G.range) { $('pausePick').hidden = true; renderRangePick(); return; }
   $('pauseSmith').onclick = openGameSmith;
   if (off) return;
   const list = PRIMARIES;
-  $('pkList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${wName(w)}</span></button>`).join('');
+  $('pkList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
   $('pkList').querySelectorAll('button').forEach(b => b.onclick = () => {
     settings.primary = b.dataset.w; saveSettings(); sendLoadout(); G.player?.rearm();
     audio.play('pickup', { ui: true, vol: 0.5 });
-    hud.message(t(G.player?.alive ? 'swapNow' : 'nextSpawn', { w: wName(b.dataset.w) }), 2);
+    hud.message(t(G.player?.alive ? 'swapNow' : 'nextSpawn', { w: G.loadouts[b.dataset.w]?.body ? partName('body', G.loadouts[b.dataset.w].body) : wName(b.dataset.w) }), 2);
     renderPausePick();
   });
 }
@@ -1468,10 +1584,10 @@ function setPaused(p) {
   $('pause').hidden = !p;
   input.enabled = !p;
   if (p) { input.keys.clear(); input.mouse.fire = input.mouse.ads = false; input.touch.fire = false; }
-  if (!p && !isTouch) lockPointer(canvas);
+  if (!p && !isTouch && !SS) lockPointer(canvas);
 }
 document.addEventListener('pointerlockchange', () => {
-  if (G.state === 'game' && !isTouch && !document.pointerLockElement && !G.paused && $('theend').hidden) setPaused(true);
+  if (G.state === 'game' && !isTouch && !document.pointerLockElement && !G.paused && $('theend').hidden && !chat.isOpen) setPaused(true);
 });
 // celular: tocar no placar de cima abre o Tab; tocar fora dele fecha (dentro dele rola a lista)
 function setTouchBoard(on) { input.touchBoard = on; document.body.classList.toggle('board-open', on); }
@@ -1488,13 +1604,74 @@ $('resume').onclick = () => { audio.play('ui_click', { ui: true }); setPaused(fa
 $('quit').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
 $('pauseSettings').onclick = () => { $('pause').hidden = true; $('menu').hidden = false; ui.go('settings', true); };
 
+// ---------- dica leve na tela (01/11, pedido dele, estilo COD) ----------
+// borda na frente = escalar (o recarregar fica no aviso de municao do hud). Mostra o botao do aparelho em uso (teclado, controle, toque).
+let hintEl = null, hintKey = '', hintT = 0;
+function ctxHint(dt, p) {
+  hintT -= dt; if (hintT > 0) return; hintT = 0.12;
+  let k = null;
+  if (G.state === 'game' && p.alive && !G.paused && !G.intro && !replay.on && !p.mantle) {
+    // municao: o aviso embaixo da mira (hud.ammoAlert) ja cuida; aqui so a escalada
+    if (p.onGround && !p.crouch && !(p.slideT > 0) && p.mantleSpot?.()) k = 'climb';
+  }
+  const dev = pad.active ? 1 : isTouch ? 2 : 0, key = k ? k + dev : '';
+  if (key === hintKey) return;
+  hintKey = key;
+  if (!hintEl) { hintEl = document.createElement('div'); hintEl.className = 'ctx-hint'; hintEl.setAttribute('aria-live', 'polite'); $('hud').appendChild(hintEl); }
+  hintEl.hidden = !k;
+  if (!k) return;
+  hintEl.innerHTML = `<kbd>${keyLabel('jump', dev)}</kbd><span>${t('hintClimb')}</span>`;
+}
+
+// ---------- campo de treino ----------
+// qualquer modelo, ate o bloqueado: o seu modelo vai com a sua montagem; os outros com o padrao do corpo (so nesta partida)
+function rangeLoadout(cat, body) {
+  if (cat === 'melee') return { body, camo: null };
+  return { body, scope: cat === 'sniper' ? nativePart(body, 'scope') : freeScope(cat, body), charger: nativePart(body, 'charger'), handle: null, paint: null, accent: null, camo: null, m1: 1 };
+}
+function rangeEquip(cat, body) {
+  const P = G.player; if (!G.range || !CATEGORY[cat]) return;
+  G.range.cat = cat; G.range.body = body;
+  const mine = matchLoadouts()[cat]; // a SUA montagem (pecas, camo, pintura, bocal) quando e o mesmo modelo
+  G.loadouts[cat] = mine?.body === body ? { ...mine } : { ...rangeLoadout(cat, body), ...(getLoadouts()[cat]?.saved?.[body] || {}) }; // outro modelo: o que voce montou nele antes (memoria por modelo)
+  if (PRIMARIES.includes(cat)) settings.primary = cat; // so na memoria; o salvo volta na saida
+  sendLoadout();
+  if (!P) return;
+  P.rearm();
+  if (P.owned.includes(cat)) { const st = P.stats(cat); P.ammo[cat] = { ...(P.ammo[cat] || {}), mag: st.mag, reserve: 999 }; P.equip(cat, true); }
+}
+let rangeCat = null;
+function renderRangePick() {
+  const R = G.range; if (!R) return;
+  const cats = ['pistol', ...PRIMARIES, 'melee'].filter((c, i, a) => CATEGORY[c] && a.indexOf(c) === i);
+  rangeCat = cats.includes(rangeCat) ? rangeCat : R.cat;
+  $('rgTabs').innerHTML = cats.map(c => `<button role="tab" aria-selected="${c === rangeCat}" data-c="${c}">${t('cat_' + c)}</button>`).join('');
+  $('rgTabs').querySelectorAll('button').forEach(b => b.onclick = () => { rangeCat = b.dataset.c; audio.play('ui_click', { ui: true }); renderRangePick(); });
+  const bodies = CATEGORY[rangeCat].bodies;
+  $('rgList').innerHTML = bodies.map(id => `<button role="radio" aria-checked="${R.cat === rangeCat && R.body === id}" data-b="${id}"><span>${partName('body', id)}</span></button>`).join('');
+  $('rgList').querySelectorAll('button').forEach(b => b.onclick = () => {
+    rangeEquip(rangeCat, b.dataset.b); audio.play('pickup', { ui: true, vol: 0.5 });
+    hud.message(t('swapNow', { w: partName('body', b.dataset.b) }), 1.6);
+    setPaused(false);
+  });
+}
+function startRange(cat, body) {
+  if (!CATEGORY[cat]) return;
+  G.range = new Range(G, cat, body);
+  G.range.primary = settings.primary; // devolve a principal salva na saida
+  rangeCat = cat;
+  $('menu').hidden = true;
+  startGame(new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 9999, time: 3600 }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.range?.dispose(); G.range = null; });
+}
+$('rangeBack').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
+
 // ---------- menus ----------
 const ui = initMenus({
   settings, saveSettings,
   // treino guiado na Vila: partida solo sem lobby, sem bots (os bonecos entram no passo de tiro)
   onTutorial: () => {
     try { localStorage.setItem('rr_tutorial_seen', '1'); } catch { /* */ } // primeira vez so abre sozinho uma vez
-    G.tutorial = new Tutorial(G, { quit: () => quitGame(), reward: tutorialReward, setPing: (on) => { if (input.pingBtn) input.pingBtn.hidden = !on; }, setField: (f) => {
+    G.tutorial = new Tutorial(G, { setHud: (m) => { settings.hudMode = m; saveSettings(); }, quit: () => quitGame(), reward: tutorialReward, setPing: (on) => { if (input.pingBtn) input.pingBtn.hidden = !on; }, setField: (f) => {
       const me = G.net?.core?.players.get(G.myId); if (me) me.field = f;
       if (G.tutorial) G.tutorial.fieldOverride = f;
       G.field = f; G.fieldK = 1; if (me) me.fieldCharge = 1; // treino: a Mola emprestada ja vem cheia
@@ -1502,6 +1679,8 @@ const ui = initMenus({
     } });
     startGame(new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 500, time: 1800 }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.tutorial?.dispose(); G.tutorial = null; });
   },
+  onRange: (cat, body) => startRange(cat, body),
+  bindsChanged: () => { input.kbMap = null; input.padMap = null; },
   onSolo: ({ mode, map, bots, difficulty, limit, time }) => startGame(new LocalNet({ mode, map, bots, difficulty, limit, time }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))),
   onMp: (args) => startGame(new WsNet(args), args.name, args),
   onLook: (look, team) => setLookPreview(look, team),
@@ -1648,7 +1827,7 @@ function frameBody(now, realDt) {
       if (prims.length >= 2) {
         const it = (G.brLoot || []).find(l => l[1] === 'wpn' && !P.owned.includes(l[2]) && l[2] !== 'pistol' && (l[3] - P.pos[0]) ** 2 + (l[5] - P.pos[2]) ** 2 < 2.6);
         if (it) tip('swap');
-        if (it) pr = t(isTouch ? 'br_swapTouch' : G.pad?.active ? 'br_swapPad' : 'br_swap', { a: wName(prims.includes(P.wpn) ? P.wpn : prims[0]), b: wName(it[2]) });
+        if (it) pr = t(isTouch ? 'br_swapTouch' : G.pad?.active ? 'br_swapPad' : 'br_swap', { a: gunName(G.myId, prims.includes(P.wpn) ? P.wpn : prims[0]), b: it[6] ? t(it[6]) : G.loadouts[it[2]]?.body ? partName('body', G.loadouts[it[2]].body) : wName(it[2]) });
       }
     }
     // dupla: parceiro caido perto = segurar usar enche a bomba de bicicleta
@@ -1688,10 +1867,13 @@ function frameBody(now, realDt) {
     let dy = r.yaw - r.char.root.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
     r.char.root.rotation.y += dy * k;
-    r.char.update(dt, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1] });
+    r.lean = (r.lean || 0) + ((r.leanT || 0) - (r.lean || 0)) * k; r.char.root.rotation.z = -r.lean * 0.3; // inclinado (plantar a bomba)
+    const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
+    // longe (battle royale com 50): o esqueleto anima 10x por segundo em vez de todo quadro; de perto nada muda
+    r.animAcc = (r.animAcc || 0) + dt;
+    if (camD < 70 || r.animAcc >= 0.1) { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1] }); r.animAcc = 0; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
-    const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
     r.char.lod(camD);
     r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || camD < 30);
     if (r.team && r.team === G.myTeam) r.char.sharpTag(renderer);
@@ -1703,8 +1885,11 @@ function frameBody(now, realDt) {
     if (inp.pause) setPaused(!G.paused);
     const p = G.player;
     G.pumping = !!(G.pumpMate && inp.use); // enchendo a bomba: fica parado em cima do parceiro
+    if (G.M) G.M.dyn = G.snap?.esc ? [trainBox(G.M, G.snap.esc.d)] : null; // bonde solido: voce nao atravessa e a bala para nele (01/11)
     if (!G.paused) p.update(dt, inp);
+    ctxHint(realDt, p);
     nadeArc(p);
+    if (G.range && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) { G.range.begin(); if (!G.range.armed) { G.range.armed = true; rangeEquip(G.range.cat, G.range.body); } } G.range.update(); }
     if (G.tutorial && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) G.tutorial.begin(); G.tutorial.update(dt, inp); }
     hud.board(inp.board, G.snap, G.snap?.players || [], G.myId, inp.board && !G.tutorial ? ui.chRows() : null);
     const W = WEAPONS[p.wpn];
@@ -1727,15 +1912,28 @@ function frameBody(now, realDt) {
       // balanco de cabeca curto e so na vertical (o grosso do balanco e' da arma, como no COD)
       const bob = p.onGround && Math.hypot(p.vel[0], p.vel[2]) > 2 ? Math.abs(Math.sin(p.stepPhase)) * (p.sprint ? 0.03 : 0.016) * (1 - p.adsK) : 0;
       camera.position.set(p.pos[0], p.pos[1] + p.eye - bob, p.pos[2]);
+      // inclinar: a cabeca sai de lado ate 0,5 m (menos se tiver parede ali) e a camera tomba junto
+      if (Math.abs(p.lean || 0) > 0.01) {
+        const s = Math.sign(p.lean), rx = Math.cos(p.yaw) * s, rz = -Math.sin(p.yaw) * s;
+        const room = raycast(G.M, camera.position.toArray(), [rx, 0, rz], 0.8).dist;
+        const off = Math.min(Math.abs(p.lean) * 0.5, Math.max(0, room - 0.25));
+        camera.position.x += rx * off; camera.position.z += rz * off;
+      }
       G.kickP = (G.kickP || 0) * Math.exp(-11 * realDt); G.kickR = (G.kickR || 0) * Math.exp(-9 * realDt);
-      camera.rotation.set(p.pitch + G.kickP + (Math.random() - 0.5) * sh * 0.05, p.yaw + (Math.random() - 0.5) * sh * 0.05, p.roll + G.kickR);
+      camera.rotation.set(p.pitch + G.kickP + (Math.random() - 0.5) * sh * 0.05, p.yaw + (Math.random() - 0.5) * sh * 0.05, p.roll + G.kickR - (p.lean || 0) * 0.16);
     } else if ((G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { // bate-volta voltando do ceu: tela de morte normal com a contagem
       // fora da rodada: assiste um colega em primeira pessoa ou o mapa de cima (battle royale: qualquer um vivo)
       const list = [...G.remotes.values()].filter(r => r.alive && (G.mode === 'br' || !G.isEnemy(r)));
       const S = G.spec || (G.spec = { i: 0, map: false });
-      if (inp.firePressed || inp.jumpPressed) S.i++;
+      // segue a pessoa pelo id: pela posicao na lista, a camera pulava de gente sempre que alguem morria ou
+      // entrava/saia do ringue (ficava "flicando", 01/11). So troca no Proximo ou quando ela sai de cena.
+      list.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      let at = list.findIndex(o => o.id === S.id);
+      if (inp.firePressed || inp.jumpPressed || S.i !== S.iSeen) { at = at < 0 ? 0 : (at + 1) % list.length; S.iSeen = S.i; }
+      if (at < 0 && list.length) at = 0;
+      const r = list.length ? list[at] : null;
+      S.id = r?.id ?? null;
       if (inp.mapPressed || inp.wheel) S.map = !S.map;
-      const r = list.length ? list[S.i % list.length] : null;
       for (const o of G.remotes.values()) o.char.root.visible = true;
       if (G.ringWait && G.M.ring) {
         // esperando o ringue: camera de plateia olhando a lona
@@ -1774,7 +1972,7 @@ function frameBody(now, realDt) {
     if (SR) { // espectador: a arma do outro anda e corre como a dele
       const sp = SR.speed || 0, run = SR.anim === 'sprint' || SR.anim === 'tac';
       vm.update({ dt: realDt, moving: sp > 1.5 && SR.anim !== 'jump', speed: sp, sprint: run, tac: SR.anim === 'tac', ads: 0, crouch: SR.anim === 'crouch', air: SR.anim === 'jump', pistolSprint: run && SR.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false });
-    } else vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, slide: p.slideT > 0, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: inp.lookX, lookDY: inp.lookY, firing: p.firing });
+    } else vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, slide: p.slideT > 0, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: settings.gunSway === false && !isTouch ? 0 : inp.lookX, lookDY: settings.gunSway === false && !isTouch ? 0 : inp.lookY, firing: p.firing });
     if (!SR && G.specVm && p.alive) { G.specVm = null; vm.setWeapon(p.wpn, p.lo(p.wpn), true); vm.setGloves(wornLook()); } // voltou: a sua arma e a sua luva
     vmPass.enabled = (p.alive || !!SR) && !G.down; // caido: sem arma na mao
     const inAir = p.alive && p.air && G.bounce;
@@ -1792,6 +1990,7 @@ function frameBody(now, realDt) {
     // camera de cinema (so gravacao de video, definida pelo console/gravador): comanda a camera e tira a arma da mao
     if (G.cineCam) { G.cineCam(camera, realDt, G); vmPass.enabled = false; }
     if (G.intro) introCam(realDt, p, inp);
+    if (!G.intro && introMe?.root.visible) introMeSync(0, p, false);
     if (replay.on) { replay.camera(camera, realDt, G); vmPass.enabled = false; }
     const ru = vm.gun?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0;
     // ponto do laser no mundo: onde o centro da mira bate
@@ -1826,7 +2025,7 @@ function frameBody(now, realDt) {
       if (bombBeep <= 0) { bombBeep = period; if (planted) audio.play('ui_click', { pos: [BS.pos[0], BS.pos[1] + 0.3, BS.pos[2]], vol: 0.7, rate: 1.8, jitter: 0 }); }
       bombMesh.userData.light.visible = bombBeep > period * 0.5 || !planted;
     }
-    if (G.snap) { hud.objectives(G.snap, camera, G.me); hud.radar(G, camera); hud.nadeWarn(G, camera); }
+    if (G.snap) { hud.objectives(G.snap, camera, G.me); hud.radar(G, camera); hud.nadeWarn(G, camera); hud.streaks(G, G.snap); }
     hud.compass(G, camera);
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
     const low = p.alive ? Math.max(0, (40 - p.hp) / 40) * 0.5 : 0.4;
@@ -1851,8 +2050,11 @@ function frameBody(now, realDt) {
   if (scopeOn) {
     renderer.setRenderTarget(scopeRT);
     renderer.render(scene, scopeCam);
+    if (vm.gun?.userData?.scope?.kind === 'thermal') thermalMask();
     renderer.setRenderTarget(null);
   }
+  const lensU = vm.gun?.userData?.scope?.lens?.material?.uniforms;
+  if (lensU?.uStep) lensU.uStep.value = G.player?.zoomStep ? 1 : 0;
   const fwd = camera.getWorldDirection(tmpV.clone());
   audio.setListener(camera.position, fwd, new THREE.Vector3(0, 1, 0));
   composer.render(realDt);
@@ -1861,6 +2063,12 @@ function frameBody(now, realDt) {
 }
 
 $('deadGo').onclick = () => G.net?.send({ t: 'respawn' });
+$('endLobby').onclick = () => {
+  audio.play('ui_click', { ui: true });
+  G.net?.send({ t: 'toLobby' });
+  // quem nao e o host espera ele (ou todo mundo apertar)
+  if (G.snap?.host && G.snap.host !== G.myId) { $('endLobby').disabled = true; $('endNext').textContent = t('endWaitHost'); }
+};
 $('specNext').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.i++; G.spec && (G.spec.map = false); };
 $('specMap').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.map = !G.spec.map; };
 // toque em qualquer lugar da tela de morte tambem renasce
@@ -1991,6 +2199,14 @@ const BOOT_T = performance.now();
   }
   fx = new FX(scene);
   G.fx = fx;
+  if (SS) {
+    // tela dividida: sem abertura nem cartaz; entra direto na partida da pagina de cima
+    $('splash')?.remove(); $('menu').classList.remove('intro'); $('menu').hidden = true;
+    window.__ssWake = () => audio.init(); // a pagina de cima chama no primeiro clique/tecla (som precisa de gesto)
+    // o quadro so comeca depois de conectar: o 'welcome' (na fila) monta o mapa antes do primeiro desenho
+    startGame(new SplitNet(SS.slot), settings.name || 'Jogador ' + (SS.slot + 1)).catch(e => console.warn('tela dividida', e)).finally(frame);
+    return;
+  }
   startAttract();
   irisEl.style.setProperty('--ir', '0vmax'); irisEl.dataset.r = 0;
   frame();

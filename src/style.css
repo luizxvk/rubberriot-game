@@ -905,6 +905,7 @@ body.gated #menu .poster { visibility: hidden; }
 .ch-new { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--red); color: var(--paper); font-family: var(--display); font-weight: 400; font-size: 11px; line-height: 1.6; vertical-align: 2px; }
 /* selo "novo": adesivo torto no canto da ficha, nunca come o texto */
 .bill-item .ch-new { position: absolute; top: -9px; right: -6px; margin: 0; font-size: 11px; border: 2px solid var(--ink); transform: rotate(6deg); }
+.bill-item .ch-new.beta { background: var(--blue); color: var(--paper); } /* tela dividida (01/11): ainda em teste */
 
 /* tiro automatico ligado: sem botao de atirar */
 .tbtn[hidden] { display: none; }
@@ -2028,3 +2029,187 @@ body.pad .pad-press { transform: scale(.94) translate(2px, 2px) !important; tran
 .pf-acts { display: flex; justify-content: center; }
 .pf-acts .big { text-decoration: none; text-align: center; }
 @media (max-width: 520px) { .pf-head { grid-template-columns: auto minmax(0, 1fr); } .pf-rk { grid-column: 1 / -1; justify-self: start; display: flex; gap: 8px; align-items: center; max-width: none; } }
+
+/* ---------- chat da partida online (01/11) ---------- */
+#chat { display: none; position: fixed; z-index: 8; left: max(18px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px); width: min(400px, 36vw); pointer-events: none; font-family: var(--body); }
+body.chat-on.ingame #chat { display: flex; flex-direction: column; gap: 6px; }
+.chat-log { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.chat-log li { max-width: 100%; background: rgba(20,18,16,.74); color: var(--paper); padding: 3px 10px; border-radius: 10px; border: 2px solid rgba(236,233,225,.85); overflow-wrap: anywhere; animation: chatIn .18s ease-out; transition: opacity .6s ease; }
+.chat-log li b { font-family: var(--display); font-weight: 400; margin-right: 4px; color: #e9e2c9; }
+.chat-log li.mate b { color: #a9c3e2; } .chat-log li.foe b { color: #e9a99f; }
+.chat-log li.me { background: var(--paper); color: var(--ink); border-color: var(--ink); } .chat-log li.me b { color: var(--ink); }
+.chat-log li.old { opacity: 0; }
+.chat-log.open li.old { opacity: .9; }
+@keyframes chatIn { from { transform: translateX(-14px); opacity: 0; } }
+.chat-box { pointer-events: auto; display: flex; flex-direction: column; gap: 6px; }
+.chat-row { display: flex; gap: 6px; background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; padding: 4px; box-shadow: 4px 4px 0 var(--ink); }
+.chat-row input { flex: 1; min-width: 0; border: 0; background: transparent; font: 700 15px var(--body); color: var(--ink); padding: 6px 8px; outline: none; }
+.chat-row input::placeholder { color: #8a857c; }
+.chat-send { border: 3px solid var(--ink); border-radius: 10px; background: var(--red); color: var(--paper); font: 400 15px var(--display); padding: 4px 12px; cursor: pointer; }
+.chat-x { width: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.chat-x svg { width: 20px; height: 20px; fill: currentColor; }
+.chat-send:focus-visible, .chat-x:focus-visible, .chat-quick button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.chat-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-quick button { border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); color: var(--ink); font: 800 14px var(--body); padding: 6px 12px; box-shadow: 3px 3px 0 var(--ink); }
+.chat-quick button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+#touch .tbtn.chat svg { width: 22px; height: 22px; }
+body:not(.chat-on) #touch .tbtn.chat { display: none; }
+/* celular: em cima ficam pausa, HP, minimapa e os avisos do meio; o chat entra embaixo do minimapa, acima do
+   analogico (2 linhas fechado, todas aberto) */
+body.touchmode #chat { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 160px); left: max(12px, env(safe-area-inset-left)); width: min(380px, 46vw); }
+body.touchmode .chat-log { font-size: 12px; }
+body.touchmode .chat-log li:nth-last-child(n+3) { display: none; }
+body.touchmode .chat-log.open li:nth-last-child(n+3) { display: block; }
+body.touchmode .chat-box.touch { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .chat-log li { animation: none; transition: none; } }
+.end-lobby { display: block; width: auto; margin: 14px auto 0; padding: 10px 30px; font-size: 20px; }
+.end-lobby[hidden] { display: none; }
+
+/* controle conectado/desconectado (01/11): selo no canto de baixo, some sozinho */
+.pad-toast { position: fixed; z-index: 40; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 12px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--ink); font: 800 15px var(--body); pointer-events: none; }
+.pad-toast::before { content: ''; width: 26px; height: 26px; flex: none; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21.58 16.09l-1.09-7.66C20.21 6.46 18.52 5 16.53 5H7.47C5.48 5 3.79 6.46 3.51 8.43l-1.09 7.66C2.2 17.63 3.39 19 4.94 19c.68 0 1.32-.27 1.8-.75L9 16h6l2.25 2.25c.48.48 1.13.75 1.8.75 1.56 0 2.75-1.37 2.53-2.91z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21.58 16.09l-1.09-7.66C20.21 6.46 18.52 5 16.53 5H7.47C5.48 5 3.79 6.46 3.51 8.43l-1.09 7.66C2.2 17.63 3.39 19 4.94 19c.68 0 1.32-.27 1.8-.75L9 16h6l2.25 2.25c.48.48 1.13.75 1.8.75 1.56 0 2.75-1.37 2.53-2.91z'/%3E%3C/svg%3E") center / contain no-repeat; }
+.pad-toast.off { color: var(--red); }
+.pad-toast.show { animation: padIn .25s ease-out, padOut .35s ease-in 2.85s forwards; }
+@keyframes padIn { from { transform: translateY(16px); opacity: 0; } }
+@keyframes padOut { to { transform: translateY(16px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pad-toast.show { animation: none; } }
+.dev-ico { width: 14px; height: 14px; margin-left: 6px; vertical-align: -2px; fill: currentColor; opacity: .7; }
+body.touchmode .pad-toast { right: auto; left: 50%; translate: -50% 0; bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 70px); }
+/* tela de morte, quadro do meio: a arma de quem te pegou, de lado e colorida, com o nome do modelo embaixo */
+.kc-p img.kc-gun { object-fit: contain; padding: 22px 10px 30px; filter: none; }
+.kc-gname { position: absolute; left: 50%; bottom: 6px; translate: -50% 0; z-index: 1; max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--display); font-weight: 400; font-size: clamp(14px, 2.2vw, 22px); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; padding: 0 8px; }
+
+/* ---------- selos das sequencias de abate (01/11) ---------- */
+.streaks { display: flex; gap: 8px; margin: 0 0 8px 4px; }
+.streaks[hidden] { display: none; }
+.stk { position: relative; width: 46px; height: 46px; border-radius: 50%; background: var(--paper); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); display: grid; place-items: center; color: #b9b3a8; }
+.stk-ico { width: 34px; height: 34px; opacity: .45; filter: grayscale(1); }
+.stk-ring { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); transform: rotate(-90deg); fill: none; pointer-events: none; }
+.stk-ring circle { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray .3s ease; }
+.stk-n { position: absolute; right: -6px; bottom: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--ink); color: var(--paper); font: 400 11px/18px var(--display); text-align: center; }
+.stk.got { color: var(--c, var(--red)); }
+.stk.got .stk-ico { opacity: 1; filter: none; }
+.stk.got .stk-ring circle { stroke: var(--c, var(--red)); }
+.stk[data-s="uav"] { --c: #2f5b8a; } .stk[data-s="anvil"] { --c: #6e6a63; } .stk[data-s="blimp"] { --c: #a83a2c; } .stk[data-s="nuke"] { --c: #e0a33a; }
+.stk.next { animation: stkPulse .9s ease-in-out infinite; }
+.stk.next::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; box-shadow: 0 0 0 0 var(--c); animation: stkGlow .9s ease-out infinite; }
+.stk.wait { opacity: .6; }
+.stk-key { position: absolute; left: 50%; bottom: -14px; translate: -50% 0; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 6px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); font: 400 12px/16px var(--display); text-align: center; }
+@keyframes stkPulse { 50% { transform: scale(1.12); } }
+@keyframes stkGlow { to { box-shadow: 0 0 0 12px rgba(0,0,0,0); } from { box-shadow: 0 0 0 0 var(--c); } }
+body.touchmode .streaks { gap: 6px; }
+body.touchmode .stk { width: 40px; height: 40px; }
+body.touchmode .stk-ico { width: 28px; height: 28px; }
+@media (prefers-reduced-motion: reduce) { .stk.next, .stk.next::after { animation: none; } }
+/* celular: o botao da estrela mostra o selo da proxima sequencia (apagado + quantos faltam; pronto = cor e pulso) */
+#touch .tbtn.streak { color: #9c968b; overflow: visible; }
+#touch .tbtn.streak svg { width: 34px; height: 34px; opacity: .5; filter: grayscale(1); }
+#touch .tbtn.streak .stk-n { right: -8px; bottom: -6px; }
+#touch .tbtn.streak.stk-ready { color: var(--c, var(--red)); animation: stkPulse .9s ease-in-out infinite; }
+#touch .tbtn.streak.stk-ready svg { opacity: 1; filter: none; }
+#touch .tbtn.streak[data-s="uav"] { --c: #2f5b8a; } #touch .tbtn.streak[data-s="anvil"] { --c: #6e6a63; } #touch .tbtn.streak[data-s="blimp"] { --c: #a83a2c; } #touch .tbtn.streak[data-s="nuke"] { --c: #e0a33a; }
+@media (prefers-reduced-motion: reduce) { #touch .tbtn.streak.stk-ready { animation: none; } }
+/* camera de apresentacao: so a contagem fica na tela (o resto do HUD volta no pouso) */
+body.intro-cam #hud > *:not(#countIn):not(.hud-top), body.intro-cam #touch { opacity: 0; transition: opacity .25s; }
+body.intro-cam #countIn { opacity: 1; }
+/* na camera de apresentacao a contagem desce e encolhe: no meio ela tampava o time inteiro */
+body.intro-cam #countIn { top: auto; bottom: max(28px, env(safe-area-inset-bottom)); transform: translateX(-50%) scale(.62); transform-origin: 50% 100%; }
+
+/* ---------- lobby: elenco modular (01/11, pedido dele "o card fica amassado") ----------
+   O card e uma coluna: titulo e Trocar time fixos, a lista rola sozinha, o recado embaixo. Cada linha e uma grade:
+   nome (corta com reticencias) | pontilhado | selo PRONTO | nivel. O selo tem lugar proprio (antes ficava por cima do nivel). */
+#lobby .lb-bill { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+#lobby .lb-bill h3 { flex: none; }
+#lobby .lb-bill .lb-swap { flex: none; align-self: center; }
+#lobby #lbPlayers { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 4px -6px 0 0; padding-right: 6px; scrollbar-width: thin; scrollbar-color: var(--ink) transparent; }
+#lobby .lb-status { flex: none; margin: 6px 0 0; }
+#lobby #lbPlayers li { display: grid; grid-template-columns: minmax(0, auto) minmax(10px, 1fr) auto 4.2em; align-items: center; column-gap: 8px; padding: 5px 8px 5px 14px; }
+#lobby #lbPlayers li::before { top: 7px; bottom: 7px; }
+#lobby #lbPlayers .nm { max-width: none; min-width: 0; }
+#lobby #lbPlayers .dots { transform: none; align-self: center; }
+#lobby #lbPlayers .lv { text-align: right; white-space: nowrap; }
+#lobby #lbPlayers .stamp { position: static; display: inline-block; width: auto; right: auto; top: auto; transform: rotate(-6deg); font-size: 11px; line-height: 1.3; padding: 0 5px; border-width: 2px; visibility: hidden; }
+#lobby #lbPlayers li.ok .stamp { visibility: visible; opacity: .85; }
+#lobby #lbPlayers li + li { margin-top: 2px; }
+/* deitado (pouca altura): o Arsenal encolhe (foto menor) pra sobrar altura pro elenco, que nunca fica abaixo de 3 linhas */
+@media (max-height: 520px) and (orientation: landscape) {
+  #lobby { grid-template-rows: auto auto minmax(110px, 1fr) auto; }
+  #lobby .lb-pick { padding: 6px 10px 8px; }
+  #lobby .lb-pick .lb-pick-head { margin-bottom: 4px; }
+  #lobby .lb-pick .pk-list img { max-height: 30px; }
+  #lobby .lb-pick .pk-list button { gap: 0; padding: 3px; }
+  #lobby .lb-bill { padding: 8px 12px; }
+  #lobby .lb-bill h3 { font-size: 16px; margin-bottom: 2px; padding-bottom: 3px; }
+  #lobby .lb-bill .lb-swap { margin: 2px 0; }
+  #lobby #lbPlayers li { padding: 3px 6px 3px 12px; font-size: 13.5px; }
+  #lobby .lb-actions .big { padding: 8px 14px; }
+}
+/* selo PRONTO do elenco: a regra global .stamp (carimbo grande do HUD) vazava contorno e sombra e embaralhava a palavra */
+#lobby #lbPlayers .stamp { -webkit-text-stroke: 0; text-shadow: none; paint-order: normal; color: var(--red); background: rgba(236,233,225,.85); mix-blend-mode: normal; letter-spacing: .02em; }
+/* Partida (host): titulo fixo e a lista de opcoes rola dentro do card (a ultima linha cortava) */
+#lobby .lb-cfg:not([hidden]) { display: flex; flex-direction: column; }
+#lobby .lb-cfg .lb-slate { flex: none; }
+#lobby #lbCfgList { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--ink) transparent; }
+@media (max-height: 520px) and (orientation: landscape) {
+  #lobby .lb-actions .big { padding: 6px 12px; font-size: 17px; }
+  #lobby .lb-status { font-size: 11.5px; margin-top: 4px; }
+}
+
+/* campo de treino (01/11): botao no Arsenal, etiqueta na partida e a lista de armas na pausa */
+.card-head .gs-range { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); font-weight: 800; font-size: 15px; white-space: nowrap; cursor: pointer; }
+.card-head .gs-range svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
+.card-head .gs-range:hover { background: var(--ink); color: var(--paper); }
+.card-head .gs-range:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.card-head .gs-range[hidden] { display: none; }
+.card-head .gs-range + .gs-done { margin-left: 8px; }
+.range-tag { position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 6; display: grid; justify-items: center; gap: 1px; max-width: min(92vw, 360px); padding: 6px 14px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); text-align: center; pointer-events: none; }
+.range-tag b { font-size: 15px; } .range-tag span, .range-tag small { font-size: 12px; opacity: 0.85; }
+body:not(.ingame) .range-tag, body.is-dead .range-tag { display: none; }
+.rg-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rg-tabs button { padding: 4px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper); font-weight: 800; font-size: 13px; }
+.rg-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.rg-list { max-height: 34vh; overflow-y: auto; padding-right: 2px; }
+.rg-list button { padding: 8px 4px; }
+@media (max-width: 720px), (max-height: 500px) {
+  .card-head .gs-range { font-size: 12px; padding: 5px 8px; } .card-head .gs-range span { display: none; }
+  .range-tag { top: 64px; padding: 4px 10px; } .range-tag b { font-size: 13px; }
+  .rg-list { max-height: 26vh; }
+}
+
+/* dica leve da partida (recarregar / escalar): abaixo da mira, sem bloquear toque */
+.ctx-hint { position: fixed; left: 50%; top: calc(50% + 82px); transform: translateX(-50%); z-index: 5; display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 5px; border-radius: 999px; background: rgba(250, 248, 242, 0.82); color: var(--ink); font-weight: 800; font-size: 14px; white-space: nowrap; pointer-events: none; animation: ctxIn 0.18s ease-out; }
+.ctx-hint[hidden] { display: none; }
+.ctx-hint kbd { min-width: 22px; padding: 1px 7px; border: 2px solid var(--ink); border-radius: 7px; background: var(--paper); font: inherit; font-size: 13px; text-align: center; }
+.ctx-hint.warn { background: rgba(168, 58, 44, 0.9); color: var(--paper); }
+.ctx-hint.warn kbd { color: var(--ink); }
+.ctx-hint:not(:has(kbd)) { padding-left: 11px; }
+@keyframes ctxIn { from { opacity: 0; transform: translate(-50%, 4px); } }
+@media (max-height: 500px) { .ctx-hint { top: calc(50% + 60px); font-size: 12px; } .ctx-hint kbd { font-size: 11px; } }
+body.is-dead .ctx-hint, body.replay .ctx-hint, body.intro-cam .ctx-hint { display: none; }
+
+/* comandos remapeaveis (01/11) */
+.keys .bind { min-width: 74px; font-family: var(--display); font-size: 15px; border: 2px solid var(--ink); border-radius: 8px; padding: 2px 10px; background: var(--paper-2); cursor: pointer; text-align: center; }
+.keys .bind:hover, .keys .bind:focus-visible { background: var(--ink); color: var(--paper); outline: none; }
+.keys .bind.wait { background: var(--red); color: var(--paper); animation: bindPulse 0.9s ease-in-out infinite; }
+@keyframes bindPulse { 50% { opacity: 0.65; } }
+.keys dt.fixed { font-family: var(--display); font-size: 15px; border: 2px dashed var(--ink); border-radius: 8px; padding: 1px 10px; justify-self: start; opacity: 0.75; }
+.keys .bind-hint, .keys .bind-foot { grid-column: 1 / -1; margin: 0 0 4px; font-size: 14px; opacity: 0.85; }
+.keys .bind-foot { margin-top: 8px; }
+#scr-controls .keys { max-height: min(62vh, 560px); overflow-y: auto; padding-right: 4px; }
+.keys dt:has(.bind) { border: 0; padding: 0; background: none; }
+/* tela de morte: icone da sequencia no quadro do meio (01/11) */
+.kc-p .kc-ico { width: 46%; max-width: 120px; aspect-ratio: 1; display: block; margin: 8% auto 0; color: var(--ink); }
+
+/* HUD simples (01/11): no toque os extras ficam no botao ⋯; no PC some a fileira de sequencias e as etiquetas de granada */
+.tbtn.more { display: none; }
+body.hud-simple .tbtn.more { display: grid; }
+body.hud-simple:not(.hud-more) .tbtn.frag, body.hud-simple:not(.hud-more) .tbtn.flash, body.hud-simple:not(.hud-more) .tbtn.streak,
+body.hud-simple:not(.hud-more) .tbtn.melee, body.hud-simple:not(.hud-more) .tbtn.inspect, body.hud-simple:not(.hud-more) .tbtn.field,
+body.hud-simple:not(.hud-more) .tbtn.ping { display: none !important; }
+body.hud-simple .tbtn.more.lit { background: var(--ink); color: var(--paper); }
+body.hud-simple:not(.touchmode) #streaks { display: none; }
+/* pergunta da HUD no tutorial */
+.tut .hud-ask { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.tut .hud-ask button { flex: 1 1 120px; padding: 8px 10px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); font-family: var(--display); font-size: 16px; cursor: pointer; }
+.tut .hud-ask button:hover, .tut .hud-ask button:focus-visible { background: var(--ink); color: var(--paper); outline: none; }
+@media (max-height: 500px) { .tut .hud-ask { gap: 6px; margin-top: 4px; } .tut .hud-ask button { padding: 3px 8px; font-size: 13px; border-width: 2px; flex-basis: 90px; } }

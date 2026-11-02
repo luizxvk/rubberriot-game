@@ -110,7 +110,12 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
 // peca na posicao i da lista da categoria abre no nivel da arma 1 + i*1.5 (a primeira ja vem aberta)
 export function partReq(i) { return i <= 0 ? 1 : Math.min(MAX_WPN_LEVEL, 1 + Math.ceil(i * 1.5)); }
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
+// modelo que so abre num nivel de JOGADOR (01/11, pedido dele): Liquidificador no 40
+export const BODY_MIN_LVL = { shotgun_3: 40 };
 export function partUnlocked(wpn, i, id) {
+  const own = id && LOCKED_BY[wpn + ':' + id]; // peca com desafio proprio nesta arma (akimbo da Espirro/Cuspideira)
+  if (own) return !!data.unlockAll || unlockDone(own.id);
+  if (id && BODY_MIN_LVL[id]) return !!data.unlockAll || unlockLevel() >= BODY_MIN_LVL[id];
   if (data.unlockAll || gifted(id) || wasUnlocked(id)) return true; // presente do treino / desafio antigo ja fechado
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)

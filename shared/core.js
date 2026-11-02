@@ -1,16 +1,24 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
-import { getMap, MODE_MAP, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena } from './map.js';
+import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods } from './weapons.js';
+import { getMap, MODE_MAP, ESCORT_MAPS, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena } from './map.js';
 import { navPath, floorAt, standable } from './nav.js';
 import { cleanLook } from './looks.js';
 import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
-import { escInit, escTick, escSpawn, escGoal, escSnap, escPos } from './escort.js';
+import { escInit, escTick, escSpawn, escGoal, escSnap, escPos, escTimeout, trainBox } from './escort.js';
 import { EVENTS, EV } from './events.js';
 import { brInit, brSpawn, brSpawnPoint, brArmor, brKill, brTick, brSnap, brGoal, lootList, brDown, brNear } from './br.js';
 
-const BOT_NAMES = ['Botao', 'Salsicha', 'Rolha', 'Bigorna', 'Carvao', 'Pipoca', 'Tamanco', 'Fuligem',
-  'Manivela', 'Gaita', 'Biscoito', 'Trombone', 'Pavio', 'Sabugo', 'Mola', 'Tinteiro'];
+// nomes de bot com cara de username de verdade (01/11, pedido dele); a tag "bot" continua no elenco
+const BOT_NAMES = ['salsicha_br', 'Rolha77', 'xBigornax', 'pipoca.exe', 'TamancoTTV', 'fuligem_zz', 'Manivela09', 'gaitinha_',
+  'BiscoitoNoob', 'tromboneGG', 'pavio.curto', 'SabugoPro', 'mola_mestre', 'Tinteiro_x', 'botao2008', 'carvao_quente',
+  'NinjaDoCanudo', 'zeca.mira', 'lulu_headshot', 'TioPanqueca', 'ratinho_fps', 'kbum_kbum', 'DonaBorracha', 'mira_torta'];
+// chat: tira controle/quebra de linha, corta em 80 e troca palavrao (pt/en, com e sem acento/numero) por ***
+const CHAT_BAD = /\b(p[o0]rr[a4]|c[a4]r[a4]lh[o0]|caralh\w*|merd[a4]|bu[cs]+et\w*|c[uú]z[a4][o0]|f[o0]d[a4]\w*|fdp|vtnc|viad[o0]|arromb\w*|put[a4]\w*|piranh\w*|desgra[cç]\w*|n[i1]gg\w*|f[a4]gg?[o0]t\w*|fuck\w*|sh[i1]t\w*|b[i1]tch\w*|cunt\w*|retard\w*)\b/gi;
+export function cleanChat(s) {
+  return String(s || '').replace(/[\u0000-\u001f\u007f​-‏‪-‮]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+    .replace(CHAT_BAD, w => w[0] + '*'.repeat(w.length - 1));
+}
 const MATCH_TIME = 480;
 const RESPAWN = 2.6;
 
@@ -50,7 +58,8 @@ export function nadeStep(M, n, dt) {
 }
 
 export class Core {
-  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null }) {
+  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false }) {
+    this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
     this.mut = !ranked && EVENTS[mut] ? mut : null; // evento de fim de semana (regra maluca); rankeada nunca
     this.ranked = ranked; // rankeada (31/10): sala publica so com os modos competitivos; vale pontos de rank
     this.autoNext = autoNext; // jogo rapido: acabou a partida, a proxima ja comeca (sem lobby)
@@ -89,6 +98,8 @@ export class Core {
     this.limit = this.limitPick && LIMIT_MODES.includes(this.mode) ? this.limitPick : R.limit;
     this.time = this.timePick && TIME_MODES.includes(this.mode) ? this.timePick : R.time;
     this.over = false;
+    for (const p of this.players.values()) p.spawnedIn = false; // 1o nascimento da partida: todo mundo na base do time
+    this.firstN = {};
     // infectado: todo mundo comeca sobrevivente; o primeiro infectado sai em INFECT.firstIn s
     this.infT = INFECT.firstIn; this.infStarted = false; this.lastStand = null; this.surviveT = INFECT.surviveTick;
     if (this.mode === 'infect') for (const p of this.players.values()) p.team = 'blue';
@@ -105,7 +116,7 @@ export class Core {
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
     if (this.mode === 'br') brInit(this);
     this.esc = null; if (this.mode === 'escort') escInit(this);
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; fieldReset(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; fieldReset(this);
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {};
       this.spawn(p);
@@ -122,6 +133,7 @@ export class Core {
   // ---------- plantar a bomba: rodadas ----------
   newRound() {
     this.roundN++;
+    for (const p of this.players.values()) p.spawnedIn = false; this.firstN = {}; // cada round o time nasce junto na base
     // intervalo: os times trocam de lado (o placar vai junto com cada time)
     if (this.roundN === BOMB.swapAfter + 1) {
       for (const p of this.players.values()) p.team = p.team === 'red' ? 'blue' : 'red';
@@ -133,7 +145,7 @@ export class Core {
     const atk = [...this.players.values()].filter(p => p.team === 'red');
     const carrier = atk.length ? atk[Math.floor(Math.random() * atk.length)] : null;
     this.bomb = { state: carrier ? 'carried' : 'dropped', carrier: carrier ? carrier.id : null, pos: carrier ? [...carrier.pos] : [0, 0, 0], site: null, t: 0, prog: 0, actor: null, goal: Math.random() < 0.5 ? 'A' : 'B' };
-    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; fieldReset(this);
+    this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; fieldReset(this);
     if (this.roundN > 1) this.freezeT = COUNT_IN;
     this.event({ k: 'round', n: this.roundN, carrier: this.bomb.carrier });
   }
@@ -210,9 +222,12 @@ export class Core {
     // infectado: antes do primeiro infectado todo mundo e sobrevivente; depois, quem chega entra infectado
     if (this.mode === 'infect') return this.infStarted ? 'red' : 'blue';
     // bomba: gente vai pro lado com menos gente (bots nao contam: eles trocam de lado pra completar)
-    if (this.mode === 'bomb' && !bot) { const n = this.teamHumans(); return n.red <= n.blue ? 'red' : 'blue'; }
     let r = 0, b = 0;
     for (const p of this.players.values()) { if (p.team === 'red') r++; else if (p.team === 'blue') b++; }
+    // gente entra no lado com menos GENTE (empate: o com menos jogadores no total) e toma a vaga de um bot
+    // desse lado (balanceBots); troca de lado so no lobby (pedido dele 01/11)
+    if (!bot && this.coop) return 'red';
+    if (!bot) { const n = this.teamHumans(); if (n.red !== n.blue) return n.red < n.blue ? 'red' : 'blue'; }
     return r <= b ? 'red' : 'blue';
   }
 
@@ -271,15 +286,22 @@ export class Core {
   // configuracao da sala (host no lobby). Refaz modo/mapa/times e a partida do zero; os humanos ficam.
   configure(m) {
     const mode = MODES[m.mode] ? m.mode : this.modeId();
+    const prevMode = this.modeId(), prevRaw = this.mapRaw ?? this.mapPick;
     this.duo = mode === 'duo';
     this.bounce = mode === 'bounce';
     this.mode = this.duo || this.bounce ? 'br' : mode;
     this.cfg = MODES[mode];
     const map = typeof m.map === 'string' && MAP_IDS.includes(m.map) && m.map !== 'ilha' ? m.map : 'auto';
     // escolta so roda na Ladeira do Bonde, e a Ladeira so serve pra escolta (o mapa precisa do trilho)
-    const map2 = this.mode === 'escort' ? 'bonde' : map === 'bonde' ? 'auto' : map;
-    this.mapPick = this.mode === 'br' ? 'ilha' : map2;
-    this.M = getMap(this.mode === 'br' ? 'ilha' : map2 !== 'auto' ? map2 : MODE_MAP[this.mode]);
+    // escolta: Ladeira ou Vale do Apito (auto sorteia); fora da escolta os mapas de trilho nao entram
+    const map2 = this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : ESCORT_MAPS.includes(map) ? 'auto' : map;
+    // mesmo modo e mesma escolha de mapa (so trocou evento, bots, tempo...): o mapa fica (01/11: trocar o evento
+    // sorteava outro mapa da escolta no 'auto')
+    if (!(mode === prevMode && map === prevRaw && this.M)) {
+      this.mapPick = this.mode === 'br' ? 'ilha' : map2;
+      this.M = getMap(this.mode === 'br' ? 'ilha' : map2 !== 'auto' ? map2 : MODE_MAP[this.mode]);
+    }
+    this.mapRaw = map;
     if (Number.isFinite(m.bots)) this.wantBots = Math.max(0, Math.min(MAX_PLAYERS - 1, m.bots | 0));
     if ([0.7, 1, 1.35].includes(m.difficulty)) { this.difficulty = m.difficulty; this.skill = botSkill(m.difficulty); }
     this.limitPick = Number.isFinite(m.limit) ? Math.max(0, Math.min(500, m.limit | 0)) : 0;
@@ -292,7 +314,7 @@ export class Core {
     this.reset();
     this.balanceBots();
     this.pairDuo();
-    for (const p of this.players.values()) if (!p.bot) p.lobbyReady = false; // mudou a partida: todo mundo confirma de novo
+    // host mudou a partida: quem ja estava pronto continua pronto (pedido dele 01/11); so cai quem mexe na propria classe
     this.lobbyT = 0;
     this.event({ k: 'cfg' });
   }
@@ -308,7 +330,7 @@ export class Core {
     const ilha = this.M.id === 'ilha';
     const modos = (this.ranked ? RANKED_MODES : QUICK_MODES).filter(m => m !== atual && !(ilha && (m === 'br' || m === 'bounce')));
     const mode = modos[Math.floor(Math.random() * modos.length)];
-    const mapas = MAP_IDS.filter(id => id !== 'ilha' && id !== 'bonde' && id !== this.M.id); // a Ladeira so serve a escolta (configure forca)
+    const mapas = MAP_IDS.filter(id => id !== 'ilha' && !ESCORT_MAPS.includes(id) && id !== this.M.id); // a Ladeira so serve a escolta (configure forca)
     this.configure({ mode, map: mode === 'br' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
   }
 
@@ -380,12 +402,26 @@ export class Core {
   balanceBots() {
     const humans = this.humans();
     const bots = [...this.players.values()].filter(p => p.bot);
-    const want = Math.max(0, Math.min(this.wantBots - Math.max(0, humans - 1), MAX_PLAYERS - humans));
+    // battle royale: campo fixo de BR.field (bots completam; sem escolha de bots)
+    const want = this.mode === 'br' ? Math.max(0, BR.field - humans) : Math.max(0, Math.min(this.wantBots - Math.max(0, humans - 1), MAX_PLAYERS - humans));
     while (bots.length < want) {
       const name = BOT_NAMES[this.botSeq++ % BOT_NAMES.length];
       bots.push(this.addPlayer('bot' + this.botSeq, name, true));
     }
-    while (bots.length > want) this.players.delete(bots.pop().id);
+    // sobrou bot: sai um do lado com mais jogadores (quem acabou de entrar ocupa a vaga dele); de preferencia um morto
+    while (bots.length > want) {
+      let out = bots[bots.length - 1];
+      if (this.cfg.teams && !this.duo && this.mode !== 'infect') {
+        const cnt = { red: 0, blue: 0 };
+        for (const p of this.players.values()) if (p.team in cnt) cnt[p.team]++;
+        const big = cnt.red >= cnt.blue ? 'red' : 'blue';
+        const side = bots.filter(o => o.team === big);
+        if (side.length) out = side.find(o => !o.alive) || side[side.length - 1];
+      }
+      bots.splice(bots.indexOf(out), 1);
+      this.dropFlag?.(out);
+      this.players.delete(out.id);
+    }
     this.spreadBots();
     this.pairDuo();
   }
@@ -437,10 +473,21 @@ export class Core {
     if (this.esc && p.team) list = [0, 1, 2, 3, 4, 5].map(() => escSpawn(this, p.team)); // escolta: atras/na frente do bonde
     const enemies = [...this.players.values()].filter(o => o !== p && o.alive && this.enemies(p, o));
     const mates = [...this.players.values()].filter(o => o !== p && o.alive && !this.enemies(p, o));
-    let pick = this.bestSpawn(list, enemies, mates);
+    // comeco da partida: o time nasce junto na base (o "ponto neutro" espalhava metade pelo mapa, pedido dele 01/11)
+    const first = !p.spawnedIn; p.spawnedIn = true;
+    let pick = this.bestSpawn(list, first ? [] : enemies, first ? [] : mates);
     // base do time "quente" (inimigo em cima): nasce num ponto neutro (escolta nao: o ponto neutro caia colado no bonde)
-    if (list !== S.ffa && !this.esc && (!pick || pick.sc < 6)) { const alt = this.bestSpawn(S.ffa, enemies, mates); if (alt && (!pick || alt.sc > pick.sc)) pick = alt; }
-    const s = this.mode === 'br' ? brSpawnPoint(this, p) : pick ? pick.s : list[0];
+    if (list !== S.ffa && !this.esc && !first && (!pick || pick.sc < 6)) { const alt = this.bestSpawn(S.ffa, enemies, mates); if (alt && (!pick || alt.sc > pick.sc)) pick = alt; }
+    let s = this.mode === 'br' ? brSpawnPoint(this, p) : pick ? pick.s : list[0];
+    // 1o nascimento num modo de time: todo mundo em roda em volta do ponto mais central da base (juntos, nao espalhados)
+    if (first && this.mode !== 'br' && list !== S.ffa && !this.esc && list.length) {
+      const cx = list.reduce((a, q) => a + q[0], 0) / list.length, cz = list.reduce((a, q) => a + q[1], 0) / list.length;
+      const base = list.reduce((b, q) => (Math.hypot(q[0] - cx, q[1] - cz) < Math.hypot(b[0] - cx, b[1] - cz) ? q : b), list[0]);
+      const k = (this.firstN ||= {})[p.team] = ((this.firstN[p.team] ?? -1) + 1);
+      const r = k ? 2.2 + Math.floor((k - 1) / 6) * 2 : 0, a = (k % 6) * Math.PI / 3 + Math.floor(k / 6) * 0.5;
+      const q = [base[0] + Math.cos(a) * r, base[1] + Math.sin(a) * r];
+      s = standable(this.M, q[0], q[1]) ? q : base;
+    }
     let x = s[0], z = s[1];
     const jx = x + rnd(-0.8, 0.8), jz = z + rnd(-0.8, 0.8);
     if (standable(this.M, jx, jz) && Math.abs(floorAt(this.M, jx, jz) - floorAt(this.M, x, z)) < 0.1) { x = jx; z = jz; }
@@ -451,9 +498,11 @@ export class Core {
     p.yaw = this.openYaw(x, y, z);
     if (this.esc) { const q = escPos(this); p.yaw = Math.atan2(-(q[0] - x), -(q[2] - z)); } // escolta: nasce olhando pro bonde
     // bate-volta: todo mundo entra caindo do ceu (paraquedas); `drop` abre a janela do dano de queda
-    if (this.bounce) { p.pos[1] = y + BR.bounce.dropH; p.drop = 30; p.chute = false; p.air = true; }
+    if (this.bounce) { p.pos[1] = y + BR.bounce.dropH; p.drop = 30; p.chute = false; p.air = true; p.dropAt = [x, z]; } // dropAt: o ponto espalhado sorteado (bot cai ali)
     p.hp = p.bot ? BOT_HP : 100;
-    p.alive = true; p.shieldT = 0; // a barra do equipamento continua de onde estava (enche por pontos)
+    p.alive = true; p.shieldT = 0; p.stimT = 0;
+    if (this.mode !== 'br' && p.field === 'vest') p.armor = FIELD.vest.armor; else if (this.mode !== 'br') p.armor = 0; // colete de campo: nasce vestido
+    // a barra do equipamento continua de onde estava (enche por pontos)
     const xn = hasSkill(p, 'bolso') ? SKILLS.bolso.nades : 0; // bolso fundo
     p.nades = { frag: 1 + xn, flash: 1 + xn };
     p.owned = new Set(SPAWN_KIT);
@@ -498,6 +547,15 @@ export class Core {
     const p = this.players.get(id);
     if (!p || !m || typeof m !== 'object') return;
     switch (m.t) {
+      // tela de fim: voltar pro lobby (host leva a sala; os outros so marcam, e todo mundo marcado tambem leva)
+      case 'toLobby': {
+        if (!this.over || !this.useLobby || p.bot) break;
+        p.endBack = true;
+        const hs = [...this.players.values()].filter(o => !o.bot);
+        if (id === this.hostId() || hs.every(o => o.endBack)) this.backLobby = true;
+        this.event({ k: 'endBack', id, host: id === this.hostId() });
+        break;
+      }
       case 'ready': {
         p.lobbyReady = !!m.v;
         this.lobbyT = 0;
@@ -551,12 +609,20 @@ export class Core {
         p.los = cleanLoadouts(m.los);
         p.field = FIELD[m.field] && (p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null; // equipamento de campo
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
+        // mexeu na classe/armas no lobby depois de dar pronto: volta pra nao pronto (tem que confirmar de novo)
+        const sig = JSON.stringify([p.primary, p.los, p.skills, p.field, p.tracer]);
+        if (this.phase === 'lobby' && p.loSig && p.loSig !== sig && p.lobbyReady) { p.lobbyReady = false; this.lobbyT = 0; }
+        p.loSig = sig;
         this.event({ k: 'lo', id, los: p.los, tracer: p.tracer });
         break;
       }
+      // com o que a pessoa esta jogando (icone no placar): pc, celular ou controle
+      case 'dev': { p.dev = ['pc', 'mob', 'pad'].includes(m.v) ? m.v : null; break; }
       case 'look': {
         // visual do boneco: so o que existe no catalogo; repassa pra sala
-        p.look = cleanLook(m.look);
+        const nl = cleanLook(m.look);
+        if (this.phase === 'lobby' && p.look && p.lobbyReady && JSON.stringify(nl) !== JSON.stringify(p.look)) { p.lobbyReady = false; this.lobbyT = 0; } // trocou o visual: confirma de novo
+        p.look = nl;
         this.event({ k: 'look', id, look: p.look });
         break;
       }
@@ -573,6 +639,7 @@ export class Core {
         if (!Array.isArray(m.pos) || m.pos.length !== 3 || !m.pos.every(Number.isFinite)) return;
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
         p.pos = clampArena(this.M, m.pos); p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
+        p.lean = this.mode === 'bomb' && Number.isFinite(m.ln) ? Math.max(-1, Math.min(1, m.ln)) : 0; // inclinar (so plantar a bomba)
         if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn && (this.mode !== 'infect' || p.owned.has(m.wpn))) { p.lastWpn = p.wpn; p.wpn = m.wpn; }
         break;
       case 'swing':
@@ -621,6 +688,18 @@ export class Core {
         break;
       }
       // marcacao (ping) do battle royale: so o time ve (dupla = o parceiro; sozinho = so voce)
+      // chat da sala: texto curto, 1 por segundo (3 seguidas e espera 4 s), palavrao mascarado. Bot nao fala.
+      case 'chat': {
+        if (p.bot) break;
+        const now = Date.now();
+        p.chatT = (p.chatT || []).filter(x => now - x < 4000);
+        if (p.chatT.length >= 3 || now - (p.chatT[p.chatT.length - 1] || 0) < 900) break;
+        const text = cleanChat(m.text);
+        if (!text) break;
+        p.chatT.push(now);
+        this.event({ k: 'chat', id, name: p.name, team: p.team || null, text });
+        break;
+      }
       case 'ping': {
         if ((this.mode !== 'br' && !this.pingAny) || !p.alive) break; // pingAny: treino (passo de marcar)
         const now = this.clock || 0;
@@ -641,9 +720,6 @@ export class Core {
         break;
       case 'streak':
         if (p.alive) this.useStreak(p, m.kind);
-        break;
-      case 'chat':
-        this.event({ k: 'msg', text: `${p.name}: ${String(m.text).slice(0, 80)}` });
         break;
     }
   }
@@ -669,6 +745,11 @@ export class Core {
       if (am !== 'ap' || Math.min(wallThickness(this.M, eye, chest), wallThickness(this.M, eye, head)) > A.pierce) return 0;
       wallK = A.wallK;
     }
+    // Canhao de Carga (kit da Luneta): tiro cheio vale 999 se tem o kit e esperou a carga (2,8 s desde o ultimo)
+    if (m.mega && m.wpn === 'sniper' && p.los?.sniper?.conv === 'charge' && p.los?.sniper?.body === 'sniper_0') {
+      const now = this.clock || 0;
+      if (now - (p.megaAt ?? -9) >= 2.8) { p.megaAt = now; this.event({ k: 'boom', at: [v.pos[0], v.pos[1] + 1, v.pos[2]], mega: 1 }); return 999; }
+    }
     const tr = bodyTrait(this.bodyOf(p, m.wpn));
     const maxShot = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (this.bpOf(p, m.wpn).dmg || 1) * (A.dmg || 1) * wallK * 1.25;
     const dmg = Math.min(m.dmg, maxShot);
@@ -679,7 +760,7 @@ export class Core {
 
   event(ev) {
     // tiro de gente (nao do dirigivel) vira barulho: bot perto ouve e vai ver (some em 3 s)
-    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
+    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && this.players.get(ev.id).los?.[ev.wpn]?.muzzle !== 'silencer') (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
     this.send(null, { t: 'ev', ...ev });
   }
 
@@ -693,8 +774,11 @@ export class Core {
     const E = EV(this.mut);
     if (head) dmg = E?.oneHead && wpn !== 'melee' ? 999 : dmg * (E?.headMul || 1.6); // evento: cabecao doi mais; duelo: cuca derruba
     if (BLAST.includes(wpn) && hasSkill(v, 'couro')) dmg *= SKILLS.couro.blast; // couro grosso
-    if (this.mode === 'br' && wpn !== 'iris') dmg = brArmor(v, dmg); // colete (a iris passa direto)
+    // colete (BR ou o equipamento de campo): absorve ate quebrar; a iris passa direto
+    if ((this.mode === 'br' || v.armor > 0) && wpn !== 'iris') { const had = v.armor > 0; dmg = brArmor(v, dmg); if (had && !(v.armor > 0) && this.mode !== 'br') this.event({ k: 'vestBreak', id: v.id }); }
     v.hurtAt = this.clock || 0;
+    // bot que leva tiro (01/11): treme a mira um instante e vira pra onde veio o tiro (previsivel: quem atira primeiro leva vantagem)
+    if (v.bot && v.ai && a && a !== v) { v.ai.hurtT = 0.4; if (!v.ai.target) { v.ai.lastSeen = [...a.pos]; v.ai.lastSeenT = 3; v.ai.holdT = 0; } }
     v.hp -= dmg;
     // quem ajudou: dano acumulado por atacante, com hora (assistencia vale por 6 s)
     if (a && a !== v) { v.dmgBy = v.dmgBy || {}; const r = v.dmgBy[a.id] || (v.dmgBy[a.id] = { dmg: 0, t: 0 }); r.dmg += dmg; r.t = this.clock || 0; }
@@ -704,7 +788,7 @@ export class Core {
   }
 
   kill(v, a, wpn, head) {
-    v.alive = false; v.hp = 0; v.down = 0; v.reviveT = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : RESPAWN; v.deaths++; v.streak = 0;
+    v.alive = false; v.hp = 0; v.down = 0; v.reviveT = 0; v.respawnT = this.mode === 'infect' && this.infStarted ? INFECT.infectedRespawn : this.mode === 'ctf' ? 5 : RESPAWN; // bandeira: 5 s (gente e bot, pedido dele 01/11) v.deaths++; v.streak = 0;
     this.dropFlag(v);
     const suicide = !a || a === v;
     if (!suicide) {
@@ -727,6 +811,9 @@ export class Core {
       }
       if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && wpn !== 'nuke') for (const [kind, s] of Object.entries(STREAKS)) {
         if (a.streak === s.kills - (hasSkill(a, 'pavio') && s.kills > 3 ? SKILLS.pavio.streak : 0)) {
+          // bot e Torta Atomica (01/11, pedido dele): so 30% das vezes e no maximo uma por partida (pegavam toda hora)
+          if (kind === 'nuke' && a.bot && ((this.botNukes || 0) >= 1 || Math.random() > 0.3)) continue;
+          if (kind === 'nuke' && a.bot) this.botNukes = (this.botNukes || 0) + 1;
           a.ready.push(kind);
           this.event({ k: 'streakReady', id: a.id, kind });
           if (a.bot) this.useStreak(a, kind);
@@ -882,11 +969,8 @@ export class Core {
   // STREAK_GAP s depois), ninguem chama outra. A sequencia fica guardada e o jogador ve o que esta no ar.
   streakLock() {
     // radar fica fora da fila (regra dele 30/10): nao trava nem e travado; chamar de novo so estende
-    const kind = this.nukes.length ? 'nuke' : this.blimps.length ? 'blimp' : this.anvils.some(a => a.streak) ? 'anvil' : null;
-    if (kind) {
-      const t = kind === 'nuke' ? Math.max(...this.nukes.map(n => n.t)) : kind === 'blimp' ? Math.max(...this.blimps.map(b => b.t)) : Math.max(...this.anvils.filter(a => a.streak).map(a => a.t));
-      return { kind, t: t + STREAK_GAP };
-    }
+    // bigorna e torta tambem sairam da fila (01/11): so o dirigivel no ar trava
+    if (this.blimps.length) return { kind: 'blimp', t: Math.max(...this.blimps.map(b => b.t)) + STREAK_GAP };
     return this.streakGap > 0 ? { kind: 'gap', t: this.streakGap } : null;
   }
 
@@ -901,10 +985,10 @@ export class Core {
       this.event({ k: 'streak', id: p.id, kind, team: p.team });
       return;
     }
-    const lock = this.streakLock();
+    const lock = STREAK_FREE.includes(kind) ? null : this.streakLock();
     if (lock) { if (!p.bot) this.send(p.id, { t: 'ev', k: 'streakWait', kind: lock.kind, n: Math.ceil(lock.t) }); return; }
     p.ready.splice(i, 1);
-    this.streakGap = STREAK_GAP;
+    if (kind === 'blimp') this.streakGap = STREAK_GAP;
     const A = this.M.arena;
     if (kind === 'anvil') {
       const targets = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o)).slice(0, 7);
@@ -920,13 +1004,14 @@ export class Core {
 
   tickStreaks(dt) {
     // intervalo entre sequencias: so comeca a contar quando a do ar acaba
-    if (this.nukes.length || this.blimps.length || this.anvils.some(a => a.streak)) this.streakGap = STREAK_GAP;
+    if (this.blimps.length) this.streakGap = STREAK_GAP;
     else if (this.streakGap > 0) this.streakGap -= dt;
     // bot com sequencia guardada chama assim que a sala libera (um por vez)
     if (!this.over) {
       const livre = !this.streakLock();
-      const b = [...this.players.values()].find(o => o.bot && o.alive && (o.ready.includes('uav') || (livre && o.ready.length)));
-      if (b) this.useStreak(b, b.ready.includes('uav') ? 'uav' : b.ready[0]);
+      const pick = (o) => o.ready.find(k => STREAK_FREE.includes(k)) || (livre ? o.ready[0] : null);
+      const b = [...this.players.values()].find(o => o.bot && o.alive && pick(o));
+      if (b) this.useStreak(b, pick(b));
     }
     // Torta Atomica: quando o pavio acaba, todo inimigo vivo cai; a partida segue (quem chamou saiu = cancela)
     for (const n of this.nukes) {
@@ -1059,14 +1144,16 @@ export class Core {
     const ai = p.ai, M = this.M;
     if (p.air) {
       const fl = floorAt(M, p.pos[0], p.pos[2]);
-      if (p.pos[1] - fl < BR.bounce.dropH - 6) p.chute = true;
+      // igual ao jogador com o paraquedas automatico: queda livre e abre perto do chao (abria la em cima e
+      // descia 14 s devagar); e cai no PROPRIO ponto sorteado (ia todo mundo pro meio da iris e caia junto)
+      if (p.pos[1] - fl < 22) p.chute = true;
       p.vel[1] = Math.max(p.vel[1] - 24 * dt, -(p.chute ? BR.bounce.chute : BR.bounce.freefall));
-      const z = this.zone?.to || this.zone, tx = z ? z.c[0] - p.pos[0] : 0, tz = z ? z.c[1] - p.pos[2] : 0, tl = Math.hypot(tx, tz) || 1;
-      const sp = tl > 8 ? BR.bounce.airSpeed * 0.7 : 0;
+      const at = p.dropAt || [p.pos[0], p.pos[2]], tx = at[0] - p.pos[0], tz = at[1] - p.pos[2], tl = Math.hypot(tx, tz) || 1;
+      const sp = tl > 1.5 ? Math.min(BR.bounce.airSpeed, tl) : 0;
       p.vel[0] += ((tx / tl) * sp - p.vel[0]) * Math.min(1, 2 * dt); p.vel[2] += ((tz / tl) * sp - p.vel[2]) * Math.min(1, 2 * dt);
       p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7);
       p.anim = p.chute ? 'chute' : 'fall';
-      if (p.onGround) { p.air = false; p.chute = false; p.drop = 0; ai.path = null; }
+      if (p.onGround) { p.air = false; p.chute = false; p.drop = 0; p.dropAt = null; ai.path = null; ai.think = 0; ai.react = Math.min(ai.react || 0, 0.2); } // pousou: ja age
       return;
     }
     // dupla: caido fica no chao esperando o parceiro com a bomba de bicicleta
@@ -1081,6 +1168,7 @@ export class Core {
       let best = null, bd = sight * sight;
       if (ai.blind <= 0) for (const o of this.players.values()) {
         if (!o.alive || !this.enemies(p, o)) continue;
+        if (!!p.inRing !== !!o.inRing) continue; // ringue (01/11): quem luta so ve o adversario; quem esta fora nao mira em quem luta (corriam pra corda e ficavam pulando)
         const d = dist2(o.pos, p.pos);
         if (d < bd && hasLOS(M, eye, [o.pos[0], o.pos[1] + 1.4, o.pos[2]])) { bd = d; best = o; }
       }
@@ -1096,6 +1184,10 @@ export class Core {
       ai.goal = this.botGoal(p);
     }
     const w = WEAPONS[p.wpn];
+    // papel fixo de cada bot (01/11, pedido dele: movimento mais tatico e previsivel): 0 = ponta (chega perto,
+    // desliza pra dentro da briga), 1 = flanco (meia distancia, dança de lado), 2 = ancora (fica longe, agacha e segura)
+    const role = ai.role ??= (p.id.charCodeAt(p.id.length - 1) + p.id.length) % 3;
+    ai.slideCd = (ai.slideCd || 0) - dt; ai.hurtT = (ai.hurtT || 0) - dt;
     let moveDir = null, wantYaw = p.yaw, sprint = false;
     // plantar a bomba: bot segura o botao no ponto (ataque) ou em cima da bomba (defesa) quando ninguem o ve
     if (this.mode === 'bomb') p.using = this.botWantsUse(p);
@@ -1110,13 +1202,24 @@ export class Core {
       if (ai.t <= 0) { ai.t = rnd(0.5, 1.4); ai.strafe = (Math.random() < 0.5 ? -1 : 1) * this.skill.strafe; }
       ai.onT = (ai.onT || 0) + dt;
       const fx = dx / (d || 1), fz = dz / (d || 1);
-      const ideal = WEAPONS[p.wpn]?.melee ? 0.8 : p.wpn === 'shotgun' ? 6 : p.wpn === 'sniper' ? 30 : 14;
+      const ideal = (WEAPONS[p.wpn]?.melee ? 0.8 : p.wpn === 'shotgun' ? 6 : p.wpn === 'sniper' ? 30 : 14) * (role === 0 ? 0.65 : role === 2 ? 1.35 : 1);
       let adv = d > ideal + 3 ? 1 : d < ideal - 3 ? -0.6 : 0;
+      // ancora na distancia certa: para, agacha e atira (fica parado de proposito, da pra prever e flanquear)
+      ai.crouch = role === 2 && !adv && d > 12 && !WEAPONS[p.wpn]?.melee && ai.reloadT <= 0 && !ai.rescue && !['ctf', 'dom', 'escort', 'bomb'].includes(this.mode); // modo de objetivo: anda sempre
       // contra quem esta de lamina (infectado): recua atirando, nunca deixa encostar
       if (WEAPONS[t.wpn]?.melee && !WEAPONS[p.wpn]?.melee) adv = d < 9 ? -1 : d > 16 ? 0.4 : 0;
-      moveDir = [fx * adv - fz * ai.strafe * 0.8, fz * adv + fx * ai.strafe * 0.8];
+      const sw = role === 2 ? 0.25 : role === 1 ? 1 : 0.7; // quanto cada papel dança de lado
+      moveDir = ai.crouch ? null : [fx * adv - fz * ai.strafe * 0.8 * sw, fz * adv + fx * ai.strafe * 0.8 * sw];
+      // deslize: ao avistar alguem andando rapido (mais o ponta), ou o ponta fechando distancia. Uma vez a cada uns segundos
+      const hsNow = Math.hypot(p.vel[0], p.vel[2]);
+      if (p.onGround && ai.slideCd <= 0 && hsNow > 5.5 && !WEAPONS[p.wpn]?.melee && d > 5 && d < 26 &&
+        ((ai.onT < 0.3 && Math.random() < (role === 0 ? 0.55 : 0.2)) || (role === 0 && adv > 0 && Math.random() < dt * 0.5))) {
+        ai.slideT = 0.6; ai.slideCd = rnd(3.5, 6); ai.slideDir = [p.vel[0] / hsNow, p.vel[2] / hsNow];
+      }
       // de lamina nao tem por que dancar de lado: vai reto ate encostar
-      if (WEAPONS[p.wpn]?.melee) moveDir = d > 0.7 ? [fx, fz] : null;
+      // para a 1,8 m (o soco alcanca 2,3) e recua se encostar: andava ate 0,7 e o objetivo puxava pra dentro do outro,
+      // os dois do ringue ficavam um dentro do outro tremendo (01/11)
+      if (WEAPONS[p.wpn]?.melee) { moveDir = d > 1.8 ? [fx, fz] : d < 1.3 ? [-fx * 0.7, -fz * 0.7] : null; ai.closeIn = true; }
       // machucado: corre pra cobertura atirando de lado
       else if (ai.cover && Math.hypot(ai.cover[0] - p.pos[0], ai.cover[2] - p.pos[2]) > 1) {
         const g = this.botSteer(p, ai.cover, dt);
@@ -1153,22 +1256,45 @@ export class Core {
         if (--ai.burstLeft <= 0) ai.pauseT = rnd(...this.skill.pause);
       }
     } else if (ai.reloadT <= 0 && ai.mag < w.mag * 0.5 && ai.mag < w.mag) this.botReload(p);
-    if (!moveDir && ai.goal) {
+    const holdMelee = t && ai.closeIn; ai.closeIn = false; // no alcance do soco: fica onde esta (nao volta pro objetivo)
+    if (!moveDir && ai.goal && !holdMelee) {
       const d = Math.hypot(ai.goal[0] - p.pos[0], ai.goal[2] - p.pos[2]);
       const g = d > 1.5 ? this.botSteer(p, ai.goal, dt) : null;
       if (g) { moveDir = g; if (!t) { wantYaw = Math.atan2(-g[0], -g[1]); p.pitch *= 0.9; } sprint = !t && ai.blind <= 0; }
+    }
+    // ancora sem alvo: ao chegar num ponto da patrulha segura o angulo uns segundos, varrendo devagar
+    if (!t) ai.crouch = false;
+    if (!t && ai.holdT > 0 && !p.using) { ai.holdT -= dt; moveDir = null; ai.holdYaw ??= p.yaw; wantYaw = ai.holdYaw + Math.sin(ai.holdT * 1.3) * 0.6; ai.crouch = true; }
+    else ai.holdYaw = null;
+    // nada de bolo: colega a menos de 3,5 m empurra pro lado (cada um segue sua rota)
+    if (moveDir && !p.using) {
+      let sx = 0, sz = 0;
+      for (const o of this.players.values()) {
+        if (o === p || !o.alive || this.enemies(p, o)) continue;
+        const ox = p.pos[0] - o.pos[0], oz = p.pos[2] - o.pos[2], od = Math.hypot(ox, oz);
+        if (od < 3.5 && od > 0.01) { const k = (3.5 - od) / 3.5; sx += ox / od * k; sz += oz / od * k; }
+      }
+      if (sx || sz) moveDir = [moveDir[0] + sx * 0.9, moveDir[1] + sz * 0.9];
+      const ml = Math.hypot(moveDir[0], moveDir[1]); if (ml > 1) moveDir = [moveDir[0] / ml, moveDir[1] / ml];
     }
     if (p.using) moveDir = null;
     if (ai.blind > 0) wantYaw = p.yaw + Math.sin(ai.blind * 6) * 0.5;
     p.yaw += clampA(angDiff(p.yaw, wantYaw), (t ? this.skill.turn : 5) * dt);
 
-    let speed = sprint ? 10.5 : ai.blind > 0 ? 3 : 7;
+    let speed = sprint ? 9.3 : ai.blind > 0 ? 3 : 6.4; // acompanha o jogador mais lento (01/11)
     if (this.mode === 'infect' && p.team === 'red') speed *= INFECT.speed;
     const ground = p.onGround;
     const acc = ground ? 12 : 3;
+    if (ai.crouch) speed = 0;
     const tx = moveDir ? moveDir[0] * speed : 0, tz = moveDir ? moveDir[1] * speed : 0;
-    p.vel[0] += (tx - p.vel[0]) * Math.min(1, acc * dt);
-    p.vel[2] += (tz - p.vel[2]) * Math.min(1, acc * dt);
+    if (ai.slideT > 0 && ground) { // deslize: embalo que perde forca, sem virar
+      ai.slideT -= dt; const sp = 5 + 7.5 * Math.max(0, ai.slideT / 0.6);
+      p.vel[0] = ai.slideDir[0] * sp; p.vel[2] = ai.slideDir[1] * sp;
+    } else {
+      if (!ground) ai.slideT = 0;
+      p.vel[0] += (tx - p.vel[0]) * Math.min(1, acc * dt);
+      p.vel[2] += (tz - p.vel[2]) * Math.min(1, acc * dt);
+    }
     p.vel[1] -= 24 * (EV(this.mut)?.grav || 1) * dt;
     ai.stuckT += dt;
     if (ai.stuckT > 0.6) {
@@ -1176,10 +1302,10 @@ export class Core {
       if (moveDir && moved < 1.2 && ground) { p.vel[1] = 7.2; ai.strafe *= -1; ai.t = 1; ai.path = null; }
       ai.last = [...p.pos]; ai.stuckT = 0;
     }
-    if (t && ground && this.skill.strafe > 0.5 && Math.random() < dt * 0.35) p.vel[1] = 7.2;
+    if (t && ground && !(ai.slideT > 0) && !ai.crouch && role !== 2 && this.skill.strafe > 0.5 && Math.random() < dt * 0.25) p.vel[1] = 7.2;
     p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7);
     const hs = Math.hypot(p.vel[0], p.vel[2]);
-    p.anim = !p.onGround ? 'jump' : ai.reloadT > 0 ? 'reload' : hs > 9 ? 'sprint' : hs > 1 ? 'run' : 'idle';
+    p.anim = !p.onGround ? 'jump' : ai.slideT > 0 ? 'slide' : ai.reloadT > 0 ? 'reload' : ai.crouch ? 'crouch' : hs > 9 ? 'sprint' : hs > 1 ? 'run' : 'idle';
   }
 
   botReload(p, instant = false) {
@@ -1296,7 +1422,7 @@ export class Core {
     }
     if (heard && (!ai.heardAt || dist2(heard, ai.heardAt) > 25)) { ai.heardAt = heard; ai.route = this.routeTo(p, heard); }
     if (ai.route?.length) {
-      if (dist2(ai.route[0], p.pos) < 9) { ai.visited = [...(ai.visited || []).slice(-4), ai.route.shift()]; }
+      if (dist2(ai.route[0], p.pos) < 9) { ai.visited = [...(ai.visited || []).slice(-4), ai.route.shift()]; if (ai.role === 2 || (ai.role === 1 && Math.random() < 0.3)) ai.holdT = rnd(1.5, 3); }
       if (ai.route.length) return ai.route[0];
       ai.heardAt = null;
     }
@@ -1389,6 +1515,12 @@ export class Core {
     // mira esquenta: comeca em 35% do maximo do nivel e chega nele depois de 'warm' s no alvo
     const sk = this.skill, warm = Math.min(1, 0.35 + 0.65 * (p.ai.onT || 0) / sk.warm);
     let pHit = sk.aim * warm - d * 0.006 - tSpeed * 0.015;
+    // erra mais andando rapido, deslizando, no ar ou logo depois de levar tiro; agachado parado acerta um pouco mais
+    const mySpeed = Math.hypot(p.vel[0], p.vel[2]);
+    pHit -= mySpeed * 0.01;
+    if (p.ai.slideT > 0 || !p.onGround) pHit *= 0.6;
+    if (p.ai.hurtT > 0) pHit *= 0.65;
+    if (p.ai.crouch) pHit *= 1.12;
     pHit = Math.max(0.04, Math.min(0.85, pHit));
     const pellets = w.pellets || 1;
     let dmg = 0, head = false;
@@ -1429,8 +1561,11 @@ export class Core {
     if (this.phase !== 'play') { this.tickLobby(dt); return; }
     if (this.over) {
       this.overT -= dt;
-      // fim de partida: volta todo mundo pro lobby (pronto zerado)
-      if (this.overT <= 0) {
+      // fim de partida: volta todo mundo pro lobby (pronto zerado). Sala com lobby (solo e de amigos) NAO volta
+      // sozinha: espera o host apertar "Voltar pro lobby" (ou todo mundo apertar); 3 min de trava (pedido dele 01/11)
+      const waitBack = this.useLobby && !this.backLobby && this.overT > -180;
+      if (this.overT <= 0 && !waitBack) {
+        this.backLobby = false; for (const p of this.players.values()) p.endBack = false;
         if (this.useLobby) this.phase = 'lobby'; else if (this.autoNext) this.nextQuick(); else this.reset();
         this.over = false;
         for (const p of this.players.values()) p.lobbyReady = false;
@@ -1452,8 +1587,9 @@ export class Core {
       if (this.mode === 'infect') winner = 'blue';
       else if (this.esc) {
         // tempo acabou com atacante encostado no bonde: prorrogacao (uma vez); senao a defesa segurou
-        if (!this.esc.ot && this.esc.red > 0) { this.esc.ot = true; this.time = 25; this.event({ k: 'escOt' }); winner = null; }
-        else winner = 'blue';
+        const atkN = this.esc.atk === 'red' ? this.esc.red : this.esc.blue;
+        if (!this.esc.ot && atkN > 0) { this.esc.ot = true; this.time = 25; this.event({ k: 'escOt' }); winner = null; }
+        else { winner = escTimeout(this); if (!winner) { this.time = this.time || 210; } }
       }
       else if (this.cfg.teams) winner = this.teamScore.red === this.teamScore.blue ? 'empate' : this.teamScore.red > this.teamScore.blue ? 'red' : 'blue';
       else {
@@ -1467,7 +1603,7 @@ export class Core {
     for (const p of this.players.values()) {
       // orcamento de dano: enche no ritmo da arma (barra trapaca de cliente)
       const w = WEAPONS[p.wpn];
-      if (w) { const tr = bodyTrait(this.bodyOf(p, p.wpn)), bm = this.bpOf(p, p.wpn), dmg = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (bm.dmg || 1); p.budget = Math.min(dmg * 5, p.budget + (dmg / (w.rate * (tr.rate || 1) * (bm.rate || 1))) * 1.6 * dt); }
+      if (w) { const tr = bodyTrait(this.bodyOf(p, p.wpn)), bm = this.bpOf(p, p.wpn), dmg = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (bm.dmg || 1); const cv = p.los?.[p.wpn]?.conv === 'auto' ? 1.9 : 1; p.budget = Math.min(dmg * 5, p.budget + (dmg / (w.rate * (tr.rate || 1) * (bm.rate || 1))) * 1.6 * cv * dt); } // kit automatico: cadencia maior
       if (!p.alive) {
         p.respawnT -= dt;
         // humano: depois do minimo, renasce quando pedir (botao/toque) ou sozinho 5 s depois
@@ -1514,6 +1650,7 @@ export class Core {
     if (this.mode === 'ctf') this.tickCTF(dt);
     if (this.mode === 'dom') this.tickDOM(dt);
     if (this.esc && !this.over && !(this.freezeT > 0)) escTick(this, dt);
+    this.M.dyn = this.esc ? [trainBox(this.M, this.esc.d)] : null; // bonde solido pros bots e pras balas (01/11)
     this.snapshot(dt);
   }
 
@@ -1555,12 +1692,12 @@ export class Core {
       players.push({
         id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
-        kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: p.score, gunLvl: p.gunLvl, respawnT: r2(p.respawnT),
-        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0,
+        kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined,
       });
     }
     this.send(null, {
-      t: 'snap', mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
+      t: 'snap', lob: this.useLobby, host: this.over ? this.hostId() : undefined, mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,
@@ -1591,10 +1728,11 @@ function cleanLoadouts(los) {
     const l = los[w];
     if (!l || typeof l !== 'object') continue;
     const o = {};
-    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo', 'bp', 'ammo']) {
+    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo', 'bp', 'ammo', 'conv']) {
       const v = l[k];
       o[k] = typeof v === 'string' && v.length <= 24 && /^[#\w-]+$/.test(v) ? v : null;
     }
+    o.muzzle = ['silencer', 'brake', 'comp', 'flash'].includes(l.muzzle) && w !== 'melee' ? l.muzzle : null; // bocal (01/11)
     if (o.bp && BLUEPRINTS[o.bp]?.wpn !== w) o.bp = null;
     if (o.ammo && (!AMMO[o.ammo] || w === 'melee')) o.ammo = null;
     out[w] = o;

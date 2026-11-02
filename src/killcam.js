@@ -38,10 +38,12 @@ export function shootPanels(renderer, scene, k, v) {
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-export function stripHtml(imgs, { killer, wpn, dist, head, t }) {
+export function stripHtml(imgs, { killer, wpn, dist, head, t, icon }) {
   const sfx = head ? t('kc_head') : ['BANG!', 'POW!', 'BLAM!'][Math.floor(Math.random() * 3)];
   const p = (i, inner, cap) => `<figure class="kc-p kc-${i}">${inner}<figcaption>${cap}</figcaption></figure>`;
   return p(1, imgs[0] ? `<img src="${imgs[0]}" alt="">` : '<i class="kc-blank"></i>', esc(t('kc_who', { n: killer })))
-    + p(2, (imgs[1] ? `<img src="${imgs[1]}" alt="">` : '<i class="kc-blank"></i>') + `<b class="kc-sfx">${esc(sfx)}</b>`, esc(t('kc_shot', { w: wpn, d: dist })))
+    // meio: so a arma dele, inteira e de lado, com o nome do modelo (sem foto do tiro)
+    // sequencia (Torta Atomica, bigornas, dirigivel...): o icone dela no lugar da arma (01/11)
+    + p(2, imgs[1] ? `<img class="kc-gun" src="${imgs[1]}" alt="${esc(wpn)}"><b class="kc-gname">${esc(wpn)}</b>` : icon ? `<svg class="kc-ico" viewBox="0 0 48 48" aria-hidden="true">${icon}</svg><b class="kc-gname">${esc(wpn)}</b>` : `<i class="kc-blank"></i><b class="kc-gname">${esc(wpn)}</b>`, esc(t('kc_dist', { d: dist })))
     + p(3, `<i class="kc-blank"></i><b class="kc-sfx kc-big">PLAFT!</b>`, esc(t('kc_you')));
 }

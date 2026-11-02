@@ -1,16 +1,34 @@
 // HUD em DOM: placa de placar, vida, municao, feed, marcadores, placar (Tab).
+import { bindLabel } from './binds.js';
 import * as THREE from 'three';
 import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
-import { STREAKS, BR } from '../shared/weapons.js';
+import { STREAKS, BR, STREAK_FREE } from '../shared/weapons.js';
+// proxima sequencia pra chamar: a primeira que pode agora; se nenhuma pode (dirigivel esperando), a primeira guardada
+const callNext = (ready, lock) => ready.find(k => STREAK_FREE.includes(k) || !lock) || ready[0];
+const callLocked = (ready, lock) => !!ready.length && !!lock && !ready.some(k => STREAK_FREE.includes(k));
 import { t, wName, modeName, eliteTag } from './i18n.js';
 import { badgeSvg } from './rank.js';
 import { partName } from './arsenal.js';
 import { isTouch } from './input.js';
 import { audio } from './audio.js';
+// icone do que a pessoa usa pra jogar, do lado do nome no placar (Material Icons: computer, smartphone, sports_esports)
+const DEV_ICON = {
+  pc: 'M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z',
+  mob: 'M17 1.01 7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z',
+  pad: 'M21.58 16.09l-1.09-7.66C20.21 6.46 18.52 5 16.53 5H7.47C5.48 5 3.79 6.46 3.51 8.43l-1.09 7.66C2.2 17.63 3.39 19 4.94 19c.68 0 1.32-.27 1.8-.75L9 16h6l2.25 2.25c.48.48 1.13.75 1.8.75 1.56 0 2.75-1.37 2.53-2.91zM11 11H9v2H8v-2H6v-1h2V8h1v2h2v1zm4-1c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm2 3c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z',
+};
+const devIcon = (d) => DEV_ICON[d] ? `<svg class="dev-ico" viewBox="0 0 24 24" aria-label="${t('dev_' + d)}" role="img"><path d="${DEV_ICON[d]}"/></svg>` : '';
 
 const $ = (id) => document.getElementById(id);
 const TEAM = { red: 'h_red', blue: 'h_blue' };
 // pavio curto: as sequencias a partir da bigorna custam 1 abate a menos (igual ao servidor)
+// selos das sequencias: desenho proprio (tinta + papel), viewBox 48. ink = traco, cor = currentColor do selo
+export const STREAK_SVG = {
+  uav: `<circle cx="24" cy="25" r="15" fill="#ece9e1" stroke="#141210" stroke-width="3"/><path d="M24 25V10a15 15 0 0 1 13 7.5z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><circle cx="24" cy="25" r="7" fill="none" stroke="#141210" stroke-width="1.6" stroke-dasharray="3 3"/><circle cx="31" cy="20" r="2.6" fill="#141210"/><circle cx="17" cy="31" r="2" fill="#141210"/><circle cx="24" cy="25" r="2" fill="#141210"/>`,
+  anvil: `<path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M11 18h20" stroke="#ece9e1" stroke-width="2" stroke-linecap="round"/><path d="M8 8l4 3M17 5l1 4M27 6l-2 4" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
+  blimp: `<path d="M35 22l9-7v15z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="21" cy="22" rx="17" ry="9" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M8 19c6-2 20-2 27 0" stroke="#ece9e1" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M18 31v3M25 31v3" stroke="#141210" stroke-width="2.5"/><rect x="15" y="33" width="13" height="6" rx="2" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/>`,
+  nuke: `<path d="M13 23c-5 0-7-3-7-6 0-4 4-6 7-5 1-4 5-6 9-5 3-3 10-2 12 3 4 0 7 3 7 6 0 4-3 7-7 7z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M20 23h8l1.5 9h-11z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M6 33h36l-4 9H10z" fill="#e0a33a" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M9 33c2-3 5-3 7 0 2-3 5-3 7 0 2-3 5-3 7 0 2-3 5-3 7 0 2-3 3-2 4 0" fill="none" stroke="#141210" stroke-width="2"/>`,
+};
 const nextStreak = (n, pavio) => { for (const s of Object.values(STREAKS)) { const k = s.kills - (pavio && s.kills > 3 ? 1 : 0); if (k > n) return k - n; } return 0; };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -81,10 +99,10 @@ export class Hud {
     let txt = '', cls = '';
     if (p.alive && a && a.mag !== Infinity && !W.melee && p.reloadT <= 0) {
       const mag = p.stats().mag;
-      const key = p.g.pad?.active ? 'X' : isTouch ? '' : 'R';
+      const key = isTouch && !p.g.pad?.active ? '' : bindLabel(null, 'reload', p.g.pad?.active ? 1 : 0); // tecla remapeada
       if (a.mag === 0 && a.reserve <= 0) { txt = t('ammoOut'); cls = 'out'; }
       else if (a.mag === 0) { txt = key ? t('ammoReloadKey', { k: key }) : t('ammoReload'); cls = 'empty'; }
-      else if (a.mag <= Math.max(2, Math.ceil(mag * 0.25))) { txt = t('ammoLow'); cls = 'low'; }
+      else if (a.mag <= Math.max(2, Math.ceil(mag * 0.25))) { txt = a.reserve > 0 && key ? t('ammoLowKey', { k: key }) : t('ammoLow'); cls = 'low'; } // com a tecla (pedido dele 01/11, estilo COD)
     } else if (p.alive && p.reloadT > 0) { txt = t('ammoReloading'); cls = 'busy'; }
     if (el.textContent !== txt) el.textContent = txt;
     el.className = 'ammo-alert ' + cls;
@@ -218,6 +236,7 @@ export class Hud {
     // botao de mao no toque: pulsa quando da pra plantar/desarmar ali, apagado quando nao da
     const ub = G.input?.useBtn;
     if (ub) ub.classList.toggle('can', !!lbl);
+    G.bombCan = !!lbl; // onde da pra plantar/desarmar o E vira usar (fora dali ele inclina)
     if (el.lbl.textContent !== lbl) el.lbl.textContent = lbl;
     el.fill.style.width = Math.max(0, Math.min(1, prog)) * 100 + '%';
     const carrying = B.state === 'carried' && B.carrier === G.myId;
@@ -269,8 +288,17 @@ export class Hud {
     this.push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>★ ${title}</small><b>${name}</b>${sub ? `<i>${sub}</i>` : ''}</span><em>+${xp} XP</em>`, 'ev-unl elite', 4200);
   }
 
+  // desbloqueios e desafios em FILA (01/11, pedido dele): um depois do outro, nunca empilhados (no celular enchia a tela)
   unlockBanner({ kind, name, img, more = 0 }) {
-    this.push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>${kind}</small><b>${name}</b></span>${more ? `<em>+${more}</em>` : ''}`, 'ev-unl', 3200);
+    (this.unlQ ||= []).push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>${kind}</small><b>${name}</b></span>${more ? `<em>+${more}</em>` : ''}`);
+    this.nextUnl();
+  }
+  nextUnl() {
+    if (this.unlOn || !this.unlQ?.length) return;
+    const ms = document.body.classList.contains('touchmode') ? 2400 : 2900;
+    this.unlOn = true;
+    this.push(this.unlQ.shift(), 'ev-unl', ms);
+    setTimeout(() => { this.unlOn = false; this.nextUnl(); }, ms + 380);
   }
 
   // granada de fragmentacao perto (< 9 m): icone em cima dela; fora da tela, preso na borda apontando
@@ -450,7 +478,8 @@ export class Hud {
     const ready = me?.ready || [];
     // tecla de cada aparelho: teclado G/F/X, controle LB/RB/direcional pra cima, toque = icone do botao
     const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb';
-    const [kf, kl, ks, kz] = dev === 'pad' ? ['LB ', 'RB ', '▲ ', '► '] : dev === 'touch' ? ['', '', '★ ', ''] : ['G ', 'F ', 'X ', 'Z '];
+    const bl = (id) => bindLabel(null, id, dev === 'pad' ? 1 : 0) + ' '; // tecla remapeada (binds.js)
+    const [kf, kl, ks, kz] = dev === 'touch' ? ['', '', '★ ', ''] : [bl('frag'), bl('flash'), bl('streak'), bl('field')];
     const fld = p.g?.field, fpc = Math.floor((p.g?.fieldK ?? 0) * 100), fcd = fpc < 100 ? 1 : 0; // barra por pontos (%)
     const key = (fld || '') + fpc + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev + '/' + (me?.fz || 0) + '/' + (ready.length && snap.sLock ? snap.sLock.kind + snap.sLock.t : '');
     if (key !== this.kitKey) {
@@ -462,8 +491,48 @@ export class Hud {
         `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
         (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fpc + '%' : ''}</span>` : '') +
         // sequencia pronta mas outra no ar: fica apagada com a contagem ate liberar
-        (ready.length && snap.sLock && ready[0] !== 'uav' ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + ready[0])}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
+        (p.g?.mode !== 'br' && p.g?.mode !== 'gungame' ? '' : callLocked(ready, snap.sLock) ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + callNext(ready, snap.sLock))}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio')) })}</span>`);
     }
+  }
+
+  // fileira de selos das sequencias em cima da vida: progresso em anel; pronta = cor, pulso e tecla (toque: o selo)
+  streaks(G, snap) {
+    const el = this.stk ||= document.getElementById('streaks');
+    const me = snap?.players?.find(o => o.id === G.myId);
+    const on = !!me && G.state === 'game' && G.mode !== 'br' && G.mode !== 'gungame';
+    if (el.hidden === on) el.hidden = !on;
+    if (!on) return;
+    const ready = me.ready || [], n = me.streak || 0, pavio = G.skills?.includes('pavio');
+    // celular: a fileira nao cabe la em cima (pausa, vida, minimapa, avisos); o selo vira o proprio botao da estrela
+    if (isTouch) { el.hidden = true; this.streakBtn(ready, n, pavio, snap); return; }
+    const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb', bind = dev === 'pad' ? '▲' : dev === 'touch' ? '' : 'X';
+    const lock = callLocked(ready, snap.sLock) ? snap.sLock.t : 0, nx = callNext(ready, snap.sLock);
+    const key = ready.join(',') + '/' + n + '/' + dev + '/' + lock + '/' + (pavio ? 1 : 0) + '/' + nx + (snap.sLock ? 1 : 0);
+    if (key === this.stkKey) return;
+    this.stkKey = key;
+    el.innerHTML = Object.entries(STREAKS).map(([id, S]) => {
+      const need = S.kills - (pavio && S.kills > 3 ? 1 : 0), got = ready.includes(id), next = nx === id;
+      const k = got ? 1 : Math.min(1, n / need), C = 2 * Math.PI * 22;
+      const cls = got ? (lock && next ? 'stk got wait' : next ? 'stk got next' : 'stk got') : 'stk';
+      const tip = got ? t('s_' + id) : t('s_' + id) + ' (' + need + ')';
+      return `<div class="${cls}" data-s="${id}" title="${esc(tip)}"><svg class="stk-ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" pathLength="${C.toFixed(1)}" stroke-dasharray="${(C * k).toFixed(1)} ${C.toFixed(1)}"/></svg>`
+        + `<svg class="stk-ico" viewBox="0 0 48 48" role="img" aria-label="${esc(tip)}">${STREAK_SVG[id] || ''}</svg>`
+        + (got ? (next && lock ? `<b class="stk-key">${lock}s</b>` : next && bind ? `<b class="stk-key">${bind}</b>` : '') : `<b class="stk-n">${need}</b>`) + `</div>`;
+    }).join('');
+  }
+
+  streakBtn(ready, n, pavio, snap) {
+    const b = document.querySelector('#touch .tbtn.streak');
+    if (!b) return;
+    const list = Object.entries(STREAKS).map(([id, S]) => [id, S.kills - (pavio && S.kills > 3 ? 1 : 0)]);
+    const id = (ready.length && callNext(ready, snap.sLock)) || (list.find(([, k]) => k > n) || list[list.length - 1])[0];
+    const need = list.find(([x]) => x === id)[1], lock = callLocked(ready, snap.sLock);
+    const key = id + '/' + ready.length + '/' + n + '/' + (lock ? 1 : 0);
+    if (b.dataset.k === key) return;
+    b.dataset.k = key;
+    b.dataset.s = id;
+    b.classList.toggle('stk-ready', !!ready.length && !lock);
+    b.innerHTML = `<svg viewBox="0 0 48 48" aria-hidden="true">${STREAK_SVG[id]}</svg>` + (ready.length ? '' : `<b class="stk-n">${Math.max(0, need - n)}</b>`);
   }
 
   // bussola do battle royale: rumo e marcadores pelo angulo em relacao a camera
@@ -544,7 +613,7 @@ export class Hud {
     const cfg = MODES[snap.mode];
     const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
     const bomb = snap.mode === 'bomb';
-    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
+    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${devIcon(p.dv)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
     let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.mode)}</h3>`;

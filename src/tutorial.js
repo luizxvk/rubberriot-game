@@ -2,6 +2,7 @@
 // (so passa quando o jogador faz) e mostra o botao certo pro aparelho em uso (teclado, controle ou toque).
 // Bonecos de treino = bots que nao pensam (nao andam nem atiram). Nada aqui da XP nem conta desafio.
 import { getLang } from './i18n.js';
+import { bindLabel, isBindable } from './binds.js';
 import { audio } from './audio.js';
 import { isTouch } from './input.js';
 import { hasLOS } from '../shared/map.js';
@@ -35,6 +36,7 @@ const KEYS = {
 const TXT = {
   pt: {
     prize: 'Premio do treino (Desafios):', who: 'Seu Tinteiro', step: 'Passo {n} de {t}', next: '{k} pra continuar', done: 'Boa!', finish: '{k} pra voltar ao menu',
+    hud: ['Como voce quer a tela?', '**Simples**: so o essencial pra andar, mirar e atirar; granadas, faca, sequencias e o resto ficam guardados no botao ⋯ (no PC some a fileira de sequencias). **Completa**: tudo a vista. Da pra trocar depois em Ajustes.'],
     welcome: ['Bem-vindo a Vila!', 'Eu sou o **Seu Tinteiro** e vou te ensinar a brigar de borracha. Cada tarefa so passa quando voce fizer. Da pra sair a qualquer hora na pausa ({pause}).'],
     look: ['Olhe em volta', 'Gire a camera com {look}. Olhe pros lados e pra cima.'],
     move: ['Ande', 'Ande pela Vila com {move}. Cinco passos largos bastam.'],
@@ -61,6 +63,7 @@ const TXT = {
   },
   en: {
     prize: 'Training reward (Challenges):', who: 'Mr. Inkwell', step: 'Step {n} of {t}', next: '{k} to continue', done: 'Nice!', finish: '{k} to go back to the menu',
+    hud: ['How do you want your screen?', '**Simple**: just the essentials to move, aim and shoot; grenades, knife, streaks and the rest are tucked in the ⋯ button (on PC the streak row hides). **Full**: everything on screen. You can switch later in Settings.'],
     welcome: ['Welcome to the Village!', 'I am **Mr. Inkwell** and I will teach you to brawl in rubber. Each task only moves on when you do it. You can leave anytime from pause ({pause}).'],
     look: ['Look around', 'Turn the camera with {look}. Look left, right and up.'],
     move: ['Walk', 'Walk around the Village with {move}. Five big steps will do.'],
@@ -87,25 +90,31 @@ const TXT = {
   },
 };
 
-const STEPS = ['welcome', 'look', 'move', 'body', 'slide', 'aim', 'targets', 'ping', 'reload', 'inspect', 'classes', 'swap', 'melee', 'nades', 'field', 'streak', 'use', 'br', 'modes', 'menus', 'bye'];
-const INFO = new Set(['welcome', 'classes', 'use', 'br', 'modes', 'menus', 'bye']);
+const STEPS = ['welcome', 'hud', 'look', 'move', 'body', 'slide', 'aim', 'targets', 'ping', 'reload', 'inspect', 'classes', 'swap', 'melee', 'nades', 'field', 'streak', 'use', 'br', 'modes', 'menus', 'bye'];
+const INFO = new Set(['welcome', 'hud', 'classes', 'use', 'br', 'modes', 'menus', 'bye']);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Tutorial {
-  constructor(G, { quit, setField, reward, setPing }) {
-    this.G = G; this.quit = quit; this.setField = setField; this.reward = reward; this.setPing = setPing;
+  constructor(G, { quit, setField, reward, setPing, setHud }) {
+    this.G = G; this.quit = quit; this.setField = setField; this.reward = reward; this.setPing = setPing; this.setHud = setHud;
     this.slideOn = true; // Carrinho ligado no treino todo (a skill de verdade so no nivel 5)
     this.i = -1; this.st = {}; this.targets = []; this.kills = 0; this.started = false;
     const el = this.el = document.createElement('div');
     el.className = 'tut'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
     // click (nao pointerdown): arrastar pra rolar o texto no celular nao conta como "continuar"
     el.addEventListener('pointerdown', (e) => { if (INFO.has(STEPS[this.i])) e.stopPropagation(); });
-    el.addEventListener('click', (e) => { if (INFO.has(STEPS[this.i])) { e.stopPropagation(); this.advance(); } });
+    el.addEventListener('click', (e) => {
+      if (!INFO.has(STEPS[this.i])) return;
+      e.stopPropagation();
+      const h = e.target.closest('[data-hud]'); if (h) this.setHud?.(h.dataset.hud); // pergunta da HUD (01/11)
+      if (STEPS[this.i] === 'hud' && !h) return; // so passa escolhendo
+      this.advance();
+    });
     document.body.classList.add('tutorial');
   }
   get L() { return getLang() === 'pt' ? 'pt' : 'en'; }
   dev() { return this.G.pad?.active ? 1 : isTouch ? 2 : 0; }
-  key(k) { return KEYS[this.L][k][this.dev()]; }
+  key(k) { const d = this.dev(); return d < 2 && isBindable(k) ? bindLabel(null, k, d) || KEYS[this.L][k][d] : KEYS[this.L][k][d]; } // tecla remapeada aparece no tutorial
   fmt(s, vars = {}) {
     return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\{(\w+)\}/g, (_, k) => vars[k] != null ? esc(vars[k]) : KEYS.pt[k] ? `<kbd>${esc(this.key(k))}</kbd>` : '');
   }
@@ -152,6 +161,7 @@ export class Tutorial {
     this.el.innerHTML = `<header><span class="tut-who">${esc(T.who)}</span><span class="tut-n">${esc(T.step.replace('{n}', this.i + 1).replace('{t}', STEPS.length))}</span></header>`
       + `<h3>${esc(this.st.ok ? T.done : title)}</h3><p>${this.fmt(body, { c: this.kills })}</p>`
       + (goals ? `<ul class="tut-goals">${goals.map(([k, n]) => `<li class="${this.st[k] ? 'on' : ''}">${esc(n)}</li>`).join('')}</ul>` : '')
+      + (id === 'hud' ? `<div class="hud-ask"><button data-hud="simple">${esc(this.L === 'pt' ? 'Simples' : 'Simple')}</button><button data-hud="full">${esc(this.L === 'pt' ? 'Completa' : 'Full')}</button></div>` : '')
       + (id === 'bye' && this.prize ? `<div class="tut-prize"><small>${esc(T.prize)}</small>${this.prize.map(x => `<b>${esc(x)}</b>`).join('')}</div>` : '')
       + (INFO.has(id) ? `<small class="tut-go">${this.fmt(id === 'bye' ? T.finish : T.next, { k: this.key('next') })}</small>` : '')
       + `<i class="tut-bar"><span style="width:${Math.round((this.i + (this.st.ok ? 1 : 0)) / STEPS.length * 100)}%"></span></i>`;
@@ -226,3 +236,6 @@ export class Tutorial {
 
   dispose() { this.el.remove(); document.body.classList.remove('tutorial'); }
 }
+
+// rotulo do comando no aparelho atual: 0 teclado/mouse, 1 controle, 2 toque (dicas da partida usam tambem)
+export function keyLabel(k, dev) { const L = getLang() === 'pt' ? 'pt' : 'en'; return (dev < 2 && isBindable(k) && bindLabel(null, k, dev)) || (KEYS[L][k]?.[dev] ?? ''); }

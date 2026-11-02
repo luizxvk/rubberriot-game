@@ -111,7 +111,8 @@ export class BrView {
       const die = life > 0 ? now + life : 0;
       if (this.items.has(id)) { this.items.get(id).die = die; continue; }
       const g = new THREE.Group();
-      if (kind === 'wpn') { const gun = buildGun(wpn, bp ? bpLoadout(bp) : loadouts?.[wpn] || null); if (gun) { gun.scale.setScalar(1.6); g.add(gun); } }
+      // arma no chao sem mira laser (o feixe atravessava o mapa)
+      if (kind === 'wpn') { const lo = bp ? bpLoadout(bp) : loadouts?.[wpn] || null; const gun = buildGun(wpn, lo ? { ...lo, laser: null } : null); if (gun) { gun.scale.setScalar(1.6); g.add(gun); } }
       else if (kind === 'armor') g.add(vest());
       else if (kind === 'hp') g.add(milkBottle());
       else if (kind === 'nade') g.add(grenade());

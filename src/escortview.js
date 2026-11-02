@@ -3,7 +3,7 @@
 // que conta e muda de cor pelo estado: vermelho empurrando, listrado contestado, cinza parado, azul voltando.
 import * as THREE from 'three';
 import { ink, toon, PAL, hatchTexture } from './toon.js';
-import { trackOf, trackAt, ESCORT } from '../shared/escort.js';
+import { trackOf, trackAt, trackY, ESCORT } from '../shared/escort.js';
 import { floorAt } from '../shared/nav.js';
 
 const CREAM = 0xe9dcc0;
@@ -53,14 +53,14 @@ export class EscortView {
     const sleepers = new THREE.InstancedMesh(sleeper, sm, nS), rails = new THREE.InstancedMesh(rail, rm, nS * 2);
     const o = new THREE.Object3D();
     for (let i = 0; i < nS; i++) {
-      const p = trackAt(M, i * 1.2 + 0.6), y = floorAt(M, p.x, p.z) + 0.04;
+      const p = trackAt(M, i * 1.2 + 0.6), y = trackY(M, p.x, p.z) + 0.04;
       o.position.set(p.x, y, p.z); o.rotation.set(0, p.yaw + Math.PI / 2, 0); o.scale.set(1, 1, 1); o.updateMatrix(); sleepers.setMatrixAt(i, o.matrix);
       for (const s of [-1, 1]) { o.position.set(p.x + Math.cos(p.yaw) * s * 0.75, y + 0.08, p.z - Math.sin(p.yaw) * s * 0.75); o.rotation.set(0, p.yaw, 0); o.scale.set(1, 1, 1.25); o.updateMatrix(); rails.setMatrixAt(i * 2 + (s > 0), o.matrix); }
     }
     this.root.add(sleepers, rails);
     // portais dos pontos de controle (arco com placa) e a garagem no fim
     const gate = (d, col, label) => {
-      const p = trackAt(M, d), g = new THREE.Group(), y = floorAt(M, p.x, p.z);
+      const p = trackAt(M, d), g = new THREE.Group(), y = trackY(M, p.x, p.z);
       g.position.set(p.x, y, p.z); g.rotation.y = p.yaw;
       for (const s of [-1, 1]) { const c = ink(new THREE.BoxGeometry(0.35, 5, 0.35), PAL.ink, 0.03); c.position.set(s * 2.8, 2.5, 0); g.add(c); }
       const top = ink(new THREE.BoxGeometry(6, 0.6, 0.4), col, 0.04); top.position.y = 5.1; g.add(top);
@@ -80,7 +80,7 @@ export class EscortView {
     if (!esc) return;
     const prev = this.d;
     this.d += (esc.d - this.d) * Math.min(1, dt * 5); // o snapshot chega 20x/s: suaviza
-    const p = trackAt(this.M, this.d), y = floorAt(this.M, p.x, p.z);
+    const p = trackAt(this.M, this.d), y = trackY(this.M, p.x, p.z);
     this.tram.position.set(p.x, y, p.z);
     const dy = p.yaw - this.tram.rotation.y; this.tram.rotation.y += Math.atan2(Math.sin(dy), Math.cos(dy)) * Math.min(1, dt * 4);
     this.spin += (this.d - prev) / 0.42;

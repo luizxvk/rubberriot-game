@@ -61,8 +61,9 @@ export const TEAM_MAX = MAX_PLAYERS / 2;
 
 // granadas: G = fragmentacao, F = flash
 export const NADES = {
-  frag: { speed: 25, fuse: 2.0, radius: 6.5, dmg: 140 },
-  flash: { speed: 26, fuse: 1.4, radius: 15 },
+  // arremesso mais longe (pedido dele 01/11): ~35% a mais de distancia
+  frag: { speed: 29, fuse: 2.0, radius: 6.5, dmg: 140 },
+  flash: { speed: 30, fuse: 1.4, radius: 15 },
 };
 
 // sequencias de abates (cartoon): radar espiao, chuva de bigornas, dirigivel atirador e,
@@ -89,6 +90,7 @@ export const SKILL_SLOTS = 2;
 // Battle royale: colete absorve parte do dano; iris (zona) fecha em fases; o dirigivel solta caixotes.
 // phases: espera (s), fecha (s), raio final (fracao do raio inicial), dano fora (vida/s)
 export const BR = {
+  field: 50, // battle royale (os 3 modos): sempre 50 na ilha; bot ocupa a vaga, gente que entra toma a vaga dele (pedido dele 01/11)
   armorMax: 100, armorPiece: 50, armorAbsorb: 0.7,
   r0: 1.5, phases: [[45, 35, 0.62, 2], [35, 30, 0.38, 4], [30, 25, 0.2, 7], [25, 20, 0.08, 11], [20, 20, 0, 16]],
   ring: { lastPhase: 3, wait: 25, fight: 45, spar: 6 }, // ringue: vale ate a fase 3 da iris; espera e luta (s); spar = sozinho na fila chama sparring
@@ -128,11 +130,17 @@ export const FIELD = {
   spring: { lvl: 5, need: 250, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
   hole: { lvl: 9, need: 350, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
   anvil: { lvl: 13, need: 400, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
+  // 01/11 (pedido dele): estimulante injeta e devolve vida em 1,5 s; colete nasce vestido (absorve 70% do tiro ate
+  // quebrar, ai o dano volta pra vida) e a barra cheia conserta ele
+  stim: { lvl: 3, need: 220, heal: 70, dur: 1.5, icon: 'vaccines' },
+  vest: { lvl: 7, need: 300, armor: 60, icon: 'shield' },
 };
 export const FIELD_IDS = Object.keys(FIELD);
 export const BLAST = ['frag', 'anvil', 'blimp', 'bomb'];
 export const hasSkill = (p, id) => !!p?.skills?.includes(id);
 
+// fora da fila (01/11, pedido dele): radar, bigorna e torta chamam na hora; so o dirigivel espera a vez
+export const STREAK_FREE = ['uav', 'anvil', 'nuke'];
 export const STREAKS = {
   uav: { kills: 3, time: 25 },
   anvil: { kills: 5 },
@@ -209,7 +217,7 @@ export const BODY_TRAITS = {
   fusil_12: { mode: 'semi', rate: 2.3, dmg: 1.5, spread: 0.55, hip: 1.35, kick: 1.35 }, // bico de pena: semi de precisao (abaixo da Agulha)
   shotgun_1: { mode: 'semi' },                                                     // bomba
   shotgun_2: { mode: 'semi', rate: 0.55, dmg: 0.82, kick: 0.85 },                  // semiautomatica
-  shotgun_3: { mode: 'auto', rate: 0.3, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~4,8/s), dano baixo por tiro, 32 no pente (6 x 5,34)
+  shotgun_3: { mode: 'auto', rate: 0.22, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~6,5/s; era 4,8, pedido dele 01/11), dano baixo por tiro, 32 no pente (6 x 5,34)
   // pacote WW2
   fusil_9: { mode: 'auto', rate: 1.12, dmg: 1.1, kick: 1.15, hip: 1.05 },             // trovao de lata
   subfusil_12: { mode: 'auto', rate: 0.7, dmg: 0.82, kick: 1.25, spread: 1.1, mag: 1.875, reload: 1.25 }, // tamborzao: cospe bala; tambor de 60 (32 x 1,875), troca devagar

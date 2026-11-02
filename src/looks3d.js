@@ -265,9 +265,11 @@ export function styleGlove(glove, style, color) {
   for (const c of [...glove.children]) if (c.userData.gloveExtra) glove.remove(c);
   glove.material = mat;
   for (const c of glove.children) if (c.isMesh && !c.userData.outline && c.material?.isMeshToonMaterial) c.material = mat;
-  glove.scale.setScalar(style === 'boxing' ? 1.35 : style === 'mitten' ? 1.1 : 1);
+  const base = glove.userData.baseScale ||= glove.scale.clone(); // luva Mickey ja vem achatada: o estilo multiplica por cima
+  glove.scale.copy(base).multiplyScalar(style === 'boxing' ? 1.35 : style === 'mitten' ? 1.1 : 1);
+  for (const c of glove.children) if (c.userData.finger) c.visible = !['mitten', 'oven', 'boxing'].includes(style); // luva sem dedos esconde os dedos
   const add = (m) => { m.userData.gloveExtra = true; glove.add(m); return m; };
-  if (style === 'oven') { glove.scale.setScalar(1.15); const th = add(ink(new THREE.SphereGeometry(0.05, 8, 6), 0xffffff, 0.012)); th.material = mat; th.position.set(0.1, 0.02, -0.04); }
+  if (style === 'oven') { glove.scale.copy(base).multiplyScalar(1.15); const th = add(ink(new THREE.SphereGeometry(0.05, 8, 6), 0xffffff, 0.012)); th.material = mat; th.position.set(0.1, 0.02, -0.04); }
   if (style === 'mitten') { const th = add(ink(new THREE.SphereGeometry(0.05, 8, 6), col, 0.012)); th.position.set(0.1, 0.02, -0.04); }
   if (style === 'boxing') { const lace = add(ink(new THREE.TorusGeometry(0.08, 0.012, 4, 10), PAL.white, 0)); lace.position.set(0, 0.1, -0.02); lace.rotation.x = Math.PI / 2; }
   if (style === 'spiked') {

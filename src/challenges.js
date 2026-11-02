@@ -47,6 +47,9 @@ export const UNLOCKS = [
   // akimbo (30/10): so sai daqui; duas pistolas, pente dobrado, sem mirar
   // revolver Bang-Bang (30/10): so sai daqui
   { id: 'u_akimbo', n: 50, xp: 2000, ok: K('pistol'), reward: { slot: 'handle', id: 'akimbo', wpn: 'pistol' } },
+  // akimbo nas armas compridas (01/11, pedido dele): so na Cuspideira (submetralhadora) e na Espirro (escopeta)
+  { id: 'u_akimbo_smg', n: 75, xp: 2500, ok: K('smg'), reward: { slot: 'handle', id: 'akimbo', wpn: 'smg' } },
+  { id: 'u_akimbo_sg', n: 40, xp: 2500, ok: K('shotgun'), reward: { slot: 'handle', id: 'akimbo', wpn: 'shotgun' } },
   { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
   { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
   { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
@@ -102,7 +105,8 @@ export function eliteToday() {
 const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_12: ['u_ww_ppsh', 100], subfusil_13: ['u_pk_mp5', 60], fusil_10: ['u_pk_ak', 80], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
 export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
 // item -> desafio que libera (o arsenal consulta isso)
-export const LOCKED_BY = Object.fromEntries(UNLOCKS.map(u => [u.reward.id, u]));
+// a mesma peca em outra arma (akimbo da pistola x da submetralhadora) tem desafio proprio: chave 'arma:peca'
+export const LOCKED_BY = Object.fromEntries(UNLOCKS.map(u => [u.reward.id === 'akimbo' && u.reward.wpn !== 'pistol' ? u.reward.wpn + ':akimbo' : u.reward.id, u]));
 export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u.id === id)?.n ?? Infinity);
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
