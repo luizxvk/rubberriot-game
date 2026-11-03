@@ -8,6 +8,7 @@ export class LocalNet {
     this.onmsg = () => {};
     this.onclose = () => {};
     this.core = new Core({ mode, map, bots, difficulty, lobby, limit, time, mut, send: (to, m) => { if (to == null || to === 'me') this.queue.push(m); } });
+    this.core.local = true; // sem AFK no solo
   }
   connect(name) { this.core.join('me', name); return Promise.resolve(); }
   send(m) { this.core.handle('me', m); }

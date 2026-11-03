@@ -3,7 +3,9 @@
 // num iframe (?ss=<tela>&pad=<controle>) falando com ela pelo window.__ssHost, em JSON igual ao multiplayer.
 // Todo mundo joga como convidado, junto no vermelho contra os bots (etapa 2: conta Rovex por tela).
 import { Core, MAP_IDS } from '../shared/core.js';
-import { ESCORT_MAPS } from '../shared/map.js';
+import { ESCORT_MAPS, HEIST_ONLY } from '../shared/map.js';
+import qrcode from 'qrcode-generator';
+import { API, STANDALONE } from './rovex.js';
 import './split.css';
 
 const EN = (() => { try { return (localStorage.getItem('rr_lang') || navigator.language || '').startsWith('en'); } catch { return false; } })();
@@ -11,21 +13,23 @@ const T = EN ? {
   title: 'Split screen', seat: 'Press A to join', seatSub: 'one controller per screen', leave: 'B leaves', pad: 'Controller {n}', player: 'Player {n}',
   mode: 'Mode', map: 'Map', bots: 'Bots', diff: 'Skill', two: '2 players', twos: { h: 'Top and bottom', v: 'Side by side' }, go: 'Start', back: 'Back to menu', need: 'Plug in a controller and press A',
   soundOff: 'Click or press any key to turn the sound on', hint: 'Player 1 picks: D-pad moves, A changes, Start starts',
+  qr: 'Scan with your phone to play with your Rovex account', qrOpt: 'optional · code {n}', acct: 'Rovex account', out: 'Sign out', outPad: 'Y signs out', qrWait: 'Generating code...', qrOff: 'No connection: playing as guest',
   modes: { tdm: 'Team Deathmatch', ffa: 'Free-for-All', ctf: 'Capture the Flag', dom: 'Domination', gungame: 'Gun Game', escort: 'Escort' },
-  maps: { auto: 'Automatic', vila: 'Village', fabrica: 'Factory', fronteira: 'Frontier', estaleiro: 'Shipyard', refinaria: 'Refinery', bonde: 'Tram Hill', apito: 'Whistle Valley' },
+  maps: { auto: 'Automatic', vila: 'Village', fabrica: 'Factory', fronteira: 'Frontier', estaleiro: 'Shipyard', refinaria: 'Refinery', ferradura: 'Horseshoe Bank', bonde: 'Tram Hill', apito: 'Whistle Valley' },
   diffs: { 0.7: 'Easy', 1: 'Normal', 1.35: 'Hard' },
 } : {
   title: 'Tela dividida', seat: 'Aperte A pra entrar', seatSub: 'um controle por tela', leave: 'B sai', pad: 'Controle {n}', player: 'Jogador {n}',
   mode: 'Modo', map: 'Mapa', bots: 'Bots', diff: 'Nivel', two: '2 telas', twos: { h: 'Em cima e embaixo', v: 'Lado a lado' }, go: 'Comecar', back: 'Voltar ao menu', need: 'Ligue um controle e aperte A',
   soundOff: 'Clique ou aperte uma tecla pra ligar o som', hint: 'Jogador 1 escolhe: direcional anda, A troca, Start comeca',
+  qr: 'Leia com o celular pra jogar com a sua conta Rovex', qrOpt: 'opcional · codigo {n}', acct: 'Conta Rovex', out: 'Sair da conta', outPad: 'Y sai da conta', qrWait: 'Gerando o codigo...', qrOff: 'Sem conexao: joga como convidado',
   modes: { tdm: 'Mata-Mata', ffa: 'Contra Todos', ctf: 'Captura a Bandeira', dom: 'Dominacao', gungame: 'Escada de Armas', escort: 'Escolta' },
-  maps: { auto: 'Automatico', vila: 'Vila', fabrica: 'Fabrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito' },
+  maps: { auto: 'Automatico', vila: 'Vila', fabrica: 'Fabrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', ferradura: 'Banco Ferradura', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito' },
   diffs: { 0.7: 'Faceis', 1: 'Normais', 1.35: 'Dificeis' },
 };
 const fmt = (s, n) => s.replace('{n}', n);
 const MODES = Object.keys(T.modes);
 const DIFFS = [0.7, 1, 1.35];
-const mapsFor = (mode) => ['auto', ...(mode === 'escort' ? ESCORT_MAPS : MAP_IDS.filter(m => m !== 'ilha' && !ESCORT_MAPS.includes(m)))];
+const mapsFor = (mode) => ['auto', ...(mode === 'escort' ? ESCORT_MAPS : mode === 'heist' ? [...HEIST_ONLY, ...MAP_IDS.filter(m => m !== 'ilha')] : MAP_IDS.filter(m => m !== 'ilha' && !ESCORT_MAPS.includes(m)))];
 
 let cfg = { mode: 'tdm', map: 'auto', bots: 6, difficulty: 1, two: 'h' }; // two: como dividir com 2 jogadores (h = em cima e embaixo, v = lado a lado)
 try { cfg = { ...cfg, ...JSON.parse(localStorage.getItem('rr_ss_cfg') || '{}') }; } catch { /* */ }
@@ -48,6 +52,7 @@ root.innerHTML = `
         <h2 class="ss-name"></h2>
         <p class="ss-sub"></p>
         <small class="ss-leave">${T.leave}</small>
+        <div class="ss-acct" aria-live="polite"></div>
       </article>`).join('')}
     </div>
     <div class="ss-badge" role="group" aria-labelledby="ssTitle">
@@ -95,7 +100,8 @@ function render() {
   document.querySelectorAll('.ss-seat').forEach((el) => {
     const i = +el.dataset.i, p = seats[i];
     el.classList.toggle('in', p != null);
-    el.querySelector('.ss-name').textContent = p != null ? fmt(T.player, i + 1) : T.seat;
+    el.querySelector('.ss-name').textContent = p != null ? (accts[i]?.name || fmt(T.player, i + 1)) : T.seat;
+    renderAcct(i, el, p != null);
     el.querySelector('.ss-sub').textContent = p != null ? fmt(T.pad, p + 1) : T.seatSub;
   });
   $('ssGo').disabled = n === 0;
@@ -118,6 +124,66 @@ function leavePage() {
 const wakeAll = () => { for (const f of frames) try { f.contentWindow.__ssWake?.(); } catch { /* */ } $('ssSound').hidden = true; };
 addEventListener('pointerdown', wakeAll); addEventListener('keydown', wakeAll);
 
+// ---------- conta Rovex por tela (02/11, pedido dele) ----------
+// sentou: o cartao mostra um QR; a pessoa le com o celular, entra na Rovex e autoriza (pagina autorizar-app com
+// ?qr=CODIGO). Aqui a pagina pergunta pelo codigo a cada 2,5 s; autorizou = nome no cartao, e a tela dela joga com
+// a conta (progresso, arsenal e variantes dela; ver ssboot.js). Sair do lugar (B) ou Y = sai da conta.
+const ROVEX_SITE = STANDALONE || location.port === '5197' ? 'https://tryrovex.com' : location.origin;
+const accts = [0, 1, 2, 3].map(i => { try { const a = JSON.parse(localStorage.getItem('rr_ss_acct_' + i) || 'null'); return a?.token ? a : null; } catch { return null; } });
+const qrs = [null, null, null, null]; // { code, exp, svg } | { off: true } | { wait: true }
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function signOut(i) {
+  accts[i] = null; qrs[i] = null;
+  try { localStorage.removeItem('rr_ss_acct_' + i); } catch { /* */ }
+}
+async function newQr(i) {
+  qrs[i] = { wait: true };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/qr', { method: 'POST', signal: AbortSignal.timeout?.(6000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { code, exp } = await r.json();
+    if (seats[i] == null || accts[i]) { qrs[i] = null; return; } // saiu do lugar enquanto gerava
+    const q = qrcode(0, 'M');
+    q.addData(`${ROVEX_SITE}/autorizar-app?app=rubber-riot&qr=${code}`);
+    q.make();
+    qrs[i] = { code, exp, svg: q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }) };
+  } catch { qrs[i] = { off: true, retry: performance.now() + 20000 }; }
+  render();
+}
+function renderAcct(i, el, seated) {
+  const box = el.querySelector('.ss-acct');
+  let html = '';
+  if (seated && accts[i]) html = `<p class="ss-who"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span>${T.acct}</span></p><button type="button" class="ss-out" data-out="${i}">${T.out}</button><small class="ss-outpad">${T.outPad}</small>`;
+  else if (seated) {
+    const q = qrs[i];
+    if (!q || (q.off && performance.now() > q.retry)) { if (!q?.wait) newQr(i); html = `<p class="ss-qrtxt">${T.qrWait}</p>`; }
+    else if (q.wait) html = `<p class="ss-qrtxt">${T.qrWait}</p>`;
+    else if (q.off) html = `<p class="ss-qrtxt">${T.qrOff}</p>`;
+    else html = `<div class="ss-qr" role="img" aria-label="QR">${q.svg}</div><p class="ss-qrtxt">${T.qr}<small>${fmt(T.qrOpt, q.code)}</small></p>`;
+  }
+  if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
+}
+document.addEventListener('click', (e) => { const b = e.target.closest?.('[data-out]'); if (b) { signOut(+b.dataset.out); render(); } });
+// pergunta pelos codigos abertos; vencido gera outro
+setInterval(async () => {
+  if (running) return;
+  for (let i = 0; i < 4; i++) {
+    const q = qrs[i];
+    if (seats[i] == null || accts[i] || !q?.code) continue;
+    if (Date.now() > q.exp) { qrs[i] = null; render(); continue; }
+    try {
+      const r = await fetch(API + '/games/rubber-riot/qr/' + q.code, { signal: AbortSignal.timeout?.(5000) });
+      const j = r.ok ? await r.json() : null;
+      if (j?.ok && j.token) {
+        accts[i] = { token: j.token, name: String(j.nome || '').slice(0, 14) || fmt(T.player, i + 1) };
+        try { localStorage.setItem('rr_ss_acct_' + i, JSON.stringify(accts[i])); } catch { /* */ }
+        qrs[i] = null; render();
+      } else if (j?.expirado) { qrs[i] = null; render(); }
+    } catch { /* tenta de novo */ }
+  }
+}, 2500);
+setInterval(() => { if (!running) render(); }, 5000); // sem rede: tenta gerar de novo de tempos em tempos
+
 // ---------- controles ----------
 const prev = new Map(); // indice do controle -> botoes do quadro anterior
 let navT = 0;
@@ -132,7 +198,8 @@ function pollSetup(dt) {
     const seat = seats.indexOf(g.index);
     if (seat < 0 && down(0)) { const free = seats.indexOf(null); if (free >= 0) { seats[free] = g.index; render(); } continue; }
     if (seat < 0) continue;
-    if (down(1)) { seats[seat] = null; render(); continue; }
+    if (down(1)) { seats[seat] = null; signOut(seat); render(); continue; }
+    if (down(3) && accts[seat]) { signOut(seat); render(); continue; } // Y: sai da conta (fica no lugar como convidado)
     if (g.index !== p1) continue;
     // so o jogador 1 mexe no selo
     if (down(9)) { start(); return; }
@@ -168,6 +235,7 @@ function start() {
       if (to == null) { for (const b of inbox.values()) b.push(raw); } else inbox.get(to)?.push(raw);
     },
   });
+  core.local = true; // sofa: ninguem sai por ficar parado
   inbox = new Map(); joined = new Set(); want = n;
   $('ssSetup').hidden = true;
   const game = $('ssGame');

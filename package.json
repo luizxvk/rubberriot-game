@@ -1,15 +1,18 @@
 {
   "name": "rubber-riot",
   "private": true,
-  "version": "0.11.4",
+  "version": "0.12.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5197 --host",
     "server": "node server.js",
     "sfx": "node scripts/gen-sfx.mjs",
-    "rovex": "vite build && node scripts/para-rovex.mjs"
+    "check": "node scripts/check-keys.mjs",
+    "tripo": "node scripts/tripo.mjs",
+    "rovex": "node scripts/check-keys.mjs && vite build && node scripts/para-rovex.mjs"
   },
   "dependencies": {
+    "qrcode-generator": "^1.4.4",
     "three": "0.169.0",
     "ws": "8.18.0"
   },

@@ -1,10 +1,11 @@
 // Jogador local: movimento firme estilo COD (anda, corre, agacha, pula baixo; sem carrinho
 // e sem pulo duplo), tiro hitscan, recarga e troca de arma.
 import * as THREE from 'three';
-import { moveBody, raycast, rayPlayer, hasLOS, wallThickness } from '../shared/map.js';
+import { moveBody, raycast, rayPlayer, hasLOS, wallThickness, headroom } from '../shared/map.js';
 import { standable, floorAt } from '../shared/nav.js';
-import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, bodyTrait, STREAK_FREE } from '../shared/weapons.js';
+import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, HEIST, bodyTrait, STREAK_FREE, GADGETS, gadgetOf } from '../shared/weapons.js';
 import { EV } from '../shared/events.js';
+import { BOR } from '../shared/mobs.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
@@ -15,9 +16,9 @@ import { isTouch } from './input.js';
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 // slots (teclas 1, 2, 3...): arma principal primeiro, pistola em 2, faca por ultimo
-const SLOT_ORDER = ['smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'pistol', 'melee', 'fists'];
+const SLOT_ORDER = ['rpg', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'pistol', 'melee', 'fists'];
 // pegou arma do chao: so troca sozinho se ela for "maior" que a da mao (faca < pistola < principais)
-const PICK_RANK = ['fists', 'melee', 'pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper'];
+const PICK_RANK = ['fists', 'melee', 'pistol', 'smg', 'rifle', 'shotgun', 'minigun', 'sniper', 'rpg'];
 
 // Deslizar (skill Carrinho, pedido dele 30/10): agachar correndo, no chao e rapido. Impulso reto que perde velocidade numa curva
 // ate a do agachado; da pra virar so um pouco; pular no meio vira pulo com o embalo; agachar de novo levanta;
@@ -43,6 +44,7 @@ export class Player {
 
   // pecas da arma: na escada de armas o modelo e' o do degrau, fora dela a classe do Arsenal
   lo(id) {
+    if (this.pickLo?.[id]) return this.pickLo[id]; // arma pega do chao: montada do jeito de quem largou (ate morrer)
     if (this.g.mode === 'gungame' && this.ggBody && id === this.wpn) return this.ggLo(id, this.ggBody);
     // battle royale: variante pega no chao ou no caixote vale no lugar da sua
     const bp = this.g.mode === 'br' && this.brBp?.[id];
@@ -53,6 +55,8 @@ export class Player {
       const k = this.g.snap?.infKit?.body ?? 0, bodies = CATEGORY[id].bodies, key = id + '|' + k;
       return (this.infCache ||= {})[key] ||= infectLoadout(id, { body: bodies[k % bodies.length] });
     }
+    // Noite dos Borroes: Rascunho = arma de fabrica (pistola = Estalo, o resto o 1o modelo da categoria); Arte-Final usa o Arsenal
+    if (this.g.mode === 'borroes' && this.g.snap?.bor && !this.g.snap.bor.art && CATEGORY[id] && id !== 'melee') { const b = this.g.boxBody?.get(this.g.myId)?.[id]; return (this.rasCache ||= {})[id + b] ||= infectLoadout(id, b ? { body: b } : undefined); } // modelo tirado da Caixa vale ate morrer
     return this.g.loadouts[id];
   }
 
@@ -79,6 +83,7 @@ export class Player {
   }
 
   spawn(ev) {
+    this.pickLo = null; // renasceu: volta pras proprias armas
     this.ggBody = ev.body || null;
     this.pos = [...ev.pos]; this.vel = [0, 0, 0]; this.recoilP = 0; this.recoilY = 0;
     // bate-volta: nasce caindo; o paraquedas abre no pulo (no celular abre sozinho, ajuste)
@@ -89,7 +94,7 @@ export class Player {
     this.owned = []; this.ammo = {}; this.stash = {};
     // escada de armas e infectado: o servidor decide o kit (infectado = so a lamina)
     if (this.g.mode === 'gungame') { this.give(ev.wpn, false); this.equip(ev.wpn, true); }
-    else if ((this.g.mode === 'infect' || this.g.mode === 'br' || EV(ev.mut ?? this.g.snap?.mut)?.kit) && ev.owned?.length) { // infectado, battle royale e evento com armas fixas: o servidor decide o kit
+    else if ((this.g.mode === 'infect' || this.g.mode === 'br' || this.g.mode === 'borroes' || EV(ev.mut ?? this.g.snap?.mut)?.kit) && ev.owned?.length) { // infectado, battle royale, noite dos borroes e evento com armas fixas: o servidor decide o kit
       for (const w of ev.owned) this.give(w, false);
       this.equip(ev.wpn, true);
     }
@@ -105,7 +110,7 @@ export class Player {
   // A municao nao enche de graca: a arma que sai guarda o que tinha e volta com isso se for escolhida de novo.
   rearm() {
     if (!this.alive) return;
-    if (this.g.mode !== 'gungame' && this.g.mode !== 'infect' && this.g.mode !== 'br' && !EV(this.g.snap?.mut)?.kit) {
+    if (this.g.mode !== 'gungame' && this.g.mode !== 'infect' && this.g.mode !== 'br' && !(this.g.mode === 'borroes' && !this.g.snap?.bor?.art) && !EV(this.g.snap?.mut)?.kit) {
       const primary = PRIMARIES.includes(this.g.settings.primary) ? this.g.settings.primary : 'smg';
       const old = this.owned.find(w => PRIMARIES.includes(w) && w !== primary);
       if (old) { this.stash[old] = this.ammo[old]; this.owned = this.owned.filter(w => w !== old); delete this.ammo[old]; }
@@ -147,6 +152,8 @@ export class Player {
 
   equip(id, instant = false) {
     if (!this.owned.includes(id)) return;
+    if (this.bagged && id !== 'pistol' && this.owned.includes('pistol')) return; // com a bolsa: so pistola
+    audio.preloadGuns(this.owned.map(w => this.lo(w)?.body)); // som de cada arma pronto antes do 1o tiro
     if (id !== this.wpn) this.lastWpn = this.wpn;
     this.wpn = id;
     this.reloadT = 0;
@@ -167,7 +174,7 @@ export class Player {
     const { W, st, mag } = this.stats();
     if (!a || a.mag >= mag || a.reserve <= 0 || this.reloadT > 0) return;
     this.burstLeft = 0;
-    const dur = W.reload * st.reload * this.sk('maos', 'reload') * this.cold('reload');
+    const dur = W.reload * st.reload * this.sk('maos', 'reload') * this.sk('pique', 'reload') * this.cold('reload');
     this.reloadT = dur; this.reloadDur = dur; // o anel da mira enche com isso
     this.g.vm.reload(dur);
     audio.play('reload', { vol: 0.7, rate: 1.6 / dur + 0.2 });
@@ -188,8 +195,8 @@ export class Player {
     // contagem de inicio (todo mundo carregando / 3, 2, 1): da pra olhar em volta, nao da pra se mexer
     // plantando / desarmando: parado no lugar, segurando o botao
     const B = this.g.snap?.bomb, acting = (B && B.actor === this.g.myId && B.prog > 0) || this.g.pumping; // dupla: enchendo a bomba no parceiro = parado
-    if (this.g.mode === 'bomb' || this.g.mode === 'br') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
-    if (this.g.snap?.freeze > 0 || acting) inp = { ...inp, moveX: 0, moveZ: 0, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false };
+    if (this.g.mode === 'bomb' || this.g.mode === 'br' || this.g.mode === 'borroes') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
+    if (this.g.snap?.freeze > 0 || acting || this.g.me?.fr) inp =  { ...inp, moveX: 0, moveZ: 0, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false };
     // dupla: caido so rasteja (nada de tiro, pulo, corrida, granada, faca ou equipamento)
     if (this.g.down) inp = { ...inp, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false, fieldPressed: false, ads: false, adsPressed: false, tacPressed: false, lastPressed: false };
     const safe = { pos: [...this.pos], vel: [...this.vel], yaw: this.yaw, pitch: this.pitch };
@@ -253,7 +260,7 @@ export class Player {
 
     // corrida e disparada (duplo toque no Shift ou botao da disparada)
     const wantSprint = inp.sprint && mz > 0.3 && this.onGround !== false && !inp.ads;
-    if (wantSprint && !this.sprint && this.sprintOut <= 0) this.sprint = true;
+    if (wantSprint && !this.sprint && this.sprintOut <= 0 && !fire) this.sprint = true; // gatilho apertado nao religa a corrida (03/11: correr + atirar travava a arma a cada 0,12 s e a cadencia caia)
     if (!inp.sprint && !this.tac) this.sprint = false;
     if (mz <= 0.3 || inp.ads) { this.sprint = false; this.tac = false; }
     if (fire && (this.sprint || this.tac)) { this.sprint = false; this.tac = false; this.sprintOut = 0.12; }
@@ -265,6 +272,7 @@ export class Player {
     // deslizar: comeca no lugar do agachar quando esta correndo rapido no chao
     this.slideCd = Math.max(0, (this.slideCd || 0) - dt);
     const hsNow = Math.hypot(this.vel[0], this.vel[2]);
+    const wasLow = this.crouch || this.slideT > 0;
     if (this.slideT > 0 && inp.crouchPressed && this.slideT < SLIDE.dur - 0.2) { this.endSlide(false); inp = { ...inp, crouchPressed: false }; } // agachar de novo: levanta
     if (inp.crouchPressed && !(this.slideT > 0) && (this.g.skills?.includes('carrinho') || this.g.tutorial?.slideOn) && this.onGround && (this.sprint || this.tac) && hsNow > SLIDE.minSpeed && !this.slideCd && !this.g.down && !(this.air && this.g.bounce)) {
       this.slideT = SLIDE.dur; this.slideDir = [this.vel[0] / hsNow, this.vel[2] / hsNow]; this.slideV0 = hsNow + SLIDE.boost;
@@ -277,6 +285,7 @@ export class Player {
     if (inp.crouchPressed) { this.crouch = !this.crouch; if (this.crouch) { this.sprint = false; this.tac = false; } }
     if (inp.crouchHeld === false && S.holdCrouch && !(this.slideT > 0)) this.crouch = false;
     if (this.crouch && (inp.jumpPressed || this.sprint)) { this.crouch = false; if (inp.jumpPressed) inp = { ...inp, jumpPressed: false }; }
+    if (wasLow && !this.crouch && !(this.slideT > 0) && this.g.M && !headroom(this.g.M, this.pos)) { this.crouch = true; this.sprint = false; this.tac = false; } // teto baixo (duto): continua agachado
 
     // velocidade alvo
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -284,10 +293,13 @@ export class Player {
     let speed = this.tac ? 12.2 : this.sprint ? 9.6 : 6.7; // 01/11: um pouco mais lento (pedido dele, mais equilibrado)
     if (this.crouch) speed = 3.7;
     speed *= (st.move ?? 1) * this.sk('borracha', 'move');
+    if (this.g.stimBoostT > 0) speed *= FIELD.stim.boost; // estimulante: um pouco mais de correria durante o efeito (03/11)
+    if (this.bagged) { speed *= HEIST.carrySlow; this.sprint = false; this.tac = false; } // Roube o Cofre: com a bolsa nas costas
     if (this.adsK > 0.3) speed *= 0.6;
     if (W.id === 'minigun' || this.wpn === 'minigun') speed *= this.firing ? 0.6 : 0.85;
     if (this.g.mode === 'infect' && this.g.myTeam === 'red') speed *= INFECT.speed;
     if (this.g.down) speed *= BR.duo.crawl;
+    if (this.g.snap?.bor?.puddles.some(q => (q[1] - this.pos[0]) ** 2 + (q[3] - this.pos[2]) ** 2 < q[4] * q[4] && Math.abs(q[2] - this.pos[1]) < 1.2)) speed *= BOR.spit.slow; // poca do Cuspidor
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
@@ -422,9 +434,11 @@ export class Player {
       audio.play('pickup', { vol: 0.45, rate: 1.5 }); // pino
       break;
     }
+    this.gadgetUpdate(dt, inp);
     if (inp.streakPressed && this.g.me?.ready?.length) {
       // chama a primeira que pode agora (radar, bigorna e torta nao esperam fila; o dirigivel espera o outro sair)
-      const L = this.g.snap?.sLock, k = this.g.me.ready.find(x => STREAK_FREE.includes(x) || !L);
+      const L = this.g.snap?.sLock, want = this.g.streakKind; this.g.streakKind = null; // celular: selo tocado = aquela
+      const k = want && this.g.me.ready.includes(want) && (STREAK_FREE.includes(want) || !L) ? want : this.g.me.ready.find(x => STREAK_FREE.includes(x) || !L);
       if (!k) { this.g.hud.message(t(L.kind === 'gap' ? 'streakGap' : 'streakWait', { s: t('s_' + L.kind), n: L.t }), 1.8); audio.play('empty', { ui: true, vol: 0.5 }); }
       else this.g.net.send({ t: 'streak', kind: k });
     }
@@ -432,7 +446,9 @@ export class Player {
     // recarga
     const a = this.ammo[this.wpn];
     if (this.reloadT > 0) {
-      this.reloadT -= dt;
+      // correndo sem a skill Recarga no Pique: a recarga pausa (02/11, pedido dele); com ela segue normal
+      const paused = (this.sprint || this.tac) && !this.g.skills?.includes('pique');
+      if (!paused) this.reloadT -= dt;
       if (this.reloadT <= 0 && a) {
         const need = mag - a.mag, take = Math.min(need, a.reserve);
         a.mag += take; a.reserve -= take;
@@ -455,6 +471,10 @@ export class Player {
     // direito = da direita; controle: LT = esquerda, RT = direita. Cada mao tem a propria cadencia (2x a do akimbo
     // alternado), entao os dois juntos atiram no mesmo ritmo do toque, que segue alternando sozinho.
     const onPad = !!this.g.pad?.active, aki = this.lo(this.wpn)?.handle === 'akimbo' && !W.melee && (!isTouch || onPad);
+    // Canhao de Carga: SO a Luneta (sniper_0) com o kit montado (02/11: o kit salvo na categoria valia em toda sniper)
+    const loS = this.wpn === 'sniper' ? this.lo('sniper') : null, chargeKit = loS?.conv === 'charge' && loS?.body === 'sniper_0';
+    // fora dela: carga zera e os circulos somem (antes ficavam girando na arma seguinte)
+    if (!chargeKit && (this.chargeT > 0 || this.g.vm.charge)) { this.chargeT = 0; this.g.vm.charge = 0; audio.stopKey?.('charge'); }
     if (aki) {
       const T = this.akT ||= [0, 0]; T[0] -= dt; T[1] -= dt;
       const auto = mode === 'auto', L = onPad ? inp.ads : inp.fire, R = onPad ? inp.fire : inp.ads;
@@ -468,7 +488,7 @@ export class Player {
         this.g.vm.forceSide = i === 0 ? 'L' : 'R';
         this.shoot(W, st); this.fireT = 0; T[i] = W.rate * st.rate * 2;
       }
-    } else if (this.wpn === 'sniper' && this.lo('sniper')?.conv === 'charge') {
+    } else if (chargeKit) {
       // Canhao de Carga (kit da Luneta, 01/11): segurando carrega ate 3 s; soltando atira. Carga cheia = abate na hora
       const ready = this.fireT <= 0 && this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !this.sprint && !this.tac;
       if (fire && ready && a && a.mag > 0) {
@@ -620,7 +640,11 @@ export class Player {
     const g = this.g;
     const a = this.ammo[this.wpn];
     if (a.mag !== Infinity) a.mag--;
-    this.fireT = W.rate * st.rate;
+    // cadencia exata (03/11): a sobra do quadro entra no proximo tiro. Antes zerava, e cada tiro esperava um quadro a
+    // mais; nas armas rapidas (Cuspideira, Pipoqueira) a cadencia caia sempre que o FPS oscilava. Teto de 1 quadro
+    // longo de sobra pra arma parada nao soltar rajada acumulada no primeiro tiro
+    const carry = this.firing && this.fireT < 0 ? Math.max(this.fireT, -0.05) : 0;
+    this.fireT = W.rate * st.rate + carry;
     const cam = g.camera;
     const o = this.eyePos();
     const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);
@@ -645,7 +669,13 @@ export class Player {
     this.recoilP += kick * adsK * 0.95 * pp;
     this.recoilY += kick * adsK * 0.5 * py + (Math.random() - 0.5) * kick * 0.1 * adsK;
     g.vm.fire(kick * (ads ? 0.55 : 1.3));
-    g.shake(W.kick * 0.4);
+    g.shake(kick * 0.4); // tremor segue o coice da montagem (kit de rajada da Bico de Pena = zero)
+    if (W.rocket) { // Bazuca: sai o foguete reto pra onde a mira aponta (o servidor voa, acerta e explode)
+      g.net.send({ t: 'rocket', d: fwd.toArray().map(v => Math.round(v * 1000) / 1000) });
+      audio.play('rocket', { vol: 0.9, jitter: 0.04 });
+      const rk = g.vm.gun?.userData.rocket; if (rk) rk.visible = false;
+      return;
+    }
     const bodyNow = this.lo(this.wpn)?.body; // som proprio de modelo: revolver, AA-12 e o laser do Bico Longo
     const laser = this.wpn === 'pistol' && bodyNow === LASER_BODY;
     audio.play(laser ? 'laser' : bodyNow === 'pistol_10' ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: this.lo(this.wpn)?.muzzle === 'silencer' });
@@ -659,7 +689,7 @@ export class Player {
     const ndc = mz.clone().project(g.vm.camera);
     const muzzleScreen = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(cam).sub(cam.position).normalize().multiplyScalar(1.1).add(cam.position);
 
-    const pellets = slug ? 1 : W.pellets || 1, ammo = this.ammoNow();
+    const pellets = slug ? 1 : st.pellets || W.pellets || 1, ammo = this.ammoNow(); // serrada: chumbo do modelo
     let total = 0, head = false, victim = null, hitPoint = null, firstEnd = null;
     const dmgK = st.dmg;
     for (let i = 0; i < pellets; i++) {
@@ -673,10 +703,10 @@ export class Player {
       const hit = this.traceTargets(o, d.toArray(), 250, ammo === 'ap');
       if (i === 0 || hit.player) firstEnd = hit.point;
       if (hit.player) {
-        const fall = slug ? Math.max(0.55, 1 - hit.dist / 110) * (W.pellets || 1) * AMMO.slug.slugK : this.wpn === 'shotgun' ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'pistol' && this.lo(this.wpn)?.handle === 'akimbo' ? Math.max(0.7, 1 - hit.dist / 140) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
+        const fall = slug ? Math.max(0.55, 1 - hit.dist / 110) * (W.pellets || 1) * AMMO.slug.slugK : this.wpn === 'shotgun' || st.pellets ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'pistol' && this.lo(this.wpn)?.handle === 'akimbo' ? Math.max(0.7, 1 - hit.dist / 140) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
         if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
-      if (i < (this.wpn === 'shotgun' ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)
+      if (i < (this.wpn === 'shotgun' || st.pellets ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)
     }
     // dirigivel inimigo no caminho da bala do meio: enche de furo (o servidor confere e estoura)
     if (!victim && g.blimpMeshes?.length) {
@@ -776,6 +806,59 @@ export class Player {
       if (dist < wall && dist < max && (!best || dist < best.dist)) best = { m, dist, point: pw.toArray() };
     }
     return best;
+  }
+
+  // ---------- gadget de baixo do cano (03/11) ----------
+  gadgetId() { return this.wpn === 'rifle' ? gadgetOf(this.lo('rifle')) : null; } // vale em todo lugar, campo de treino tambem (03/11)
+  gadgetUpdate(dt, inp) {
+    const id = this.gadgetId(), F = GADGETS.gd_flame, S = GADGETS.gd_shot;
+    this.gadgetPoseT = Math.max(0, (this.gadgetPoseT || 0) - dt); // arma levantada (pose do gadget) enquanto usa e um tico depois
+    if (id && inp.gadget && this.alive) this.gadgetPoseT = Math.max(this.gadgetPoseT, 0.25);
+    this.flameFuel ??= F.fuel; this.ubShells ??= S.shells;
+    // espelho do servidor (so pra tela): enche/volta do mesmo jeito
+    if (this.flameFuel < F.fuel && (this.flameIdle = (this.flameIdle || 0) + dt) > 1) this.flameFuel = Math.min(F.fuel, this.flameFuel + F.regen * dt * 2);
+    if (this.ubShells < S.shells && (this.ubT = (this.ubT || 0) + dt) >= S.refill) { this.ubT = 0; this.ubShells++; }
+    const busy = !this.alive || this.reloadT > 0 || this.switchT > 0 || this.throwT > 0 || this.sprint;
+    if (id === 'gd_flame' && inp.gadget && !busy && this.flameFuel > 0) {
+      this.flameIdle = 0; this.flameFuel = Math.max(0, this.flameFuel - dt);
+      if ((this.flameT = (this.flameT || 0) - dt) <= 0) {
+        this.flameT = F.tick;
+        const f = new THREE.Vector3(); this.g.camera.getWorldDirection(f);
+        this.g.net.send({ t: 'flame', d: f.toArray().map(v => Math.round(v * 1000) / 1000) });
+        // sai do cano NA TELA (mesma conta do tiro: a arma da mao tem camera propria); abaixo do cano escondia o comeco do jato atras da arma
+        const cam = this.g.camera, ndc = this.g.vm.muzzleCam().project(this.g.vm.camera);
+        const mz = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(cam).sub(cam.position).normalize().multiplyScalar(1.1).add(cam.position);
+        // o jato mira onde a mira aponta a ~6 m, partindo do bocal
+        const fd = cam.position.clone().addScaledVector(f, 6).sub(mz).normalize();
+        this.g.fx.flame?.(mz.toArray(), fd.toArray());
+        if ((this.flameSnd = (this.flameSnd || 0) - F.tick) <= 0) { this.flameSnd = 0.32; audio.play('flamer', { vol: 0.55, key: 'flamer', max: 2, jitter: 0.06 }); }
+      }
+    } else if (id === 'gd_flame' && inp.gadgetPressed && this.flameFuel <= 0) audio.play('empty', { ui: true, vol: 0.5 });
+    if (id === 'gd_shot' && inp.gadgetPressed && !busy) {
+      if (this.ubShells <= 0) { audio.play('empty', { ui: true, vol: 0.5 }); return; }
+      this.ubShells--; this.ubT = 0; this.gadgetPoseT = 0.6;
+      this.gadgetShot();
+    }
+  }
+  // escopetinha: chumbo saindo de baixo do cano (mesma conta da escopeta); o servidor confere o cartucho
+  gadgetShot() {
+    const g = this.g, W = WEAPONS.ubshot, cam = g.camera, o = this.eyePos();
+    const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion), rt = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+    const mz = g.vm.muzzleCam().applyMatrix4(cam.matrixWorld);
+    g.net.send({ t: 'ubshot', o: mz.toArray(), e: fwd.clone().multiplyScalar(20).add(mz).toArray() });
+    const per = new Map();
+    for (let i = 0; i < W.pellets; i++) {
+      const r = Math.sqrt(Math.random()) * W.spread, th = Math.random() * Math.PI * 2;
+      const d = fwd.clone().addScaledVector(rt, Math.cos(th) * r).addScaledVector(up, Math.sin(th) * r).normalize();
+      const hit = this.traceTargets(o, d.toArray(), W.range);
+      if (hit.player) { const e = per.get(hit.player) || { dmg: 0, head: false }; e.dmg += W.dmg * Math.max(0.25, 1 - hit.dist / 22); e.head ||= hit.head; per.set(hit.player, e); }
+      else if (hit.normal) g.fx.impact(hit.point, hit.normal);
+      if (i < 5) g.fx.bullet(mz.toArray(), hit.point, 'chalk', 'shotgun');
+    }
+    for (const [v, e] of per) { g.net.send({ t: 'hit', v: v.id, dmg: Math.round(e.dmg), head: e.head, wpn: 'ubshot' }); g.onHitConfirm?.(null, e.head, Math.round(e.dmg), v); }
+    this.recoilP += W.kick; g.vm.fire(W.kick * 1.2); g.shake(0.08);
+    audio.play(audio.gunSound('shotgun_1', 'shotgun'), { vol: 0.8, key: 'gun', max: 5, jitter: 0.05 });
   }
 
   traceTargets(o, d, max, pierce = false, skip = null) {

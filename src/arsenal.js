@@ -5,13 +5,13 @@
 import * as THREE from 'three';
 import { pushSoon } from './rovex.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { toon, outline } from './toon.js';
+import { toon, outline, geo } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeGun } from './guns.js';
 import { t, wName } from './i18n.js';
 import { camoGlsl, camoTime, camoById } from './camos.js';
 import { attachCamoFx } from './camofx.js';
-import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS } from '../shared/weapons.js';
+import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS, GADGETS } from '../shared/weapons.js';
 import { bpUnlocked } from './progress.js';
 
 const S = 0.32; // unidade do glb -> metros
@@ -24,9 +24,9 @@ let gunTex = null;
 export const MELEE = Array.from({ length: 15 }, (_, i) => 'melee_' + i);
 const MELEE_LEN = [0.34, 0.5, 0.3, 0.72, 0.52, 0.36, 0.52, 0.56, 0.3, 0.55, 0.28, 0.5, 0.6, 0.52, 0.5];
 export const CATEGORY = {
-  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (sai de desafio)
+  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10', 'pistol_11'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (sai de desafio)
   smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_12', 'subfusil_13'], scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
-  rifle: { bodies: [...range('fusil_', 1, 7), 'fusil_9', 'fusil_10', 'fusil_11', 'fusil_12'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
+  rifle: { bodies: [...range('fusil_', 1, 7), 'fusil_9', 'fusil_11', 'fusil_12', 'fusil_13'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'gd_flame', 'gd_shot'] },
   // escopeta: as 3 lunetas do fim da lista so cabem no Bacamarte (LONG_SCOPE)
   shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9', 'sniper_scope_0', 'sniper_scope_1', 'sniper_scope_2'], chargers: ['shotgun_charguer_1'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
   melee: { bodies: MELEE, scopes: [], chargers: [], handles: [] },
@@ -91,6 +91,7 @@ export function partName(slot, id) {
   if (slot === 'muzzle') return t('mz_' + id);
   if (slot === 'laser') return t(id === 'laser_2' ? 'laserTac' : 'laserDot');
   if (id === 'akimbo') return t('akimbo');
+  if (GADGETS[id]) return t(id);
   return t('grip') + ' ' + n;
 }
 function catOf(id) { return id.startsWith('melee') ? 'melee' : id.startsWith('subfusil') ? 'smg' : id.startsWith('fusil') ? 'rifle' : id.startsWith('pistol') ? 'pistol' : id.startsWith('shotgun') ? 'shotgun' : 'sniper'; }
@@ -107,12 +108,13 @@ export const CONV_KITS = {
   shotgun_2: { auto: { mode: 'auto', rate: 0.55, dmg: 0.78, spread: 1.15, kick: 1.25, reload: 1.1 } },
   subfusil_8: { auto: { mode: 'auto', kick: 1.08 } },
   fusil_7: { auto: { mode: 'auto', rate: 0.62, dmg: 0.72, spread: 1.1, kick: 1.2 } }, // Relampago automatica (02/11, pedido dele): cadencia de fuzil comum, cada tiro bem mais fraco que o semi
+  fusil_12: { burst: { mode: 'burst', burst: 3, rate: 0.45, dmg: 0.6, kick: 0, spread: 0.9 } }, // Bico de Pena em rajada (03/11, pedido dele): 3 por puxada, coice ZERO, cada bala bem mais fraca
   sniper_0: { charge: { adsTime: 1.1, move: 0.95 } }, // Luneta: Canhao de Carga (01/11): segura 3 s = abate na hora, qualquer distancia // Dois Toques (SCAR-L) automatica: mesmo dano e cadencia da rajada, so o modo muda (pedido dele 01/11); libera no nivel do modelo
 };
 export const convOptions = (body) => Object.keys(CONV_KITS[body] || {});
 // akimbo: pistola toda; nas compridas so um modelo (pedido dele 01/11)
 const AKIMBO_BODIES = { smg: ['subfusil_5'], shotgun: ['shotgun_2'] };
-export function handleFits(body, cat, id) { return id !== 'akimbo' || cat === 'pistol' || !!AKIMBO_BODIES[cat]?.includes(body); }
+export function handleFits(body, cat, id) { if (GADGETS[id]) return GADGETS[id].body === body; return id !== 'akimbo' || cat === 'pistol' || !!AKIMBO_BODIES[cat]?.includes(body); }
 export function scopeFits(body, cat, id) {
   if (!id) return cat !== 'sniper';
   if (id === nativePart(body, 'scope')) return true;
@@ -173,7 +175,7 @@ export function loadArsenal() {
       // lente das miras: faces verdes viradas pro eixo do cano viram buraco (vidro)
       const pal = paletteReader(gunTex);
       if (pal) for (const [name, p] of Object.entries(parts)) if (/scope/.test(name)) { p.lens = stripLens(p.geo, pal); levelScope(p); }
-    }).then(() => cutForeMounts()).then(() => loadWW2(loader)).then(() => loadRevolver(loader)).then(() => loadPack2(loader)).then(() => loadSniper4(loader)).then(() => buildDrumMag()).catch(e => console.warn('low_poly_guns.glb nao carregou', e)),
+    }).then(() => cutForeMounts()).then(() => loadWW2(loader)).then(() => loadRevolver(loader)).then(() => loadPack2(loader)).then(() => buildDrumMag()).catch(e => console.warn('low_poly_guns.glb nao carregou', e)),
     loader.loadAsync(import.meta.env.BASE_URL + 'models/src/melee.glb').then(g => {
       // cada mesh do arquivo vira melee_i: cabo no -z, ponta/cabeca no +z (sem a rotacao do Sketchfab)
       let i = 0;
@@ -394,7 +396,7 @@ function loadWW2(loader) {
 // abaixo do fundo do receptor nesse trecho e vira o pente original, entao os outros pentes encaixam no lugar.
 // grip/mid/fore: mesmas marcas da WW2 (fracao a partir do cano). scopeCut tira a mira que vem colada.
 const PACK2 = [
-  { node: 'AK_10', id: 'fusil_10', cat: 'rifle', k: 1.04, grip: 0.685, mid: 0.5, magCut: [0.4, 0.57] },
+  
   { node: 'AR_7', id: 'fusil_11', cat: 'rifle', k: 1, grip: 0.7, mid: 0.52, magCut: [0.46, 0.58], scopeCut: [0.46, 0.56, 0.35] },
   { node: 'dmr .45_12', id: 'fusil_12', cat: 'rifle', k: 1.08, grip: 0.72, mid: 0.5, magCut: [0.46, 0.57] },
   { node: 'MP5_8', id: 'subfusil_13', cat: 'smg', k: 1, grip: 0.64, mid: 0.56, magCut: [0.37, 0.49] },
@@ -402,7 +404,17 @@ const PACK2 = [
 // AA-12 (pedido dele 30/10): escopeta automatica, malha unica com textura (a cor da textura decide as zonas).
 // scopeCut tira a alca traseira alta (batia na mira) e scopeCut2 a massa da frente (aparecia no ADS).
 const AA12 = [{ node: 'aa12', id: 'shotgun_3', cat: 'shotgun', k: 1, grip: 0.657, mid: 0.48, magCut: [0.4, 0.54], scopeCut: [0.6, 0.74], scopeCut2: [0, 0.16] }]; // scopeCut2: massa da frente (aparecia na mira ADS)
-export const PACK2_BODIES = [...PACK2, ...AA12].map(w => w.id);
+// pacote 3 (03/11, pedido dele; "Lowpoly Guns Package" de Ugur Yakisik, CC-BY 4.0 -> creditos): AK nova (fuzil) e a
+// sniper que virou o modelo do Mestre-Cuca. Uma textura de paleta: warm = madeira laranja vai pro destaque.
+// mag: o pente vem como peca SEPARADA no arquivo -> vira o pente original, pendurado no vao (well = fracao do cano)
+const PACK3 = [
+  { node: 'AK', id: 'fusil_13', cat: 'rifle', k: 1.04, grip: 0.7, mid: 0.52, fore: 0.32, warm: true, zUp: true, mag: 'AkMagazine', well: 0.46 },
+  { node: 'Cube', id: 'sniper_4', cat: 'sniper', k: 1, grip: 0.72, mid: 0.56, fore: 0.36, zUp: true, darkCamo: 45, metal: '#3e4a2b', scopeCut: [0.42, 0.82] }, // toda verde e preta: a coronha (maior area) leva camo/pintura (oliva de fabrica), o metal escuro leva o destaque
+];
+// Escopeta serrada (03/11, pedido dele; "Sawed off shotgun low poly" de Mgt_Ganm12, CC-BY 4.0 -> creditos): secundaria
+// de 2 tiros de chumbo, aceita akimbo, sem bocal. Dois materiais sem textura: lightMat (madeira vermelha) = destaque.
+const SAWED = [{ node: 'RootNode', id: 'pistol_11', cat: 'pistol', k: 1.55, grip: 0.84, mid: 0.6, fore: 0.4, lightMat: 'Material', sawed: true }];
+export const PACK2_BODIES = [...PACK2, ...AA12, ...PACK3, ...SAWED].map(w => w.id);
 // ilhas: grupos de triangulos ligados por vertice (cada peca fechada do modelo low-poly)
 function geoIslands(ge) {
   const p = ge.attributes.position, nT = p.count / 3, par = new Int32Array(nT).map((_, i) => i), seen = new Map();
@@ -433,7 +445,7 @@ export const ironOptions = (cat) => (cat === 'sniper' || cat === 'melee' ? [] : 
 // botao de regulagem do lado; massa na frente = base, orelhas (ou aro fechado) e pino com ponto colorido no topo.
 // A linha de visada passa pelo centro do furo e pelo ponto; e por ela que a mira (ADS) olha.
 function addIrons(id, body, inner, origin, partMat) {
-  const b = parts[body].box, len = b.max.z - b.min.z, cx = (b.min.x + b.max.x) / 2, w = b.max.x - b.min.x;
+  const b = parts[body].box, len = b.max.z - b.min.z, cx = axisX(body), w = b.max.x - b.min.x;
   const zR = b.min.z + len * 0.6, zF = b.min.z + len * 0.08;
   const top = (z0, z1) => { const y = hiUnder(body, cx, w * 0.18, z0, z1); return Number.isFinite(y) ? y : b.max.y; };
   const yR = top(zR - len * 0.03, zR + len * 0.03), yF = top(zF - len * 0.03, zF + len * 0.03), u = len * 0.016;
@@ -473,7 +485,7 @@ export const MUZZLES = { // na ordem do nivel da arma que abre (progress.js MUZZ
   brake: { kick: 0.8, adsTime: 1.05 },                                                                  // freio de boca: segura o coice, pesa na mira
   silencer: { spread: 0.96, kick: 0.95, adsTime: 1.08, move: 0.98, dmg: 0.94, flash: 0.15, quiet: true }, // silenciador: quase sem clarao e abafado; dano e mira mais lentos
 };
-const MUZZLE_BAN = ['sniper_0', 'sniper_2', 'sniper_3', 'pistol_5']; // Luneta, Marretao, Ping Velho e Bico Longo: sem bocal (pedido dele 01/11)
+const MUZZLE_BAN = ['sniper_0', 'sniper_2', 'sniper_3', 'pistol_5', 'pistol_11']; // + serrada (03/11) // Luneta, Marretao, Ping Velho e Bico Longo: sem bocal (pedido dele 01/11)
 export const muzzleFits = (body) => !!body && !body.startsWith('melee') && !!parts[body] && !MUZZLE_BAN.includes(body);
 export const muzzleOptions = (body) => (muzzleFits(body) ? Object.keys(MUZZLES) : []);
 // ponta do cano no modelo: centro e raio dos vertices da frente (z minimo = boca)
@@ -541,7 +553,84 @@ function buildDrumMag() {
   geo.computeVertexNormals(); geo.computeBoundingBox();
   parts.pistol_drum = { geo, box: geo.boundingBox.clone(), ww2: true, drumMag: true };
 }
-function loadPack2(loader) { return loadPackFile(loader, 'rifle_pack.glb', PACK2).then(() => loadPackFile(loader, 'aa12.glb', AA12)); }
+function loadPack2(loader) { return loadPackFile(loader, 'rifle_pack.glb', PACK2).then(() => loadPackFile(loader, 'aa12.glb', AA12)).then(() => loadPackFile(loader, 'lowpoly_guns_package.glb', PACK3)).then(() => loadPackFile(loader, 'sawed_off.glb', SAWED)).then(() => loadRpg(loader)).then(() => buildGadgetParts()); }
+// gadgets de baixo do cano (03/11): desenho proprio, montado no tamanho do modelo dono; encaixa como empunhadura
+// (topo da peca no guarda-mao). Tanque/bocal escuros levam o destaque; faixa vermelha de aviso.
+function buildGadgetParts() {
+  const pal = paletteReader(gunTex), uvDark = pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5], uvLight = pal ? paletteUV(pal, [178, 128, 84]) : [0.5, 0.5];
+  const piece = (ge, uv, x, y, z, rx = 0) => { if (rx) ge.rotateX(rx); ge.translate(x, y, z); if (ge.index) ge = ge.toNonIndexed(); setUV(ge, uv); return ge; };
+  for (const [id, G] of Object.entries(GADGETS)) {
+    const B = parts[G.body]; if (!B) continue;
+    const L = B.box.max.z - B.box.min.z, list = [];
+    if (id === 'gd_flame') { // tanque de gas deitado + bocal comprido com chama-piloto
+      list.push(piece(new THREE.CylinderGeometry(0.045 * L, 0.045 * L, 0.2 * L, 14), uvLight, 0, -0.06 * L, 0.02 * L, Math.PI / 2));
+      list.push(piece(new THREE.CylinderGeometry(0.047 * L, 0.047 * L, 0.03 * L, 14), uvDark, 0, -0.06 * L, 0.08 * L, Math.PI / 2));
+      list.push(piece(new THREE.CylinderGeometry(0.014 * L, 0.018 * L, 0.2 * L, 10), uvDark, 0, -0.03 * L, -0.15 * L, Math.PI / 2));
+      list.push(piece(new THREE.CylinderGeometry(0.024 * L, 0.02 * L, 0.035 * L, 10), uvDark, 0, -0.03 * L, -0.26 * L, Math.PI / 2));
+      list.push(piece(new THREE.BoxGeometry(0.03 * L, 0.03 * L, 0.12 * L), uvDark, 0, -0.005 * L, -0.02 * L));
+    } else { // escopetinha: tubo + telha de bombear + trilho
+      list.push(piece(new THREE.CylinderGeometry(0.022 * L, 0.022 * L, 0.36 * L, 12), uvDark, 0, -0.035 * L, -0.08 * L, Math.PI / 2));
+      list.push(piece(new THREE.CylinderGeometry(0.03 * L, 0.03 * L, 0.12 * L, 12), uvLight, 0, -0.035 * L, -0.04 * L, Math.PI / 2));
+      list.push(piece(new THREE.BoxGeometry(0.03 * L, 0.025 * L, 0.26 * L), uvDark, 0, -0.005 * L, -0.06 * L));
+    }
+    const geo = mergeGeometries(list); if (id === 'gd_flame') geo.translate(0, 0, -0.07 * L); // tanque pra frente: nao encosta no pente
+    geo.computeVertexNormals(); geo.computeBoundingBox();
+    parts[id] = { geo, box: geo.boundingBox.clone(), gadget: true };
+  }
+}
+
+// ---------- Bazuca (sequencia, 03/11): RPG e o foguete do pacote 3, com a textura original ----------
+// Arquivo com Z pra cima: deita, eixo mais comprido vira Z, boca (ponta mais fina do tubo / ogiva do foguete) no -Z.
+function packPiece(g, name, frontThin) {
+  const o0 = g.scene.getObjectByName(name); if (!o0) return null;
+  const list = []; let map = null;
+  o0.traverse(o => { if (!o.isMesh) return; let ge = o.geometry.clone().applyMatrix4(o.matrixWorld); if (ge.index) ge = ge.toNonIndexed(); for (const k of Object.keys(ge.attributes)) if (!['position', 'normal', 'uv'].includes(k)) ge.deleteAttribute(k); list.push(ge); map ||= o.material?.map || null; });
+  if (!list.length) return null;
+  const ge = mergeGeometries(list); ge.rotateX(Math.PI / 2); ge.computeBoundingBox();
+  const s = ge.boundingBox.getSize(new THREE.Vector3());
+  if (s.x > s.z) ge.rotateY(Math.PI / 2);
+  ge.computeBoundingBox(); ge.center(); ge.computeBoundingBox();
+  const b = ge.boundingBox, len = b.max.z - b.min.z, pos = ge.attributes.position;
+  const thick = (lo, hi) => { let a = Infinity, c = -Infinity; for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i); if (z >= lo && z <= hi) { const y = pos.getY(i); a = Math.min(a, y); c = Math.max(c, y); } } return c - a; };
+  const minThin = thick(b.min.z, b.min.z + len * 0.08) < thick(b.max.z - len * 0.08, b.max.z);
+  if (minThin !== frontThin) ge.rotateY(Math.PI); // boca no -Z
+  ge.scale(1 / len, 1 / len, 1 / len); ge.computeVertexNormals(); ge.computeBoundingBox();
+  // centro da boca (fatia da frente): o foguete e o cano saem DAQUI, nao do centro da caixa (cabo e alca puxavam pra baixo)
+  const P = ge.attributes.position, z0 = ge.boundingBox.min.z; let sx = 0, sy = 0, n = 0;
+  for (let i = 0; i < P.count; i++) if (P.getZ(i) < z0 + 0.03) { sx += P.getX(i); sy += P.getY(i); n++; }
+  return { geo: ge, map, mouth: n ? [sx / n, sy / n] : [0, 0], front: z0 };
+}
+function loadRpg(loader) {
+  return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/lowpoly_guns_package.glb').then(g => {
+    g.scene.updateMatrixWorld(true);
+    parts.__rpg = packPiece(g, 'RPG', true);
+    parts.__rocket = packPiece(g, 'RPGAmmo', false); // foguete: a ogiva (grossa) vai na frente
+  }).catch(e => console.warn('bazuca nao carregou', e));
+}
+const rpgMat = () => (parts.__rpgMat ||= toon(0xffffff, { map: parts.__rpg?.map || parts.__rocket?.map || null }));
+function buildRpg() {
+  const holder = new THREE.Group(), inner = new THREE.Group();
+  const m = new THREE.Mesh(parts.__rpg.geo, rpgMat()); outline(m, 0.0055);
+  // o eixo da boca do tubo fica na linha do centro da arma (x 0, y 0.03): o modelo desce/anda pra isso
+  const R = parts.__rpg, K = 1.05, mx = R.mouth[0] * K, my = R.mouth[1] * K, front = -0.12 + R.front * K;
+  inner.add(m); inner.scale.setScalar(K); inner.position.set(-mx, 0.03 - my, -0.12);
+  // foguete encaixado na boca, no mesmo eixo, metade pra fora (some quando sai e volta na recarga)
+  const ammo = parts.__rocket ? new THREE.Mesh(parts.__rocket.geo, rpgMat()) : null;
+  if (ammo) { const s = 0.42; ammo.scale.setScalar(s); ammo.position.set(0, 0.03, front - s * 0.22); holder.add(ammo); }
+  holder.add(inner);
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.03, front);
+  const gripR = new THREE.Object3D(); gripR.position.set(0, -0.1, 0.0);
+  const gripL = new THREE.Object3D(); gripL.position.set(-0.04, -0.1, -0.2);
+  holder.add(muzzle, gripR, gripL);
+  holder.userData = { id: 'rpg', muzzle, gripR, gripL, scope: null, stats: {}, rocket: ammo };
+  return holder;
+}
+// foguete voando (mundo): mesma malha, ogiva pra frente (-Z = pra onde vai)
+export function rocketMesh() {
+  if (!parts.__rocket) { const g = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 8).rotateX(Math.PI / 2), toon(0x3f6b2a)); return g; }
+  const m = new THREE.Mesh(parts.__rocket.geo, rpgMat()); outline(m, 0.004); m.scale.setScalar(0.75);
+  const g = new THREE.Group(); g.add(m); return g;
+}
 function loadPackFile(loader, file, LIST) {
   return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/' + file).then(g => {
     g.scene.updateMatrixWorld(true);
@@ -559,11 +648,11 @@ function loadPackFile(loader, file, LIST) {
         if (ge.index) ge = ge.toNonIndexed();
         // com textura: a cor dela em cada triangulo decide; sem: a cor do material
         const tex = o.material?.map ? paletteReader(o.material.map) : null, uv0 = ge.attributes.uv, n = ge.attributes.position.count, a = new Float32Array(n * 2);
-        const matLight = lum(o.material?.color) > 0.5;
+        const matLight = w.lightMat ? o.material?.name === w.lightMat : lum(o.material?.color) > 0.5;
         for (let i = 0; i < n; i += 3) {
-          let light = matLight;
-          if (tex && uv0) { const c = tex((uv0.getX(i) + uv0.getX(i + 1) + uv0.getX(i + 2)) / 3, (uv0.getY(i) + uv0.getY(i + 1) + uv0.getY(i + 2)) / 3); light = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2] > 110; }
-          const uv = light ? uvLight : uvMetal;
+          let light = matLight, dark = false;
+          if (tex && uv0) { const c = tex((uv0.getX(i) + uv0.getX(i + 1) + uv0.getX(i + 2)) / 3, (uv0.getY(i) + uv0.getY(i + 1) + uv0.getY(i + 2)) / 3); const L = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]; if (w.darkCamo) { light = false; dark = L >= w.darkCamo; } else light = w.warm ? c[0] - c[2] > 45 || L > 150 : L > 110; }
+          const uv = light ? uvLight : dark ? uvDark : uvMetal; // dark: peca escura que so leva o destaque
           for (let j = 0; j < 3; j++) { a[(i + j) * 2] = uv[0]; a[(i + j) * 2 + 1] = uv[1]; }
         }
         for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k);
@@ -572,6 +661,7 @@ function loadPackFile(loader, file, LIST) {
       });
       const geo = list.length ? mergeGeometries(list) : null;
       if (!geo) continue;
+      if (w.zUp) geo.rotateX(Math.PI / 2); // arquivo com Z pra cima (veio de FBX): deita certo
       geo.computeBoundingBox();
       const b = geo.boundingBox, len = b.max.x - b.min.x, pos = geo.attributes.position;
       const ext = (lo, hi) => { let a = Infinity, c = -Infinity; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i); if (x >= lo && x <= hi) { const y = pos.getY(i); if (y < a) a = y; if (y > c) c = y; } } return c - a; };
@@ -584,6 +674,11 @@ function loadPackFile(loader, file, LIST) {
         .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
       geo.applyMatrix4(m);
       if (w.tilt) geo.rotateX(w.tilt); // modelo que vem com o cano inclinado: nivela
+      if (w.zUp) { // pacote 3: centra o X pelo CANO (fatia da boca); ferrolho/alavanca de um lado tiravam a mira e o laser do eixo
+        geo.computeBoundingBox(); const P0 = geo.attributes.position, zf = geo.boundingBox.min.z + (geo.boundingBox.max.z - geo.boundingBox.min.z) * 0.04;
+        let sx = 0, n0 = 0; for (let i = 0; i < P0.count; i++) if (P0.getZ(i) < zf) { sx += P0.getX(i); n0++; }
+        if (n0) { const dx = -sx / n0; geo.translate(dx, 0, 0); m.premultiply(new THREE.Matrix4().makeTranslation(dx, 0, 0)); }
+      }
       geo.computeVertexNormals(); geo.computeBoundingBox();
       let bodyGeo = geo;
       const bb0 = geo.boundingBox, zAt0 = (f) => bb0.min.z + (bb0.max.z - bb0.min.z) * f;
@@ -604,77 +699,29 @@ function loadPackFile(loader, file, LIST) {
       if (out.size) { const keep = []; for (let t = 0; t < geo.attributes.position.count / 3; t++) if (!out.has(t)) keep.push(t); bodyGeo = geoTake(geo, keep); }
       if (magT.length) magGeo = geoTake(geo, magT);
       bodyGeo.computeBoundingBox();
-      const body = parts[w.id] = { geo: bodyGeo, box: bodyGeo.boundingBox.clone(), ww2: true, camoGreen: true, metal: '#2a2724' };
+      const body = parts[w.id] = { geo: bodyGeo, box: bodyGeo.boundingBox.clone(), ww2: true, camoGreen: true, metal: w.metal || '#2a2724', sawed: !!w.sawed };
+      if (w.zUp) body.axisX = 0; // centrado pelo cano acima
       const bb = body.box, blen = bb.max.z - bb.min.z, zAt = (f) => bb.min.z + blen * f;
       const pr = profile(w.id);
       if (w.grip) { const gz = zAt(w.grip); body.grip = { zc: gz, z0: gz - blen * 0.04, z1: gz + blen * 0.04, lo: pr.lo[sliceOf(pr, gz)] }; }
       if (w.mid) body.mid = zAt(w.mid);
       if (w.fore) body.fore = zAt(w.fore);
+      if (!magGeo && w.mag) { // pente que vem solto no arquivo
+        const mo = g.scene.getObjectByName(nodeName(w.mag)), ml = [];
+        mo?.traverse(o => { if (o.isMesh) { let ge = o.geometry.clone().applyMatrix4(o.matrixWorld); if (ge.index) ge = ge.toNonIndexed(); for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k); ml.push(ge); } });
+        if (ml.length) {
+          magGeo = mergeGeometries(ml); if (w.zUp) magGeo.rotateX(Math.PI / 2); magGeo.applyMatrix4(m); if (w.tilt) magGeo.rotateX(w.tilt); magGeo.computeBoundingBox();
+          const mb = magGeo.boundingBox, mc = mb.getCenter(new THREE.Vector3()), wz = zAt(w.well), bh = bb.max.y - bb.min.y;
+          magGeo.translate((w.zUp ? 0 : (bb.min.x + bb.max.x) / 2) - mc.x, pr.lo[sliceOf(pr, wz)] + bh * 0.06 - mb.max.y, wz - mc.z);
+          magGeo.computeVertexNormals();
+        }
+      }
       if (magGeo) { setUV(magGeo, uvDark); magGeo.computeBoundingBox(); parts[w.id.replace(/_(\d+)$/, '_charger_$1')] = { geo: magGeo, box: magGeo.boundingBox.clone(), ww2: true }; }
     }
   }).catch(e => console.warn(file + ' nao carregou', e));
 }
 
-// ---------- sniper de ferrolho (pedido dele 30/10) ----------
-// 4 pecas: corpo (com luneta colada), gatilho, ferrolho, pente. Gatilho entra no corpo; a luneta colada sai
-// (ilhas acima do topo do receptor) pra a escolhida no Arsenal entrar; o ferrolho e' peca animada (gira e
-// puxa pra tras a cada tiro); o pente vira o original (troca com os outros de sniper).
-// Zonas: um material so com textura -> a cor da textura no triangulo decide (escuro leva camo, claro destaque).
-const SN4_CAMO_LIGHT = true; // na textura dela a coronha (maior area) e' clara: o claro leva a camo, o metal escuro vira destaque
-const SN4 = { id: 'sniper_4', k: 1, grip: 0.7, mid: 0.56, fore: 0.4, scopeCut: [0.3, 0.78] };
-function loadSniper4(loader) {
-  return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/bolt_sniper.glb').then(g => {
-    g.scene.updateMatrixWorld(true);
-    const pal = paletteReader(gunTex);
-    const uvMetal = pal ? paletteUV(pal, [90, 170, 60]) : [0.5, 0.5], uvLight = pal ? paletteUV(pal, [178, 128, 84]) : [0.5, 0.5];
-    const prep = (o) => {
-      let ge = o.geometry.clone().applyMatrix4(o.matrixWorld);
-      if (ge.index) ge = ge.toNonIndexed();
-      const tex = paletteReader(o.material?.map), uv0 = ge.attributes.uv, n = ge.attributes.position.count, a = new Float32Array(n * 2);
-      for (let i = 0; i < n; i += 3) {
-        let light = false;
-        if (tex && uv0) { const c = tex((uv0.getX(i) + uv0.getX(i + 1) + uv0.getX(i + 2)) / 3, (uv0.getY(i) + uv0.getY(i + 1) + uv0.getY(i + 2)) / 3); light = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2] > 140; }
-        const uv = light === SN4_CAMO_LIGHT ? uvMetal : uvLight; // a zona de maior area (coronha clara) leva a camo
-        for (let j = 0; j < 3; j++) { a[(i + j) * 2] = uv[0]; a[(i + j) * 2 + 1] = uv[1]; }
-      }
-      for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k);
-      ge.setAttribute('uv', new THREE.BufferAttribute(a, 2));
-      return ge;
-    };
-    const get = (nm) => { let m = null; g.scene.getObjectByName(nm)?.traverse(o => { if (o.isMesh && !m) m = o; }); return m ? prep(m) : null; };
-    const bodyRaw = get('MS_Sniper_Body'), trig = get('MS_Sniper_Trigger'), bolt = get('MS_Sniper_Bolt'), mag = get('MS_Sniper_Magazine');
-    if (!bodyRaw) return;
-    let bodyG = trig ? mergeGeometries([bodyRaw, trig]) : bodyRaw;
-    const all = mergeGeometries([bodyG, bolt, mag].filter(Boolean)); all.computeBoundingBox();
-    const b = all.boundingBox, len = b.max.z - b.min.z, pos = all.attributes.position;
-    // cano = ponta mais fina; o jogo quer o cano em z minimo
-    const ext = (lo, hi) => { let a = Infinity, c = -Infinity; for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i); if (z >= lo && z <= hi) { const y = pos.getY(i); if (y < a) a = y; if (y > c) c = y; } } return c - a; };
-    const flip = ext(b.max.z - len * 0.07, b.max.z) < ext(b.min.z, b.min.z + len * 0.07);
-    const ls = CATEGORY.sniper.bodies.filter(id => parts[id] && !parts[id].ww2).map(id => parts[id].box.max.z - parts[id].box.min.z);
-    const k = (ls.reduce((s, x) => s + x, 0) / Math.max(1, ls.length)) * SN4.k / len, c = b.getCenter(new THREE.Vector3());
-    const m = new THREE.Matrix4().makeScale(k, k, k).multiply(new THREE.Matrix4().makeRotationY(flip ? Math.PI : 0)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
-    for (const ge of [bodyG, bolt, mag]) if (ge) { ge.applyMatrix4(m); ge.computeVertexNormals(); ge.computeBoundingBox(); }
-    // luneta colada: ilhas inteiras acima do topo do receptor no trecho marcado
-    const bb0 = bodyG.boundingBox.clone(), L0 = bb0.max.z - bb0.min.z, zA = (f) => bb0.min.z + L0 * f;
-    parts[SN4.id] = { geo: bodyG, box: bb0.clone() }; const pr0 = profile(SN4.id); delete profiles[SN4.id];
-    const recTop = pr0.hi[sliceOf(pr0, zA(0.2))]; // topo do receptor na frente da luneta
-    const out = [];
-    for (const gr of geoIslands(bodyG)) if (gr.box.min.z >= zA(SN4.scopeCut[0]) && gr.box.max.z <= zA(SN4.scopeCut[1]) && gr.box.max.y > recTop + 0.06) out.push(...gr.tris); // tubo e aneis (os aneis descem pra dentro do receptor)
-    if (out.length) { const kill = new Set(out), keep = []; for (let t = 0; t < bodyG.attributes.position.count / 3; t++) if (!kill.has(t)) keep.push(t); bodyG = geoTake(bodyG, keep); bodyG.computeVertexNormals(); }
-    bodyG.computeBoundingBox();
-    const bb = bodyG.boundingBox.clone();
-    if (bolt) bb.union(bolt.boundingBox);
-    const body = parts[SN4.id] = { geo: bodyG, box: bb, ww2: true, camoGreen: true, metal: '#2a2724' }; // coronha na zona verde: Pintura + camo
-    const blen = bb.max.z - bb.min.z, zAt = (f) => bb.min.z + blen * f, pr = profile(SN4.id), gz = zAt(SN4.grip);
-    body.grip = { zc: gz, z0: gz - blen * 0.04, z1: gz + blen * 0.04, lo: pr.lo[sliceOf(pr, gz)] };
-    body.mid = zAt(SN4.mid);
-    body.fore = zAt(SN4.fore); // mao de apoio no guarda-mao (sniper nao leva empunhadura)
-    // ferrolho: gira no proprio eixo (z) e corre pra tras; pivo no centro dele
-    if (bolt) { const ob = bolt.boundingBox; body.bolt = { geo: bolt, pivot: new THREE.Vector3((ob.min.x + ob.max.x) / 2, (ob.min.y + ob.max.y) / 2, (ob.min.z + ob.max.z) / 2), travel: (ob.max.z - ob.min.z) * 0.55 }; }
-    if (mag) parts.sniper_charger_4 = { geo: setUV(mag, pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5]), box: mag.boundingBox.clone(), ww2: true };
-    body.scopeCut = out.length;
-  }).catch(e => console.warn('bolt_sniper.glb nao carregou', e));
-}
+// sniper de ferrolho antiga (bolt_sniper.glb, 30/10) saiu em 03/11: o Mestre-Cuca agora e a sniper do pacote 3
 
 export function arsenalReady() { return !!parts.fusil_1; }
 export const debugParts = () => parts; // depuracao (window.__A)
@@ -776,11 +823,12 @@ function rearTube(id) {
 // recebe camuflagem. A camuflagem e' so do corpo, e mesmo nele o verde fica com a pintura.
 function paintMaterial(paint, accent, camo, part = false, camoGreen = false) {
   const m = toon(0xffffff, { map: gunTex, unique: true });
+  m.userData.gunOwn = true; // so desta arma: disposeGun libera
   // so a camo desta peca entra no shader (peca encaixada nunca leva camo)
   const glslCode = part ? 0 : camoById(camo).code;
   m.userData.u = {
     uPart: { value: part ? 1 : 0 },
-    uPaint: { value: new THREE.Color(paint || '#ffffff') }, uPaintOn: { value: paint ? 1 : 0 },
+    uPaint: { value: new THREE.Color(paint || '#ffffff') }, uPaintOn: { value: 1 }, // sem pintura escolhida: o verde de fabrica vira BRANCO (03/11, pedido dele)
     uAccent: { value: new THREE.Color(accent || '#ffffff') }, uAccentOn: { value: accent ? 1 : 0 },
     uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 }, uCamoGreen: { value: camoGreen ? 1 : 0 },
   };
@@ -833,7 +881,7 @@ const KIND_RET = { hunt: 'duplex', mil: 'milbdc', thermal: 'cross', vari: 'duple
 
 function lensMaterial(big, ret, color, kind = null) {
   const style = ret === 'milbdc' ? 7 : Math.max(0, RETICLES.indexOf(ret));
-  return new THREE.ShaderMaterial({
+  return lensOwn(new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: {
       tScope: { value: scopeTarget.texture }, uBig: { value: big ? 1 : 0 }, uOn: { value: 0 },
@@ -932,7 +980,7 @@ function lensMaterial(big, ret, color, kind = null) {
         }
         gl_FragColor = vec4(c, a);
       }`,
-  });
+  }));
 }
 
 // boca do pente: centro da face de cima (onde ele entra no poco). Pente curvo tem a caixa adiantada em
@@ -950,7 +998,8 @@ function magMouth(id) {
 // volta da boca ate bater com a do original (reto num poco inclinado ficava torto e saindo do encaixe)
 // ajuste por pente (pedidos dele 30/10): flip = vira pro outro lado; noTilt = entra reto
 const MAG_FIT = { sniper_charger_1: { flip: true }, 'sniper_2|sniper_charger_1': { flip: true, noTilt: true }, // Marretao: pente 1 saia torto (01/11)
-  fusil_charguer_5: { noTilt: true, ins: 0.05 }, 'fusil_5|fusil_charger_1': { flip: true, noTilt: true, back: 0.35 } }; // chave 'corpo|pente' vale so naquela arma; back = recua (fracao da profundidade do pente) // ins = quanto entra no poco (fracao da altura; padrao ate 25%)
+  fusil_charguer_5: { noTilt: true, ins: 0.05 }, 'fusil_5|fusil_charguer_5': { noTilt: true, ins: 0.05, flip: true, back: -0.18 }, // Garoa: o pente 5 curvava pra tras e entrava no gatilho (piscava): virado e um tico pra frente (03/11)
+  'fusil_5|fusil_charger_1': { noTilt: true, ins: 0.05, back: -0.18 } /* Garoa: pente 1 no mesmo angulo e lugar do pente de fabrica (pedido dele 03/11) */ }; // chave 'corpo|pente' vale so naquela arma; back = recua (fracao da profundidade do pente) // ins = quanto entra no poco (fracao da altura; padrao ate 25%)
 // pentes que nao fazem sentido visual num corpo (conferidos na folha 30/10): nao aparecem pra escolher
 const MAG_BAN = {
   fusil_1: ['fusil_charguer_5', 'fusil_charguer_7'], fusil_7: ['fusil_charguer_2'], fusil_11: ['fusil_charguer_2'],
@@ -1142,10 +1191,12 @@ function hiUnder(body, xc, halfW, z0, z1) {
   return best;
 }
 
+// eixo do cano em X: o centro da caixa, a nao ser que o modelo tenha peca saindo de um lado (alavanca do ferrolho)
+const axisX = (body) => parts[body].axisX ?? (parts[body].box.min.x + parts[body].box.max.x) / 2;
 function bodySlot(body, slot) {
   const nat = nativePart(body, slot);
   if (nat) return slot === 'charger' ? magMouth(nat) : anchor(slot, parts[nat].box);
-  const b = parts[body].box, len = b.max.z - b.min.z, cx = (b.min.x + b.max.x) / 2;
+  const b = parts[body].box, len = b.max.z - b.min.z, cx = axisX(body);
   const pr = profile(body);
   const mag = nativePart(body, 'charger');
   const magBox = mag ? parts[mag].box : null;
@@ -1201,6 +1252,13 @@ export function bpLoadout(id) {
 
 // Monta a arma. Devolve o mesmo formato do makeGun (userData: muzzle, gripR, gripL, spin, scope, stats)
 // Camuflagem lendaria liga o efeito de fora da arma (fogo, raio, tinta, estrelas)
+// arma que saiu de vez (troca de arma de um boneco, arma largada que sumiu): libera os materiais que sao so dela.
+// Geometria das pecas e compartilhada (cache das pecas), entao fica. (02/11: cada troca/largada vazava memoria de video)
+export function disposeGun(g) {
+  g?.traverse(o => { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) if (m?.userData?.gunOwn) m.dispose(); });
+}
+const lensOwn = (m) => { m.userData.gunOwn = true; return m; };
+
 export function buildGun(wpn, lo) {
   const g = buildGunParts(wpn, lo), fx = camoById(lo?.camo).fx;
   if (g && fx) attachCamoFx(g, fx);
@@ -1208,6 +1266,7 @@ export function buildGun(wpn, lo) {
 }
 function buildGunParts(wpn, lo) {
   if (wpn === 'minigun' && parts.__minigun) return buildMinigun();
+  if (wpn === 'rpg' && parts.__rpg) return buildRpg();
   if (wpn === 'melee') return buildMelee(lo);
   if (wpn === 'fists') return buildFists();
   const cat = CATEGORY[wpn];
@@ -1226,7 +1285,7 @@ function buildGunParts(wpn, lo) {
   const mat = paintMaterial(lo.paint || (camoGreen ? parts[lo.body].metal : null), lo.accent, lo.camo, false, camoGreen);
   const partMat = paintMaterial(lo.paint, lo.accent, null, true);
   const bodyBox = parts[lo.body].box;
-  const len = bodyBox.max.z - bodyBox.min.z, h = bodyBox.max.y - bodyBox.min.y, cx = (bodyBox.min.x + bodyBox.max.x) / 2;
+  const len = bodyBox.max.z - bodyBox.min.z, h = bodyBox.max.y - bodyBox.min.y, cx = axisX(lo.body);
   const chargerSlot = bodySlot(lo.body, 'charger');
   // origem da arma = punho da mao direita (atras do carregador, embaixo)
   const isPistol = wpn === 'pistol';
@@ -1255,6 +1314,9 @@ function buildGunParts(wpn, lo) {
     piv.add(mm); inner.add(piv); anim[key] = piv;
   }
   let scopeInfo = null;
+  // frente do pente montado (z minimo, espaco do corpo): gadget de baixo do cano nunca encosta nele (03/11)
+  let magFrontZ = null, gadgetShift = null;
+  const noteMag = (mm) => { if (!mm) return; mm.geometry.computeBoundingBox(); const z = mm.geometry.boundingBox.min.z + mm.position.z + origin.z; magFrontZ = magFrontZ == null ? z : Math.min(magFrontZ, z); };
   for (const slot of ['charger', 'scope', 'handle']) {
     const id = lo[slot];
     if (!id || !parts[id]) continue;
@@ -1267,6 +1329,7 @@ function buildGunParts(wpn, lo) {
       const mh = parts[id].box.max.y - parts[id].box.min.y, prB = profile(lo.body), lip = prB.lo[sliceOf(prB, target.z)];
       if (Number.isFinite(lip)) target.y = lip + Math.min(Math.max(0, target.y - lip), mh * (F.ins ?? 0.25));
       const mm = add(id, { self, target }, partMat);
+      noteMag(mm);
       const natM = nativePart(lo.body, 'charger');
       const th = !F.noTilt && natM && Math.abs(magTilt(natM)) > 0.09 ? Math.max(-0.6, Math.min(0.6, magTilt(id) - magTilt(natM))) : 0; // so gira se o poco original e' inclinado (pente em cunha enganava a conta)
       if (mm && (Math.abs(th) > 0.01 || F.flip)) {
@@ -1277,7 +1340,17 @@ function buildGunParts(wpn, lo) {
       }
       continue;
     }
-    if (slot !== 'scope') { add(id, nat ? null : { self: anchor(slot, parts[id].box), target: bodySlot(lo.body, slot) }, partMat); continue; }
+    if (slot === 'handle' && parts[id].gadget) { // gadget: na frente do pente, assentado embaixo do corpo ali
+      const hb = parts[id].box, self = anchor('handle', hb), target = bodySlot(lo.body, 'handle'), gap = (hb.max.z - hb.min.z) * 0.06;
+      if (magFrontZ != null && hb.max.z + (target.z - self.z) > magFrontZ - gap) target.z = magFrontZ - gap - (hb.max.z - self.z);
+      target.z = Math.max(target.z, bodyBox.min.z + (self.z - hb.min.z) * 0.6); // nao passa muito da boca do cano
+      const prG = profile(lo.body), lip = prG.lo[sliceOf(prG, target.z)];
+      if (Number.isFinite(lip)) target.y = lip + 0.004;
+      gadgetShift = target.clone().sub(self);
+      add(id, { self, target }, partMat);
+      continue;
+    }
+    if (slot !== 'scope') { const mm = add(id, nat ? null : { self: anchor(slot, parts[id].box), target: bodySlot(lo.body, slot) }, partMat); if (slot === 'charger') noteMag(mm); continue; }
     {
       const b = parts[id].box, sl = b.max.z - b.min.z, sh = b.max.y - b.min.y;
       // eixo optico = centro da lente; olho fica na traseira da mira
@@ -1332,7 +1405,7 @@ function buildGunParts(wpn, lo) {
       const lensR = (L ? L.r : sh * 0.3) * 0.96;
       const kind = big ? SCOPE_KIND[id] || null : null;
       const ret = lo.ret && lo.ret !== 'auto' ? lo.ret : big ? KIND_RET[kind] || 'duplex' : 'dot';
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(lensR, 32), lensMaterial(big, ret, lo.retColor || 'red', kind));
+      const lens = new THREE.Mesh(geo(THREE.CircleGeometry, Math.round(lensR * 1e4) / 1e4, 32), lensMaterial(big, ret, lo.retColor || 'red', kind));
       lens.position.set(lensC.x, lensC.y, lensZ - 0.004).add(shift).sub(origin);
       lens.renderOrder = 3;
       inner.add(lens);
@@ -1362,7 +1435,7 @@ function buildGunParts(wpn, lo) {
   let hs;
   if (lo.handle && parts[lo.handle]) {
     const hb = parts[lo.handle].box, nat = ownerBody(lo.handle) === lo.body;
-    const shift = nat ? new THREE.Vector3() : bodySlot(lo.body, 'handle').sub(anchor('handle', hb));
+    const shift = gadgetShift || (nat ? new THREE.Vector3() : bodySlot(lo.body, 'handle').sub(anchor('handle', hb)));
     hs = hb.getCenter(new THREE.Vector3()).add(shift);
   } else {
     const pr = profile(lo.body), z = parts[lo.body].fore ?? bodyBox.min.z + len * 0.3; // marca do guarda-mao quando existe
@@ -1374,7 +1447,7 @@ function buildGunParts(wpn, lo) {
   const iron = IRONS[lo.scope] ? addIrons(lo.scope, lo.body, inner, origin, partMat) : new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6).sub(origin).multiplyScalar(S);
   holder.add(muzzle, gripR, gripL);
   const laser = lo.laser && LASER_DEF[lo.laser] ? addLaser(holder, lo, origin, isPistol) : null;
-  holder.userData = { id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, iron, mat, laser, stats: loadoutStats(wpn, lo), drum: anim.drum || null, hammer: anim.hammer || null, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
+  holder.userData = { id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, iron, mat, laser, stats: loadoutStats(wpn, lo), drum: anim.drum || null, hammer: anim.hammer || null, sawed: !!parts[lo.body]?.sawed, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
   return holder;
 }
 
@@ -1412,8 +1485,10 @@ function buildMinigun() {
   inner.position.set(0, 0.05, -0.15);
   holder.add(inner);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.05, -0.68);
-  const gripR = new THREE.Object3D(); gripR.position.set(0, -0.08, 0.15);
-  const gripL = new THREE.Object3D(); gripL.position.set(-0.12, 0.05, -0.05);
+  // maos na MANOPLA (03/11, pedido dele): a moldura preta atras dos canos (barras dos lados, z ~ -0.08);
+  // antes a direita ficava enfiada no tambor de municao e a esquerda solta no ar
+  const gripR = new THREE.Object3D(); gripR.position.set(0.077, 0.08, -0.078);
+  const gripL = new THREE.Object3D(); gripL.position.set(-0.073, 0.13, -0.078);
   holder.add(muzzle, gripR, gripL);
   holder.userData = { id: 'minigun', muzzle, gripR, gripL, spin, spinAxis: axis, scope: null, stats: {} };
   return holder;
@@ -1459,6 +1534,8 @@ const AKIMBO_LONG = {
   shotgun: { mag: 2, rate: 0.85, dmg: 0.9, spread: 1.2, kick: 1.1, reload: 1.9, move: 0.95 },
 };
 const GRIP_TRAITS = {
+  gd_flame: { adsTime: 1.1, move: 0.97 },                                     // lanca-chamas: pesa na mira
+  gd_shot: { adsTime: 1.08, kick: 1.05 },                                      // escopetinha: pesa um pouco
   subfusil_handle_2: { kick: 0.7, adsTime: 1.08, move: 0.98 },               // vertical: segura o recuo
   subfusil_handle_3: { adsTime: 0.86, kick: 0.88, spread: 1.05 },            // angulada: mira rapida
   subfusil_handle_6: { spread: 0.78, kick: 0.9, move: 0.97 },                // curta: tiro de quadril
@@ -1527,13 +1604,19 @@ function beamMaterial(color) {
     fragmentShader: 'uniform vec3 uCol; uniform float uOn; varying float vT; varying float vX; void main(){ float a = pow(vT, 1.4) * 0.95 * uOn; float core = pow(abs(sin(vX * 6.2832)), 6.0); gl_FragColor = vec4(mix(uCol, vec3(1.0), core * 0.6), a); }',
   });
 }
+// lado esquerdo (x minimo) do corpo so no trecho em volta de z (a caixa inteira pega peca saindo de outro ponto)
+function sideAt(body, z) {
+  const P = parts[body], pos = P.geo.attributes.position, tol = (P.box.max.z - P.box.min.z) * 0.035;
+  let mn = Infinity; for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - z) < tol) mn = Math.min(mn, pos.getX(i));
+  return Number.isFinite(mn) ? mn : P.box.min.x;
+}
 function addLaser(holder, lo, origin, isPistol) {
   const D = LASER_DEF[lo.laser], [w, h, d] = D.size;
-  const b = parts[lo.body].box, pr = profile(lo.body), len = b.max.z - b.min.z, cx = (b.min.x + b.max.x) / 2;
+  const b = parts[lo.body].box, pr = profile(lo.body), len = b.max.z - b.min.z, cx = axisX(lo.body);
   const z = b.min.z + len * (isPistol ? 0.16 : 0.27), sl = pr.lo[sliceOf(pr, z)], sh = pr.hi[sliceOf(pr, z)];
   const at = isPistol
     ? new THREE.Vector3(cx, sl, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(0, -h / 2 - 0.004, 0))
-    : new THREE.Vector3(b.min.x, (sl + sh) / 2, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(-w / 2 - 0.004, 0, 0));
+    : new THREE.Vector3(sideAt(lo.body, z), (sl + sh) / 2, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(-w / 2 - 0.004, 0, 0)); // encosta na lateral DAQUELE trecho (alavanca do ferrolho afastava)
   const g = new THREE.Group(); g.position.copy(at);
   const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(0x2a2724)); outline(box, 0.004); g.add(box);
   const rail = new THREE.Mesh(new THREE.BoxGeometry(isPistol ? w * 0.7 : 0.008, isPistol ? 0.008 : h * 0.7, d * 0.7), toon(0x1c1a18));
@@ -1556,7 +1639,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
   if (!lo || !arsenalReady() || !parts[lo.body]) return st;
   // perfil do modelo: modo de tiro e cadencia/dano/quadril proprios
   const bt = bodyTrait(lo.body);
-  st.mode = bt.mode || null; st.burst = bt.burst || 0;
+  st.mode = bt.mode || null; st.burst = bt.burst || 0; st.pellets = bt.pellets || 0; // serrada: chumbo
   for (const k of ['rate', 'dmg', 'hip', 'kick', 'spread', 'mag', 'reload']) if (bt[k]) st[k] *= bt[k];
   const nat = nativePart(lo.body, 'charger');
   const drum = DRUM_MAGS[lo.charger];
@@ -1582,7 +1665,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
   const mz = lo.muzzle && muzzleFits(lo.body) && MUZZLES[lo.muzzle];
   if (mz) for (const k of ['spread', 'kick', 'adsTime', 'move', 'dmg', 'hip']) if (mz[k]) st[k] *= mz[k];
   const kit = lo.conv && CONV_KITS[lo.body]?.[lo.conv];
-  if (kit) for (const [k, v] of Object.entries(kit)) if (k === 'mode') st.mode = v; else st[k] *= v;
+  if (kit) for (const [k, v] of Object.entries(kit)) if (k === 'mode' || k === 'burst') st[k] = v; else st[k] *= v; // burst = balas por rajada (valor, nao fator)
   if (lo.handle === 'akimbo' && st.mode === 'burst') { st.mode = 'semi'; st.burst = 0; } // akimbo: cada bala sai de uma mao, intercalando (rajada viraria tiro duplo)
   if (lo.scope && parts[lo.scope]) {
     const b = parts[lo.scope].box, sl = b.max.z - b.min.z;
@@ -1642,6 +1725,12 @@ export function getLoadouts() {
   if (gone) { saveLoadouts(s); pushSoon(); }
   return s;
 }
+// variantes do jogador (02/11, pedido dele, estilo loadout do COD): montagem inteira salva com nome, por categoria
+// { smg: [{ id, name, lo }] }. Equipada = lo.cv (id) + lo.cvName; mexer numa peca tira o selo (igual a variante de elite)
+const VKEY = 'rr_variants_v1';
+export const VARIANT_MAX = 6;
+export function getVariants() { try { const v = JSON.parse(localStorage.getItem(VKEY)); return v && typeof v === 'object' ? v : {}; } catch { return {}; } }
+export function saveVariants(v) { try { localStorage.setItem(VKEY, JSON.stringify(v)); } catch { /* sem storage */ } pushSoon(); }
 export function saveLoadouts(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ } pushSoon(); } // sobe pra conta Rovex tambem (antes so ia junto com outro save)
 
 // Na partida so vale o que ja foi desbloqueado; peca bloqueada volta pro padrao (o salvo fica intacto)

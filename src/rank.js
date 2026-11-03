@@ -29,9 +29,12 @@ export function rankResult(won, humanShare, perf = 0) {
 
 // badge em SVG: escudo com divisas (bronze 1, prata 2, ouro 3 + estrela), losango lapidado (diamante),
 // hexagono com coroa e louros (mestre). Contorno de tinta grosso como o resto do jogo.
+// id do gradiente unico por emblema (03/11): com id repetido o navegador pegava o de um emblema escondido
+// (display:none) e o do elenco saia sem cor
+let rkSeq = 0;
 export function badgeSvg(tier, size = 22) {
   const T = TIERS[tier]; if (!T) return '';
-  const g = `rk${tier}`, grad = `<defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${T.c1}"/><stop offset="1" stop-color="${T.c2}"/></linearGradient></defs>`;
+  const g = `rk${tier}_${++rkSeq}`, grad = `<defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${T.c1}"/><stop offset="1" stop-color="${T.c2}"/></linearGradient></defs>`;
   const ink = 'stroke="#1b1916" stroke-width="4" stroke-linejoin="round"';
   const chev = (y) => `<path d="M18 ${y}l14 9 14-9" fill="none" stroke="#1b1916" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`;
   let body;

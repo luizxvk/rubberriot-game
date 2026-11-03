@@ -4,12 +4,15 @@ import { SS } from './ssboot.js';
 const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload',
   'hit', 'hitmarker', 'death', 'jump', 'step', 'step2', 'land', 'pickup', 'slide', 'flag', 'capture', 'ui', 'ui_hover',
   'ui_click', 'ui_back', 'iris', 'levelup', 'unlock', 'empty', 'swap', 'ads', 'whoosh', 'headshot', 'killstamp', 'music',
+  'safetick', 'siren', 'cashreg', // Roube o Cofre
+  'planefly', 'trainwhistle', 'bomberdrone', 'eraser', 'firedrop', // sequencias grandes (03/11)
   'explosion', 'pan', // existiam mas nao carregavam: granada e bigorna tocavam ruido sintetico
   'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt', // momentos que eram mudos (contagem, rodada, fim, assist, renascer) e o ferrolho
   'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
   'ringbell', 'crowd', 'pump', 'balloon', // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
   'chute', 'wind', 'splat', 'revolver', 'aa12', 'laser',
-  'nukealarm', 'chargeup', 'megashot']; // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
+  'nukealarm', 'chargeup', 'megashot',
+  'rocket', 'flamer']; // 03/11: Bazuca e lanca-chamas // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
 function soundEdges(b) {
@@ -40,6 +43,12 @@ class Audio {
     const ssG = ctx.createGain(); ssG.gain.value = SS ? 1 / Math.sqrt(SS.n) : 1;
     this.master.connect(comp).connect(ssG).connect(ctx.destination);
     this.sfxBus = ctx.createGain(); this.sfxBus.connect(this.master);
+    // eco do tiro (03/11): um so pra tudo (barato). Atraso com retorno e passa-baixa: cada repeticao mais longe e abafada
+    this.echoIn = ctx.createGain(); this.echoIn.gain.value = 0.32;
+    const ed = ctx.createDelay(1.5); ed.delayTime.value = 0.21;
+    const efb = ctx.createGain(); efb.gain.value = 0.36;
+    const elp = ctx.createBiquadFilter(); elp.type = 'lowpass'; elp.frequency.value = 1700;
+    this.echoIn.connect(ed); ed.connect(elp); elp.connect(efb); efb.connect(ed); elp.connect(this.master);
     this.uiBus = ctx.createGain(); this.uiBus.gain.value = 0.7; this.uiBus.connect(this.master);
     // musica passa por um "gramofone": passa-faixa + chiado de vinil
     this.musicBus = ctx.createGain(); this.musicBus.gain.value = this.vol.music;
@@ -48,6 +57,7 @@ class Audio {
     this.musicBus.connect(hp).connect(lp).connect(this.master);
     this.crackle();
     for (const n of NAMES) this.load(n);
+    if (this.pendGuns) { this.preloadGuns([...this.pendGuns]); this.pendGuns = null; }
   }
 
   // som proprio do modelo (01/11): g_<corpo>.mp3 carrega na primeira vez que a arma aparece; ate la (ou sem arquivo) usa o da categoria
@@ -58,6 +68,9 @@ class Audio {
     if (this.ctx && !this.failed?.has(n)) this.load(n);
     return fallback;
   }
+
+  // carrega o som do modelo antes do 1o tiro (03/11: o 1o disparo saia com o som generico da categoria)
+  preloadGuns(bodies) { for (const b of bodies) if (b) { if (this.ctx) this.load('g_' + b); else (this.pendGuns ||= new Set()).add(b); } } // audio ainda desligado: guarda e carrega no init
 
   async load(name) {
     if (this.buf[name] || this.loading?.has(name) || this.failed?.has(name)) return;
@@ -191,6 +204,7 @@ class Audio {
       g.connect(p); node = p;
     }
     node.connect(o.ui ? this.uiBus : this.sfxBus);
+    if (!o.ui && !o.muffle && this.echoIn && (o.echo ?? /^r?gun/.test(o.key || ''))) node.connect(this.echoIn); // tiro ecoa (silenciador nao)
     let src;
     if (b) {
       src = ctx.createBufferSource();

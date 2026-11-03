@@ -1,7 +1,105 @@
 // Monta o visual do boneco (chapeu, olhos, oculos, luvas, camisa, estampa do short, efeito).
 // Tudo procedural, no mesmo traco de tinta do resto (ink + toon). A cor do time fica no short e na fita.
 import * as THREE from 'three';
-import { ink, toon, PAL } from './toon.js';
+import { ink, toon, PAL, smoothGeo } from './toon.js';
+import { camoGlsl, camoTime } from './camos.js';
+
+// skin animada do corpo (Loja, 03/11): shader PROPRIO de cada skin (nao e o das camos), no corpo preto todo.
+// Um material por skin pra todos os bonecos (o tempo e o mesmo uniform das camos). camoGlsl(0) = so as funcoes de
+// apoio das camos (ruido, voronoi); skinColor desenha a skin e usa a borda (fr) pra um brilho de contorno.
+export const SKIN_CODE = { lapis: 1, giz: 2, holograma: 3, discoteca: 4, massinha: 5, planta: 6, dragao: 7, tempestade: 8 };
+// 03/11 (pedido dele): temas que NAO existem em nenhuma camo nem efeito do jogo (as 8 primeiras repetiam lava, galaxia...)
+const SKIN_GLSL = /* glsl */`
+vec3 skinColor(int k, vec3 p, vec3 n, float fr, float t, out vec3 glow) {
+  glow = vec3(0.0);
+  if (k == 1) { // rabisco a lapis: papel com hachura de grafite que "ferve" (redesenha 8x por segundo, igual desenho animado)
+    float bt = floor(t * 8.0); vec3 q = p + vec3(c_h(vec3(bt, 1.0, 2.0)), c_h(vec3(bt, 3.0, 4.0)), 0.0) * 0.06;
+    float shade = smoothstep(0.2, 0.8, 0.5 - n.y * 0.35 + n.x * 0.25);
+    float h1 = abs(fract((q.x + q.y) * 9.0 + c_n(q * 3.0 + bt) * 0.7) - 0.5);
+    float h2 = abs(fract((q.x - q.y) * 9.0 + c_n(q * 3.0 + bt + 5.0) * 0.7) - 0.5);
+    float line = smoothstep(0.13, 0.05, h1) * (0.3 + shade * 0.7), cross = smoothstep(0.11, 0.04, h2) * smoothstep(0.5, 0.85, shade);
+    return vec3(0.94, 0.92, 0.87) - vec3(0.6, 0.6, 0.62) * max(line, cross);
+  }
+  if (k == 2) { // giz de cera: manchas de cor de giz com os riscos da cera e o papel aparecendo nos buracos
+    vec2 v = c_vor(p * 2.2);
+    vec3 c = c_hue(fract(v.y * 0.9 + t * 0.02)) * 0.8 + 0.12;
+    float stroke = 0.78 + 0.22 * sin((p.x * 0.7 + p.y) * 60.0 + c_n(p * 8.0) * 6.0);
+    float gaps = smoothstep(0.55, 0.78, c_n(p * 22.0 + vec3(0.0, 0.0, v.y * 10.0)));
+    return mix(c * stroke, vec3(0.95, 0.93, 0.88), gaps * 0.55);
+  }
+  if (k == 3) { // holograma: linhas de varredura subindo, faixa clara correndo e falha de sinal de vez em quando
+    float scan = 0.6 + 0.4 * sin(p.y * 80.0 - t * 12.0);
+    float band = smoothstep(0.94, 1.0, fract(p.y * 0.6 - t * 0.35));
+    float glitch = step(0.97, c_h(vec3(floor(p.y * 12.0), floor(t * 10.0), 1.0)));
+    vec3 hc = c_hue(fract(0.5 + p.y * 0.12 + t * 0.05 + glitch * 0.3)) * 0.35 + vec3(0.1, 0.65, 0.95) * 0.65;
+    glow = hc * (fr * 1.6 + band * 1.2 + glitch * 0.8) * scan;
+    return hc * scan * 0.55 + band * 0.5;
+  }
+  if (k == 4) { // bola de discoteca: ladrilhos de espelho que piscam com a luz girando e faiscas
+    vec3 q = p * 7.0, id = floor(q), f = fract(q);
+    float edge = smoothstep(0.42, 0.5, max(abs(f.x - 0.5), abs(f.y - 0.5)));
+    float h = c_h(id), flash = pow(0.5 + 0.5 * sin(t * 3.0 + h * 20.0 + n.x * 4.0), 6.0);
+    vec3 tint = mix(vec3(0.75, 0.78, 0.86), c_hue(fract(h + t * 0.1)), 0.35);
+    float spark = step(0.985, c_h(id + floor(t * 6.0)));
+    glow = (tint * flash * 0.6 + vec3(1.0) * spark * 2.0) * (1.0 - edge);
+    return mix(tint * (0.45 + flash * 0.7), vec3(0.15), edge);
+  }
+  if (k == 5) { // massinha de modelar: tres cores de massinha remexendo devagar, com marca de dedo
+    float k5 = fract(c_fbm(p * 1.6 + vec3(0.0, t * 0.08, t * 0.05)) * 3.0 + p.y * 0.4);
+    vec3 a = vec3(0.95, 0.45, 0.35), b = vec3(0.35, 0.7, 0.95), c = vec3(0.98, 0.85, 0.3);
+    vec3 col = mix(mix(a, b, smoothstep(0.3, 0.36, k5)), c, smoothstep(0.63, 0.69, k5));
+    col = mix(col, a, smoothstep(0.94, 1.0, k5));
+    float prints = 0.9 + 0.1 * sin(length(fract(p.xy * 1.5) - 0.5) * 90.0);
+    return col * prints;
+  }
+  if (k == 6) { // planta azul: papel de projeto, grade fina e as linhas grossas sendo desenhadas
+    vec3 g = abs(fract(p * 4.0) - 0.5), g2 = abs(fract(p) - 0.5);
+    float fine = smoothstep(0.47, 0.5, max(g.x, g.y)), bold = smoothstep(0.46, 0.5, max(g2.x, g2.y));
+    float draw = step(fract(p.y + p.x * 0.5 - t * 0.25), 0.55);
+    glow = vec3(0.6, 0.8, 1.0) * bold * draw * 0.35;
+    return vec3(0.1, 0.28, 0.6) + vec3(0.8, 0.9, 1.0) * (fine * 0.25 + bold * 0.7 * draw);
+  }
+  if (k == 7) { // pele de dragao: escamas em fileira com brilho furta-cor (verde -> ouro) que corre com a luz
+    vec2 q = vec2(p.x * 5.0, p.y * 7.0); q.x += step(1.0, mod(floor(q.y), 2.0)) * 0.5;
+    vec2 f = fract(q) - vec2(0.5, 0.0); float d = length(f * vec2(1.0, 1.3));
+    float edge = smoothstep(0.38, 0.5, d);
+    float ir = 0.5 + 0.5 * sin(n.x * 3.0 + n.y * 2.0 + t * 1.5 + c_h(vec3(floor(q), 1.0)) * 3.0);
+    vec3 col = mix(vec3(0.05, 0.35, 0.2), vec3(0.85, 0.7, 0.2), ir * 0.7);
+    glow = vec3(1.0, 0.8, 0.3) * fr * 0.5 + vec3(0.3, 1.0, 0.5) * smoothstep(0.9, 1.0, ir) * (1.0 - edge) * 0.4;
+    return mix(col * (0.7 + 0.3 * (1.0 - f.y)), vec3(0.03, 0.1, 0.06), edge);
+  }
+  if (k == 8) { // ceu de tempestade: nuvem escura rodando, chuva fina e relampago que acende o corpo
+    float cl = c_fbm(p * 1.8 + vec3(t * 0.15, 0.0, -t * 0.1));
+    vec3 col = mix(vec3(0.12, 0.14, 0.2), vec3(0.45, 0.5, 0.6), smoothstep(0.3, 0.75, cl));
+    float fl = step(0.92, c_h(vec3(floor(t * 6.0), 7.0, 7.0)));
+    float bolt = smoothstep(0.035, 0.0, abs(p.x * 0.8 + c_fbm(vec3(p.y * 4.0, floor(t * 6.0), 0.0)) * 0.8 - 0.4)) * fl;
+    float rain = step(0.97, c_h(vec3(floor(p.x * 30.0), floor(p.y * 6.0 + t * 20.0), 0.0)));
+    glow = vec3(0.7, 0.85, 1.0) * (bolt * 2.0 + fl * 0.4) + vec3(0.4, 0.5, 0.8) * fr * 0.4;
+    return col + vec3(0.7, 0.8, 1.0) * (fl * 0.35 + bolt + rain * 0.2);
+  }
+  return vec3(1.0);
+}
+`;const SKINMAT = new Map();
+export function skinMat(id) {
+  const code = SKIN_CODE[id];
+  if (!code) return null;
+  if (SKINMAT.has(id)) return SKINMAT.get(id);
+  const m = toon(0xffffff, { unique: true });
+  m.userData.u = { uCamo: { value: code }, uTime: camoTime, uReact: { value: 0 } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, m.userData.u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position * 2.4;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\n' + camoGlsl(0) + SKIN_GLSL + '\nvec3 gCamoGlow = vec3(0.0);')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 sg; vec3 nn = normalize(vNormal); float fr = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 2.0);
+          diffuseColor.rgb = skinColor(int(uCamo + 0.5), vCamoPos, nn, fr, uTime, sg); gCamoGlow = sg; }`);
+  };
+  m.customProgramCacheKey = () => 'skinU' + code;
+  SKINMAT.set(id, m);
+  return m;
+}
 
 const hex = (s) => parseInt(String(s).replace('#', ''), 16);
 const canvasTex = (w, h, draw) => {
@@ -75,6 +173,32 @@ export function buildEyewear(style) {
 }
 
 // ---------- chapeus ----------
+// sem tremido entre pecas (03/11, pedido dele + regra do vault): peca de acessorio colada em outra (fita na copa,
+// glace no bolo, oculos no rosto, chapeu na cabeca) piscava (z-fighting). Cada malha ganha um deslocamento de
+// profundidade crescente na ordem em que foi montada (a de cima ganha da de baixo) e o acessorio todo ganha da
+// cabeca. Copia do material por nivel (o toon e o contorno sao compartilhados: nao mexe no original).
+// WeakMap (03/11, bateria de desempenho): a chave era o uuid num Map comum, entao material criado a cada montagem
+// (lente/corrente de oculos) ficava no cache pra sempre. Agora a copia vai embora junto com o original
+const OFFMAT = new WeakMap();
+function offMat(m, k) {
+  let lv = OFFMAT.get(m); if (!lv) OFFMAT.set(m, lv = new Map());
+  let c = lv.get(k);
+  if (!c) { c = m.clone(); c.polygonOffset = true; c.polygonOffsetFactor = -k; c.polygonOffsetUnits = -k * 4; if (m.onBeforeCompile) { c.onBeforeCompile = m.onBeforeCompile; c.customProgramCacheKey = m.customProgramCacheKey; } lv.set(k, c); }
+  return c;
+}
+export function antiFlicker(root, base = 1) {
+  if (!root) return root;
+  let k = base;
+  root.traverse(o => {
+    if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+    const isLine = o.parent?.isMesh && o.material.side === THREE.BackSide; // contorno: mesmo nivel da peca dele
+    const lv = isLine ? (o.parent.userData.offK ?? base) : Math.min(8, k++);
+    o.userData.offK = lv;
+    if (!o.material.polygonOffset) o.material = offMat(o.material, lv);
+  });
+  return root;
+}
+
 export function buildHat(id, teamCol) {
   const g = new THREE.Group();
   const band = (r, y, h = 0.06) => { const b = ink(new THREE.CylinderGeometry(r, r, h, 16), teamCol, 0); b.position.y = y; return b; }; // fita do time
@@ -249,6 +373,35 @@ export function buildHat(id, teamCol) {
       }
       g.position.set(0, 0.2, 0); break;
     }
+    // ---- chapeus da Loja (03/11): so comprando, animados ----
+    case 'ufo': { // disco voador girando com luzinhas e a cupula de vidro
+      const disc = new THREE.Group(); g.add(disc);
+      const plate = ink(new THREE.CylinderGeometry(0.42, 0.3, 0.09, 20), 0xbfc4cc, 0.02); disc.add(plate);
+      const dome = ink(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x9fe3f0, 0.015); dome.position.y = 0.04; disc.add(dome);
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2, l = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffe14a : 0x3cff6b })); l.position.set(Math.cos(a) * 0.38, -0.01, Math.sin(a) * 0.38); disc.add(l); }
+      g.userData.spin = disc; g.position.set(0, 0.42, 0); break;
+    }
+    case 'bolo': { // bolo de aniversario com glace escorrendo e a vela acesa
+      add(ink(new THREE.CylinderGeometry(0.27, 0.29, 0.2, 18), 0xf3d6b0, 0.02));
+      add(ink(new THREE.CylinderGeometry(0.285, 0.285, 0.05, 18), 0xff8fb8, 0.012), 0, 0.09);
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2, d = add(ink(new THREE.SphereGeometry(0.045, 6, 4), 0xff8fb8, 0.008), Math.cos(a) * 0.28, 0.04, Math.sin(a) * 0.28); d.scale.y = 1.6; }
+      add(ink(new THREE.CylinderGeometry(0.025, 0.025, 0.16, 8), 0x7fd1d8, 0.008), 0, 0.2);
+      const fl = add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffb21a })), 0, 0.31); fl.scale.y = 1.6;
+      g.userData.bob = fl; g.position.set(0, 0.36, 0); break;
+    }
+    case 'nuvem': { // nuvenzinha de chuva flutuando em cima da cabeca
+      const cl = new THREE.Group(); g.add(cl);
+      for (const [x, y, r] of [[0, 0, 0.17], [-0.17, -0.03, 0.13], [0.17, -0.03, 0.13], [0.07, 0.07, 0.12]]) { const s = ink(new THREE.SphereGeometry(r, 12, 8), 0x8a8f9a, 0.015); s.position.set(x, y, 0); cl.add(s); }
+      for (let i = 0; i < 4; i++) { const d = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.06, 2, 4), new THREE.MeshBasicMaterial({ color: 0x7fd1d8 })); d.position.set(-0.15 + i * 0.1, -0.2 - (i % 2) * 0.06, 0); cl.add(d); }
+      g.userData.bob = cl; g.position.set(0, 0.62, 0); break;
+    }
+    case 'tubarao': { // barbatana de tubarao saindo da cabeca, com a fita do time na base
+      const fin = new THREE.Shape(); fin.moveTo(-0.16, 0); fin.quadraticCurveTo(-0.02, 0.18, 0.1, 0.42); fin.quadraticCurveTo(0.08, 0.16, 0.18, 0); fin.lineTo(-0.16, 0);
+      const m = add(ink(new THREE.ExtrudeGeometry(fin, { depth: 0.12, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 2 }), 0x6c7f8f, 0.015));
+      m.rotation.y = Math.PI / 2; m.position.set(-0.06, 0, 0.02);
+      g.add(band(0.12, 0.01, 0.04));
+      g.position.set(0, 0.3, 0.04); break;
+    }
     default: return buildHat('bowler', teamCol);
   }
   return g;
@@ -268,6 +421,8 @@ export function styleGlove(glove, style, color) {
   const base = glove.userData.baseScale ||= glove.scale.clone(); // luva Mickey ja vem achatada: o estilo multiplica por cima
   glove.scale.copy(base).multiplyScalar(style === 'boxing' ? 1.35 : style === 'mitten' ? 1.1 : 1);
   for (const c of glove.children) if (c.userData.finger) c.visible = !['mitten', 'oven', 'boxing'].includes(style); // luva sem dedos esconde os dedos
+  const fg = glove.userData.fingerGeo; // luva numa geometria so (03/11): troca pela versao sem dedos (e o contorno junto)
+  if (fg) { const geo = fg[['mitten', 'oven', 'boxing'].includes(style) ? 1 : 0]; if (glove.geometry !== geo) { glove.geometry = geo; for (const c of glove.children) if (c.material?.isShaderMaterial) c.geometry = smoothGeo(geo); } }
   const add = (m) => { m.userData.gloveExtra = true; glove.add(m); return m; };
   if (style === 'oven') { glove.scale.copy(base).multiplyScalar(1.15); const th = add(ink(new THREE.SphereGeometry(0.05, 8, 6), 0xffffff, 0.012)); th.material = mat; th.position.set(0.1, 0.02, -0.04); }
   if (style === 'mitten') { const th = add(ink(new THREE.SphereGeometry(0.05, 8, 6), col, 0.012)); th.position.set(0.1, 0.02, -0.04); }

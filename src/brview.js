@@ -1,7 +1,7 @@
 // Battle royale na tela: loot no chao, caixote do dirigivel caindo e a iris (parede de pelicula queimando
 // em volta da zona). Recebe a lista de loot do servidor (evento 'loot') e o estado da iris do snapshot.
 import * as THREE from 'three';
-import { ink, toon, PAL, wordTexture } from './toon.js';
+import { ink, freeGeos, toon, PAL, wordTexture } from './toon.js';
 import { buildGun, bpLoadout } from './arsenal.js';
 import { milkBottle } from './world.js';
 
@@ -101,7 +101,7 @@ export class BrView {
     this.next.rotation.x = -Math.PI / 2; this.next.position.y = 0.08; this.root.add(this.next);
     this.zone = null; this.shown = { c: [0, 0], r: 300 };
   }
-  dispose() { this.root.parent?.remove(this.root); }
+  dispose() { this.root.parent?.remove(this.root); freeGeos(this.root); }
 
   setLoot(list, loadouts) {
     const seen = new Set(), now = performance.now() / 1000;

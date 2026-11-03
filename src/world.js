@@ -1,7 +1,8 @@
 // Vila Borracha: cena, cidade que danca, ceu, objetivos, pickups e efeitos.
 import * as THREE from 'three';
-import { ink, toon, outline, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
-import { buildGun } from './arsenal.js';
+import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildGun, rocketMesh } from './arsenal.js';
 
 export const BEAT = 2.2; // batidas por segundo da danca da cidade
 
@@ -12,8 +13,14 @@ const THEME = {
   fronteira: { sky: 0xdcd8cc, ground: ['#d3cdb8', '#8a8470'], paths: true, trees: [[-40, -36], [40, 36], [-62, 10], [62, -10], [-14, 50], [14, -50], [-56, -50], [56, 50]] },
   // estaleiro: asfalto do porto com faixas de seguranca, sem arvore la dentro
   estaleiro: { sky: 0xcfd3d2, ground: ['#b9b6ae', '#6a675f'], hazard: true, hazardStrips: [[40, 1, 0, -15], [40, 1, 0, 15]], trees: [] },
+  // Banco Ferradura: paralelepipedo de cidade, ruas dos lados e o beco atras do banco; arvores so na praca
+  ferradura: { sky: 0xd8d5cc, ground: ['#c9c3b6', '#77716a'], roadList: [[10, 92, -24, 0], [10, 92, 24, 0], [92, 14, 0, -27], [30, 26, 0, 31]], trees: [[-10, 24], [10, 24], [-10, 38], [10, 38], [-18, 44], [18, 44]] },
   // refinaria: areia do deserto, ceu quente
   refinaria: { sky: 0xe6d9bf, ground: ['#dccaa0', '#9c8662'], trees: [] },
+  // Estudio Tinteiro (Noite dos Borroes, 03/11 pedido dele): estudio abandonado de NOITE, escuro e assustador.
+  // Ceu quase preto, nevoa escura perto, luz da lua fraca e azulada; quem ilumina e a lanterna de cada um e as
+  // lampadas penduradas piscando (tinteiroDecor). Teto em cima do estudio (o telhado fica a ceu aberto).
+  tinteiro: { sky: 0x08080b, ground: ['#2f2a26', '#14110f'], fog: [3, 30], dark: true, trees: [] },
   // ilha do battle royale: grama rabiscada, neblina perto (esconde o longe e alivia o celular), muita arvore
   ilha: { sky: 0xd9d6c8, ground: ['#cdd0b4', '#7f8467'], paths: true, fog: [55, 165], trees: (() => {
     let s = 3; const r = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
@@ -34,21 +41,23 @@ export function buildWorld(scene, M) {
   scene.background = new THREE.Color(TH.sky);
   scene.fog = new THREE.Fog(TH.sky, TH.fog ? TH.fog[0] : ARENA * 1.2, TH.fog ? TH.fog[1] : ARENA * 4);
 
-  root.add(new THREE.HemisphereLight(0xffffff, 0x6e6a63, 1.4));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  root.add(new THREE.HemisphereLight(TH.dark ? 0x5a6280 : 0xffffff, TH.dark ? 0x0a0908 : 0x6e6a63, TH.dark ? 0.32 : 1.4));
+  const sun = new THREE.DirectionalLight(TH.dark ? 0x8fa0c8 : 0xffffff, TH.dark ? 0.3 : 2.2); // escuro: luar fraco
   sun.position.set(30, 60, 20);
   root.add(sun);
 
   // chao: paralelepipedo rabiscado + estrada clara
   const groundTex = hatchTexture(TH.ground[0], TH.ground[1], { density: 40, cross: true });
-  groundTex.repeat.set(ARENA / 2, ARENA / 2);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 60, ARENA * 2 + 60), toon(0xffffff, { map: groundTex }));
+  // Floresta (03/11): o chao escuro do estudio fica so dentro dele; fora, chao de mato num plano com furo (nada sobreposto = sem piscar)
+  const GS = M.forest ? (M.studio + 1) * 2 : ARENA * 2 + 60;
+  groundTex.repeat.set(M.forest ? GS / 4 : ARENA / 2, M.forest ? GS / 4 : ARENA / 2);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(GS, GS), toon(0xffffff, { map: groundTex }));
   ground.rotation.x = -Math.PI / 2;
   root.add(ground);
   const roadTex = hatchTexture('#e8e4da', '#a8a196', { density: 10 });
   roadTex.repeat.set(2, 24);
   const roads = TH.roads ? [[8, ARENA * 2, 0, 0], [ARENA * 2, 8, 0, 0], [6, ARENA * 2, -36, 0], [6, ARENA * 2, 36, 0]]
-    : TH.paths ? [[7, ARENA * 2, 0, 0], [6, ARENA * 2, -44, 0], [6, ARENA * 2, 44, 0]] : [];
+    : TH.paths ? [[7, ARENA * 2, 0, 0], [6, ARENA * 2, -44, 0], [6, ARENA * 2, 44, 0]] : TH.roadList || [];
   if (TH.hazard) {
     // faixas de seguranca da fabrica no chao
     const hz = hazardTexture();
@@ -68,12 +77,18 @@ export function buildWorld(scene, M) {
   const plank = hatchTexture('#a99f90', '#5d574f', { planks: true });
   const sideTex = hatchTexture('#ddd8cc', '#a19a8e', { density: 14 });
   const faces = [0, 1, 2, 3].map(i => facadeTexture(i));
+  // Banco Ferradura: marmore em blocos (repete pelo tamanho da peca, senao o bloco fica do tamanho do predio)
+  const marbleBase = M.theme === 'ferradura' ? hatchTexture('#ece7dc', '#b3ab9c', { bricks: true }) : null;
+  const marble = (w, h) => { const t = marbleBase.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(h / 1.6))); return t; };
 
   const hazardTex = hazardTexture();
+  const forestTrees = [];
   for (const b of M.boxes) {
     const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], d = b.max[2] - b.min[2];
     const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
     if (b.kind === 'roof') continue; // corpo invisivel do telhado pontudo (o desenho vem com a casa)
+    if (b.kind === 'forestedge') continue; // borda da floresta: o desenho e a mata fechada (forestDecor)
+    if (b.kind === 'tree') { forestTrees.push(b); continue; } // arvores da floresta: copias (InstancedMesh) no forestDecor
     if (b.kind === 'house') {
       const g = new THREE.Group();
       g.position.set(cx, b.min[1], cz);
@@ -207,13 +222,103 @@ export function buildWorld(scene, M) {
       root.add(g); dancers.push({ obj: g, h, phase: cx * 0.1, amp: 0.025 });
       continue;
     }
-    else mesh = ink(new THREE.BoxGeometry(w, h, d), b.kind === 'step' ? PAL.light : 0xffffff, 0.04, { map: b.kind === 'step' ? null : plank });
+    else if (b.kind === 'marble') {
+      mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: marble(Math.max(w, d), h), unique: true });
+      if (b.sign) { // frontao: placa com o nome, triangulo em cima e a ferradura dourada
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.86, h * 0.8), new THREE.MeshBasicMaterial({ map: bankSign() }));
+        plate.position.set(cx, b.min[1] + h / 2, b.max[2] + 0.02); root.add(plate);
+        const tri = new THREE.Shape(); tri.moveTo(-w / 2, 0); tri.lineTo(w / 2, 0); tri.lineTo(0, 3.2); tri.lineTo(-w / 2, 0);
+        const ped = ink(new THREE.ExtrudeGeometry(tri, { depth: d * 0.8, bevelEnabled: false }), 0xf0ebe0, 0.07);
+        ped.position.set(cx, b.max[1], cz - d * 0.4); root.add(ped);
+        const shoe = horseshoe(0.9); shoe.position.set(cx, b.max[1] + 1.2, cz + d * 0.4 + 0.08); root.add(shoe);
+      }
+    }
+    else if (b.kind === 'rail') { // balaustrada: corrimao escuro em cima de pilaretes claros
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const along = w > d, len = Math.max(w, d), n = Math.max(2, Math.round(len / 0.55));
+      const top = ink(new THREE.BoxGeometry(along ? len : w + 0.1, 0.16, along ? d + 0.1 : len), PAL.dark, 0.03); top.position.y = h - 0.08; g.add(top);
+      for (let i = 0; i < n; i++) { const k = -len / 2 + (i + 0.5) * len / n; const pin = ink(new THREE.CylinderGeometry(0.07, 0.11, h - 0.16, 6), PAL.paper, 0.02); pin.position.set(along ? k : 0, (h - 0.16) / 2, along ? 0 : k); g.add(pin); }
+      root.add(g); continue;
+    }
+    else if (b.kind === 'column') { // coluna de banco: fuste, base e capitel
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const r = Math.min(w, d) / 2;
+      const shaft = ink(new THREE.CylinderGeometry(r * 0.8, r * 0.9, h - 0.8, 12), PAL.paper, 0.05); shaft.position.y = h / 2; g.add(shaft);
+      for (const y of [0.2, h - 0.2]) { const cap = ink(new THREE.BoxGeometry(w * 1.25, 0.4, d * 1.25), 0xe6e0d4, 0.04); cap.position.y = y; g.add(cap); }
+      root.add(g); continue;
+    }
+    else if (b.kind === 'bankroof') mesh = ink(new THREE.BoxGeometry(w, h, d), PAL.dark, 0.06);
+    else if (b.kind === 'counter') { // balcao dos caixas: madeira escura com tampo claro
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const body = ink(new THREE.BoxGeometry(w, h, d), 0x5d4a3a, 0.05); body.position.y = h / 2; g.add(body);
+      const lid = ink(new THREE.BoxGeometry(w + 0.2, 0.12, d + 0.2), PAL.paper, 0.03); lid.position.y = h + 0.06; g.add(lid);
+      root.add(g); continue;
+    }
+    else if (b.kind === 'duct') mesh = ink(new THREE.BoxGeometry(w, h, d), 0x9aa0a0, 0.05, { map: sideTex });
+    else if (b.kind === 'coreto') { // coreto: piso de madeira em cima de base de pedra
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const r = Math.min(w, d) / 2;
+      const base = ink(new THREE.CylinderGeometry(r * 1.05, r * 1.1, h, 8), PAL.light, 0.05); base.position.y = h / 2; base.rotation.y = Math.PI / 8; g.add(base);
+      const deck = ink(new THREE.CylinderGeometry(r * 0.98, r * 0.98, 0.06, 8), 0xffffff, 0, { map: plank }); deck.position.y = h + 0.03; deck.rotation.y = Math.PI / 8; g.add(deck);
+      root.add(g); continue;
+    }
+    else if (b.kind === 'coretoroof') { // telhado do coreto: cone listrado vermelho e branco com bandeirinha
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const r = Math.min(w, d) / 2;
+      const shell = ink(new THREE.ConeGeometry(r, 2.6, 16), 0xffffff, 0.07, { map: stripeTex() }); shell.position.y = 1.3 + h; g.add(shell);
+      const rim = ink(new THREE.CylinderGeometry(r, r, h, 8), PAL.dark, 0.04); rim.position.y = h / 2; g.add(rim);
+      const mast = ink(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), PAL.ink, 0); mast.position.y = h + 2.9; g.add(mast);
+      const flag = ink(new THREE.BoxGeometry(0.9, 0.5, 0.06), PAL.red, 0.02); flag.position.set(0.45, h + 3.1, 0); g.add(flag);
+      root.add(g); dancers.push({ obj: g, h: 3, phase: 1.3, amp: 0.03 }); continue;
+    }
+    else if (b.kind === 'bench') { // banco de praca: ripas de madeira em pes de ferro
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const seat = ink(new THREE.BoxGeometry(w, 0.12, d), 0xffffff, 0.03, { map: plank }); seat.position.y = h * 0.55; g.add(seat);
+      const back = ink(new THREE.BoxGeometry(0.1, h * 0.55, d), 0xffffff, 0.03, { map: plank }); back.position.set(Math.sign(cx) * w * 0.45, h * 0.8, 0); g.add(back);
+      for (const e of [-1, 1]) { const leg = ink(new THREE.BoxGeometry(w * 0.9, h * 0.55, 0.1), PAL.ink, 0); leg.position.set(0, h * 0.27, e * d * 0.42); g.add(leg); }
+      root.add(g); continue;
+    }
+    else if (b.kind === 'hedge') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.05, { map: hedgeTex ||= hatchTexture('#9ea283', '#5d6249', { density: 30, cross: true }) });
+    else if (b.kind === 'lamp') { // poste de rua de 1930: haste preta e lanterna
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const pole = ink(new THREE.CylinderGeometry(0.08, 0.14, h, 8), PAL.ink, 0.02); pole.position.y = h / 2; g.add(pole);
+      const lamp = ink(new THREE.CylinderGeometry(0.22, 0.3, 0.55, 6), PAL.paper, 0.03); lamp.position.y = h + 0.2; g.add(lamp);
+      const hat = ink(new THREE.ConeGeometry(0.38, 0.3, 6), PAL.ink, 0.02); hat.position.y = h + 0.6; g.add(hat);
+      root.add(g); continue;
+    }
+    else if (b.kind === 'car') { // carro parado dos anos 30: corpo, cabine e rodas
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const along = d > w, L = Math.max(w, d), W = Math.min(w, d), col = [PAL.red, PAL.blue, 0x5f7f3e][(b.seed || 0) % 3];
+      const body = ink(new THREE.BoxGeometry(W, h * 0.45, L), col, 0.05); body.position.y = h * 0.42; g.add(body);
+      const cab = ink(new THREE.BoxGeometry(W * 0.9, h * 0.4, L * 0.45), PAL.dark, 0.05); cab.position.set(0, h * 0.82, -L * 0.08); g.add(cab);
+      for (const [ex, ez] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const wh = ink(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12), PAL.ink, 0.02); wh.rotation.z = Math.PI / 2; wh.position.set(ex * W * 0.5, 0.42, ez * L * 0.32); g.add(wh); }
+      if (!along) g.rotation.y = Math.PI / 2;
+      root.add(g); dancers.push({ obj: g, h, phase: cx * 0.2, amp: 0.03 }); continue;
+    }
+    else if (b.kind === 'dumpster') mesh = ink(new THREE.BoxGeometry(w, h, d), 0x4f6a52, 0.05, { map: sideTex });
+    else if (STUDIO[b.kind]) { const g = STUDIO[b.kind](w, h, d, b); g.position.set(cx, b.min[1], cz); root.add(g); continue; } // moveis do Estudio Tinteiro
+    else mesh = ink(new THREE.BoxGeometry(w, h, d), b.kind === 'step' ? (marbleBase ? 0xe6e0d4 : PAL.light) : 0xffffff, 0.04, { map: b.kind === 'step' ? null : plank });
     mesh.position.set(cx, b.min[1] + h / 2, cz);
     root.add(mesh);
   }
 
-  // morros e arvores de borracha fora do muro
-  for (let i = 0; i < 18; i++) {
+  if (M.theme === 'ferradura') bankDecor(root);
+  const studio = TH.dark ? tinteiroDecor(root, M.studio || ARENA) : null;
+  const preForest = new Set(root.children); // o que e do estudio/mapa (a mata vem depois e fica de fora do recorte)
+  const forest = M.forest ? forestDecor(root, M, forestTrees) : null;
+  // Floresta (03/11, desempenho): o miolo do estudio vai num grupo proprio (juntado a parte). Da mata, atras da parede
+  // de 12 m, ele nem aparece mas era desenhado (~550 chamadas olhando pro estudio); cull() some com ele la fora.
+  // Fora do recorte: a mata (malhas instanciadas na origem) e lampada com luz de verdade (luz que some muda a
+  // contagem de luzes da cena e recompila todos os materiais)
+  let inner = null;
+  if (M.forest) {
+    inner = new THREE.Group(); const lim = M.studio - 0.1;
+    for (const o of [...root.children]) if (preForest.has(o) && o !== ground && !o.isLight && !o.getObjectByProperty('isLight', true) && Math.abs(o.position.x) < lim && Math.abs(o.position.z) < lim) inner.add(o);
+    root.add(inner);
+  }
+
+  // morros e arvores de borracha fora do muro (estudio fechado: nada disso, so o escuro)
+  for (let i = 0; i < (TH.dark ? 0 : 18); i++) {
     // morros longe o bastante pra nunca invadir a arena (diagonal dos cantos ~ ARENA * 1.42)
     const rad = 18 + (i % 4) * 5;
     const a = (i / 18) * Math.PI * 2, r = ARENA * 1.5 + rad + 6 + (i % 3) * 8;
@@ -222,7 +327,7 @@ export function buildWorld(scene, M) {
     hill.scale.y = 0.6;
     root.add(hill);
   }
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < (TH.dark ? 0 : 26); i++) {
     const a = (i / 26) * Math.PI * 2 + 0.1, r = ARENA * 1.42 + 8 + (i % 2) * 6;
     const t = makeTree();
     t.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
@@ -237,13 +342,13 @@ export function buildWorld(scene, M) {
     swayers.push({ obj: t, base: 0, amp: 0.1, speed: 2.4, phase: x, tree: true });
   }
 
-  // sol com cara + nuvens
-  const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTexture(), fog: false, transparent: true }));
+  // sol com cara + nuvens (estudio de noite: lua cheia de desenho no lugar do sol, sem nuvem)
+  const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: TH.dark ? moonTexture() : sunTexture(), fog: false, transparent: true }));
   sunSpr.scale.set(36, 36, 1);
   sunSpr.position.set(-90, 75, -120);
   root.add(sunSpr);
   const clouds = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < (TH.dark ? 0 : 9); i++) {
     const c = makeCloud();
     c.position.set(-120 + i * 30, 40 + (i % 3) * 8, -60 + ((i * 37) % 120));
     root.add(c);
@@ -256,12 +361,20 @@ export function buildWorld(scene, M) {
   mergeMoving(root, [...trees.map(s => ({ obj: s.obj, phase: s.phase, amp: s.amp })), ...clouds.map(c => ({ obj: c, phase: 0, amp: -1 }))], moveT);
   const chimneys = swayers.filter(s => !s.tree);
   // o resto que fica parado vira poucas malhas (so chamine e sol continuam soltos)
-  const merged = mergeStatic(root, new Set([...chimneys.map(s => s.obj), sunSpr]));
+  const keep = new Set([...chimneys.map(s => s.obj), sunSpr, ...(studio ? studio.moving : []), ...(forest ? forest.moving : [])]);
+  if (inner) { mergeStatic(inner, keep); keep.add(inner); }
+  const merged = mergeStatic(root, keep);
   if (typeof location !== 'undefined' && /[?&]perf/.test(location.search)) console.log('[mapa] malhas juntadas', merged);
+  const fdoor = M.bor?.doors.find(d => d.id === 'floresta');
 
   return {
     root,
-    dispose() { scene.remove(root); },
+    dispose() { scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
+    // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
+    cull(p) {
+      if (!inner) return;
+      inner.visible = Math.max(Math.abs(p.x), Math.abs(p.z)) < M.studio + 0.6 || !fdoor || Math.hypot(p.x - fdoor.x, p.z - fdoor.z) < 18 || p.y > 13;
+    },
     update(t) {
       // predios e casas ficam parados (pulando atrapalhava a mira); so ceu, sol, arvores e chamines mexem
       const beat = t * BEAT * Math.PI;
@@ -269,8 +382,76 @@ export function buildWorld(scene, M) {
       for (const s of chimneys) s.obj.rotation.z = Math.sin(t * s.speed + s.phase) * s.amp;
       sunSpr.material.rotation = Math.sin(t * 1.4) * 0.12;
       sunSpr.position.y = 75 + Math.sin(beat) * 1.2;
+      studio?.update(t);
+      forest?.update(t);
     },
   };
+}
+
+// ---------- Banco Ferradura (03/11): placa, ferradura, piso do subsolo e parede de cofrinhos ----------
+let bankSignTex = null, hedgeTex = null;
+function bankSign() {
+  if (bankSignTex) return bankSignTex;
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 160;
+  const g = c.getContext('2d');
+  g.fillStyle = '#2b2724'; g.fillRect(0, 0, 1024, 160);
+  g.strokeStyle = '#d9c38a'; g.lineWidth = 8; g.strokeRect(14, 14, 996, 132);
+  g.fillStyle = '#efe6cc'; g.font = '84px "Bowlby One", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('BANCO FERRADURA', 512, 86);
+  bankSignTex = new THREE.CanvasTexture(c); bankSignTex.colorSpace = THREE.SRGBColorSpace;
+  return bankSignTex;
+}
+function stripeTex() { // gomos vermelho e branco do telhado do coreto (u da volta no cone)
+  const c = document.createElement('canvas'); c.width = 256; c.height = 8;
+  const g = c.getContext('2d'); for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#faf8f2' : '#a83a2c'; g.fillRect(i * 32, 0, 32, 8); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function horseshoe(s) { // ferradura dourada de boca pra cima (sorte)
+  const g = new THREE.Group();
+  const arc = ink(new THREE.TorusGeometry(s * 0.6, s * 0.17, 8, 18, Math.PI * 1.3), 0xc9a24a, 0.04);
+  arc.rotation.z = Math.PI + Math.PI * 0.15 - Math.PI * 0.3; g.add(arc);
+  return g;
+}
+function bankDecor(root) {
+  // piso xadrez do subsolo (fosso do cofre)
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.fillStyle = (x + y) % 2 ? '#3a3632' : '#d9d3c6'; g.fillRect(x * 32, y * 32, 32, 32); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 8); t.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(18, 16), toon(0xffffff, { map: t }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0.015, -4); root.add(floor);
+  // parede de cofrinhos (caixas de deposito) nas paredes do fosso
+  const bc = document.createElement('canvas'); bc.width = 256; bc.height = 128;
+  const bg = bc.getContext('2d'); bg.fillStyle = '#8f8778'; bg.fillRect(0, 0, 256, 128);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) {
+    bg.fillStyle = '#b8b0a0'; bg.fillRect(x * 32 + 3, y * 32 + 3, 26, 26);
+    bg.strokeStyle = '#1b1916'; bg.lineWidth = 2; bg.strokeRect(x * 32 + 3, y * 32 + 3, 26, 26);
+    bg.fillStyle = '#1b1916'; bg.beginPath(); bg.arc(x * 32 + 16, y * 32 + 16, 3, 0, Math.PI * 2); bg.fill();
+  }
+  const wall = (w, x, z, ry) => {
+    const tt = new THREE.CanvasTexture(bc); tt.colorSpace = THREE.SRGBColorSpace; tt.wrapS = THREE.RepeatWrapping; tt.repeat.set(Math.round(w / 4), 1);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, 2.6), toon(0xffffff, { map: tt, unique: true })); m.position.set(x, 1.4, z); m.rotation.y = ry; root.add(m);
+  };
+  wall(17.6, 0, 3.98, Math.PI); // frente do fosso (olha pro cofre)
+  // piso do salao em lajotas grandes (o topo do marmore ficava listrado)
+  const tc = document.createElement('canvas'); tc.width = tc.height = 64;
+  const tg = tc.getContext('2d');
+  for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) { tg.fillStyle = (x + y) % 2 ? '#d3cbbb' : '#ece7dc'; tg.fillRect(x * 32, y * 32, 32, 32); }
+  tg.strokeStyle = '#9d9584'; tg.lineWidth = 1; for (let i = 0; i <= 64; i += 32) { tg.beginPath(); tg.moveTo(i, 0); tg.lineTo(i, 64); tg.moveTo(0, i); tg.lineTo(64, i); tg.stroke(); }
+  for (const [w, d, x, z] of [[6.7, 26, -12.65, 1], [6.7, 26, 12.65, 1], [18, 10.7, 0, 9.65]]) {
+    const ft = new THREE.CanvasTexture(tc); ft.colorSpace = THREE.SRGBColorSpace; ft.wrapS = ft.wrapT = THREE.RepeatWrapping; ft.repeat.set(w / 3, d / 3);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), toon(0xffffff, { map: ft, unique: true })); m.rotation.x = -Math.PI / 2; m.position.set(x, 3.012, z); root.add(m);
+  }
+  // boca do duto no beco: moldura escura, rebites e a grade arrancada jogada no chao
+  const mouth = new THREE.Group(); mouth.position.set(0, 0, -21.02);
+  for (const [w, h, x, y] of [[3, 0.25, 0, 1.47], [0.25, 1.6, -1.38, 0.8], [0.25, 1.6, 1.38, 0.8]]) { const f = ink(new THREE.BoxGeometry(w, h, 0.12), PAL.ink, 0.02); f.position.set(x, y, 0); mouth.add(f); }
+  const hole = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35), new THREE.MeshBasicMaterial({ color: 0x1b1916, transparent: true, opacity: 0.55, depthWrite: false })); hole.position.set(0, 0.68, -0.4); mouth.add(hole);
+  root.add(mouth);
+  const grate = new THREE.Group(); grate.position.set(2.6, 0.04, -23); grate.rotation.set(-Math.PI / 2, 0, 0.5);
+  const gf = ink(new THREE.BoxGeometry(2.3, 1.3, 0.06), 0x6e6a63, 0.03); grate.add(gf);
+  for (let i = -4; i <= 4; i++) { const bar = ink(new THREE.BoxGeometry(0.06, 1.2, 0.1), PAL.ink, 0); bar.position.x = i * 0.25; grate.add(bar); }
+  root.add(grate);
+  wall(15.6, -8.98, -4.2, Math.PI / 2); wall(15.6, 8.98, -4.2, -Math.PI / 2);
 }
 
 function hazardTexture() {
@@ -407,7 +588,7 @@ export function buildObjectives(scene, M) {
   });
   return {
     flags, zones: zoneObjs, pickups, root,
-    dispose() { scene.remove(root); },
+    dispose() { scene.remove(root); freeGeos(root); },
     // carrier(id): { me } pra quem carrega sou eu, { pos, yaw } pro boneco suavizado dos outros
     update(t, snap, mode, carrier) {
       for (const team of ['red', 'blue']) {
@@ -448,10 +629,10 @@ export function buildObjectives(scene, M) {
 
 function anvilMesh() {
   const g = new THREE.Group();
-  const base = ink(new THREE.BoxGeometry(1.2, 0.35, 0.8), PAL.ink, 0.04); base.position.y = 0.18; g.add(base);
-  const neck = ink(new THREE.BoxGeometry(0.6, 0.35, 0.5), PAL.ink, 0.04); neck.position.y = 0.5; g.add(neck);
-  const top = ink(new THREE.BoxGeometry(1.9, 0.45, 0.8), PAL.dark, 0.04); top.position.set(0.15, 0.9, 0); g.add(top);
-  const horn = ink(new THREE.ConeGeometry(0.28, 0.9, 6), PAL.dark, 0.03); horn.rotation.z = Math.PI / 2; horn.position.set(-1.25, 0.95, 0); g.add(horn);
+  const base = ink(geo(THREE.BoxGeometry, 1.2, 0.35, 0.8), PAL.ink, 0.04); base.position.y = 0.18; g.add(base);
+  const neck = ink(geo(THREE.BoxGeometry, 0.6, 0.35, 0.5), PAL.ink, 0.04); neck.position.y = 0.5; g.add(neck);
+  const top = ink(geo(THREE.BoxGeometry, 1.9, 0.45, 0.8), PAL.dark, 0.04); top.position.set(0.15, 0.9, 0); g.add(top);
+  const horn = ink(geo(THREE.ConeGeometry, 0.28, 0.9, 6), PAL.dark, 0.03); horn.rotation.z = Math.PI / 2; horn.position.set(-1.25, 0.95, 0); g.add(horn);
   return g;
 }
 
@@ -491,6 +672,7 @@ const BULLET = {
   shotgun: { seg: 0.25, speed: 100 }, sniper: { seg: 0.9, speed: 240 }, minigun: { seg: 0.4, speed: 130 },
 };
 const LASER_BOLT = { seg: 1.3, speed: 85 }; // raio comprido e mais lento que bala (de cinema)
+const BULLET_MAX_FLY = 0.05; // s: teto do voo, qualquer distancia
 function tracerMaterial(style, len) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, // mistura normal: em cenario claro, somar luz deixava tudo branco
@@ -547,7 +729,7 @@ export class FX {
     this.puffGeo = new THREE.SphereGeometry(1, 10, 8);
   }
 
-  add(obj, life, update) { this.scene.add(obj); this.list.push({ obj, life, t: 0, update }); }
+  add(obj, life, update, done) { this.scene.add(obj); this.list.push({ obj, life, t: 0, update, done }); } // done: libera o que e so do efeito
 
   // estilo: chalk (giz, padrao), fire, ink, spark, rainbow, none
   tracer(o, e, style = 'chalk') {
@@ -578,7 +760,9 @@ export class FX {
     const len = a.distanceTo(b);
     if (len < 0.5) return;
     // bala do tamanho de bala (pedido dele: fina e curta); o contorno de tinta e o que faz ela aparecer
-    const B = style === 'laser' ? LASER_BOLT : BULLET[wpn] || BULLET.rifle, seg = Math.min(len, B.seg), fly = len / B.speed, tail = 0.06;
+    // chega quase na hora como o acerto (03/11: a bala lenta chegava depois da bolinha do impacto); o risco estica com a velocidade
+    const B = style === 'laser' ? LASER_BOLT : BULLET[wpn] || BULLET.rifle, fly = Math.min(len / B.speed, BULLET_MAX_FLY), speed = len / fly;
+    const seg = Math.min(len, Math.max(B.seg, speed * 0.008)), tail = 0.06;
     const dir = b.clone().sub(a).normalize();
     const T = TRACERS[style], w = (T ? T.w : 1) * 0.6;
     const mat = T ? tracerMaterial(style, seg) : this.tracerMat.clone();
@@ -592,7 +776,7 @@ export class FX {
     ink.scale.set(1.6, 1.6, 1); m.add(ink);
     const life = fly + tail;
     this.add(m, life, (f, k) => {
-      const t = k * life, d = Math.min(len, t * B.speed), s = Math.max(0, d - seg);
+      const t = k * life, d = Math.min(len, t * speed), s = Math.max(0, d - seg);
       f.obj.position.copy(a).addScaledVector(dir, s);
       f.obj.scale.z = Math.max(0.01, d - s);
       const fade = t > fly ? (t - fly) / tail : 0; // chegou: o risco some no alvo
@@ -629,8 +813,42 @@ export class FX {
     }
   }
 
+  // lanca-chamas (03/11, refeito): jato de bolinhas de fogo pequenas (miolo amarelo -> laranja -> vermelho) e um fiapo de fumaca;
+  // textura unica, material por particula liberado no done
+  flame(o, d) {
+    this.flameTex ||= (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.8, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+    const ramp = [new THREE.Color(0xffe066), new THREE.Color(0xff9a1a), new THREE.Color(0xf04a12), new THREE.Color(0x8a1a08)];
+    const jit = (a) => (Math.random() - 0.5) * a, free = (ob) => ob.material.dispose();
+    for (let i = 0; i < 7; i++) {
+      const smoke = i === 6;
+      const mat = new THREE.SpriteMaterial({ map: this.flameTex, transparent: true, depthWrite: false, color: smoke ? 0x3a3532 : ramp[0], opacity: smoke ? 0 : 0.95 }); // mistura normal: aditivo sumia no cenario claro (03/11)
+      const s = new THREE.Sprite(mat);
+      const sp = (smoke ? 5 : 8) + Math.random() * 3, spr = smoke ? 0.3 : 0.2; // abre em leque: de frente, jato fino vira um bolo so
+      const v = new THREE.Vector3(d[0] + jit(spr), d[1] + jit(spr), d[2] + jit(spr)).normalize().multiplyScalar(sp);
+      const back = Math.random() * 0.5; // espalha ao longo do tick: o jato fica continuo desde o cano
+      s.position.set(o[0] + d[0] * back, o[1] + d[1] * back, o[2] + d[2] * back);
+      const s0 = smoke ? 0.25 : 0.14 + Math.random() * 0.06, s1 = smoke ? 1.5 : 0.8 + Math.random() * 0.4, rot = Math.random() * 6;
+      s.scale.setScalar(s0);
+      this.add(s, smoke ? 0.8 + Math.random() * 0.3 : 0.4 + Math.random() * 0.2, (f, k, dt) => {
+        f.obj.position.addScaledVector(v, dt); v.multiplyScalar(Math.max(0, 1 - dt * (smoke ? 3 : 3.6))); v.y += dt * (smoke ? 2.2 : 3); // arrasto e sobe
+        f.obj.scale.setScalar(s0 + (s1 - s0) * Math.sqrt(k));
+        mat.rotation = rot + k * 1.5;
+        if (smoke) { mat.opacity = k < 0.3 ? k / 0.3 * 0.32 : 0.32 * (1 - (k - 0.3) / 0.7); return; }
+        const t = Math.min(2.999, k * 3), j = Math.floor(t);
+        mat.color.copy(ramp[j]).lerp(ramp[j + 1], t - j);
+        mat.opacity = k > 0.6 ? (1 - k) / 0.4 * 0.95 : 0.95;
+      }, free);
+    }
+  }
+
+  // sem fumacinha (03/11, pedido dele): a bolinha branca nascia na hora no alvo e parecia uma segunda bala
   impact(pos, normal) {
-    this.puff(pos, 2, 0.18, PAL.light, 0.3);
     if (normal) {
       const m = new THREE.Mesh(new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: PAL.ink, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }));
       m.position.fromArray(pos).addScaledVector(new THREE.Vector3().fromArray(normal), 0.02);
@@ -659,13 +877,17 @@ export class FX {
 
   // mancha de tinta no chao (morte, explosao)
   splat(pos, size = 1.6, color = PAL.ink) {
-    const g = new THREE.CircleGeometry(1, 14);
-    const a = g.attributes.position;
-    for (let i = 1; i < a.count; i++) { const k = 0.7 + Math.random() * 0.55; a.setXY(i, a.getX(i) * k, a.getY(i) * k); }
+    // 8 formas sorteadas uma vez e reaproveitadas (antes: geometria nova por mancha, nunca liberada)
+    const pool = this.splatGeos ||= Array.from({ length: 8 }, () => {
+      const g = new THREE.CircleGeometry(1, 14), a = g.attributes.position;
+      for (let i = 1; i < a.count; i++) { const k = 0.7 + Math.random() * 0.55; a.setXY(i, a.getX(i) * k, a.getY(i) * k); }
+      return g;
+    });
+    const g = pool[Math.floor(Math.random() * pool.length)];
     const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, polygonOffset: true, polygonOffsetFactor: -3, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.rotation.z = Math.random() * 6;
     m.position.set(pos[0], (pos[1] || 0) + 0.03, pos[2]);
-    this.add(m, 9, (f, k) => { const sc = size * Math.min(1, k * 40); f.obj.scale.setScalar(sc); f.obj.material.opacity = k > 0.8 ? (1 - k) * 5 * 0.85 : 0.85; });
+    this.add(m, 9, (f, k) => { const sc = size * Math.min(1, k * 40); f.obj.scale.setScalar(sc); f.obj.material.opacity = k > 0.8 ? (1 - k) * 5 * 0.85 : 0.85; }, (o) => o.material.dispose());
   }
 
   // estrelinhas girando na cabeca de quem caiu
@@ -695,9 +917,11 @@ export class FX {
 
   // aviso + bigorna caindo do ceu
   anvilWarn(pos) {
-    const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.4, 24), new THREE.MeshBasicMaterial({ color: PAL.red, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    // anel compartilhado; o material (opacidade piscando) e de cada aviso e sai no done (antes: geometria nova por aviso, nunca liberada)
+    this.warnRing ||= new THREE.RingGeometry(2.6, 3.4, 24);
+    const ring = new THREE.Mesh(this.warnRing, new THREE.MeshBasicMaterial({ color: PAL.red, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.position.set(pos[0], 0.05, pos[2]);
-    this.add(ring, 1.9, (f, k) => { f.obj.material.opacity = 0.4 + Math.sin(k * 40) * 0.3; f.obj.scale.setScalar(1.2 - k * 0.3); });
+    this.add(ring, 1.9, (f, k) => { f.obj.material.opacity = 0.4 + Math.sin(k * 40) * 0.3; f.obj.scale.setScalar(1.2 - k * 0.3); }, (o) => o.material.dispose());
   }
 
   anvil(pos) {
@@ -713,27 +937,39 @@ export class FX {
     }, 180);
   }
 
+  // escudo de nascimento (02/11): bolha de sabao azulada em volta do boneco, com contorno de tinta tracejado
+  protBubble() {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1.15, 20, 14), new THREE.MeshBasicMaterial({ color: 0x7fb3e6, transparent: true, opacity: 0.22, depthWrite: false }));
+    m.scale.set(1, 1.25, 1); m.position.y = 1.0; g.add(m);
+    const r = new THREE.Mesh(new THREE.TorusGeometry(1.18, 0.035, 6, 40), new THREE.MeshBasicMaterial({ color: 0x2f5b8a }));
+    r.rotation.x = Math.PI / 2; r.position.y = 0.15; g.add(r);
+    g.userData.spin = r;
+    return g;
+  }
+
   nadeMesh(kind) {
+    if (kind === 'rocket') return rocketMesh(); // foguete da Bazuca
     const g = new THREE.Group();
     if (kind === 'frag') {
-      const b = ink(new THREE.SphereGeometry(0.11, 10, 8), 0x3f4a32, 0.012); b.scale.set(1, 1.25, 1); g.add(b);
-      const l = ink(new THREE.BoxGeometry(0.03, 0.12, 0.05), PAL.mid, 0.006); l.position.set(0.07, 0.08, 0); g.add(l);
-      const c = ink(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 8), PAL.mid, 0.006); c.position.y = 0.15; g.add(c);
+      const b = ink(geo(THREE.SphereGeometry, 0.11, 10, 8), 0x3f4a32, 0.012); b.scale.set(1, 1.25, 1); g.add(b);
+      const l = ink(geo(THREE.BoxGeometry, 0.03, 0.12, 0.05), PAL.mid, 0.006); l.position.set(0.07, 0.08, 0); g.add(l);
+      const c = ink(geo(THREE.CylinderGeometry, 0.035, 0.035, 0.05, 8), PAL.mid, 0.006); c.position.y = 0.15; g.add(c);
     } else {
-      const b = ink(new THREE.CylinderGeometry(0.06, 0.06, 0.22, 10), PAL.light, 0.01); g.add(b);
-      const c = ink(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 8), PAL.dark, 0.006); c.position.y = 0.13; g.add(c);
+      const b = ink(geo(THREE.CylinderGeometry, 0.06, 0.06, 0.22, 10), PAL.light, 0.01); g.add(b);
+      const c = ink(geo(THREE.CylinderGeometry, 0.035, 0.035, 0.05, 8), PAL.dark, 0.006); c.position.y = 0.13; g.add(c);
     }
     return g;
   }
 
   blimpMesh(team) {
     const g = new THREE.Group();
-    const body = ink(new THREE.SphereGeometry(3, 18, 12), PAL.light, 0.15); body.scale.set(1, 0.8, 2.3); g.add(body);
-    const band = ink(new THREE.CylinderGeometry(2.45, 2.45, 0.8, 18), team === 'blue' ? PAL.blue : PAL.red, 0); band.rotation.x = Math.PI / 2; g.add(band);
+    const body = ink(geo(THREE.SphereGeometry, 3, 18, 12), PAL.light, 0.15); body.scale.set(1, 0.8, 2.3); g.add(body);
+    const band = ink(geo(THREE.CylinderGeometry, 2.45, 2.45, 0.8, 18), team === 'blue' ? PAL.blue : PAL.red, 0); band.rotation.x = Math.PI / 2; g.add(band);
     for (const [x, y] of [[0, 2.2], [0, -2.2], [2.2, 0], [-2.2, 0]]) {
-      const fin = ink(new THREE.BoxGeometry(x ? 1.8 : 0.15, y ? 1.8 : 0.15, 1.6), PAL.dark, 0.06); fin.position.set(x, y, 6); g.add(fin);
+      const fin = ink(geo(THREE.BoxGeometry, x ? 1.8 : 0.15, y ? 1.8 : 0.15, 1.6), PAL.dark, 0.06); fin.position.set(x, y, 6); g.add(fin);
     }
-    const gond = ink(new THREE.BoxGeometry(1.2, 0.9, 2.4), PAL.dark, 0.06); gond.position.y = -2.7; g.add(gond);
+    const gond = ink(geo(THREE.BoxGeometry, 1.2, 0.9, 2.4), PAL.dark, 0.06); gond.position.y = -2.7; g.add(gond);
     return g;
   }
 
@@ -741,9 +977,326 @@ export class FX {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const f = this.list[i];
       f.t += dt;
-      const k = Math.min(1, f.t / f.life);
-      f.update && f.update(f, k, dt);
-      if (k >= 1) { this.scene.remove(f.obj); this.list.splice(i, 1); }
+      let k = Math.min(1, f.t / f.life);
+      // efeito com erro sai na hora (02/11: um efeito quebrado parava a lista toda e o clarao da flash ficava na tela)
+      try { f.update && f.update(f, k, dt); } catch (e) { k = 1; console.error('[fx]', e); }
+      if (k >= 1 || !Number.isFinite(k)) { this.scene.remove(f.obj); this.list.splice(i, 1); f.done?.(f.obj); }
     }
   }
+}
+
+// ---------- Estudio Tinteiro (Noite dos Borroes, 03/11): moveis e clima de estudio abandonado de noite ----------
+let studioTex = null;
+function stex() {
+  if (studioTex) return studioTex;
+  const wall = hatchTexture('#3b342f', '#1d1916', { density: 16 }); wall.wrapS = wall.wrapT = THREE.RepeatWrapping;
+  const wood = hatchTexture('#4a3d33', '#221b16', { planks: true });
+  const brick = hatchTexture('#4a3a33', '#1f1814', { bricks: true });
+  return (studioTex = { wall, wood, brick });
+}
+// cada tipo de caixa novo do mapa devolve um grupo com o pe no chao (y = 0 do grupo = b.min[1])
+const STUDIO = {
+  // parede de estudio: papel de parede escuro com rodape de madeira e friso; tinta escorre de cima (decor)
+  studiowall(w, h, d) {
+    const g = new THREE.Group(), T = stex(), t = T.wall.clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.round(Math.max(w, d) / 3)), Math.max(1, Math.round(h / 3)));
+    const body = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: t, unique: true }); body.position.y = h / 2; g.add(body);
+    if (h < 6) return g;
+    const base = ink(new THREE.BoxGeometry(w + 0.08, 0.9, d + 0.08), 0x2a211b, 0.02); base.position.y = 0.45; g.add(base);
+    const rim = ink(new THREE.BoxGeometry(w + 0.12, 0.14, d + 0.12), 0x5b4a3c, 0); rim.position.y = 0.95; g.add(rim);
+    return g;
+  },
+  // prancheta de animador: tampo inclinado com papel e lampada de braco apagada
+  desk(w, h, d, b) {
+    const g = new THREE.Group(), T = stex();
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = ink(new THREE.BoxGeometry(0.12, h - 0.1, 0.12), 0x2a211b, 0.02); l.position.set(sx * (w / 2 - 0.15), (h - 0.1) / 2, sz * (d / 2 - 0.15)); g.add(l); }
+    const top = ink(new THREE.BoxGeometry(w, 0.1, d), 0xffffff, 0.03, { map: T.wood }); top.position.y = h - 0.05; top.rotation.x = b.light ? 0 : 0.18; g.add(top);
+    const paper = ink(new THREE.BoxGeometry(w * 0.6, 0.02, d * 0.6), 0xb8b0a0, 0); paper.position.set(0, h + 0.03, 0); paper.rotation.set(b.light ? 0 : 0.18, 0.2, 0); g.add(paper);
+    const blot = new THREE.Mesh(new THREE.CircleGeometry(0.22, 12), toon(0x0b0a09)); blot.rotation.x = -Math.PI / 2 + (b.light ? 0 : 0.18); blot.position.set(0.2, h + 0.05, 0.05); g.add(blot); // borrao de tinta no desenho
+    return g;
+  },
+  // cavalete com tela rabiscada
+  easel(w, h, d) {
+    const g = new THREE.Group();
+    for (const s of [-1, 1]) { const l = ink(new THREE.BoxGeometry(0.08, h, 0.08), 0x3a2e25, 0.02); l.position.set(0, h / 2, s * d * 0.35); l.rotation.x = -s * 0.12; g.add(l); }
+    const back = ink(new THREE.BoxGeometry(0.08, h * 0.9, 0.08), 0x3a2e25, 0.02); back.position.set(w * 0.4, h * 0.45, 0); back.rotation.z = 0.25; g.add(back);
+    const canvas = ink(new THREE.BoxGeometry(0.06, h * 0.45, d * 0.8), 0x9c9484, 0.03); canvas.position.set(-0.05, h * 0.62, 0); g.add(canvas);
+    const smear = ink(new THREE.BoxGeometry(0.07, h * 0.25, d * 0.18), 0x0b0a09, 0); smear.position.set(-0.07, h * 0.6, d * 0.1); smear.rotation.x = 0.6; g.add(smear);
+    return g;
+  },
+  // estante do arquivo: prateleiras com latas de filme
+  shelf(w, h, d) {
+    const g = new THREE.Group(), T = stex(), along = w > d, len = Math.max(w, d), dep = Math.min(w, d);
+    const frame = ink(new THREE.BoxGeometry(w, h, d), 0x2a211b, 0.05); frame.position.y = h / 2; frame.scale.set(along ? 1 : 0.35, 1, along ? 0.35 : 1); g.add(frame);
+    for (let k = 0; k < 4; k++) {
+      const y = 0.15 + k * (h / 4), shelf = ink(new THREE.BoxGeometry(along ? len : dep, 0.06, along ? dep : len), 0xffffff, 0.02, { map: T.wood }); shelf.position.y = y; g.add(shelf);
+      for (let i = 0; i < Math.floor(len / 0.7); i++) {
+        if ((i * 7 + k * 3) % 5 === 0) continue; // falha na fileira
+        const can = ink(new THREE.CylinderGeometry(0.28, 0.28, 0.08 + (i % 3) * 0.06, 14), (i + k) % 4 ? 0x4b4f52 : 0x6e5a2e, 0.02);
+        const p = -len / 2 + 0.4 + i * 0.7; can.position.set(along ? p : 0, y + 0.1 + ((i + k) % 2) * 0.05, along ? 0 : p); can.rotation.x = along ? Math.PI / 2 : 0; can.rotation.z = along ? 0 : Math.PI / 2; g.add(can);
+      }
+    }
+    return g;
+  },
+  // cabine de projecao: bloco de madeira escura com janelinhas acesas fraco
+  booth(w, h, d) {
+    const g = new THREE.Group(), T = stex();
+    const body = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: T.wood }); body.position.y = h / 2; g.add(body);
+    const lip = ink(new THREE.BoxGeometry(w + 0.2, 0.18, d + 0.2), 0x1d1712, 0.03); lip.position.y = h + 0.09; g.add(lip);
+    return g;
+  },
+  roofdeck(w, h, d) {
+    const g = new THREE.Group(), T = stex(), t = T.wood.clone(); t.needsUpdate = true; t.repeat.set(Math.round(w / 3), Math.round(d / 3));
+    const body = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: t, unique: true }); body.position.y = h / 2; g.add(body);
+    return g;
+  },
+  chimney(w, h, d) {
+    const g = new THREE.Group(), T = stex();
+    const body = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.05, { map: T.brick }); body.position.y = h / 2; g.add(body);
+    const cap = ink(new THREE.BoxGeometry(w + 0.25, 0.2, d + 0.25), 0x1d1712, 0.03); cap.position.y = h + 0.1; g.add(cap);
+    return g;
+  },
+  // parede de fora do estudio (Floresta, 03/11): tijolo escuro repetindo pelo tamanho, com cimalha em cima
+  studioext(w, h, d) {
+    const g = new THREE.Group(), T = stex(), t = T.brick.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(Math.max(1, Math.round(Math.max(w, d) / 2.5)), Math.max(1, Math.round(h / 2.5)));
+    const body = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: t, unique: true }); body.position.y = h / 2; g.add(body);
+    if (h < 9) return g; // pedaco em cima da porta
+    const cap = ink(new THREE.BoxGeometry(w > d ? w + 0.4 : w + 0.4, 0.35, w > d ? d + 0.4 : d - 0.4), 0x1d1712, 0.03); cap.position.y = h + 0.175; g.add(cap); // ao longo de z: mais curta, nao entra na do canto (sem piscar)
+    return g;
+  },
+  // tronco caido: cilindro deitado com casca escura, toco de galho e a ponta clara (madeira cortada)
+  log(w, h, d) {
+    const g = new THREE.Group(), along = w > d, L = Math.max(w, d), r = h / 2;
+    const body = ink(geo(THREE.CylinderGeometry, 1, 1, 1, 9), 0x3b2d22, 0.05); body.scale.set(r, L, r); body.position.y = r;
+    body.rotation.set(along ? 0 : Math.PI / 2, 0, along ? Math.PI / 2 : 0); g.add(body);
+    for (const s of [-1, 1]) {
+      const end = new THREE.Mesh(geo(THREE.CircleGeometry, 1, 9), toon(0x8a6f50)); end.scale.setScalar(r * 0.86);
+      end.position.set(along ? s * (L / 2 + 0.06) : 0, r, along ? 0 : s * (L / 2 + 0.06)); end.rotation.y = along ? s * Math.PI / 2 : (s > 0 ? 0 : Math.PI); g.add(end); // 6 cm fora da ponta (sem piscar)
+    }
+    const twig = ink(geo(THREE.CylinderGeometry, 0.06, 0.11, 1.1, 5), 0x3b2d22, 0.03); twig.position.set(along ? L * 0.15 : 0.3, h + 0.3, along ? 0.3 : L * 0.15); twig.rotation.set(0.5, 0, -0.4); g.add(twig);
+    const moss = ink(geo(THREE.SphereGeometry, 1, 7, 5), 0x2f4a26, 0.03); moss.scale.set(along ? L * 0.22 : r * 0.7, 0.18, along ? r * 0.7 : L * 0.22); moss.position.set(along ? -L * 0.12 : 0, h - 0.04, along ? 0 : -L * 0.12); g.add(moss);
+    return g;
+  },
+};
+
+// cartaz rasgado de desenho animado velho (rosto de borrao sorrindo, letreiro); semente muda o texto/cor
+const posterTex = [];
+function poster(seed) {
+  if (posterTex[seed % 3]) return posterTex[seed % 3];
+  const c = document.createElement('canvas'); c.width = 256; c.height = 360;
+  const g = c.getContext('2d');
+  g.fillStyle = ['#b8ab8c', '#a89a7c', '#9e8d6e'][seed % 3]; g.fillRect(0, 0, 256, 360);
+  g.fillStyle = 'rgba(40,30,20,.25)'; for (let i = 0; i < 40; i++) g.fillRect(Math.random() * 256, Math.random() * 360, 2 + Math.random() * 6, 1 + Math.random() * 3); // sujeira
+  g.strokeStyle = '#1b1916'; g.lineWidth = 8; g.strokeRect(12, 12, 232, 336);
+  g.fillStyle = '#141210'; g.beginPath(); g.ellipse(128, 160, 70, 82, 0, 0, Math.PI * 2); g.fill(); // o borrao
+  g.fillStyle = '#efe8d8'; g.beginPath(); g.ellipse(102, 140, 16, 22, 0, 0, Math.PI * 2); g.ellipse(154, 140, 16, 22, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#141210'; g.beginPath(); g.arc(106, 146, 7, 0, Math.PI * 2); g.arc(150, 146, 7, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#efe8d8'; g.beginPath(); g.moveTo(80, 188); g.quadraticCurveTo(128, 236, 176, 188); g.quadraticCurveTo(128, 210, 80, 188); g.fill(); // sorriso de dentes
+  g.strokeStyle = '#141210'; g.lineWidth = 2; for (let x = 92; x < 170; x += 12) { g.beginPath(); g.moveTo(x, 190); g.lineTo(x, 206); g.stroke(); }
+  g.fillStyle = '#7a1f17'; g.font = '34px "Bowlby One", Impact, sans-serif'; g.textAlign = 'center';
+  g.fillText(['O BORRAO', 'TINTEIRO', 'NAO SAIA'][seed % 3], 128, 300);
+  g.fillStyle = '#141210'; g.font = '18px "Bowlby One", Impact, sans-serif'; g.fillText(['ESTREIA HOJE', 'ESTUDIOS 1932', 'DA TELA'][seed % 3], 128, 330);
+  // rasgo: canto arrancado
+  g.globalCompositeOperation = 'destination-out'; g.beginPath();
+  if (seed % 2) { g.moveTo(256, 0); g.lineTo(256, 120); g.lineTo(220, 90); g.lineTo(200, 40); g.lineTo(150, 0); } else { g.moveTo(0, 360); g.lineTo(0, 250); g.lineTo(30, 280); g.lineTo(60, 330); g.lineTo(110, 360); }
+  g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (posterTex[seed % 3] = t);
+}
+
+// teto do estudio, lampadas penduradas piscando, cartazes rasgados, tinta escorrendo e pocas no chao
+function tinteiroDecor(root, A) {
+  const moving = [], lamps = [];
+  // teto escuro (o telhado do sul fica aberto pro ceu de noite)
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(A * 2, A + 13), toon(0x0d0b0a)); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, 9, (A - 13) / 2); root.add(ceil);
+  for (let x = -A + 4; x < A; x += 8) { const beam = ink(new THREE.BoxGeometry(0.5, 0.6, A + 13), 0x1d1712, 0.03); beam.position.set(x, 8.7, (A - 13) / 2); root.add(beam); } // vigas
+  // lampadas: fio do teto, cupula e lampada; luz de verdade so em poucas (celular)
+  const lite = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  const spots = [[0, 0, 1], [-6, 6, 0], [6, -6, 0], [-23, 0, 1], [23, 0, 1], [0, 22, 1], [-28, -9, 0], [28, 9, 0]];
+  for (const [x, z, real] of spots) {
+    const g = new THREE.Group(); g.position.set(x, 9, z); root.add(g);
+    const len = 2.4 + ((x * 7 + z * 3) & 3) * 0.4;
+    const cord = ink(new THREE.CylinderGeometry(0.02, 0.02, len, 4), 0x111111, 0); cord.position.y = -len / 2; g.add(cord);
+    const shade = ink(new THREE.ConeGeometry(0.55, 0.45, 14, 1, true), 0x3a3a30, 0.03); shade.position.y = -len - 0.1; g.add(shade);
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffd28a });
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), bulbMat); bulb.position.y = -len - 0.3; g.add(bulb);
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(3.2, 20), new THREE.MeshBasicMaterial({ color: 0xffb860, transparent: true, opacity: 0.12, depthWrite: false })); glow.rotation.x = -Math.PI / 2; glow.position.y = -8.9; g.add(glow); // poca de luz no chao (barata)
+    let light = null;
+    if (real && !(lite && lamps.filter(l => l.light).length >= 2)) { light = new THREE.PointLight(0xffc27a, 9, 15, 1.5); light.position.y = -len - 0.4; g.add(light); }
+    lamps.push({ g, bulbMat, glow, light, base: light ? light.intensity : 0, seed: x * 0.37 + z * 0.91, bad: !real });
+    moving.push(g);
+  }
+  // cartazes rasgados nas paredes do salao e das salas (face pra dentro)
+  const posters = [[-7, 3.4, -11.9, 0], [7, 3.0, 11.9, Math.PI], [-4.5, 2.6, 11.9, Math.PI], [5, 3.6, -11.9, 0], [-11.9, 3.2, -9, Math.PI / 2], [11.9, 3.0, 9, -Math.PI / 2]]; // 10 cm da parede: colado nela pisca (regra 03/11)
+  posters.forEach(([x, y, z, ry], i) => {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.1), toon(0xffffff, { map: poster(i), transparent: true, alphaTest: 0.5, unique: true }));
+    p.position.set(x, y, z); p.rotation.set(0, ry, (i % 3 - 1) * 0.06); root.add(p);
+  });
+  // tinta escorrendo do alto das paredes do salao (risco preto + gota na ponta)
+  const drip = toon(0x060505);
+  for (let i = 0; i < 28; i++) {
+    const side = i % 4, k = ((i * 53) % 21) - 10.5;
+    if (Math.abs(k) < 2.2) continue; // nao em cima da porta
+    const len = 1.2 + ((i * 37) % 7) * 0.45, x = side < 2 ? k : (side === 2 ? -11.92 : 11.92), z = side < 2 ? (side ? 11.92 : -11.92) : k;
+    const s = new THREE.Mesh(new THREE.BoxGeometry(side < 2 ? 0.12 : 0.04, len, side < 2 ? 0.04 : 0.12), drip); s.position.set(x, 7 - len / 2, z); root.add(s);
+    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), drip); blob.scale.y = 1.5; blob.position.set(x, 7 - len - 0.05, z); root.add(blob);
+  }
+  // pocas de tinta velha no chao
+  for (let i = 0; i < 14; i++) {
+    const a = i * 2.4, r = 4 + (i * 13) % 26, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const p = new THREE.Mesh(new THREE.CircleGeometry(0.6 + (i % 4) * 0.35, 14), drip); p.rotation.x = -Math.PI / 2; p.position.set(x, 0.03 + i * 0.003, z); p.scale.set(1, 0.7 + (i % 3) * 0.2, 1); root.add(p);
+  }
+  return {
+    moving,
+    // lampadas piscam (as "ruins" piscam muito e apagam de vez em quando); balancam um tico
+    update(t) {
+      for (const L of lamps) {
+        const n = Math.sin(t * 13 + L.seed * 7) * Math.sin(t * 3.1 + L.seed), cut = L.bad ? (Math.sin(t * 0.9 + L.seed * 3) > 0.35 && n > -0.2 ? 0.05 : 1) : (n > 0.93 ? 0.25 : 1);
+        const k = cut * (0.85 + 0.15 * Math.sin(t * 31 + L.seed));
+        L.bulbMat.color.setRGB(1 * k + 0.05, 0.82 * k + 0.04, 0.54 * k + 0.03);
+        L.glow.material.opacity = 0.12 * k;
+        if (L.light) L.light.intensity = L.base * k;
+        L.g.rotation.z = Math.sin(t * 0.8 + L.seed) * 0.03; L.g.rotation.x = Math.cos(t * 0.6 + L.seed) * 0.03;
+      }
+    },
+  };
+}
+
+// ---------- Floresta do Tinteiro (03/11, pedido dele): mata aberta de noite em volta do estudio ----------
+// Economia: tudo que repete e InstancedMesh (1 chamada de desenho + 1 do contorno por tipo, uma geometria so
+// na memoria pra N copias); cor muda por copia (setColorAt), sem material novo; nenhuma textura nova grande
+// (o chao e um hatch 256 repetindo). Colisao so da arvore/pedra/tronco do mapa; o resto e enfeite.
+function forestDecor(root, M, trees) {
+  const S = M.studio, A = M.arena, F = M.forest;
+  let seed = 977; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const solid = (x, z, m) => M.boxes.some(b => b.kind !== 'forestedge' && x > b.min[0] - m && x < b.max[0] + m && z > b.min[2] - m && z < b.max[2] + m);
+  const inStudio = (x, z, m = 0) => Math.max(Math.abs(x), Math.abs(z)) < S + 1 + m;
+  const segD = (x, z) => { let best = Infinity; for (let i = 1; i < F.creek.length; i++) { const [ax, az] = F.creek[i - 1], [bx, bz] = F.creek[i], dx = bx - ax, dz = bz - az, k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); best = Math.min(best, Math.hypot(x - ax - dx * k, z - az - dz * k)); } return best; };
+  const nearPool = (x, z, r) => (M.bor?.pools || []).some(q => Math.hypot(q.pos[0] - x, q.pos[1] - z) < r);
+  // chao de mato: plano grande com o furo do estudio (encaixa no chao dele, nada sobreposto)
+  const grass = hatchTexture('#33432a', '#131b0e', { density: 30, cross: true }); grass.wrapS = grass.wrapT = THREE.RepeatWrapping; grass.repeat.set(0.25, 0.25);
+  const R = A + 45, H = S + 1, V = (x, y) => new THREE.Vector2(x, y);
+  const shape = new THREE.Shape([V(-R, -R), V(R, -R), V(R, R), V(-R, R)]); shape.holes.push(new THREE.Path([V(-H, -H), V(-H, H), V(H, H), V(H, -H)]));
+  const floor = new THREE.Mesh(new THREE.ShapeGeometry(shape), toon(0xffffff, { map: grass, unique: true, emissive: 0x0b1009 })); floor.rotation.x = -Math.PI / 2; root.add(floor);
+
+  // emissive fraco em cada material da mata = luar (a lua do mapa e a mesma do estudio fechado, nao da pra subir)
+  const dummy = new THREE.Object3D(), col = new THREE.Color(), all = [];
+  const inst = (geom, list, th, opts = {}) => {
+    const m = new THREE.InstancedMesh(geom, toon(0xffffff, { unique: true, ...opts }), list.length);
+    list.forEach(([x, y, z, sx, sy, sz, ry, c], i) => {
+      dummy.position.set(x, y, z); dummy.rotation.set(0, ry, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
+      if (c != null) m.setColorAt(i, col.set(c));
+    });
+    if (th) outlineInstanced(m, th);
+    m.computeBoundingSphere(); m.children[0]?.computeBoundingSphere();
+    root.add(m); all.push(m); return m;
+  };
+  const merge = (parts) => { const g = mergeGeometries(parts.map(([geom, x, y, z, sx = 1, sy = 1, sz = 1]) => geom.scale(sx, sy, sz).translate(x, y, z))); parts.forEach(([geom]) => geom.dispose()); return g; };
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+
+  // arvores: as do mapa (tem corpo) + mata fechada atras da borda (so desenho; a nevoa engole)
+  const T = trees.map(b => ({ x: (b.min[0] + b.max[0]) / 2, z: (b.min[2] + b.max[2]) / 2, r: (b.max[0] - b.min[0]) / 2, s: 0.85 + rnd() * 0.45 }));
+  for (let n = 0; n < 160;) {
+    const x = (rnd() * 2 - 1) * (A + 16), z = (rnd() * 2 - 1) * (A + 16);
+    if (Math.max(Math.abs(x), Math.abs(z)) < A + 2.5) continue;
+    T.push({ x, z, r: 0.5, s: 0.9 + rnd() * 0.5 }); n++;
+  }
+  T.forEach(t => { t.pine = rnd() < 0.55; t.ry = rnd() * 6.28; });
+  const bark = [0x3a2c22, 0x33271e, 0x41322a], pineC = [0x1f3a2a, 0x24412c, 0x1b3326], leafC = [0x2c4a2a, 0x355230, 0x27402a, 0x3b4f2b];
+  const trunkG = new THREE.CylinderGeometry(0.72, 1, 1, 7).translate(0, 0.5, 0);
+  inst(trunkG, T.map(t => [t.x, 0, t.z, t.r, (t.pine ? 4.6 : 4.2) * t.s, t.r, t.ry, pick(bark)]), 0.05, { emissive: 0x140f0b });
+  const pineG = merge([[new THREE.ConeGeometry(2.5, 3.4, 7), 0, 3.6, 0], [new THREE.ConeGeometry(1.95, 3, 7), 0, 5.4, 0], [new THREE.ConeGeometry(1.3, 2.6, 7), 0, 7.2, 0]]);
+  inst(pineG, T.filter(t => t.pine).map(t => [t.x, 0, t.z, t.s, t.s, t.s, t.ry, pick(pineC)]), 0.08, { emissive: 0x0d1d14 });
+  const leafG = merge([[new THREE.IcosahedronGeometry(2.2, 1), 0, 5.4, 0, 1, 0.85, 1], [new THREE.IcosahedronGeometry(1.55, 1), 1.7, 4.6, 0.4], [new THREE.IcosahedronGeometry(1.4, 1), -1.5, 4.9, -0.5], [new THREE.IcosahedronGeometry(1.2, 1), 0.3, 6.9, 0.2]]);
+  inst(leafG, T.filter(t => !t.pine).map(t => [t.x, 0, t.z, t.s, t.s, t.s, t.ry, pick(leafC)]), 0.08, { emissive: 0x111f11 });
+
+  // espalha enfeite no anel da floresta (fora do estudio, fora de caixa, longe do riacho/pocas conforme o tipo)
+  const scatter = (n, ok, make) => { const out = []; for (let k = 0; out.length < n && k < n * 30; k++) { const x = (rnd() * 2 - 1) * (A - 0.8), z = (rnd() * 2 - 1) * (A - 0.8); if (!inStudio(x, z, 0.6) && ok(x, z)) out.push(make(x, z)); } return out; };
+  const corridor = (x, z) => x < -S - 1 && x > -S - 5 && z > -20 && z < 16; // na frente das maquinas da parede
+  const bushG = merge([[new THREE.IcosahedronGeometry(0.85, 1), 0, 0.5, 0], [new THREE.IcosahedronGeometry(0.62, 1), 0.7, 0.38, 0.25], [new THREE.IcosahedronGeometry(0.55, 1), -0.62, 0.36, -0.2]]);
+  inst(bushG, scatter(210, (x, z) => !solid(x, z, 0.9) && segD(x, z) > 2.6 && !nearPool(x, z, 2.8) && !corridor(x, z), (x, z) => { const s = 0.7 + rnd() * 0.7; return [x, 0, z, s, s * (0.7 + rnd() * 0.3), s, rnd() * 6.28, pick(leafC)]; }), 0.05, { emissive: 0x0f1c0f });
+  // capim: tufos de 3 laminas (sem contorno: e muito e pequeno)
+  const blade = (rz, rx) => new THREE.ConeGeometry(0.07, 0.6, 3).rotateZ(rz).rotateX(rx);
+  const tuftG = merge([[blade(0, 0), 0, 0.3, 0], [blade(0.35, 0.1), 0.1, 0.27, 0.03], [blade(-0.3, -0.15), -0.09, 0.28, -0.04]]);
+  inst(tuftG, scatter(650, (x, z) => !solid(x, z, 0.15) && segD(x, z) > 1.7, (x, z) => { const s = 0.7 + rnd() * 0.8; return [x, 0, z, s, s, s, rnd() * 6.28, pick([0x2e4426, 0x38502a, 0x27391f, 0x4a5a2c])]; }), 0, { emissive: 0x121f0d });
+  // cogumelos em rodinha: chapeu e pe na mesma geometria (cor por vertice); o chapeu pega a cor da copia
+  const stem = new THREE.CylinderGeometry(0.06, 0.08, 0.28, 6).translate(0, 0.14, 0), cap = new THREE.SphereGeometry(0.2, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.75, 1).translate(0, 0.26, 0);
+  const paint = (g, c) => { const cc = new THREE.Color(c), a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) { a[i] = cc.r; a[i + 1] = cc.g; a[i + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
+  const shroomG = mergeGeometries([paint(stem, 0xd8ccb2), paint(cap, 0xffffff)]); stem.dispose(); cap.dispose();
+  const shrooms = [];
+  scatter(34, (x, z) => !solid(x, z, 0.5) && segD(x, z) > 2, (x, z) => [x, z]).forEach(([x, z]) => {
+    const c = pick([0xb8402e, 0xc8913a, 0x4fc7c0, 0xb8402e]);
+    for (let k = 0; k < 3; k++) { const a = rnd() * 6.28, r = 0.2 + rnd() * 0.45, s = 0.7 + rnd() * 0.9; shrooms.push([x + Math.cos(a) * r, 0, z + Math.sin(a) * r, s, s, s, rnd() * 6.28, c]); }
+  });
+  inst(shroomG, shrooms, 0.02, { vertexColors: true, emissive: 0x1c1712 });
+
+  // riacho raso: fita escura com dois riscos de brilho da lua e seixos na beira
+  const ribbon = (w, y, off = 0) => {
+    const pos = [], idx = [];
+    F.creek.forEach(([x, z], i) => {
+      const [px, pz] = F.creek[Math.max(0, i - 1)], [nx, nz] = F.creek[Math.min(F.creek.length - 1, i + 1)], dx = nx - px, dz = nz - pz, L = Math.hypot(dx, dz) || 1, ox = -dz / L, oz = dx / L;
+      const cx = x + ox * off, cz = z + oz * off;
+      pos.push(cx + ox * w / 2, y, cz + oz * w / 2, cx - ox * w / 2, y, cz - oz * w / 2);
+      if (i) { const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+  };
+  const water = new THREE.Mesh(ribbon(3.2, 0.06, 0), toon(0x1a2836, { unique: true, emissive: 0x0b1622, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  root.add(water); // 6 cm acima do chao + polygonOffset (regra 03/11: nada coplanar)
+  const shine = new THREE.MeshBasicMaterial({ color: 0x5d7894, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide });
+  root.add(new THREE.Mesh(ribbon(0.18, 0.12, 0.55), shine), new THREE.Mesh(ribbon(0.12, 0.12, -0.7), shine));
+  const pebbles = [];
+  F.creek.forEach(([x, z], i) => { if (!i) return; const [px, pz] = F.creek[i - 1]; for (let k = 0; k < 4; k++) { const t = rnd(), side = rnd() < 0.5 ? -1 : 1, dx = x - px, dz = z - pz, L = Math.hypot(dx, dz), s = 0.18 + rnd() * 0.35; pebbles.push([px + dx * t - dz / L * side * (1.6 + rnd() * 0.5), 0.02, pz + dz * t + dx / L * side * (1.6 + rnd() * 0.5), s, s * 0.6, s * (0.8 + rnd() * 0.5), rnd() * 6.28, pick([0x6d6a62, 0x5a5850, 0x7a766a])]); } });
+  inst(new THREE.IcosahedronGeometry(1, 0), pebbles, 0.03, { emissive: 0x141414 });
+
+  // lampioes na porta da floresta (sem luz de verdade: luz nova recompila tudo e pesa no celular)
+  const door = M.bor?.doors.find(d => d.id === 'floresta'), glows = [];
+  if (door) for (const s of [-1, 1]) {
+    const x = door.x - 0.85, z = door.z + s * 2.3; // rente a parede (22 cm), fora do caminho de quem passa
+    const post = ink(new THREE.BoxGeometry(0.16, 2.6, 0.16), 0x2a211b, 0.03); post.position.set(x, 1.3, z); root.add(post);
+    const arm = ink(new THREE.BoxGeometry(0.5, 0.08, 0.08), 0x2a211b, 0.02); arm.position.set(x - 0.2, 2.55, z); root.add(arm);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffc97a })); lamp.position.set(x - 0.42, 2.35, z); root.add(lamp);
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(2.4, 18), new THREE.MeshBasicMaterial({ color: 0xffb860, transparent: true, opacity: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+    glow.rotation.x = -Math.PI / 2; glow.position.set(x - 0.4, 0.07, z); root.add(glow); glows.push(glow);
+  }
+
+  // vaga-lumes: uma malha de pontos so (140), mexe no processador (barato)
+  const FL = scatter(140, () => true, (x, z) => [x, 0.6 + rnd() * 2.6, z, rnd() * 6.28]);
+  const fpos = new Float32Array(FL.length * 3), fgeo = new THREE.BufferGeometry(); fgeo.setAttribute('position', new THREE.BufferAttribute(fpos, 3));
+  const flies = new THREE.Points(fgeo, new THREE.PointsMaterial({ color: 0xd9ff8a, size: 0.16, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+  flies.frustumCulled = false; root.add(flies);
+
+  return {
+    moving: [flies],
+    update(t) {
+      for (let i = 0; i < FL.length; i++) {
+        const [x, y, z, ph] = FL[i];
+        fpos[i * 3] = x + Math.sin(t * 0.5 + ph) * 1.2; fpos[i * 3 + 1] = y + Math.sin(t * 1.3 + ph * 2) * 0.35; fpos[i * 3 + 2] = z + Math.cos(t * 0.4 + ph) * 1.2;
+      }
+      fgeo.attributes.position.needsUpdate = true;
+      flies.material.opacity = 0.65 + Math.sin(t * 2.2) * 0.25;
+      for (const g of glows) g.material.opacity = 0.09 + Math.sin(t * 9 + g.position.z) * 0.015;
+    },
+  };
+}
+
+// lua cheia de desenho dos anos 30 (mapa de noite): disco palido com crateras, halo e cara sonolenta e torta
+let moonTex = null;
+function moonTexture() {
+  if (moonTex) return moonTex;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const halo = g.createRadialGradient(128, 128, 60, 128, 128, 128); halo.addColorStop(0, 'rgba(210,215,230,.35)'); halo.addColorStop(1, 'rgba(210,215,230,0)');
+  g.fillStyle = halo; g.fillRect(0, 0, 256, 256);
+  g.fillStyle = '#e6e2d2'; g.strokeStyle = '#141210'; g.lineWidth = 6;
+  g.beginPath(); g.arc(128, 128, 72, 0, Math.PI * 2); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(120,115,100,.45)';
+  for (const [x, y, r] of [[96, 100, 12], [160, 92, 8], [150, 160, 15], [100, 164, 7], [172, 128, 6]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+  // cara: olhos meio fechados e sorriso torto (assusta um pouco)
+  g.strokeStyle = '#141210'; g.lineWidth = 5; g.lineCap = 'round';
+  g.beginPath(); g.arc(108, 122, 11, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+  g.beginPath(); g.arc(148, 122, 11, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+  g.beginPath(); g.moveTo(104, 152); g.quadraticCurveTo(130, 170, 156, 146); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (moonTex = t);
 }

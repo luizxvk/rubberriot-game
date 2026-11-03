@@ -25,7 +25,7 @@ export const DAILY = [
 // O item fica trancado no arsenal ate o desafio fechar (nao abre por nivel).
 const K = (w) => (e) => e.type === 'kill' && (!w || e.wpn === w);
 export const UNLOCKS = [
-  { id: 'u_ember', n: 50, xp: 1000, ok: K(), reward: { slot: 'camo', id: 'ember' } },
+  // u_ember saiu (03/11): a Brasa reativa agora e so da Loja
   { id: 'u_inkreact', n: 100, xp: 2000, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'camo', id: 'inkreact' } },
   { id: 'u_sscope', n: 25, xp: 1250, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper', reward: { slot: 'scope', id: 'sniper_scope_2', wpn: 'sniper' } },
   { id: 'u_fscope', n: 60, xp: 1250, ok: K('rifle'), reward: { slot: 'scope', id: 'fusil_scope_4', wpn: 'rifle' } },
@@ -50,6 +50,9 @@ export const UNLOCKS = [
   // akimbo nas armas compridas (01/11, pedido dele): so na Cuspideira (submetralhadora) e na Espirro (escopeta)
   { id: 'u_akimbo_smg', n: 75, xp: 2500, ok: K('smg'), reward: { slot: 'handle', id: 'akimbo', wpn: 'smg' } },
   { id: 'u_akimbo_sg', n: 40, xp: 2500, ok: K('shotgun'), reward: { slot: 'handle', id: 'akimbo', wpn: 'shotgun' } },
+  // gadgets de baixo do cano (03/11): abates com o proprio modelo
+  { id: 'u_gd_flame', n: 40, xp: 2500, ok: (e) => e.type === 'kill' && e.wpn === 'rifle' && e.body === 'fusil_6', reward: { slot: 'handle', id: 'gd_flame', wpn: 'rifle' } },
+  { id: 'u_gd_shot', n: 40, xp: 2500, ok: (e) => e.type === 'kill' && e.wpn === 'rifle' && e.body === 'fusil_7', reward: { slot: 'handle', id: 'gd_shot', wpn: 'rifle' } },
   { id: 'u_ww_1911', n: 25, xp: 1250, ok: K('pistol'), reward: { slot: 'body', id: 'pistol_7', wpn: 'pistol' } },
   { id: 'u_ww_c96', n: 15, xp: 1500, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'pistol', reward: { slot: 'body', id: 'pistol_8', wpn: 'pistol' } },
   { id: 'u_ww_tt', n: 3, xp: 1500, ok: (e) => e.type === 'win', reward: { slot: 'body', id: 'pistol_9', wpn: 'pistol' } },
@@ -102,7 +105,7 @@ export function eliteToday() {
 
 // modelos que eram de desafio e agora abrem por nivel (31/10, pedido dele): quem ja tinha fechado o
 // desafio antigo continua com o modelo aberto
-const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_12: ['u_ww_ppsh', 100], subfusil_13: ['u_pk_mp5', 60], fusil_10: ['u_pk_ak', 80], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
+const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_12: ['u_ww_ppsh', 100], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
 export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
 // item -> desafio que libera (o arsenal consulta isso)
 // a mesma peca em outra arma (akimbo da pistola x da submetralhadora) tem desafio proprio: chave 'arma:peca'
@@ -117,9 +120,10 @@ const ORDER = ['u_am_fire', 'u_akimbo', 'u_lk_plunger', 'u_ember', 'u_ww_1911', 
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];
 // o jogador pode escolher quais perseguir (aba Desafios): os escolhidos entram primeiro, a fila completa o resto
 const pending = (u) => (data.career[u.id] || 0) < u.n;
+// so os desafios que a pessoa ATIVOU contam (03/11, pedido dele: antes as vagas vazias eram completadas sozinhas
+// com os proximos da lista, e aparecia "liberou a Cuspideira" sem ela nunca ter ativado aquele desafio)
 export function activeUnlocks() {
-  const pinned = (data.pick || []).map(id => UNLOCKS.find(u => u.id === id)).filter(u => u && pending(u)).slice(0, ACTIVE);
-  return [...pinned, ...ordered().filter(u => pending(u) && !pinned.includes(u))].slice(0, ACTIVE);
+  return (data.pick || []).map(id => UNLOCKS.find(u => u.id === id)).filter(u => u && pending(u)).slice(0, ACTIVE);
 }
 export const unlockPinned = (id) => (data.pick || []).includes(id);
 // liga/desliga um desafio escolhido; cheio (4), sai o escolhido mais antigo

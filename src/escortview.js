@@ -2,7 +2,7 @@
 // (bonde de desenho com uma lata de tinta gigante no teto). O circulo no chao em volta do bonde mostra o raio
 // que conta e muda de cor pelo estado: vermelho empurrando, listrado contestado, cinza parado, azul voltando.
 import * as THREE from 'three';
-import { ink, toon, PAL, hatchTexture } from './toon.js';
+import { ink, freeGeos, toon, PAL, hatchTexture } from './toon.js';
 import { trackOf, trackAt, trackY, ESCORT } from '../shared/escort.js';
 import { floorAt } from '../shared/nav.js';
 
@@ -94,7 +94,7 @@ export class EscortView {
     const col = esc.state === 'push' ? PAL.red : esc.state === 'back' ? PAL.blue : esc.state === 'contest' ? (Math.sin(t * 10) > 0 ? PAL.red : PAL.blue) : PAL.mid;
     this.ringMat.color.setHex(col);
   }
-  dispose() { this.root.parent?.remove(this.root); }
+  dispose() { this.root.parent?.remove(this.root); freeGeos(this.root); }
 }
 
 function labelTex(txt, col) {

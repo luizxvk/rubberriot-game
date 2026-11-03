@@ -67,12 +67,12 @@ const SFX = {
   nukealarm: ['soft gentle cartoon warning chime, a smooth rising slide whistle into three mellow xylophone notes and a soft wobbly vibraphone shimmer, playful and comedic but calm and pleasant, no siren, no horn, no voice, no music', 2.2], // 01/11: a sirene ficou horrorosa; comico mas suave
   chargeup: ['cartoon charging energy hum rising in pitch, wobbly theremin and springy coil whine building up for three seconds, comedic', 3.0],
   megashot: ['gigantic exaggerated cartoon cannon gunshot, earth shaking KA-BLAMMO with a long rumbling echo, a bell ding and a slide whistle down, comedic and thunderous, no music', 2.0],
-  g_pistol_1: ['tiny cartoon cap gun pistol snap, crisp sharp click bang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.5],
+  g_pistol_1: ['single real 9mm pistol gunshot, sharp loud snappy crack-bang with a crisp metallic slide clack, tight and punchy, slightly exaggerated cartoon style, mid-high pitch, one shot only, short tail, no music, no voice', 0.5], // 03/11: tiro de verdade (pedido dele; antigo em opcoes/)
   g_pistol_2: ['cartoon automatic pistol shot that sounds like a popcorn kernel popping, poppy pang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.5],
-  g_pistol_3: ['huge cartoon hand cannon pistol shot, deep heavy KABOOM with a metallic ring, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.9],
+  g_pistol_3: ['single Desert Eagle .50 magnum pistol gunshot, extremely loud powerful thunderous BOOM with a hard supersonic crack, heavy punch and a short rolling echo, the biggest handgun, slightly exaggerated cartoon style, one shot only, no music, no voice', 0.9], // 03/11: e a Deagle, bem mais forte (antigo em opcoes/)
   g_pistol_4: ['cartoon pistol firing a quick three round burst, tat-tat-tat light and bouncy, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
   g_pistol_5: ['long barrel cartoon target pistol shot, thin whistling crack ping, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
-  g_pistol_6: ['small pocket pistol cartoon shot, angry little spitting bark, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.5],
+  g_pistol_6: ['single real compact pistol gunshot, loud sharp aggressive bang with a snappy crack and a quick metallic slide clack, punchy, slightly exaggerated cartoon style, mid-high pitch, one shot only, short tail, no music, no voice', 0.5], // 03/11: tiro de verdade (antigo em opcoes/)
   g_pistol_7: ['1940s heavy service pistol cartoon shot, round chunky bang with a short echo, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
   g_pistol_8: ['old broomhandle pistol cartoon shot, woody hollow clack bang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
   g_pistol_9: ['old soviet style pistol cartoon shot, sharp sparkly crack with a tiny twinkle, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.5],
@@ -87,7 +87,7 @@ const SFX = {
   g_subfusil_9: ['cartoon smg single shot with an angry hornet sting zzap, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.4],
   g_subfusil_10: ['cartoon smg single shot like a small tack hammer tink bang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.4],
   g_subfusil_12: ['1940s drum magazine submachine gun single shot, fast rattling brrt chunk, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.4],
-  g_subfusil_13: ['cartoon smg single shot with a squeezed accordion wheeze pop, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.4],
+  g_subfusil_13: ['single real submachine gun gunshot, one 9mm SMG round, fast tight snappy crack with a punchy metallic clack, like an MP5 or Uzi, slightly exaggerated cartoon style, mid-high pitch, one shot only, very short tail, no music, no voice', 0.4], // 03/11: o sanfona ficou horrivel; tiro de SMG de verdade (antigo em opcoes/)
   g_fusil_1: ['cartoon assault rifle single shot, rolling thunder crack, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
   g_fusil_2: ['cartoon rifle shot in a short two round burst with stormy thunderclap, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
   g_fusil_3: ['cartoon precise rifle shot, thin needle like ping crack, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
@@ -96,16 +96,29 @@ const SFX = {
   g_fusil_6: ['cartoon rifle shot like four barbershop quartet voices going bom in harmony with a bang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.7],
   g_fusil_7: ['cartoon rifle shot with an electric lightning zap crack, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
   g_fusil_9: ['1940s assault rifle cartoon shot, tinny tin can rattling bang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
-  g_fusil_10: ['cartoon heavy rifle shot like a steamroller stomp, low rumbling boom, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.7],
+  // 03/11 (pedido dele): o grave dele era horrivel; agora estalado e comico (antigo no scratchpad da sessao)
+  flamer: ['short cartoon flamethrower burst, whooshy FWOOOSH of fire with a crackle and a comedic little puff at the end, mid pitch, 1930s rubber hose cartoon, no music, no voice', 0.6], // lanca-chamas (03/11)
+  g_pistol_11: ['single cartoon sawed-off double barrel shotgun blast, big chunky KA-BLAM with a scattered buckshot rattle and a comedic springy boing at the end, punchy, mid pitch, not bassy, 1930s rubber hose cartoon, one shot only, short tail, no music, no voice', 0.8], // serrada (03/11)
+  g_fusil_13: ['single AK-47 gunshot, the classic sharp loud AK crack-pop with a metallic punch and a short snappy echo, slightly exaggerated cartoon style with a tiny springy rubber twang at the very end, mid-high pitch, not bassy, one shot only, no music, no voice', 0.6], // pipocadeira: som de AK (03/11)
   g_fusil_11: ['cartoon rifle shot like a pile driver slam, metallic clang boom, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.7],
-  g_fusil_12: ['cartoon marksman rifle shot, scratchy quill pen scritch with a crack, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.6],
+  g_fusil_12: ['single designated marksman rifle gunshot, 7.62 DMR, very loud thunderous booming crack with a deep heavy punch and a big rolling outdoor echo, powerful, slightly exaggerated cartoon style, one shot only, no music, no voice', 0.9], // 03/11: DMR estrondoso (antigo em opcoes/)
   g_shotgun_1: ['cartoon blunderbuss shotgun blast, big brassy BLAM with rattling bits, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.9],
   g_shotgun_2: ['cartoon shotgun blast that sounds like a giant sneeze ah-CHOO bang, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.9],
   g_sniper_0: ['cartoon sniper rifle shot, long booming crack echoing across a canyon, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 1.2],
   g_sniper_1: ['single real bolt-action sniper rifle gunshot, loud supersonic crack and deep boom with a short outdoor echo, one shot only, no music, no voice', 1.2], // 01/11: ele quer tiro de sniper de verdade (o pica-pau ficou comico demais)
   g_sniper_2: ['cartoon heavy sniper shot like a sledgehammer slam BONG boom, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 1.2],
   g_sniper_3: ['old 1940s bolt action rifle cartoon shot with a ringing ping, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 1.0],
-  g_sniper_4: ['cartoon sniper shot with a frying pan bang and a kitchen pot clatter, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 1.0],
+  g_sniper_4: ['single huge booming cartoon sniper rifle shot, thunderous deep KA-BOOOM blast with a big rolling echo, ending in a loud ringing cast-iron frying pan CLANG tail, exaggerated old cartoon, one shot only, no music, no voice', 1.3], // 03/11: estrondoso como a Luneta, com cauda de panela (antigo no scratchpad)
+  // 03/11: Roube o Cofre
+  safetick: ['cartoon safe cracking, combination dial clicking tick tick tick then a heavy satisfying CLACK of the lock, close, dry, no music, no voice', 2.0],
+  siren: ['1930s cartoon police siren wailing up and down with a comedic bell, short alarm, no music, no voice', 3.0],
+  cashreg: ['old cash register KA-CHING with coins jingling, cartoon, short and bright, no music, no voice', 1.0],
+  // 03/11: sequencias grandes
+  planefly: ['1930s cartoon biplane flying low overhead, buzzing propeller engine passing by with a rattling machine gun strafing burst, comedic, no music, no voice', 5.0],
+  trainwhistle: ['loud cartoon steam train whistle toot toot followed by fast chugging locomotive charging closer, comedic 1930s rubber hose cartoon, no music, no voice', 3.5],
+  bomberdrone: ['enormous slow airship passing overhead, deep heavy rumbling engine drone that shakes the ground, ominous low frequency, huge and menacing with a faint comedic creak, no music, no voice', 8.0],
+  eraser: ['cartoon pencil eraser rubbing fast on paper, squeaky scribble rub then a soft comedic pop, close, dry, no music, no voice', 1.2],
+  firedrop: ['cartoon fireball falling with a whistle and landing in a soft fiery FWOOMP burst with crackle, comedic, no music, no voice', 1.0],
 };
 for (const [name, [text, dur]] of Object.entries(SFX)) {
   const out = `public/sfx/${name}.mp3`;

@@ -1,7 +1,7 @@
 // HUD em DOM: placa de placar, vida, municao, feed, marcadores, placar (Tab).
 import { bindLabel } from './binds.js';
 import * as THREE from 'three';
-import { WEAPONS, MODES, GUN_LADDER } from '../shared/weapons.js';
+import { WEAPONS, MODES, GUN_LADDER, GADGETS } from '../shared/weapons.js';
 import { STREAKS, BR, STREAK_FREE, pickStreaks } from '../shared/weapons.js';
 // proxima sequencia pra chamar: a primeira que pode agora; se nenhuma pode (dirigivel esperando), a primeira guardada
 const callNext = (ready, lock) => ready.find(k => STREAK_FREE.includes(k) || !lock) || ready[0];
@@ -24,8 +24,13 @@ const TEAM = { red: 'h_red', blue: 'h_blue' };
 // pavio curto: as sequencias a partir da bigorna custam 1 abate a menos (igual ao servidor)
 // selos das sequencias: desenho proprio (tinta + papel), viewBox 48. ink = traco, cor = currentColor do selo
 export const STREAK_SVG = {
+  plane: `<path d="M6 18h36v5H6z" fill="#ece9e1" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M8 29h32v4H8z" fill="#ece9e1" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M14 23v6M34 23v6" stroke="#141210" stroke-width="2"/><ellipse cx="24" cy="26" rx="6" ry="5" fill="currentColor" stroke="#141210" stroke-width="2.5"/><path d="M24 12v28" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="26" r="1.8" fill="#141210"/>`,
+  train: `<rect x="23" y="13" width="17" height="19" rx="2" fill="currentColor" stroke="#141210" stroke-width="2.5"/><rect x="6" y="19" width="19" height="13" rx="6" fill="#3a3632" stroke="#141210" stroke-width="2.5"/><path d="M10 19v-6h6v6" fill="#3a3632" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><circle cx="12" cy="37" r="4" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/><circle cx="24" cy="37" r="4" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/><circle cx="35" cy="37" r="4" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/><circle cx="12" cy="24" r="2" fill="#ece9e1"/><path d="M4 8c3-2 6 2 9 0" stroke="#141210" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+  bomber: `<ellipse cx="22" cy="18" rx="18" ry="11" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M8 15c7-3 21-3 28 0M8 21c7 3 21 3 28 0" stroke="#ece9e1" stroke-width="2" fill="none"/><path d="M40 13l5-4v18l-5-4" fill="#3a3632" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><rect x="15" y="29" width="14" height="5" rx="1.5" fill="#3a3632" stroke="#141210" stroke-width="2.5"/><path d="M19 37c0 3 2 5 2 7M25 37c0 3-2 5-2 7" stroke="#ff8a1f" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+  hand: `<path d="M16 6h12v10H16z" fill="#141210" stroke="#141210" stroke-width="2.5"/><path d="M13 18c0-2 2-3 4-3h10c2 0 4 1 4 3v8c3 0 5 2 5 4s-2 4-5 4H16c-2 0-4-2-4-4z" fill="#ece9e1" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M18 20v6M22 20v6M26 20v6" stroke="#141210" stroke-width="1.8"/><path d="M20 34l-2 8h6l-2-8" fill="#e58aa0" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M33 40c3-1 6-1 9 0" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
   milk: `<path d="M18 5h12v6l4 6v24a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3V17l4-6z" fill="#ece9e1" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M14 24h20v17a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M26 22l-6 10h5l-3 8 8-11h-5l3-7z" fill="#ece9e1" stroke="#141210" stroke-width="2" stroke-linejoin="round"/><path d="M17 11h14" stroke="#141210" stroke-width="2.5"/>`,
   talc: `<path d="M12 30c-5 0-8-3-8-7s3-7 8-6c1-5 6-8 11-7 3-3 10-2 12 3 5 0 9 3 9 8s-4 9-9 9z" fill="#ece9e1" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><circle cx="18" cy="22" r="4" fill="currentColor" stroke="#141210" stroke-width="2"/><circle cx="30" cy="20" r="5" fill="currentColor" stroke="#141210" stroke-width="2"/><path d="M10 36l2 2M20 38l1 3M30 37l-1 3M39 35l2 3" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
+  rpg: `<g transform="rotate(-32 24 24)"><rect x="6" y="20" width="26" height="8" rx="1.5" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M32 18.5h4l8 5.5-8 5.5h-4z" fill="#ece9e1" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M4 17.5v13" stroke="#141210" stroke-width="3.5" stroke-linecap="round"/><path d="M14 28v7m8-7v5" stroke="#141210" stroke-width="3" stroke-linecap="round"/></g>`,
   anvline: `<g transform="translate(0 2) scale(.46)"><path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="5" stroke-linejoin="round"/></g><g transform="translate(13 13) scale(.46)"><path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="5" stroke-linejoin="round"/></g><g transform="translate(26 24) scale(.46)"><path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="5" stroke-linejoin="round"/></g><path d="M4 44l40-40" stroke="#141210" stroke-width="2" stroke-dasharray="3 4"/>`,
   uav: `<circle cx="24" cy="25" r="15" fill="#ece9e1" stroke="#141210" stroke-width="3"/><path d="M24 25V10a15 15 0 0 1 13 7.5z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><circle cx="24" cy="25" r="7" fill="none" stroke="#141210" stroke-width="1.6" stroke-dasharray="3 3"/><circle cx="31" cy="20" r="2.6" fill="#141210"/><circle cx="17" cy="31" r="2" fill="#141210"/><circle cx="24" cy="25" r="2" fill="#141210"/>`,
   anvil: `<path d="M7 15h27c0 5 3 8 9 8v3c-7 0-9 2-11 6h-5v4h6v5H15v-5h6v-4h-4c-3-5-6-8-10-10z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M11 18h20" stroke="#ece9e1" stroke-width="2" stroke-linecap="round"/><path d="M8 8l4 3M17 5l1 4M27 6l-2 4" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
@@ -77,7 +82,7 @@ export class Hud {
     const key = p.wpn + ':' + (a ? a.mag + '/' + a.reserve : '') + ':' + p.owned.join(',');
     if (key !== this.ammoKey) { this.ammoKey = key; this.weapon(p); }
     // mira dinamica + luneta + ponto vermelho
-    const W = WEAPONS[p.wpn];
+    const W = WEAPONS[p.wpn] || WEAPONS.fists; // battle royale: mao vazia um instante entre trocar e pegar (log 02/11: 'spread' de undefined)
     const moving = Math.hypot(p.vel[0], p.vel[2]);
     const gap = 6 + moving * 0.9 + (p.onGround ? 0 : 10) + (W.spread || 0) * 150 + (p.firing ? 4 : 0);
     this.el.cross.style.setProperty('--g', gap * (1 - p.adsK) + 'px');
@@ -98,7 +103,7 @@ export class Hud {
   // aviso de municao embaixo da mira: baixa, vazia (recarregue) e acabou de vez (troque de arma)
   ammoAlert(p, a) {
     const el = this.el.ammoAlert || (this.el.ammoAlert = $('ammoAlert'));
-    const W = WEAPONS[p.wpn];
+    const W = WEAPONS[p.wpn] || WEAPONS.fists;
     let txt = '', cls = '';
     if (p.alive && a && a.mag !== Infinity && !W.melee && p.reloadT <= 0) {
       const mag = p.stats().mag;
@@ -117,7 +122,15 @@ export class Hud {
     const sec = Math.max(0, Math.ceil(snap.time));
     const clock = `<div><span class="lbl">${t('h_time')}</span><span class="val">${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}</span></div>`;
     let html;
-    if (mode === 'br' && snap.br) {
+    if (mode === 'borroes' && snap.bor) {
+      // Noite dos Borroes (03/11): onda + viloes restantes (ou a contagem da pausa) + meus pontos; chefao em campo = barra dele
+      const B = snap.bor, boss = B.boss ? (players || []).find(p => p.id === B.boss) : null;
+      const mid = B.state === 'break' ? `<div class="fuse"><span class="lbl">${t('bor_nextIn')}</span><span class="val">${B.t}s</span></div>` : `<div><span class="lbl">${t('bor_leftLbl')}</span><span class="val">${B.left}</span></div>`;
+      const bar = boss && boss.alive ? `<div class="bor-boss"><span class="lbl">${t('mob_' + boss.mob)}</span><i style="--k:${Math.max(0, Math.min(1, boss.hp / (boss.mh || 1)))}"></i></div>` : '';
+      const fx = Object.entries(B.fx || {}).map(([k, s]) => `<div class="fuse"><span class="lbl">${t('dr_' + k)}</span><span class="val">${s}s</span></div>`).join('');
+      html = `<div class="red"><span class="lbl">${t('bor_waveLbl')}</span>`;
+      html += `<span class="val">${B.wave || 0}${B.goal ? `<small>/${B.goal}</small>` : ''}</span></div>${mid}<div><span class="lbl">${t('bor_pts')}</span><span class="val">${me?.cs ?? 0}</span></div>${fx}${bar}`;
+    } else if (mode === 'br' && snap.br) {
       // battle royale: quantos restam + a iris (esperando = quanto falta pra fechar; fechando = aviso)
       const Z = snap.br, zs = Z.t;
       const iris = Z.state === 'closed' ? `<div class="fuse"><span class="lbl">${t('br_iris')}</span><span class="val">${t('br_closed')}</span></div>`
@@ -135,7 +148,7 @@ export class Hud {
       const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
       html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else if (cfg.teams) {
-      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
+      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''}">${z.id}</span>`).join('')}</div>`;
       if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       html = `<div class="red"><span class="lbl">${t('h_red')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('h_blue')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
@@ -250,15 +263,40 @@ export class Hud {
   // aviso grande no meio de cima da tela (infectado, ultimo sobrevivente)
   // Pilha de eventos da partida (30/10): avisos, alertas e desbloqueios entram na hora no topo da pilha,
   // os anteriores descem; nada se sobrepoe e nada espera fila. No maximo 4 na tela.
-  push(html, cls, ms) {
+  // avisos da partida (03/11, pedido dele): TODOS numa fila so, no centro de cima embaixo do placar, um por vez.
+  // O proximo entra enquanto o anterior sai (fica fluido); com fila grande cada um dura menos pra nao atrasar.
+  // urgente (alerta grande: sequencia chamada, bomba...) fura a fila. key: o mesmo aviso ja na tela so atualiza.
+  push(html, cls, ms, key = null) {
     const box = this.stack ||= document.getElementById('evStack');
-    const el = document.createElement('div');
-    el.className = 'ev ' + cls; el.innerHTML = html;
+    if (key) {
+      const cur = this.evCur?.key === key ? this.evCur : null;
+      if (cur) { cur.el.innerHTML = html; clearTimeout(cur.t); cur.t = setTimeout(() => this.evOut(cur), ms); return cur.el; }
+      const q = (this.evQ ||= []).find(x => x.key === key);
+      if (q) { q.html = html; q.ms = ms; return null; }
+    }
+    const item = { html, cls, ms, key };
+    (this.evQ ||= [])[/ev-big/.test(cls) ? 'unshift' : 'push'](item);
+    if (this.evQ.length > 8) this.evQ.splice(8); // tiroteio comprido: o que passou do ponto nem aparece
+    this.evNext();
+    return null;
+  }
+  evNext() {
+    if (this.evCur || !this.evQ?.length) return;
+    const box = this.stack ||= document.getElementById('evStack');
+    const it = this.evQ.shift(), el = document.createElement('div');
+    el.className = 'ev ' + it.cls; el.innerHTML = it.html;
     box.prepend(el);
-    while (box.children.length > (document.body.classList.contains('touchmode') ? 3 : 4)) box.lastChild.remove(); // celular: 3 (os botoes ocupam a lateral)
-    setTimeout(() => el.classList.add('out'), ms);
-    setTimeout(() => el.remove(), ms + 320);
-    return el;
+    while (box.children.length > 2) box.lastChild.remove();
+    const ms = Math.max(1100, it.ms * Math.max(0.5, 1 - this.evQ.length * 0.12));
+    const cur = this.evCur = { el, key: it.key };
+    cur.t = setTimeout(() => this.evOut(cur), ms);
+  }
+  evOut(cur) {
+    if (this.evCur !== cur) return;
+    cur.el.classList.add('out');
+    setTimeout(() => cur.el.remove(), 320);
+    this.evCur = null;
+    setTimeout(() => this.evNext(), 140); // o proximo entra enquanto este ainda sai
   }
 
   alert(title, sub = '', tone = 'red') {
@@ -277,12 +315,8 @@ export class Hud {
   // banner de desbloqueio (fila: um por vez); foto da arma + o que abriu
   // desafio de elite rastreado: plaquinha sob o placar a cada avanco (some em 3 s)
   eliteTrack(label, prog, n, done = false) {
-    let el = document.getElementById('eliteTrack');
-    if (!el) { el = document.createElement('div'); el.id = 'eliteTrack'; el.className = 'elite-track'; el.setAttribute('role', 'status'); document.getElementById('hud').appendChild(el); }
-    el.classList.toggle('done', done);
-    el.innerHTML = `<i aria-hidden="true">★</i><span><small>${t('elTitle')}</small><b>${label}</b><span class="xpbar"><i style="width:${Math.round(prog / n * 100)}%"></i></span></span><em>${done ? '✓' : prog + '/' + n}</em>`;
-    el.hidden = false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
-    clearTimeout(this.eliteT); this.eliteT = setTimeout(() => { el.hidden = true; }, done ? 5000 : 3000);
+    // 03/11: vai pra fila dos avisos (centro de cima); o mesmo desafio ja na tela so atualiza a barra
+    this.push(`<i class="et-star" aria-hidden="true">★</i><span><small>${t('elTitle')}</small><b>${label}</b><span class="xpbar"><i style="width:${Math.round(prog / n * 100)}%"></i></span></span><em>${done ? '✓' : prog + '/' + n}</em>`, 'ev-unl elite-prog' + (done ? ' done' : ''), done ? 4000 : 2400, 'elite');
   }
 
   // elite concluido na partida: cartaz grande com a arma ganha em cima de um sol de raios girando
@@ -293,15 +327,7 @@ export class Hud {
 
   // desbloqueios e desafios em FILA (01/11, pedido dele): um depois do outro, nunca empilhados (no celular enchia a tela)
   unlockBanner({ kind, name, img, more = 0 }) {
-    (this.unlQ ||= []).push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>${kind}</small><b>${name}</b></span>${more ? `<em>+${more}</em>` : ''}`);
-    this.nextUnl();
-  }
-  nextUnl() {
-    if (this.unlOn || !this.unlQ?.length) return;
-    const ms = document.body.classList.contains('touchmode') ? 2400 : 2900;
-    this.unlOn = true;
-    this.push(this.unlQ.shift(), 'ev-unl', ms);
-    setTimeout(() => { this.unlOn = false; this.nextUnl(); }, ms + 380);
+    this.push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>${kind}</small><b>${name}</b></span>${more ? `<em>+${more}</em>` : ''}`, 'ev-unl', document.body.classList.contains('touchmode') ? 2400 : 2900);
   }
 
   // granada de fragmentacao perto (< 9 m): icone em cima dela; fora da tela, preso na borda apontando
@@ -339,6 +365,9 @@ export class Hud {
   // A posicao segue o minimapa, que muda de lugar no toque e em tela baixa. Tela baixa (celular
   // deitado): um por vez, em fila, senao a pilha desce ate o analogico.
   unlockToast(text) {
+    this.push(`<span><b>${esc(text)}</b></span>`, 'ev-unl', 2600); // 03/11: centro de cima, na fila (antes: coluna da esquerda)
+  }
+  unlockToastOld(text) {
     const short = innerHeight <= 520;
     if (short) {
       (this.unlockQ ||= []).push(text);
@@ -410,6 +439,23 @@ export class Hud {
     el.querySelector('small').textContent = s.rv > 0 ? t('duo_beingPumped') : t('duo_bleed', { n: s.t });
     el.querySelector('span').style.width = Math.round(Math.min(1, s.rv > 0 ? s.rv : s.t / BR.duo.down) * 100) + '%';
     el.classList.toggle('pump', s.rv > 0);
+  }
+  // gadget equipado (03/11): plaquinha embaixo da municao com o tanque (barra) ou os cartuchos e a tecla
+  gadget(id, v, S) {
+    let el = this.gadgetEl;
+    if (!el) { el = this.gadgetEl = document.createElement('div'); el.className = 'gadget-plate'; el.setAttribute('aria-live', 'off'); document.getElementById('hud').appendChild(el); }
+    if (!id) { if (!el.hidden) el.hidden = true; return; }
+    const key = id === 'gd_flame' ? Math.round(v * 20) : v, sig = id + ':' + key;
+    if (sig === this.gadgetSig) return;
+    this.gadgetSig = sig; el.hidden = false;
+    const tag = isTouch ? '' : `<kbd>${esc(bindLabel(S, 'gadget', S?.padActive ? 1 : 0))}</kbd>`;
+    el.innerHTML = id === 'gd_flame'
+      ? `${tag}<span>${esc(t('gd_flame'))}</span><i class="gp-bar"><b style="width:${Math.round(v * 100)}%"></b></i>`
+      : `${tag}<span>${esc(t('gd_shot'))}</span><em>${'●'.repeat(Math.max(0, v))}${'○'.repeat(Math.max(0, GADGETS.gd_shot.shells - v))}</em>`;
+    el.classList.toggle('empty', id === 'gd_flame' ? v <= 0.02 : v <= 0);
+    // toque: o tanque/cartuchos vao dentro do proprio botao (a plaquinha no rodape ficava embaixo dos botoes, 03/11)
+    const btn = document.querySelector('#touch .tbtn.gadget');
+    if (btn) { btn.style.setProperty('--gfill', (id === 'gd_flame' ? Math.round(v * 100) : 0) + '%'); if (id === 'gd_flame') delete btn.dataset.n; else btn.dataset.n = v; btn.classList.toggle('empty', id === 'gd_flame' ? v <= 0.02 : v <= 0); }
   }
   message(text, t = 2.4) { this.push(esc(text), 'ev-msg', t * 1000); }
 
@@ -508,14 +554,17 @@ export class Hud {
 
   // fileira de selos das sequencias em cima da vida: progresso em anel; pronta = cor, pulso e tecla (toque: o selo)
   streaks(G, snap) {
-    const el = this.stk ||= document.getElementById('streaks');
+    // celular (02/11, pedido dele): a fileira mora DENTRO da camada de toque (por cima do HUD), embaixo da vida, e
+    // cada selo pronto e um botao; o minimapa desce pra baixo dela (touchLayout). PC: fileira em cima da vida.
+    const touchRow = isTouch && document.getElementById('touch') && !document.getElementById('touch').hidden;
+    const el = touchRow ? this.touchStkEl() : (this.stk ||= document.getElementById('streaks'));
+    if (touchRow && this.stk) this.stk.hidden = true;
     const me = snap?.players?.find(o => o.id === G.myId);
     const on = !!me && G.state === 'game' && G.mode !== 'br' && G.mode !== 'gungame';
     if (el.hidden === on) el.hidden = !on;
+    if (touchRow) this.touchLayout(G);
     if (!on) return;
     const ready = me.ready || [], n = me.streak || 0, pavio = G.skills?.includes('pavio');
-    // celular: a fileira nao cabe la em cima (pausa, vida, minimapa, avisos); o selo vira o proprio botao da estrela
-    if (isTouch) { el.hidden = true; this.streakBtn(ready, n, pavio, snap, G.streaks); return; }
     const dev = G.pad?.active ? 'pad' : isTouch ? 'touch' : 'kb', bind = dev === 'pad' ? '▲' : dev === 'touch' ? '' : 'X';
     const lock = callLocked(ready, snap.sLock) ? snap.sLock.t : 0, nx = callNext(ready, snap.sLock);
     const mine = pickStreaks(G.streaks);
@@ -531,6 +580,42 @@ export class Hud {
         + `<svg class="stk-ico" viewBox="0 0 48 48" role="img" aria-label="${esc(tip)}">${STREAK_SVG[id] || ''}</svg>`
         + (got ? (next && lock ? `<b class="stk-key">${lock}s</b>` : next && bind ? `<b class="stk-key">${bind}</b>` : '') : `<b class="stk-n">${need}</b>`) + `</div>`;
     }).join('');
+  }
+
+  // fileira de sequencias do celular: dentro do #touch (o toque chega nela), toque num selo pronto chama aquele
+  touchStkEl() {
+    if (this.tstk?.isConnected) return this.tstk;
+    const el = this.tstk = document.createElement('div');
+    el.className = 'streaks tstk'; el.hidden = true;
+    el.addEventListener('pointerdown', (e) => {
+      const s = e.target.closest('.stk'); e.preventDefault(); e.stopPropagation();
+      if (s?.classList.contains('got')) this.onStreakTap?.(s.dataset.s);
+      else audio.play('empty', { ui: true, vol: 0.4 });
+    });
+    document.getElementById('touch').appendChild(el);
+    return el;
+  }
+  // canto de cima no celular, montado pela medida real (02/11: o minimapa ficava em cima do chat e da fileira):
+  // [pausa][vida] / [chat][sequencias] / minimapa embaixo do que estiver mais baixo, encolhendo pra nao chegar no analogico
+  touchLayout(G) {
+    const now = performance.now();
+    if (now - (this.tlT || 0) < 250) return;
+    this.tlT = now;
+    const q = (s) => { const e = document.querySelector(s); if (!e || e.hidden || getComputedStyle(e).display === 'none') return null; const r = e.getBoundingClientRect(); return r.width ? r : null; };
+    const bl = q('.hud-bl'), chat = q('#touch .tbtn.chat'), stick = q('#touch .stick'), cv = this.radarCv;
+    if (this.tstk && bl) Object.assign(this.tstk.style, { left: Math.round(bl.left) + 'px', top: Math.round(bl.bottom + 6) + 'px' });
+    const row = q('#touch .tstk');
+    // avisos do meio descem pra baixo da fileira (no celular baixo eles passavam por cima dela)
+    document.body.style.setProperty('--tl-msg', Math.round(Math.max(innerHeight * 0.2, (row?.bottom || 0) + 8)) + 'px');
+    // pilha de avisos: comeca depois da fileira e para antes do arco de botoes da direita
+    const btnL = Math.min(innerWidth - 150, ...[...document.querySelectorAll('#touch .tbtn')].map(b => b.getBoundingClientRect()).filter(r => r.width && r.top < innerHeight * 0.55 && r.left > innerWidth * 0.5).map(r => r.left));
+    const evL = Math.max((row?.right || bl?.right || 0) + 10, innerWidth / 2 - 200), evW = Math.max(180, Math.min(400, btnL - 10 - evL));
+    document.body.style.setProperty('--tl-ev-l', Math.round(evL) + 'px'); document.body.style.setProperty('--tl-ev-w', Math.round(evW) + 'px');
+    if (!cv) return;
+    const top = Math.max(bl?.bottom || 0, chat?.bottom || 0, row?.bottom || 0) + 8;
+    const room = (stick ? stick.top : innerHeight) - top - 8;
+    const size = Math.max(46, Math.min(110, room)); // celular baixo: encolhe ate caber acima do analogico
+    Object.assign(cv.style, { top: Math.round(top) + 'px', bottom: 'auto', width: size + 'px', height: size + 'px' });
   }
 
   streakBtn(ready, n, pavio, snap, mine) {
@@ -628,9 +713,9 @@ export class Hud {
     const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${devIcon(p.dv)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
-    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.mode)}</h3>`;
+    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || snap.mode)}</h3>`;
     if (cfg.teams) {
-      for (const tm of ['red', 'blue']) html += `<table><caption style="text-align:left;font-family:var(--display);padding:6px 0 2px;color:var(--${tm})">${t(TEAM[tm])} · ${snap.teamScore[tm]}</caption>${head}${rows(sort(players.filter(p => p.team === tm)))}</table>`;
+      for (const tm of ['red', 'blue']) html += `<table><caption style="text-align:left;font-family:var(--display);padding:6px 0 2px;color:var(--${tm})">${t(TEAM[tm])} · ${snap.teamScore[tm]}</caption>${head}${rows(sort(players.filter(p => p.team === tm && !p.mob)))}</table>`;
     } else html += `<table>${head}${rows(sort(players))}</table>`;
     // desafios acompanhados ao lado do placar (embaixo na tela estreita), progresso ao vivo
     b.classList.toggle('has-ch', !!chs?.length);

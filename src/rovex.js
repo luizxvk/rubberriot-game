@@ -1,6 +1,7 @@
 // Ponte com a Rovex. Na Rovex o jogo roda em tryrovex.com/rubber-riot-game/ (mesma origem
 // do site), entao o login dela (token no localStorage) vale aqui direto. A pagina da Rovex
 // passa a base da API em ?api= e o convite chega como ?sala=.
+import { SS } from './ssboot.js';
 const qs = new URLSearchParams(location.search);
 // site proprio (rubberriot.tryrovex.com): outra origem, entao o jogo guarda a PROPRIA sessao,
 // vinda da tela "autorizar app" da Rovex (cofre RUBBER_RIOT, nao derruba o login do site).
@@ -45,7 +46,8 @@ export async function metaPost(n) {
 }
 
 export function token() {
-  try { return STANDALONE ? localStorage.getItem(OWN) : (localStorage.getItem('token') || sessionStorage.getItem('token') || null); } catch { return null; }
+  // tela dividida: so a sessao que a pessoa desta tela autorizou pelo QR (nunca a do dono do PC)
+  try { return STANDALONE || SS ? localStorage.getItem(OWN) : (localStorage.getItem('token') || sessionStorage.getItem('token') || null); } catch { return null; }
 }
 
 async function call(path, opt = {}) {
@@ -57,7 +59,7 @@ async function call(path, opt = {}) {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
       body: opt.body ? JSON.stringify(opt.body) : undefined,
     });
-    if (r.status === 401 && STANDALONE) logout(); // sessao do jogo vencida ou revogada: volta pro "Entrar"
+    if (r.status === 401 && (STANDALONE || SS)) logout(); // sessao do jogo vencida ou revogada: volta pro "Entrar"
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
   } finally { clearTimeout(to); }
@@ -70,8 +72,10 @@ export async function loadMe() {
   try {
     const u = await call('/users/me', { timeout: 5000 });
     // elite = assinatura Elite da Rovex ativa (o servidor ja confere a validade)
-    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14), elite: !!u.isElite } : null;
+    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14), elite: !!u.isElite, email: typeof u.email === 'string' ? u.email : '', zions: Number.isFinite(u.zions) ? u.zions : null, zionsPoints: Number.isFinite(u.zionsPoints) ? u.zionsPoints : null } : null; // saldo de Zions Points mostrado na loja
   } catch { me = null; }
+  try { dispatchEvent(new Event('rovex-me')); } catch { /* fora do navegador */ } // saldos de Zions na tela atualizam (zbal.js)
+  if (me) loadShop(); // o que comprou na Loja + saldos (sem esperar: nao atrasa a entrada)
   return me;
 }
 
@@ -86,6 +90,30 @@ export async function friendRooms() {
   return Array.isArray(j?.salas) ? j.salas : [];
 }
 export const invite = (friendId, room) => call('/games/rubber-riot/invite', { method: 'POST', body: { friendId, room } });
+// Loja (03/11): o que a conta comprou (me.rrOwned) e os saldos; comprar desconta Zions Points no servidor da Rovex
+export async function loadShop() {
+  if (!token() || !me) return null;
+  try {
+    const j = await call('/games/rubber-riot/loja', { timeout: 6000 });
+    me.rrOwned = Array.isArray(j?.itens) ? j.itens : [];
+    if (Number.isFinite(j?.zionsPoints)) me.zionsPoints = j.zionsPoints;
+    if (Number.isFinite(j?.zions)) me.zions = j.zions;
+    dispatchEvent(new Event('rovex-me'));
+    return j;
+  } catch { return null; }
+}
+// devolve { ok } ou { code: 'sem_saldo' | 'ja_tem' | 'login' | 'erro', saldo?, preco? }
+export async function buyItem(sku) {
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/loja/comprar', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ sku }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { code: j.code || 'erro', saldo: j.saldo, preco: j.preco };
+    me.rrOwned = j.itens || me.rrOwned; me.zionsPoints = j.zionsPoints; me.zions = j.zions;
+    dispatchEvent(new Event('rovex-me'));
+    return { ok: true };
+  } catch { return { code: 'erro' }; }
+}
 // convites que chegaram pra mim (o sininho da Rovex nao aparece com o jogo aberto)
 export async function invites() {
   if (!token()) return [];
@@ -97,7 +125,7 @@ export const inviteSeen = (id) => call('/games/rubber-riot/convites/' + encodeUR
 // ---------- save na conta ----------
 // a conta manda: logou, o save dela entra no lugar do local. Conta sem save herda o
 // progresso local, a nao ser que ele seja de OUTRA conta deste navegador.
-const KEYS = ['rr_progress_v1', 'rr_loadouts_v1', 'rr_challenges_v1', 'rr_settings', 'rr_lang', 'rr_look_v1'];
+const KEYS = ['rr_progress_v1', 'rr_loadouts_v1', 'rr_variants_v1', 'rr_challenges_v1', 'rr_settings', 'rr_lang', 'rr_look_v1'];
 const OWNER = 'rr_owner';
 const ls = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -119,7 +147,13 @@ export async function pullSave() {
     if (r && r.data) {
       // guest que acabou de entrar: se jogou mais como guest do que a conta tem, o dele vale e sobe
       if (wasGuest && xpOf(ls.get('rr_progress_v1')) > xpOf(r.data.rr_progress_v1)) pushSave();
-      else for (const k of KEYS) if (typeof r.data[k] === 'string') ls.set(k, r.data[k]); else ls.del(k);
+      else {
+        // variantes (02/11): conta que ainda nao tem as variantes na nuvem (gravadas antes da chave existir) nao apaga as
+        // deste aparelho; elas sobem na proxima gravacao
+        const keepVar = typeof r.data.rr_variants_v1 !== 'string' && owner === me.id && ls.get('rr_variants_v1');
+        for (const k of KEYS) if (typeof r.data[k] === 'string') ls.set(k, r.data[k]); else if (!(k === 'rr_variants_v1' && keepVar)) ls.del(k);
+        if (keepVar) pushSoon();
+      }
     } else {
       if (owner && owner !== me.id && !wasGuest) for (const k of KEYS) ls.del(k);
       ls.set(OWNER, me.id);
@@ -148,3 +182,23 @@ export function pushSave(keepalive = false) {
   call('/games/rubber-riot/save', { method: 'PUT', body: { data }, keepalive }).then(() => { lastBody = body; }).catch(() => {});
 }
 addEventListener('pagehide', () => { if (timer) pushSave(true); });
+
+// ---------- uma conta, um aparelho (02/11) ----------
+// o jogo logado avisa a cada 60 s "estou jogando neste aparelho"; outro aparelho ativo nos ultimos 90 s = { outro: true }.
+// tomar = Contestar: este aparelho passa a ser o da conta (o outro recebe o aviso no proximo toque)
+function deviceId() {
+  let d = ls.get('rr_dev');
+  if (!d || d.length < 8) { d = Array.from(crypto.getRandomValues(new Uint8Array(9)), x => x.toString(36).padStart(2, '0')).join('').slice(0, 16); ls.set('rr_dev', d); }
+  return d;
+}
+export async function sessionPing(tomar = false) {
+  if (!me) return { ok: true };
+  try { return await call('/games/rubber-riot/sessao', { method: 'POST', body: { dev: deviceId(), tomar }, timeout: 6000 }); } catch { return { ok: true }; } // sem rede/servidor antigo: nao trava ninguem
+}
+export function sessionEnd() { if (me) call('/games/rubber-riot/sessao', { method: 'POST', body: { dev: deviceId(), sair: true }, keepalive: true }).catch(() => {}); }
+// recuperar senha: o mesmo fluxo da Rovex (e-mail com o link de troca)
+export async function requestReset() {
+  if (!me?.email) return false;
+  try { const r = await fetch(API + '/auth/request-reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: me.email }) }); return r.ok; } catch { return false; }
+}
+addEventListener('pagehide', () => sessionEnd()); // fechou: libera a conta pro outro aparelho na hora

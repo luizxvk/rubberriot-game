@@ -1,11 +1,19 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
 import { STREAK_SVG } from './hud.js';
+import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
+// variante do jogador vale SO no modelo em que foi salva (02/11: aparecia em todas as armas da categoria).
+// Devolve a variante equipada nesta montagem, ou null se ela e de outro modelo / foi apagada
+const cvOf = (cat, lo) => (lo?.cv && (getVariants()[cat] || []).find(v => v.id === lo.cv && v.lo.body === lo.body)) || null;
 import { SKILL_ICONS } from './skillicons.js';
 import { tip } from './tips.js';
 import { UNLOCKS, dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState, togglePick, unlockPinned, pendingUnlocks } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
+import { renderShop, stopShop, initShop } from './shop.js';
+import { initAnn, startAnn, stopAnn, relangAnn } from './ann.js';
+import { initElitePop } from './elitepop.js';
+import { renderAllBal } from './zbal.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
@@ -45,7 +53,10 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'ranked', 'profile'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'ranked', 'profile', 'shop'];
+  initShop();
+  initElitePop(); // banner do Elite abre o popup com os beneficios (03/11)
+  initAnn((g) => g === 'play' ? $('goSolo')?.click() : ui.go(g)); // anuncios do cartaz: 'play' abre a escolha do modo
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
@@ -70,7 +81,8 @@ export function initMenus(o) {
     if (name === 'look') renderLook();
     if (name === 'ranked') renderRanked();
     if (name === 'profile') renderProfile();
-    if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); }
+    if (name === 'shop') renderShop(); else stopShop();
+    if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); startAnn(); renderAllBal(); } else stopAnn();
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
   };
@@ -82,6 +94,7 @@ export function initMenus(o) {
       audio.play(to === 'home' ? 'ui_back' : 'ui_click', { ui: true });
       if (to === 'home' && settingsFromGame && o.inGame()) { o.onBackFromSettingsInGame(); settingsFromGame = false; return; }
       if (to === 'home' && fromLobby) { fromLobby = false; o.onBackToLobby(false); return; }
+      if (to === 'settings' && ui.screen === 'controls') { ui.go('settings', settingsFromGame); return; } // volta dos Controles pros Ajustes (mantem "aberto da pausa")
       ui.go(to);
     });
     b.addEventListener('pointerenter', () => audio.play('ui_hover', { ui: true, vol: 0.35, key: 'hover', max: 1 }));
@@ -101,7 +114,9 @@ export function initMenus(o) {
   };
   ui.fromLobby = () => fromLobby;
   addEventListener('keydown', (e) => {
+    if (e.defaultPrevented) return; // um popup por cima (item da loja) ja tratou o Esc
     if (e.key === 'Escape' && fromLobby && ['arsenal', 'skills', 'challenges'].includes(ui.screen)) { audio.play('ui_back', { ui: true }); fromLobby = false; o.onBackToLobby(false); return; }
+    if (e.key === 'Escape' && ui.screen === 'controls') { audio.play('ui_back', { ui: true }); ui.go('settings', settingsFromGame); return; }
     if (e.key === 'Escape' && !o.inGame() && ui.screen !== 'home') { audio.play('ui_back', { ui: true }); ui.go('home'); }
     if (e.key === 'Escape' && settingsFromGame && o.inGame() && ui.screen === 'settings') { o.onBackFromSettingsInGame(); settingsFromGame = false; }
   });
@@ -193,18 +208,33 @@ export function initMenus(o) {
   // mira assistida: toque e controle; tiro automatico so no toque (os dois ligados por padrao)
   if (isTouch) defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssist'], ['toggle', 'autoFire', 's_autoFire']);
   else defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssistPad']);
+  // controle (03/11, pedido dele): as mesmas do mouse (sensibilidade, suavizacao, aceleracao)
+  defs.push(['range', 'padSens', 's_padSens', 0.3, 2.5, 0.05, v => v.toFixed(2)],
+    ['seg', 'padSmooth', 's_padSmooth', [['off', 'ms_off'], ['low', 'ms_low'], ['high', 'ms_high']]],
+    ['range', 'padAccel', 's_padAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%']);
+  // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
+  const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: isTouch ? 'touch' : 'ctrl', holdCrouch: 'ctrl', leanMode: 'ctrl', autoSprint: 'ctrl', padSens: 'ctrl', padSmooth: 'ctrl', padAccel: 'ctrl',
+    autoFire: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'game',
+    fov: 'video', vmFov: 'video', grain: 'video', res: 'video', film: 'video', draw: 'video', showFps: 'video',
+    master: 'audio', music: 'audio', sfx: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
+  const grp = (d) => GROUP[d[0] === 'xhair' ? 'xhair' : d[1]] || 'game';
+  const TABS = ['ctrl', ...(isTouch ? ['touch'] : []), 'video', 'audio', 'game'];
+  let setTab = 'ctrl';
   const sl = $('settingsList');
   S.lang = getLang();
   S.unlockAll = progressInfo().unlockAll;
-  const buildSettings = () => { sl.innerHTML = defs.map(d => {
+  const buildSettings = () => { sl.innerHTML = `<nav class="set-tabs" role="tablist">${TABS.map(g => `<button role="tab" data-sg="${g}" aria-selected="${g === setTab}">${t('sg_' + g)}</button>`).join('')}</nav><div class="set-body">` + defs.filter(d => grp(d) === setTab).map(d => {
     if (d[0] === 'range') return `<label class="field"><span>${t(d[2])} <b data-out="${d[1]}"></b></span><input type="range" data-k="${d[1]}" min="${d[3]}" max="${d[4]}" step="${d[5]}"></label>`;
     if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
     if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : t(l)}</button>`).join('')}</div></div>`;
     return `<div class="toggle"><span id="lbl-${d[1]}">${t(d[2])}</span><button class="switch" role="switch" aria-labelledby="lbl-${d[1]}" data-t="${d[1]}"></button></div>`;
-  }).join(''); };
+  }).join('') + '</div>'; };
   buildSettings();
+  // Controles saiu do menu inicial (03/11, pedido dele): mora nos Ajustes, na pill "Redefinir comandos" do topo
+  $('setKeys').onclick = () => { audio.play('ui_click', { ui: true }); ui.go('controls', settingsFromGame); };
   const refresh = () => {
     for (const d of defs) {
+      if (grp(d) !== setTab) continue; // so a aba aberta esta desenhada
       if (d[0] === 'range') { sl.querySelector(`[data-k="${d[1]}"]`).value = S[d[1]]; sl.querySelector(`[data-out="${d[1]}"]`).textContent = d[6](Number(S[d[1]])); }
       if (d[0] === 'seg') sl.querySelectorAll(`[data-seg="${d[1]}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === S[d[1]]));
       if (d[0] === 'toggle') sl.querySelector(`[data-t="${d[1]}"]`).setAttribute('aria-checked', !!S[d[1]]);
@@ -218,6 +248,7 @@ export function initMenus(o) {
   sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); refresh(); o.saveSettings(); });
   sl.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); sl.querySelector(`[data-sg="${setTab}"]`)?.focus(); } return; }
     const seg = b.parentElement.dataset.seg;
     if (seg) S[seg] = b.dataset.v;
     if (seg === 'lang') { setLang(S.lang); buildSettings(); ui.relang(); }
@@ -391,7 +422,7 @@ export function initMenus(o) {
   document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { stopBinding(); keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
 
   // ---------- visual do boneco: abas, itens com raridade e cadeado; o 3D gira ao lado (main.js) ----------
-  const LOOK_TABS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx'];
+  const LOOK_TABS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx', 'skin'];
   let lookTab = 'hat', lookTeam = 'red', lookPeek = null;
   function renderLook() {
     const cur = getLook();
@@ -402,7 +433,7 @@ export function initMenus(o) {
     $('lookGrid').classList.toggle('swatches', swatch);
     $('lookGrid').innerHTML = LOOKS[lookTab].map(it => {
       const open = lookOpen(lookTab, it.id), on = cur[lookTab] === it.id, peek = lookPeek === it.id;
-      const lock = open ? '' : `<small class="lk-lock">${it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
+      const lock = open ? '' : `<small class="lk-lock">${it.shop ? t('shopOnly') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
       const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>` + (isNew('look|' + lookTab + '|' + it.id) ? newPill(t('chNew')) : '');
       if (swatch) return `<button class="lk-it sw ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}" style="--c:${it.id}" aria-label="${it.id}">${it.elite ? '<i class="lk-r r2">Elite</i>' : it.acct ? '<i class="lk-r r2">Rovex</i>' : ''}${lock}</button>`;
       return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}"><b>${t('lk_' + lookTab + '_' + it.id)}</b>${rar}${lock}</button>`;
@@ -410,7 +441,7 @@ export function initMenus(o) {
     markSeen('look|' + lookTab + '|');
     const show = lookPeek ? { ...cur, [lookTab]: lookPeek } : cur;
     const pk = lookPeek && LOOKS[lookTab].find(i => i.id === lookPeek);
-    $('lookNote').textContent = !pk ? t('lookTeamNote') : pk.elite ? t('lookPeekElite') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
+    $('lookNote').textContent = !pk ? t('lookTeamNote') : pk.shop ? t('lookPeekShop') : pk.elite ? t('lookPeekElite') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
     o.onLook?.(show, lookTeam);
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; renderLook(); });
     $('lookGrid').querySelectorAll('.lk-it').forEach(b => b.onclick = () => {
@@ -522,7 +553,7 @@ export function initMenus(o) {
     const eqHtml = isPrimary
       ? (equipped ? `<p class="equipped">${t('eqDone', { w: modelName })}</p>` : `<button class="big" id="equipBtn">${t('eqPrimary', { w: modelName })}</button>`)
       : `<p class="equipped">${t(cat === 'melee' ? 'eqMelee' : 'eqSecondary', { w: wName(cat) })}</p>`;
-    $('equipBar').innerHTML = `<div class="gs-id"><b class="gs-name">${modelName}</b>${loNow.bp ? `<span class="gs-bp">★ ${t(loNow.bp)}</span>` : ''}</div>` + eqHtml;
+    $('equipBar').innerHTML = `<div class="gs-id"><b class="gs-name">${modelName}</b>${cvOf(cat, loNow) && loNow.cvName ? `<span class="gs-bp cv">${esc(loNow.cvName)} <em class="cv-pill">${t('cvPill')}</em></span>` : loNow.bp ? `<span class="gs-bp">★ ${t(loNow.bp)}</span>` : ''}</div>` + eqHtml;
     const eb = $('equipBtn');
     if (eb) eb.onclick = () => { S.primary = cat; o.saveSettings(); audio.play('pickup', { ui: true, vol: 0.6 }); renderSmith(); };
     // mostra o que vale de verdade: peca salva que ainda esta bloqueada aparece como padrao
@@ -534,19 +565,19 @@ export function initMenus(o) {
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
-    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp) && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
+    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
       const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && (!lo.scope || IRONS[lo.scope]));
       let val;
-      if (s === 'bp') val = lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
+      if (s === 'bp') val = cvOf(cat, lo) && lo.cvName ? `${esc(lo.cvName)} <em class="cv-pill">${t('cvPill')}</em>` : lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
       else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')) || CAMOS[0]; val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
       else if (s === 'ammo') val = `<svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[AMMO[lo.ammo]?.icon || 'radio_button_unchecked']}</svg> ${t('am_' + (lo.ammo || 'none'))}`;
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
       else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s]}` : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
-      return `<button class="slot slot-${s} ${s === 'bp' && lo.bp ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew('arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
+      return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew('arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
     }).join('');
     $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
     // blocos de pecas OU a lista de opcoes do slot escolhido (o painel troca, nao empilha)
@@ -615,7 +646,7 @@ export function initMenus(o) {
 
   // cada modelo guarda a propria montagem (pecas, camo, cores, bala, tracado, reticula): trocar de corpo salva a
   // do modelo atual e traz a do novo; modelo nunca montado comeca limpo (antes herdava tudo, ate a camo da variante)
-  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp'];
+  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp', 'cv', 'cvName']; // cv: a variante do jogador volta junto quando ele volta pro modelo
   function stashBody(lo) {
     if (!lo.body) return;
     lo.saved ||= {};
@@ -634,6 +665,13 @@ export function initMenus(o) {
     lo[k] = v;
     // mexeu numa peca na mao: deixa de ser a variante (camo, cor e tracado podem trocar sem perder)
     if (['body', 'scope', 'charger', 'handle', 'laser', 'conv', 'muzzle'].includes(k)) delete lo.bp;
+    // variante do jogador equipada: mexeu, a variante se atualiza sozinha e sobe pra conta (02/11, pedido dele)
+    // trocou de MODELO: a variante e do modelo antigo, entao sai (nunca vira variante do modelo novo)
+    if (k !== 'bp' && lo.cv) {
+      const all = getVariants(), v = (all[cat] || []).find(x => x.id === lo.cv);
+      if (v && v.lo.body === lo.body && k !== 'body') { v.lo = cvPick(lo); saveVariants(all); }
+      else if (!v || v.lo.body !== lo.body) { delete lo.cv; delete lo.cvName; }
+    }
     if (k === 'body' && cat === 'sniper' && !lo.scope) lo.scope = nativePart(v, 'scope');
     saveLoadouts(loadouts);
     o.loadoutsChanged(loadouts);
@@ -641,10 +679,51 @@ export function initMenus(o) {
     renderSmith();
   }
 
+  // ---------- variantes do jogador (02/11) ----------
+  // campos da montagem que entram na variante (tudo que muda a arma; o 'saved' por modelo nao)
+  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp'];
+  const cvPick = (lo) => Object.fromEntries(CV_KEYS.filter(k => lo[k] != null).map(k => [k, lo[k]]));
+  function customVariantsHtml(lo) {
+    const list = (getVariants()[cat] || []).filter(v => v.lo.body === lo.body); // so as deste modelo
+    const full = list.length >= VARIANT_MAX;
+    const items = list.map(v => {
+      const on = lo.cv === v.id, sw = CAMO_SWATCH[v.lo.camo || 'none'] || 'transparent';
+      return `<div class="opt cv ${on ? 'on' : ''}"><button class="cv-use" data-cv="${esc(v.id)}"><i class="cswatch" style="background:${sw}"></i><span class="bp-name">${esc(v.name)} <em class="cv-pill">${t('cvPill')}</em></span><small>${esc(partName('body', v.lo.body))}</small></button>`
+        + `<span class="cv-acts"><button class="cv-upd" data-cv="${esc(v.id)}">${t('cvUpdate')}</button><button class="cv-del" data-cv="${esc(v.id)}" aria-label="${esc(t('cvDel', { n: v.name }))}">${t('cvDelShort')}</button></span></div>`;
+    }).join('');
+    const form = full ? `<p class="cv-full">${t('cvFull', { n: VARIANT_MAX })}</p>`
+      : `<form class="cv-new" id="cvForm" autocomplete="off"><label for="cvName">${t('cvSaveLbl')}</label><span class="cv-row"><input id="cvName" maxlength="20" placeholder="${esc(t('cvPh'))}" spellcheck="false"><button type="submit" class="cv-save">${t('cvSave')}</button></span></form>`;
+    return `<div class="cv-block"><p class="pk-h">${t('cvTitle')}</p>${form}${items}</div><p class="pk-h">${t(BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat) ? 'cvElite' : 'cvBase')}</p>`;
+  }
+  function wireCustomVariants(shown) {
+    const all = getVariants(), list = all[cat] ||= [];
+    const lo = loadouts[cat];
+    if (list.filter(v => v.lo.body === shown.body).length >= VARIANT_MAX) { const f0 = $('cvForm'); if (f0) f0.hidden = true; } // teto por modelo // grava na montagem salva (a da tela e uma copia filtrada pelo que ja abriu)
+    const apply = (v) => { if (v.lo.body !== lo.body) swapBody(lo, v.lo.body); for (const k of CV_KEYS) delete lo[k]; Object.assign(lo, v.lo, { cv: v.id, cvName: v.name }); };
+    const done = (sfx) => { saveLoadouts(loadouts); o.loadoutsChanged(loadouts); audio.play(sfx, { vol: 0.5, ui: true }); renderSmith(); };
+    const f = $('cvForm');
+    if (f) f.onsubmit = (e) => {
+      e.preventDefault();
+      const name = $('cvName').value.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20);
+      if (!name) { $('cvName').focus(); $('cvName').classList.add('bad'); return; }
+      const v = { id: 'cv' + Date.now().toString(36), name, lo: cvPick(shown) };
+      list.push(v); saveVariants(all); Object.assign(lo, { cv: v.id, cvName: name }); done('unlock');
+    };
+    $('picker').querySelectorAll('.cv-use').forEach(b => b.onclick = () => { const v = list.find(x => x.id === b.dataset.cv); if (v) { preview = null; apply(v); done('swap'); } });
+    $('picker').querySelectorAll('.cv-upd').forEach(b => b.onclick = () => { const v = list.find(x => x.id === b.dataset.cv); if (!v) return; v.lo = cvPick(shown); saveVariants(all); Object.assign(lo, { cv: v.id, cvName: v.name }); done('pickup'); });
+    $('picker').querySelectorAll('.cv-del').forEach(b => b.onclick = () => {
+      if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = t('cvDelSure'); return; } // segundo toque apaga
+      all[cat] = list.filter(x => x.id !== b.dataset.cv); saveVariants(all);
+      if (lo.cv === b.dataset.cv) { delete lo.cv; delete lo.cvName; }
+      done('ui_back');
+    });
+  }
+
   // variante de elite: aplica a montagem inteira (pecas + camo lendaria) de uma vez
   function setVariant(id) {
     preview = null;
     const lo = loadouts[cat];
+    delete lo.cv; delete lo.cvName;
     if (id) { const B = bpLoadout(id); if (B.body !== lo.body) swapBody(lo, B.body); Object.assign(lo, B); } // a montagem do modelo atual fica guardada
     else delete lo.bp;
     saveLoadouts(loadouts);
@@ -661,7 +740,7 @@ export function initMenus(o) {
       // "bom" quando o numero sobe (dano, passo, pente) ou desce (o resto: cadencia lenta, recuo, abertura...)
       const good = (k, v) => (k === 'dmg' || k === 'move' || k === 'mag') ? v > 1 : v < 1;
       const el = eliteToday();
-      p.innerHTML = `<button class="opt bp-free ${!lo.bp ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + BP_ORDER.filter(id => BLUEPRINTS[id].wpn === cat).map(id => {
+      p.innerHTML = customVariantsHtml(lo) + `<button class="opt bp-free ${!lo.bp && !lo.cv ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + BP_ORDER.filter(id => BLUEPRINTS[id].wpn === cat).map(id => {
         const B = BLUEPRINTS[id], open = bpUnlocked(id), cur = lo.bp === id;
         const mods = Object.entries(B.mods).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
         const lock = open ? '' : `<small class="req-ch">${el.reward === id && !el.done ? t('bpToday', { c: t('el_' + el.id, { n: el.n }) }) : t('bpLocked')}</small>${el.reward === id ? `<span class="ubar"><i style="width:${Math.round(el.prog / el.n * 100)}%"></i></span>` : ''}`;
@@ -671,13 +750,14 @@ export function initMenus(o) {
         if (b.classList.contains('locked')) { peek('bp', b.dataset.bp); return; }
         setVariant(b.dataset.bp || null);
       });
+      wireCustomVariants(lo);
       return;
     }
     if (slot === 'camo') {
       // grupos: estaticas, animadas, reativas (cada um com titulo ocupando a linha)
-      const grp = (c) => c.legend || c.meta ? 'legend' : c.react ? 'react' : c.anim ? 'anim' : 'static';
+      const grp = (c) => c.shop ? 'shop' : c.legend || c.meta ? 'legend' : c.react ? 'react' : c.anim ? 'anim' : 'static';
       let last = null;
-      p.innerHTML = CAMOS.map(c => {
+      p.innerHTML = [...CAMOS.filter(c => !c.shop), ...CAMOS.filter(c => c.shop)].map(c => { // as da Loja num grupo so, no fim
         const g = grp(c), head = g !== last ? `<p class="pk-h">${t('cg_' + g)}</p>` : '';
         last = g;
         return head + camoOpt(c);
@@ -686,8 +766,8 @@ export function initMenus(o) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
         // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
-        const req = c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
-        const bar = open || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
+        const req = c.shop && !open ? t('shopOnly') : c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const bar = open || c.shop || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {
@@ -865,6 +945,7 @@ export function initMenus(o) {
     if (ui.screen === 'controls') renderKeys();
     markLang();
     if (ui.screen === 'arsenal') renderSmith();
+    relangAnn();
   };
   return ui;
 }

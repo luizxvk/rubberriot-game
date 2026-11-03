@@ -3,6 +3,8 @@ import { t } from './i18n.js';
 // Entrada unificada: teclado + mouse (pointer lock) e controles de toque no celular.
 // Teclas e botoes do mouse vem dos comandos remapeaveis (binds.js); botao do mouse vira o codigo 'MouseN'.
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// 03/11: o visual de celular (menu em tela cheia etc.) vale desde a abertura; antes so ligava ao entrar na 1a partida
+if (isTouch) document.body?.classList.add('touchmode');
 
 // Sliders em aparelho de toque: o range nativo pula pro dedo assim que encosta na trilha, entao rolar a tela
 // de Ajustes por cima dele mudava o valor. No toque o input nao recebe o dedo (CSS) e so a
@@ -132,7 +134,7 @@ export class Input {
     const s = {
       moveX: mx, moveZ: mz,
       lookX: this.lookX + smx, lookY: this.lookY + smy,
-      fire: A('fire') || t.fire || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
+      fire: A('fire') || t.fire || t.fireL || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
       ads: A('ads') || t.ads || !!pd.ads, adsPressed: E('ads') || edge('ADS'),
       sprint: A('sprint') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
       tacPressed: edge('TAC'),
@@ -146,6 +148,7 @@ export class Input {
       fragHeld: A('frag') || !!t.frag || !!pd.frag,
       flashHeld: A('flash') || !!t.flash || !!pd.flash,
       streakPressed: E('streak') || edge('STREAK'),
+      gadget: A('gadget') || !!t.gadget || !!pd.gadget, gadgetPressed: E('gadget') || edge('GADGET'),
       inspectPressed: E('inspect') || edge('INSPECT'),
       pingPressed: E('ping') || edge('PING'), // marcar (battle royale): B, botao do meio, direcional esquerdo, botao de toque
       use: A('use') || t.use || !!pd.use,
@@ -169,6 +172,7 @@ export class Input {
 
 // Material Icons (Google, Apache 2.0): caminhos SVG oficiais
 const ICON = {
+  gadget: 'M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z', // peca encaixada (Material Icons 'extension', Apache 2.0): a granada ja usa fogo
   more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
   field: 'm13.127 14.56 1.43-1.43 6.44 6.443L19.57 21zm4.293-5.73 2.86-2.86c-3.95-3.95-10.35-3.96-14.3-.02 3.93-1.3 8.31-.25 11.44 2.88zM5.95 5.98c-3.94 3.95-3.93 10.35.02 14.3l2.86-2.86C5.7 14.29 4.65 9.91 5.95 5.98zm.02-.02-.01.01c-.38 3.01 1.17 6.88 4.3 10.02l5.73-5.73c-3.13-3.13-7.01-4.68-10.02-4.3z',
   fire: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
@@ -191,6 +195,8 @@ const ICON = {
   // place (Material Icons): marcar
   ping: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
   inspect: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
+  // gps_fixed (Material Icons): atirar mirando
+  adsfire: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   streak: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
   // pan_tool (Material Icons): segurar pra plantar / desarmar
   use: 'M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z',
@@ -229,6 +235,15 @@ export function buildTouch(input, root) {
   btn(t('t_frag'), 'frag', at(148, 12, 50), () => { input.edges.add('FRAG'); input.touch.frag = true; }, () => { input.touch.frag = false; });
   btn(t('t_flash'), 'flash', at(206, 12, 50), () => { input.edges.add('FLASH'); input.touch.flash = true; }, () => { input.touch.flash = false; });
   btn(t('t_streak'), 'streak', at(156, 176, 48), () => input.edges.add('STREAK'));
+  // gadget de baixo do cano (03/11): so aparece com o gadget equipado (body.has-gadget); segurar = lanca-chamas
+  input.gadgetBtn = btn(t('t_gadget'), 'gadget', at(270, 72, 50), () => { input.touch.gadget = true; input.edges.add('GADGET'); }, () => { input.touch.gadget = false; });
+  // atirar mirando (02/11, pedido dele): segurou = mira e atira junto; soltou = sai da mira (vaga da estrela antiga)
+  let adsWas = false;
+  input.adsFireBtn = btn(t('t_adsfire'), 'adsfire fire2', at(156, 176, 56), () => { adsWas = input.touch.ads; input.touch.ads = true; input.touch.fire = true; input.edges.add('FIRE'); }, () => { input.touch.fire = false; input.touch.ads = adsWas; });
+  // atirar do lado esquerdo (02/11): ao lado do analogico, pro polegar esquerdo (o direito fica livre pra mirar)
+  const L = 'max(24px, env(safe-area-inset-left))';
+  input.fireLBtn = btn(t('t_fireL'), 'fire fireL', { left: 'calc(' + L + ' + 170px)', bottom: 'calc(max(0px, env(safe-area-inset-bottom)) + 120px)', width: '66px', height: '66px' }, () => { input.touch.fireL = true; input.edges.add('FIRE'); }, () => { input.touch.fireL = false; });
+  input.fireLBtn.dataset.hid = 'fireL'; input.adsFireBtn.dataset.hid = 'adsfire';
   btn(t('t_melee'), 'melee', at(162, 84, 50), () => input.edges.add('MELEE'));
   // equipamento de campo: o icone troca pelo equipado e o aro mostra a recarga
   input.fieldBtn = btn(t('t_field'), 'field', at(214, 150, 48), () => input.edges.add('FIELD'));
@@ -284,8 +299,9 @@ export function buildTouch(input, root) {
 // tiro automatico ligado: o botao de atirar some (o jogo atira sozinho com o inimigo na mira)
 export function setFireButton(input) {
   if (input.fireBtn) input.fireBtn.hidden = !!input.settings?.autoFire;
+  for (const b of [input.adsFireBtn, input.fireLBtn]) if (b) b.hidden = !!input.settings?.autoFire; // tiro automatico: os botoes de atirar somem
   if (input.useBtn) {
-    input.useBtn.hidden = input.mode !== 'bomb' && input.mode !== 'br'; // br: trocar arma no chao
+    input.useBtn.hidden = input.mode !== 'bomb' && input.mode !== 'br' && input.mode !== 'borroes'; // br: trocar arma no chao; borroes: comprar, abrir porta, Caixa, levantar parceiro
     if (input.pingBtn) input.pingBtn.hidden = input.mode !== 'br';
     for (const b of input.leanBtns || []) b.hidden = input.mode !== 'bomb';
     // a mao (plantar/desarmar) vai pro lugar do botao de atirar quando ele some: e onde o polegar ja esta.
@@ -294,7 +310,7 @@ export function setFireButton(input) {
       const R = 'max(20px, env(safe-area-inset-right))';
       Object.assign(input.useBtn.style, input.settings?.autoFire
         ? { right: 'calc(' + R + ' + 4px)', bottom: '92px', width: '80px', height: '80px' }
-        : { right: 'calc(' + R + ' + 214px)', bottom: '136px', width: '58px', height: '58px' });
+        : { right: 'calc(' + R + ' + 270px)', bottom: '136px', width: '58px', height: '58px' }); // 03/11: fora do equipamento de campo (batia nele)
     }
   }
 }

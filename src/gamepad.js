@@ -10,6 +10,14 @@ const DEAD = 0.16;
 const LOOK = 1350;
 
 const dz = (v) => { const a = Math.abs(v); return a < DEAD ? 0 : Math.sign(v) * ((a - DEAD) / (1 - DEAD)); };
+// o controle esta mandando comando agora? botao apertado ou eixo longe de onde ele REPOUSA (aparelho que fica parado
+// com eixo em -1, tipo pedal/controle virtual, nao rouba o lugar do Xbox). rest = eixos da primeira leitura de cada um
+const REST = new Map();
+const hasInput = (g) => {
+  if (!REST.has(g.index + g.id)) REST.set(g.index + g.id, [...g.axes]);
+  const r = REST.get(g.index + g.id);
+  return g.buttons.some(b => b?.pressed || (b?.value || 0) > 0.3) || g.axes.some((a, i) => Math.abs(a - (r[i] ?? 0)) > 0.45);
+};
 
 export class Pad {
   constructor(input) {
@@ -18,7 +26,8 @@ export class Pad {
     this.active = false;     // usou o controle por ultimo (vale ate mexer no mouse/teclado)
     this.sprintLatch = false;
     this.navT = 0;
-    addEventListener('mousemove', () => this.setActive(false));
+    // mouse tira do modo controle so quando mexe DE VERDADE (03/11: evento de movimento zero/tremidinha desligava o controle)
+    addEventListener('mousemove', (e) => { if (Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 3) this.setActive(false); });
     addEventListener('keydown', () => this.setActive(false));
     // celular: usou o controle, os botoes de toque somem; tocou na tela de novo, voltam
     addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.setActive(false); }, true);
@@ -38,8 +47,14 @@ export class Pad {
   first() {
     // tela dividida: o controle desta tela, lido pela pagina de cima (ela tem o foco; o iframe pode nao ter)
     if (SS) { const g = window.parent.navigator.getGamepads?.()[SS.pad]; return g && g.connected ? g : null; }
-    for (const g of navigator.getGamepads?.() || []) if (g && g.connected) return g;
-    return null;
+    // 03/11: antes pegava o PRIMEIRO da lista; com outro aparelho conectado antes (dongle, headset, controle virtual
+    // do Steam/DS4Windows) o Xbox de verdade era ignorado. Agora: o que esta mandando comando agora > o ultimo usado >
+    // o de layout padrao (Xbox/PlayStation) > qualquer um
+    const list = [...(navigator.getGamepads?.() || [])].filter(g => g && g.connected);
+    if (!list.length) return null;
+    const live = list.find(hasInput);
+    if (live) { this.idx = live.index; return live; }
+    return list.find(g => g.index === this.idx) || list.find(g => g.mapping === 'standard') || list[0];
   }
 
   // chamado a cada quadro. inGame = partida rolando sem pausa
@@ -55,17 +70,22 @@ export class Pad {
     if (now.some(Boolean) || Math.abs(lx) + Math.abs(ly) + Math.abs(rx) + Math.abs(ry) > 0) this.setActive(true);
 
     if (inGame) {
-      // olhar: curva quadratica (precisao no comeco do curso, giro rapido no fim)
-      const curve = (v) => Math.sign(v) * v * v;
-      I.lookX += curve(rx) * LOOK * dt;
-      I.lookY += curve(ry) * LOOK * 0.72 * dt;
+      // olhar: curva quadratica (precisao no comeco do curso, giro rapido no fim). Ajustes do controle (03/11, iguais
+      // aos do mouse): sensibilidade, suavizacao (media do analogico) e aceleracao (segurando no fim do curso gira mais)
+      const S = I.settings || {}, curve = (v) => Math.sign(v) * v * v;
+      const smK = { off: 1, low: 0.45, high: 0.2 }[S.padSmooth || 'off'] ?? 1, kk = 1 - Math.pow(1 - smK, dt * 60);
+      this.sx = (this.sx || 0) + (rx - (this.sx || 0)) * kk; this.sy = (this.sy || 0) + (ry - (this.sy || 0)) * kk;
+      this.edgeT = Math.hypot(rx, ry) > 0.9 ? Math.min(1, (this.edgeT || 0) + dt / 0.6) : 0;
+      const k = (S.padSens ?? 1) * (1 + (S.padAccel || 0) * this.edgeT * 1.2);
+      I.lookX += curve(this.sx) * LOOK * k * dt;
+      I.lookY += curve(this.sy) * LOOK * 0.72 * k * dt;
       // L3 trava a corrida ate parar de andar pra frente (igual COD)
       // botoes vem dos comandos remapeaveis (binds.js); Start e Select ficam fixos
       const P = I.padMap || (I.padMap = padBinds(I.settings)), bi = (id) => B[P[id]] ?? -1;
       if (down(bi('sprint'))) this.sprintLatch = !this.sprintLatch;
       if (-ly < 0.3) this.sprintLatch = false;
-      I.pad = { mx: lx, mz: -ly, fire: now[bi('fire')], ads: now[bi('ads')], sprint: this.sprintLatch, crouchHeld: now[bi('crouch')], board: now[B.SELECT], use: now[bi('reload')], frag: now[bi('frag')], flash: now[bi('flash')] };
-      for (const [id, ev] of [['fire', 'FIRE'], ['ads', 'ADS'], ['jump', 'JUMP'], ['crouch', 'CROUCH'], ['reload', 'RELOAD'], ['cycle', 'NEXT'], ['frag', 'FRAG'], ['flash', 'FLASH'], ['melee', 'MELEE'], ['streak', 'STREAK'], ['inspect', 'INSPECT'], ['field', 'FIELD'], ['ping', 'PING']]) if (down(bi(id))) I.edges.add(ev);
+      I.pad = { mx: lx, mz: -ly, fire: now[bi('fire')], ads: now[bi('ads')], sprint: this.sprintLatch, crouchHeld: now[bi('crouch')], board: now[B.SELECT], use: now[bi('reload')], frag: now[bi('frag')], flash: now[bi('flash')], gadget: now[bi('gadget')] };
+      for (const [id, ev] of [['fire', 'FIRE'], ['ads', 'ADS'], ['jump', 'JUMP'], ['crouch', 'CROUCH'], ['reload', 'RELOAD'], ['cycle', 'NEXT'], ['frag', 'FRAG'], ['flash', 'FLASH'], ['melee', 'MELEE'], ['streak', 'STREAK'], ['inspect', 'INSPECT'], ['field', 'FIELD'], ['ping', 'PING'], ['gadget', 'GADGET']]) if (down(bi(id))) I.edges.add(ev);
       if (down(B.START)) I.edges.add('Escape');
     } else {
       if (document.body.classList.contains('binding')) { this.prev = now; return; } // tela de comandos esperando um botao
@@ -77,7 +97,15 @@ export class Pad {
       // foco sumiu: a tela se redesenhou depois do clique (arsenal, ajustes, lobby...) ou trocou de tela. Primeiro
       // procura o mesmo botao (ou o que ficou no lugar dele) na mesma tela; so volta pro inicio se a tela mudou (01/11)
       if (cur && cur !== document.body && isShown(cur) && cur !== this.lastEl) { this.lastEl = cur; this.lastSig = sigOf(cur); }
-      if (this.active && (!cur || cur === document.body || !isShown(cur))) {
+      // popup: abriu = o foco entra nele (guarda quem abriu); fechou = a selecao volta pro botao que abriu
+      const dlg = topDialog();
+      if (dlg !== this.dlg) {
+        if (dlg && this.active) { if (!this.dlg) { const op = cur && cur !== document.body && !dlg.contains(cur) ? cur : this.pressed && !dlg.contains(this.pressed) ? this.pressed : null; if (op) { this.opener = op; this.openerSig = sigOf(op); } } /* o popup puxa o foco sozinho ao abrir: quem abriu e o ultimo apertado com A */ const f = focusables(); const pick = f.find(el => el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-selected') === 'true') || preferred(f); if (pick && !dlg.contains(cur)) setPadFocus(pick); }
+        else if (!dlg && this.active && (this.opener || this.openerSig)) { const back = this.opener && isShown(this.opener) ? this.opener : this.openerSig && refind(this.openerSig, focusables()); if (back) setPadFocus(back); this.opener = null; this.openerSig = null; } // o lobby redesenha o botao: acha pelo jeito dele
+        this.dlg = dlg;
+      } else if (dlg && this.active && cur && !dlg.contains(cur)) { const f = focusables(); if (f.length) setPadFocus(preferred(f)); } // selecao fugiu pra tela de tras: volta pro popup
+      const cur2 = document.activeElement; // (o bloco de cima pode ter mexido no foco)
+      if (this.active && (!cur2 || cur2 === document.body || !isShown(cur2))) {
         const f0 = focusables();
         if (f0.length) { const back = this.lastSig && refind(this.lastSig, f0); setPadFocus(back || preferred(f0)); }
       }
@@ -88,7 +116,7 @@ export class Pad {
         this.navT = fresh ? 0.38 : 0.13;
       }
       if (!dir) this.navT = 0;
-      if (down(B.A)) { const el = document.activeElement; if (el && el !== document.body) pressFx(el); else moveFocus('down'); }
+      if (down(B.A)) { const el = document.activeElement; if (el && el !== document.body) { this.pressed = el; pressFx(el); } else moveFocus('down'); }
       if (down(B.B)) goBack();
       if (down(B.LB) || down(B.RB)) switchTab(down(B.RB) ? 1 : -1);
       // analogico direito rola a lista que tiver o foco (ou a tela aberta)
@@ -135,7 +163,7 @@ function pressFx(el) {
 }
 // LB/RB: aba anterior/proxima da lista de abas visivel (Arsenal, Visual, Controles)
 function switchTab(d) {
-  const bar = [...document.querySelectorAll('[role="tablist"]')].find(isShown);
+  const bar = [...(topDialog() || document).querySelectorAll('[role="tablist"]')].find(isShown); // popup aberto: as abas DELE
   if (!bar) return;
   const tabs = [...bar.querySelectorAll('[role="tab"]')].filter(isShown);
   const i = tabs.findIndex(b => b.getAttribute('aria-selected') === 'true');
@@ -169,9 +197,15 @@ function hints(on) {
   Object.assign(hintEl.style, { left: ok[0] + 'px', top: ok[1] + 'px', bottom: 'auto', transform: 'none' });
 }
 
-// itens que da pra focar e estao na tela
+// itens que da pra focar e estao na tela. Popup aberto (role=dialog): SO os de dentro dele (regra 03/11: com popup
+// focado o controle so mexe nele; B fecha e a selecao volta pro botao que abriu)
+function topDialog() {
+  const list = [...document.querySelectorAll('[role="dialog"], [aria-modal="true"]')].filter(d => !d.hidden && !d.closest('[hidden]') && d.getClientRects().length > 0 && getComputedStyle(d).visibility !== 'hidden'); // popup e fixed: offsetParent e sempre null
+  return list.length ? list[list.length - 1] : null;
+}
 function focusables() {
-  return [...document.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])')]
+  const dlg = topDialog();
+  return [...(dlg || document).querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])')]
     .filter(el => !el.disabled && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[hidden], #hud, #touch'));
 }
 
@@ -197,8 +231,15 @@ function moveFocus(dir) {
   if (best) setPadFocus(best);
 }
 
-// B: fecha o que estiver por cima ou volta uma tela
+// B: fecha o que estiver por cima ou volta uma tela (popup aberto: o botao de fechar DELE)
 function goBack() {
+  const dlg = topDialog();
+  if (dlg) {
+    const x = [...dlg.querySelectorAll('.lb-x, .back, [data-close], button[aria-label="Fechar"], button[aria-label="Close"]')].find(el => el.offsetParent !== null);
+    if (x) { x.click(); return; }
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' }));
+    return;
+  }
   const back = [...document.querySelectorAll('.back, #lbFriendsClose, #resume')].find(el => el.offsetParent !== null);
   if (back) { back.click(); return; }
   dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' }));

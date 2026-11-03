@@ -63,6 +63,25 @@ export function outline(mesh, th = 0.04) {
   return mesh;
 }
 
+// contorno de InstancedMesh (floresta, 03/11): mesmo casco invertido, lendo a matriz de cada copia.
+// Divide o instanceMatrix com a malha (mexeu numa, mexeu no contorno) = 2 chamadas de desenho pra N copias
+const instOutlineMats = new Map();
+export function outlineInstanced(mesh, th = 0.04) {
+  let mat = instOutlineMats.get(th);
+  if (!mat) {
+    mat = getOutlineMat(th).clone(); mat.uniforms.th.value = th;
+    mat.vertexShader = mat.vertexShader.replace('vec4 mv = modelViewMatrix * vec4(position, 1.0);', 'vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);')
+      .replace('normalize(normalMatrix * normal)', 'normalize(normalMatrix * mat3(instanceMatrix) * normal)');
+    instOutlineMats.set(th, mat);
+  }
+  const o = new THREE.InstancedMesh(smoothGeo(mesh.geometry), mat, mesh.count);
+  o.instanceMatrix = mesh.instanceMatrix;
+  o.raycast = () => {};
+  o.frustumCulled = mesh.frustumCulled;
+  mesh.add(o);
+  return mesh;
+}
+
 // Junta tudo que fica parado embaixo de `root` numa malha por material (os contornos tambem, pelo
 // material deles). O mapa tinha ~840 malhas = ~840 chamadas de desenho por quadro; no celular era o
 // que derrubava o FPS. O visual nao muda: a posicao de cada peca vai assada na geometria.
@@ -193,6 +212,24 @@ export function mergeMoving(root, items, uT) {
 }
 
 // atalho: malha toon com contorno
+// geometria fixa compartilhada (02/11): granada, bigorna, dirigivel, mola... eram criadas de novo a cada uso e nunca
+// liberadas (o log de memoria de video subia ~13 geometrias por abate; celular perdia o contexto do WebGL). Mesma
+// forma = mesma geometria (e o contorno dela tambem fica no cache do smoothGeo)
+const sharedGeos = new Map();
+export function geo(Ctor, ...args) {
+  const k = Ctor.name + '|' + args.join(',');
+  let g = sharedGeos.get(k);
+  if (!g) { g = new Ctor(...args); sharedGeos.set(k, g); sharedSet.add(g); }
+  return g;
+}
+
+// tirou um pedaco grande da cena pra sempre (mapa da partida que acabou, arma largada): libera a geometria na placa.
+// Antes o mapa velho ficava inteiro na memoria de video a cada partida nova (02/11). As compartilhadas (geo()) ficam.
+const sharedSet = new WeakSet();
+export function freeGeos(root) {
+  root?.traverse(o => { if (o.geometry && !sharedSet.has(o.geometry)) o.geometry.dispose(); });
+}
+
 export function ink(geo, color, th = 0.04, opts) {
   const m = new THREE.Mesh(geo, toon(color, opts));
   if (th > 0) outline(m, th);

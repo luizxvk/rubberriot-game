@@ -130,7 +130,17 @@ setInterval(() => {
   const now = performance.now();
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  for (const r of rooms.values()) r.core.tick(dt);
+  for (const r of [...rooms.values()]) {
+    r.core.tick(dt);
+    // expulso pelo host ou AFK (02/11): fecha a conexao sem guardar a volta; sala vazia fecha
+    for (const d of r.core.takeDrops()) {
+      for (const [s, v] of r.sids || []) if (v === d.id) r.sids.delete(s);
+      clearTimeout(r.away?.get(d.id)); r.away?.delete(d.id);
+      const ws = r.clients.get(d.id); r.clients.delete(d.id);
+      if (ws) setTimeout(() => ws.close(4001, d.why), 300); // da tempo do aviso chegar
+      closeIfEmpty(r);
+    }
+  }
 }, 1000 / 30);
 
 console.log(`Rubber Riot MP ouvindo em ws://0.0.0.0:${PORT}`);

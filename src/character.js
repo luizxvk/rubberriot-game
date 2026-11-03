@@ -1,10 +1,11 @@
 // Borrao: personagem rubber hose original. Membros sao mangueiras (tubo curvo
 // recalculado por frame), luvas brancas, olhos de fatia de torta.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ink, toon, PAL, wordTexture } from './toon.js';
-import { buildGun } from './arsenal.js';
+import { buildGun, disposeGun } from './arsenal.js';
 import { cleanLook } from '../shared/looks.js';
-import { eyeTex, buildEyewear, buildHat, styleGlove, patternTex, buildFx } from './looks3d.js';
+import { eyeTex, buildEyewear, buildHat, styleGlove, patternTex, buildFx, skinMat, antiFlicker } from './looks3d.js';
 
 const SEG = 10, RAD = 6;
 
@@ -92,6 +93,21 @@ let STRIPE = null;
 // nessas pecas; o contorno ja e por geometria, entao vem junto). Ninguem descarta essas pecas.
 const SHARED = new Map();
 function shared(key, make) { let v = SHARED.get(key); if (!v) { v = make(); SHARED.set(key, v); } return v; }
+// luva inteira numa geometria (esfera + punho + aro + dedos), mesmas medidas das pecas soltas de antes
+function gloveGeo(fingers) {
+  return shared('gloveGeo' + fingers, () => {
+    const parts = [new THREE.SphereGeometry(0.12, 12, 10)], o = new THREE.Object3D();
+    const add = (geo, p, r = [0, 0, 0]) => { o.position.set(...p); o.rotation.set(...r); o.updateMatrix(); parts.push(geo.applyMatrix4(o.matrix)); };
+    add(new THREE.CylinderGeometry(0.1, 0.13, 0.08, 10), [0, 0.12, 0]);
+    add(new THREE.TorusGeometry(0.13, 0.022, 6, 14), [0, 0.16, 0], [Math.PI / 2, 0, 0]);
+    if (fingers) {
+      for (let i = 0; i < 3; i++) add(new THREE.CapsuleGeometry(0.042, 0.06, 3, 8), [-0.07 + i * 0.07, -0.03, -0.11], [-1.1, 0, 0]);
+      add(new THREE.CapsuleGeometry(0.04, 0.05, 3, 8), [0.11, 0, -0.04], [0, 0, -0.9]);
+    }
+    const g = mergeGeometries(parts); parts.forEach(p => p.dispose());
+    return g;
+  });
+}
 function stripeTex() {
   if (STRIPE) return STRIPE;
   const c = document.createElement('canvas'); c.width = 256; c.height = 16;
@@ -128,7 +144,7 @@ export class Character {
     this.head.position.y = 1.62;
     this.body.add(this.head);
     const skull = ink(shared(`new THREE.SphereGeometry(0.36, 18, 14)`, () => new THREE.SphereGeometry(0.36, 18, 14)), PAL.ink, 0.03);
-    this.head.add(skull);
+    this.head.add(skull); this.skull = skull;
     const mask = ink(shared(`new THREE.SphereGeometry(0.3, 16, 12)`, () => new THREE.SphereGeometry(0.3, 16, 12)), 0xf0ebe0, 0.015);
     mask.position.set(0, -0.06, -0.14); mask.scale.set(1.05, 0.85, 0.8);
     this.head.add(mask);
@@ -145,27 +161,20 @@ export class Character {
     const curl = [];
     for (let i = 0; i <= 10; i++) { const a = i * 0.55; curl.push(new THREE.Vector3(Math.cos(a) * 0.12 * (1 - i / 14), 0.3 + i * 0.03, Math.sin(a) * 0.12 * (1 - i / 14) + 0.05)); }
     const curlM = ink(shared(`new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curl), 20, 0.045, 6)`, () => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curl), 20, 0.045, 6)), PAL.ink, 0.015); curlM.userData.detail = true;
-    this.head.add(curlM);
+    this.head.add(curlM); this.curl = curlM;
     // chapeu, oculos, luvas, camisa, estampa e efeito: setLook (no fim do construtor)
     this.hat = null; this.eyewear = null; this.fx = null;
 
-    this.armR = new Hose(0.065, PAL.ink); this.armL = new Hose(0.065, PAL.ink);
+    this.armR = new Hose(0.072, PAL.ink); this.armL = new Hose(0.072, PAL.ink); // 03/11: braco um tico mais grosso e luva menor (a mao parecia gigante)
     this.legR = new Hose(0.075, PAL.ink); this.legL = new Hose(0.075, PAL.ink);
     for (const h of [this.armR, this.armL, this.legR, this.legL]) this.body.add(h.mesh);
     const glove = () => {
-      const g = ink(shared(`new THREE.SphereGeometry(0.12, 12, 10)`, () => new THREE.SphereGeometry(0.12, 12, 10)), PAL.white, 0.025);
-      const cuff = ink(shared(`new THREE.CylinderGeometry(0.1, 0.13, 0.08, 10)`, () => new THREE.CylinderGeometry(0.1, 0.13, 0.08, 10)), PAL.white, 0.02);
-      cuff.position.y = 0.12; cuff.userData.detail = true; g.add(cuff);
+      // 03/11 (desempenho): luva + punho + aro + 3 dedos + polegar numa geometria so (era 7 malhas + 7 contornos
+      // = 14 chamadas de desenho por mao; agora 2). Versao com e sem dedos (mitten/oven/boxing), compartilhadas
+      const g = ink(gloveGeo(true), PAL.white, 0.02);
+      g.userData.fingerGeo = [gloveGeo(true), gloveGeo(false)];
       // estilo Mickey (01/11): mao menos redonda, 3 dedos gordos na frente + polegar e punho em sino com borda
-      g.scale.set(1.05, 0.82, 1);
-      for (let i = 0; i < 3; i++) {
-        const f = ink(shared('mickeyFinger', () => new THREE.CapsuleGeometry(0.042, 0.06, 3, 8)), PAL.white, 0.012);
-        f.position.set(-0.07 + i * 0.07, -0.03, -0.11); f.rotation.x = -1.1; f.userData.finger = true; g.add(f);
-      }
-      const th = ink(shared('mickeyThumb', () => new THREE.CapsuleGeometry(0.04, 0.05, 3, 8)), PAL.white, 0.012);
-      th.position.set(0.11, 0.0, -0.04); th.rotation.z = -0.9; th.userData.finger = true; g.add(th);
-      const rim = ink(shared('mickeyRim', () => new THREE.TorusGeometry(0.13, 0.022, 6, 14)), PAL.white, 0.012);
-      rim.position.y = 0.16; rim.rotation.x = Math.PI / 2; rim.userData.detail = true; g.add(rim);
+      g.scale.set(1.05 * 0.78, 0.82 * 0.78, 0.78); // 78% (03/11): proporcional ao braco
       return g;
     };
     this.handR = glove(); this.handL = glove();
@@ -216,15 +225,26 @@ export class Character {
     const L = cleanLook(look);
     this.look = L;
     const tc = this.teamCol, hx = (c) => parseInt(c.slice(1), 16);
-    this.torso.material = toon(hx(L.shirt));
+    this.torso.material = skinMat(L.skin) || toon(hx(L.shirt)); // skin animada (Loja) cobre a camisa
+    // ...e o corpo preto todo: cabeca, topete, bracos, pernas e sapatos (rosto, luvas e short do time ficam)
+    this.baseMat ||= new Map();
+    for (const m of [this.skull, this.curl, this.armR.mesh, this.armL.mesh, this.legR.mesh, this.legL.mesh, this.shoeR, this.shoeL]) {
+      if (!m) continue;
+      if (!this.baseMat.has(m)) this.baseMat.set(m, m.material);
+      m.material = skinMat(L.skin) || this.baseMat.get(m);
+    }
+    // com skin o contorno da mangueira cobria a mangueira inteira (de preto nao dava pra ver): some so com skin
+    for (const h of [this.armR, this.armL, this.legR, this.legL]) h.line.visible = !skinMat(L.skin);
     const pt = patternTex(L.pattern);
     this.shorts.material = pt ? toon(tc, { map: pt }) : toon(tc);
     this.eyes.material = eyeMat(L.eyes);
     if (this.eyewear) this.head.remove(this.eyewear);
-    this.eyewear = buildEyewear(L.eyes); if (this.eyewear) this.head.add(this.eyewear);
+    this.eyewear = buildEyewear(L.eyes); if (this.eyewear) { antiFlicker(this.eyewear); this.head.add(this.eyewear); }
     if (this.hat) this.head.remove(this.hat);
-    this.hat = buildHat(L.hat, tc); if (this.hat) this.head.add(this.hat);
+    this.hat = buildHat(L.hat, tc); if (this.hat) { antiFlicker(this.hat); this.head.add(this.hat); }
+    if (this.curl) this.curl.visible = !['bolo', 'tubarao'].includes(L.hat); // chapeu que cobre o topo: o topete atravessava
     styleGlove(this.handR, L.glove, L.gloveCol); styleGlove(this.handL, L.glove, L.gloveCol);
+    for (const h of [this.handR, this.handL]) for (const c of h.children) if (c.userData.gloveExtra) antiFlicker(c, 2); // peca extra da luva (polegar, anel...) por cima da luva
     if (this.fx) this.root.remove(this.fx.group);
     this.fx = buildFx(L.fx); if (this.fx) this.root.add(this.fx.group);
     this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
@@ -233,6 +253,7 @@ export class Character {
 
   setWeapon(id, lo = null) {
     this.wpn = id;
+    disposeGun(this.gun); // a arma velha era so deste boneco: libera a pintura (vazava a cada troca)
     this.gunHolder.clear();
     this.gun = buildGun(id, lo);
     if (id === 'melee') this.gun.scale.setScalar(1.6); // faca na mao (01/11): maior pra ler de longe
@@ -247,6 +268,18 @@ export class Character {
     this.gun.traverse(o => { if (o.isMesh && !o.material?.isShaderMaterial) { o.geometry.computeBoundingSphere?.(); const r = o.geometry.boundingSphere?.radius || 0; if (r > big) { big = r; body = o; } } });
     this.gun.traverse(o => { if (o.isMesh && o !== body && o.parent !== body && !o.userData.noFx && !o.material?.transparent && (o.material?.blending ?? 1) === 1) this.gunDetails.push(o); });
     if (this.far) for (const o of this.gunDetails) o.visible = false;
+  }
+
+  // gira a luva pra boca dela (+y) apontar pro braco (do pulso pro ponto de controle da mangueira); dedos (-z) pra
+  // frente do boneco. twist = giro extra em volta do pulso (aceno)
+  wristAlign(hand, ctrl, twist = 0) {
+    const y = ctrl.clone().sub(hand.position).normalize();
+    const z = new THREE.Vector3(0, 0, 1); z.addScaledVector(y, -z.dot(y));
+    if (z.lengthSq() < 1e-4) z.set(1, 0, 0).addScaledVector(y, -y.x);
+    z.normalize();
+    const x = new THREE.Vector3().crossVectors(y, z);
+    hand.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    if (twist) hand.rotateY(twist);
   }
 
   // nivel de detalhe pela distancia da camera: 16 bonecos x 48 malhas pesavam no celular
@@ -287,9 +320,10 @@ export class Character {
     if (hu?.spin) hu.spin.rotation.y += dt * (anim === 'sprint' || anim === 'run' ? 22 : 9);
     if (hu?.bob) hu.bob.position.y = (hu.bobY ??= hu.bob.position.y) + Math.sin(t * 4 + this.phase) * 0.03;
     if (this.chute.visible) this.chute.rotation.z = Math.sin(t * 1.6 + this.phase) * 0.06;
-    // laser dos outros: o feixe longo aparece (e entrega a posicao), correndo desliga
+    // laser dos outros: desligado sempre (03/11, pedido dele: os feixes dos bots/jogadores cruzando a tela
+    // atrapalhavam). So o seu aparece (viewmodel + ponto no mundo, igual no multiplayer)
     const lz = this.gun?.userData.laser;
-    if (lz) lz.beam.material.uniforms.uOn.value = alive && anim !== 'sprint' && anim !== 'tac' ? 1 : 0;
+    if (lz) lz.beam.material.uniforms.uOn.value = 0;
     this.phase += dt * (anim === 'tac' ? 15 : anim === 'sprint' ? 12.5 : 10) * Math.min(1, speed / 6 + 0.15);
     const ph = this.phase;
     // deslize e agachar entram e saem amaciados (01/11: o boneco pulava de pe pro deslize num quadro so)
@@ -395,6 +429,37 @@ export class Character {
     }
     if (climb && !this.gun2h) this.handL.position.lerp(new THREE.Vector3(-0.22, 1.72, -0.5), climb);
     const shR = new THREE.Vector3(0.36, 1.32, 0), shL = new THREE.Vector3(-0.36, 1.32, 0);
+    if (anim === 'pose') { // vitrine (Visual e Loja, 03/11): sem arma. Ciclo de 8 s com transicao suave:
+      // solto (bracos caidos balancando, peso trocando de perna) -> aceno (mao direita ao lado da cabeca, a outra na
+      // cintura, cabeca inclina) -> maos na cintura (cotovelo pra fora, peito estufado). A luva gira junto com a pose.
+      const tt = s.t || 0, cyc = tt % 8, br = Math.sin(tt * 2.2);
+      const sm = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+      const wave = sm(2.2, 2.7, cyc) * (1 - sm(4.4, 4.9, cyc)), hips = sm(4.6, 5.2, cyc) * (1 - sm(7.4, 7.95, cyc)), loose = 1 - Math.max(wave, hips);
+      const sway = Math.sin(tt * 1.3), L = (a, b, k) => a + (b - a) * k;
+      // mao esquerda: solta -> cintura (no aceno e no maos-na-cintura)
+      const hl = Math.max(wave, hips);
+      this.handL.position.set(L(-0.47 + sway * 0.02, -0.42, hl), L(0.8 + br * 0.015, 1.02, hl), L(-0.06, 0.1, hl));
+      // mao direita: solta -> acenando do lado da cabeca -> cintura
+      const wv = Math.sin(tt * 11) * 0.5;
+      let rx = L(0.47 - sway * 0.02, 0.42, hips), ry = L(0.8 - br * 0.015, 1.02, hips), rz = L(-0.06, 0.1, hips);
+      rx = L(rx, 0.62 + wv * 0.06, wave); ry = L(ry, 1.82, wave); rz = L(rz, -0.08, wave);
+      this.handR.position.set(rx, ry, rz);
+      // cotovelo: caido perto do corpo -> pra fora na cintura -> alto no aceno
+      const cR = new THREE.Vector3(L(L(0.52, 0.72, hips), 0.78, wave), L(L(1.05, 1.16, hips), 1.42, wave), L(0.02, 0.14, Math.max(hips, wave * 0.4)));
+      const cL = new THREE.Vector3(L(-0.52, -0.72, hl), L(1.05, 1.16, hl), L(0.02, 0.14, hl));
+      this.armR.set(shR, cR, this.handR.position);
+      this.armL.set(shL, cL, this.handL.position);
+      // luva presa no pulso (03/11, pedido dele): a boca da luva (+y dela) aponta sempre pro braco, na direcao do fim da
+      // mangueira; os dedos (-z da luva) ficam pra frente. No aceno a mao balanca girando em volta do pulso.
+      this.wristAlign(this.handR, cR, wave * wv * 0.6);
+      this.wristAlign(this.handL, cL, 0);
+      // corpo: respira, troca o peso de perna (solto), cabeca inclina no aceno, peito estufa na cintura
+      this.body.position.y += br * 0.012 + hips * 0.02;
+      this.body.rotation.z = sway * 0.035 * loose - wave * 0.04;
+      this.head.rotation.z = wave * 0.18 + sway * 0.03 * loose;
+      this.head.rotation.x = -hips * 0.08;
+      return;
+    }
     this.armR.set(shR, new THREE.Vector3(0.48, 1.0, -0.1), this.handR.position);
     this.armL.set(shL, new THREE.Vector3(-0.35, 1.0, -0.35), this.handL.position);
     if (this.gun && this.gun.userData.spin) this.gun.userData.spin.rotation.z += dt * (s.firing ? 30 : 2);

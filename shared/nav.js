@@ -9,13 +9,14 @@
 // Antes era so "livre/bloqueado" e todo degrau acima do primeiro virava parede:
 // o bot nunca subia escada e o ponto B da dominacao era inalcancavel.
 // celula de 0,5 m: com 1 m a grade pulava degrau (escada de 0,67 m virava desnivel de 1 m)
-const CELL = 0.5, RAD = 0.45, STEP = 0.6, BODY = 1.7;
+const CELL = 0.5, RAD = 0.45, STEP = 0.6, BODY = 1.7, DUCK = 1.15; // DUCK: altura agachado (duto do banco)
 
 function grid(M) {
   if (M._nav) return M._nav;
   const A = M.arena + 2, N = Math.ceil((A * 2) / CELL);
   const floor = new Float32Array(N * N);
   const block = new Uint8Array(N * N);
+  const low = new Uint8Array(N * N); // so passa agachado (teto entre DUCK e BODY): duto do Banco Ferradura (03/11)
   // empilhamento: caixa mais baixa primeiro, cada uma so vira chao se apoiar no chao atual
   const boxes = [...M.boxes].sort((a, b) => a.min[1] - b.min[1]);
   for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
@@ -34,10 +35,11 @@ function grid(M) {
     for (const b of M.boxes) {
       if (x < b.min[0] - RAD || x > b.max[0] + RAD || z < b.min[2] - RAD || z > b.max[2] + RAD) continue;
       if (b.max[1] <= f + STEP || b.min[1] >= f + BODY) continue; // da pra subir, ou passa por cima da cabeca
+      if (b.min[1] >= f + DUCK) { low[i] = 1; continue; } // teto baixo: agachado passa
       block[i] = 1; break;
     }
   }
-  return (M._nav = { A, N, floor, block });
+  return (M._nav = { A, N, floor, block, low });
 }
 
 const cellOf = (g, x, z) => [Math.max(0, Math.min(g.N - 1, Math.floor((x + g.A) / CELL))), Math.max(0, Math.min(g.N - 1, Math.floor((z + g.A) / CELL)))];
@@ -53,12 +55,33 @@ export function floorAt(M, x, z) {
   const g = grid(M), [cx, cz] = cellOf(g, x, z);
   return hAt(g, cx, cz);
 }
-// ponto onde da pra ficar de pe (nao encostado em parede)
+// ponto onde da pra ficar de pe (nao encostado em parede; teto baixo do duto tambem nao: ninguem nasce ali)
 export function standable(M, x, z) {
   // topo do muro de borda conta como "andavel" na grade: nascer/cair ali jogava o bot pra fora da arena
   if (Math.abs(x) > M.arena - 0.6 || Math.abs(z) > M.arena - 0.6) return false;
   const g = grid(M), [cx, cz] = cellOf(g, x, z);
-  return walk(g, cx, cz);
+  return walk(g, cx, cz) && !g.low[cz * g.N + cx];
+}
+// teto baixo aqui (o bot anda agachado)
+export function lowAt(M, x, z) {
+  const g = grid(M), [cx, cz] = cellOf(g, x, z);
+  return !!g.low[cz * g.N + cx];
+}
+// bot enroscado (03/11): uma celula andavel perto (1 a 4 m), no mesmo piso, sorteada entre as mais perto. Serve de
+// direcao pra sair e, em ultimo caso, de lugar pra empurrar o corpo
+export function freeNear(M, pos) {
+  const g = grid(M), [cx, cz] = cellOf(g, pos[0], pos[2]), out = [];
+  for (let r = 2; r <= 8 && out.length < 3; r++) {
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      const x = cx + dx, z = cz + dz;
+      if (!walk(g, x, z) || Math.abs(hAt(g, x, z) - pos[1]) > 0.7) continue;
+      // as vizinhas tambem livres: nao devolve uma celula espremida na quina
+      if (!walk(g, x + 1, z) || !walk(g, x - 1, z) || !walk(g, x, z + 1) || !walk(g, x, z - 1)) continue;
+      out.push(center(g, x, z));
+    }
+  }
+  return out.length ? out[Math.floor(Math.random() * out.length)] : null;
 }
 
 // celula andavel mais perto; empata pela altura mais proxima do alvo (alvo em cima da plataforma)
@@ -118,6 +141,41 @@ function hpop(S) {
   return top;
 }
 
+// mapa com duas regioes ligadas por UMA porta (Estudio Tinteiro + Floresta em volta, 03/11): a rota longa nao fecha
+// no A* curto dos bots (8 mil celulas) e o bot ia reto na parede. Entao vai por etapas: estudio <-> mata pela porta;
+// dentro da mata, se a reta corta o estudio, contorna pelo canto do anel. M.portal = { r, in:[x,z], out:[x,z], k }
+export function hop(M, from, goal) {
+  const P = M.portal; if (!P) return goal;
+  const inS = (x, z) => Math.max(Math.abs(x), Math.abs(z)) < P.r, at = (x, z) => [x, floorAt(M, x, z), z];
+  const a = inS(from[0], from[2]), b = inS(goal[0], goal[2]);
+  let t = goal;
+  if (a !== b) {
+    const mine = a ? P.in : P.out, other = a ? P.out : P.in;
+    if (Math.hypot(from[0] - mine[0], from[2] - mine[1]) > 1.6) t = at(mine[0], mine[1]);
+    else return at(other[0], other[1]); // na porta: atravessa
+  }
+  if (a) return t;
+  // reta corta o quadrado do estudio (com folga)? (Liang-Barsky)
+  const R = P.r + 1.2, cross = (p, q) => {
+    let t0 = 0, t1 = 1; const dx = q[0] - p[0], dz = q[1] - p[1];
+    for (const [pp, qq] of [[-dx, p[0] + R], [dx, R - p[0]], [-dz, p[1] + R], [dz, R - p[1]]]) {
+      if (pp === 0) { if (qq < 0) return false; continue; }
+      const r = qq / pp; if (pp < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+    }
+    return true;
+  };
+  const f = [from[0], from[2]], g = [t[0], t[2]];
+  if (!cross(f, g)) return t;
+  const D = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  let best = null, bs = Infinity;
+  for (const c of [[-P.k, -P.k], [P.k, -P.k], [P.k, P.k], [-P.k, P.k]]) {
+    if (D(f, c) < 2 || cross(f, c)) continue;
+    const s = D(f, c) + D(c, g) + (cross(c, g) ? 30 : 0);
+    if (s < bs) { bs = s; best = c; }
+  }
+  return best ? at(best[0], best[1]) : t;
+}
+
 // rota de 'from' ate 'to' (posicoes [x,y,z]); devolve pontos [x,z] ja esticados, ou null
 export function navPath(M, from, to, maxNodes = 60000) {
   const g = grid(M);
@@ -145,7 +203,7 @@ export function navPath(M, from, to, maxNodes = 60000) {
       const nx = x + dx, nz = z + dz;
       if (!pass(g, x, z, nx, nz)) continue;
       if (dx && dz && (!pass(g, x, z, x + dx, z) || !pass(g, x, z, x, z + dz))) continue; // nao corta quina
-      const nk = nz * N + nx, c = ck + (dx && dz ? 1.414 : 1);
+      const nk = nz * N + nx, c = ck + (dx && dz ? 1.414 : 1) * (g.low[nk] ? 2 : 1); // agachado anda mais devagar
       if (seen[nk] === ep && c >= cost[nk]) continue;
       seen[nk] = ep; cost[nk] = c; came[nk] = k;
       hpush(S, c + h(nx, nz), nk);

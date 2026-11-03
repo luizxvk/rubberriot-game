@@ -2,6 +2,7 @@
 // O desenho roda no shader da arma, em espaco do objeto (fica preso na arma, nao na tela).
 export const camoTime = { value: 0 };
 
+// shop: true = so pela Loja (03/11, pedido dele): nao abre por nivel, desafio, variante nem premio do treino
 export const CAMOS = [
   { id: 'none', code: 0 },
   // estaticas
@@ -16,8 +17,8 @@ export const CAMOS = [
   // animadas
   { id: 'gold', code: 5, anim: true, req: { wpn: 10 } },
   { id: 'diamond', code: 6, anim: true, req: { wpn: 13 } },
-  { id: 'ink', code: 7, anim: true, req: { wpn: 16 } },
-  { id: 'lava', code: 8, anim: true, req: { wpn: 18 } },
+  { id: 'ink', code: 7, anim: true, shop: true },
+  { id: 'lava', code: 8, anim: true, shop: true },
   { id: 'neonice', code: 9, anim: true, req: { wpn: 20 } },
   { id: 'rainbow', code: 10, anim: true, req: { player: 25 } },
   { id: 'aether', code: 11, anim: true, req: { player: 38 } },
@@ -25,19 +26,19 @@ export const CAMOS = [
   { id: 'filmreel', code: 17, anim: true, req: { wpn: 11 } },
   { id: 'toonfire', code: 18, anim: true, req: { wpn: 12 } },
   { id: 'electric', code: 19, anim: true, req: { wpn: 14 } },
-  { id: 'hypno', code: 20, anim: true, req: { wpn: 15 } },
-  { id: 'aquarium', code: 21, anim: true, req: { wpn: 17 } },
+  { id: 'hypno', code: 20, anim: true, shop: true },
+  { id: 'aquarium', code: 21, anim: true, shop: true },
   { id: 'chrome', code: 22, anim: true, req: { wpn: 19 } },
-  { id: 'phantom', code: 23, anim: true, req: { player: 30 } },
+  { id: 'phantom', code: 23, anim: true, shop: true },
   // 30/10 (noite, pedido dele): eter obscuro (escuro de verdade) e carbono animado
   // rankeada (31/10): premio da faixa (vale pra sempre depois de alcancar); shader conhecido + particulas
   { id: 'rk_ouro', code: 5, anim: true, rank: 2, fx: 'stars' },
   { id: 'rk_diamante', code: 6, anim: true, rank: 3, fx: 'storm' },
   { id: 'rk_mestre', code: 12, anim: true, rank: 4, fx: 'flame' },
-  { id: 'darkaether', code: 42, anim: true, req: { player: 45 } },
-  { id: 'carbon', code: 43, anim: true, req: { wpn: 12 } },
+  { id: 'darkaether', code: 42, anim: true, shop: true },
+  { id: 'carbon', code: 43, anim: true, shop: true },
   // reativas: mudam de estagio a cada 2 abates na mesma vida (2, 4, 6)
-  { id: 'ember', code: 24, anim: true, react: true, req: { player: 20, wpn: 16 } },
+  { id: 'ember', code: 24, anim: true, react: true, shop: true },
   { id: 'inkreact', code: 25, anim: true, react: true, req: { player: 42, wpn: 20 } },
   // Elite da Rovex: reativa exclusiva de quem assina (gratis enquanto a assinatura estiver ativa)
   { id: 'hexelite', code: 30, anim: true, react: true, elite: true },
@@ -57,9 +58,9 @@ export const CAMOS = [
   { id: 'kintsugi', code: 36, anim: true, legend: true, fx: 'stars' },
   { id: 'circuit', code: 37, anim: true, legend: true, fx: 'storm' },
   { id: 'galaxy', code: 38, anim: true, legend: true, fx: 'stars' },
-  { id: 'popart', code: 39, anim: true, legend: true, fx: 'drip' },
-  { id: 'plasma', code: 40, anim: true, legend: true, fx: 'flame' },
-  { id: 'aurora', code: 41, anim: true, legend: true, fx: 'stars' },
+  { id: 'popart', code: 39, anim: true, shop: true, fx: 'drip' },
+  { id: 'plasma', code: 40, anim: true, shop: true, fx: 'flame' },
+  { id: 'aurora', code: 41, anim: true, shop: true, fx: 'stars' },
   // meta da comunidade (31/10): Ouro da Borracha, so pra quem jogou na semana que bateu 1 milhao de PLAFTs
   { id: 'plaftgold', code: 44, anim: true, meta: true, fx: 'stars' },
 ];

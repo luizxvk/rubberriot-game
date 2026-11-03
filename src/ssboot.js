@@ -10,6 +10,7 @@ export const SPLIT_HOST = qs.has('split') && !qs.has('ss');
 export const SS = qs.has('ss') && inFrame ? { slot: Math.max(0, Math.min(3, Number(qs.get('ss')) | 0)), pad: Number(qs.get('pad')) | 0, n: Math.max(1, Math.min(4, Number(qs.get('n')) | 0)) } : null;
 
 if (SS) {
+  const SS_SLOT = SS.slot;
   const real = window.localStorage, key = 'rr_ss_settings_' + SS.slot;
   const mem = new Map();
   const rget = (k) => { try { return real.getItem(k); } catch { return null; } };
@@ -20,6 +21,9 @@ if (SS) {
   mem.set('rr_settings', JSON.stringify(st));
   for (const k of ['rr_lang', 'rr_tips']) { const v = rget(k); if (v != null) mem.set(k, v); } // dica ja vista no PC nao volta em cada tela
   mem.set('rr_home_tour', '1'); mem.set('rr_tutorial_seen', '1'); mem.set('rr_tutorial_done', '1');
+  // conta Rovex desta tela (02/11): entrou pelo QR na pagina da tela dividida. A sessao vai pra memoria desta tela;
+  // o progresso, o arsenal e as variantes DESTA pessoa descem da conta dela e sobem de volta (cada tela a sua)
+  try { const a = JSON.parse(rget('rr_ss_acct_' + SS_SLOT) || 'null'); if (a?.token) { mem.set('rr_token', a.token); st.name = a.name || st.name; mem.set('rr_settings', JSON.stringify(st)); } } catch { /* */ }
   const store = {
     getItem: (k) => (mem.has(k) ? mem.get(k) : null),
     setItem: (k, v) => { mem.set(k, String(v)); if (k === 'rr_settings') try { real.setItem(key, String(v)); } catch { /* */ } },

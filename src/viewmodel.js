@@ -107,6 +107,27 @@ const REV_INSPECT = { dur: 3.0, spinR: [0.67, 0.86], keys: [
   [0.66, 0, 0.07, 0, 0.32, 0, -0.1, 0, 0, 0],
   [0.87, 0, 0.04, 0, 0.12, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] };
+// Serrada (03/11): ergue, tomba de lado mostrando os dois canos, a esquerda da um tapa na coronha que faz ela dar
+// uma cambalhota pra frente (giro no dedo), e volta encaixando com um tranco
+const SAWED_INSPECT = { dur: 3.0, spinR: [0.55, 0.78], keys: [
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0.14, -0.06, 0.06, 0.04, 0.35, 0.3, -0.25, 0, 0, 0],      // ergue apontando pra cima
+  [0.3, -0.1, 0.05, 0.06, 0.1, 1.2, -0.4, 0, 0, 0],          // tomba: os dois canos de lado
+  [0.42, -0.1, 0.04, 0.06, 0.05, 1.15, -0.4, 0.06, 0.04, 0.06], // tapa da esquerda na coronha
+  [0.52, -0.02, 0.06, 0.02, 0.25, 0.1, -0.05, 0, 0, 0],      // sobe pra cambalhota
+  [0.8, -0.02, 0.05, 0.02, 0.2, 0, 0, 0, 0, 0],
+  [0.88, 0, -0.02, 0.03, -0.12, 0, 0, 0, 0, 0],               // encaixa com tranco
+  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] };
+// Serrada no akimbo: as duas cruzam na frente mostrando os canos, uma de cada vez da cambalhota e batem as coronhas
+const SAWED_AKIMBO_INSPECT = { dur: 3.4, spinR: [0.3, 0.48], spinL: [0.52, 0.7], keys: [
+  [0, ...AK0],
+  [0.14, 0.03, 0.04, 0, 0.2, -0.35, -0.5, -0.03, 0.04, 0, 0.2, 0.35, 0.5],     // cruzam: canos de lado
+  [0.28, 0.02, 0.07, 0.02, 0.35, 0, -0.1, -0.03, 0.04, 0, 0.2, 0.35, 0.5],     // direita sobe pra cambalhota
+  [0.5, 0.01, 0.03, 0, 0.1, 0, 0, -0.02, 0.07, 0.02, 0.35, 0, 0.1],           // esquerda sobe
+  [0.72, 0, 0.02, 0, 0.08, 0, 0, 0, 0.02, 0, 0.08, 0, 0],
+  [0.84, 0.04, 0, 0.01, 0.05, 0.25, 0.2, -0.04, 0, 0.01, 0.05, -0.25, -0.2], // batem as coronhas
+  [0.92, 0.01, 0.01, 0, 0.02, 0.05, 0.04, -0.01, 0.01, 0, 0.02, -0.05, -0.04],
+  [1, ...AK0]] };
 // giro no dedo: 0 -> 2pi com aceleracao e freio suaves dentro da janela [a, b] do inspect
 const spinAt = (p, [a, b]) => { const u = THREE.MathUtils.clamp((p - a) / (b - a), 0, 1); return (u < 1 && u > 0) ? (u * u * u * (u * (u * 6 - 15) + 10)) * Math.PI * 2 : 0; };
 
@@ -328,13 +349,13 @@ export class ViewModel {
   // uav = luneta de pirata, anvil = detonador de TNT, blimp = campainha de balcao
   callStreak(kind) {
     if (this.prop) this.scene.remove(this.prop);
-    kind = kind === 'anvline' ? 'anvil' : kind; // Linha de Bigornas: mesmo detonador
+    kind = kind === 'anvline' || kind === 'train' ? 'anvil' : kind === 'plane' || kind === 'bomber' || kind === 'hand' ? 'blimp' : kind; // detonador ou campainha (as grandes de 03/11 tambem)
     this.prop = makeProp(kind); this.propKind = kind;
     this.scene.add(this.prop);
     this.streakT = STREAK_DUR; this.inspectT = 0;
   }
 
-  inspectDef() { return this.akimbo ? (this.wpn === 'pistol' ? AKIMBO_INSPECT : AKIMBO_LONG_INSPECT) : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
+  inspectDef() { const sw = this.gun?.userData.sawed; return this.akimbo ? (sw ? SAWED_AKIMBO_INSPECT : this.wpn === 'pistol' ? AKIMBO_INSPECT : AKIMBO_LONG_INSPECT) : sw ? SAWED_INSPECT : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
   inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = this.inspectDef().dur; }
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
   // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
@@ -431,7 +452,7 @@ export class ViewModel {
         insp = inspectPose(I.keys, ip);
         tx += insp[0]; ty += insp[1]; tz += insp[2]; trx += insp[3]; tryy += insp[4]; trz += insp[5];
         if (this.akimbo) { akL = insp.slice(6, 12); insp = [...insp.slice(0, 6), 0, 0, 0]; spinR = spinAt(ip, I.spinR); spinL = spinAt(ip, I.spinL); }
-        else if (I === REV_INSPECT) spinR = spinAt(ip, I.spinR);
+        else if (I === REV_INSPECT || I === SAWED_INSPECT) spinR = spinAt(ip, I.spinR); // serrada tambem da cambalhota
       }
     }
     // revolver: tambor gira ate o proximo furo, cao volta armado; no inspect o tambor da 3 voltas rapidas
@@ -500,7 +521,7 @@ export class ViewModel {
     if (this.throwT > 0) { this.throwT -= dt; th = Math.sin((1 - this.throwT / 0.5) * Math.PI); }
     // recarga: tomba a arma e volta
     let rl = 0;
-    if (this.reloadT > 0) { this.reloadT -= dt; const p = 1 - this.reloadT / this.reloadDur; rl = Math.sin(Math.min(1, p) * Math.PI); }
+    if (this.reloadT > 0) { if (!st.reloadPaused) this.reloadT -= dt; const p = 1 - this.reloadT / this.reloadDur; rl = Math.sin(Math.min(1, p) * Math.PI) * (st.reloadPaused ? 0.35 : 1); } // pausada correndo: a mao abaixa a arma
 
     // golpe de lamina (0..1) e ferrolho (0..1)
     let sw2 = 0, sp = 0;
@@ -542,6 +563,9 @@ export class ViewModel {
     // corrida com duas: direita sobe enquanto a esquerda desce (e troca), no compasso do passo
     const akRun = this.akimbo && st.sprint && !st.tac ? Math.sin(this.bobT) * 0.055 : 0;
     if (akRun) { this.rig.position.y += akRun; this.rig.rotation.x += akRun * 1.6; }
+    // gadget de baixo do cano em uso (03/11, estilo COD): a arma da uma levantada pra cima e volta suave
+    this.gadK = (this.gadK || 0) + ((st.gadget ? 1 : 0) - (this.gadK || 0)) * (1 - Math.exp(-12 * st.dt));
+    if (this.gadK > 0.002) { this.rig.rotation.x += this.gadK * 0.16; this.rig.position.y += this.gadK * 0.02; this.rig.position.z += this.gadK * 0.012; }
     if (mlD > 0) { this.rig.position.x += mlD * 0.07; this.rig.position.y -= mlD * 0.2; this.rig.rotation.x -= mlD * 0.45; this.rig.rotation.z -= mlD * 0.55; }
     if (this.akimbo) { // espelho da direita, com o recuo proprio
       this.kick2 = damp(this.kick2 || 0, 0, 12, dt);

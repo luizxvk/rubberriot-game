@@ -87,6 +87,17 @@ export class Chat {
     if (s) this.send({ t: 'chat', text: s.slice(0, 80) });
   }
 
+  // linha do sistema (03/11): fulano entrou/saiu da partida, em italico, sem nome colorido
+  sys(text) {
+    if (!this.on) return;
+    this.place();
+    const li = document.createElement('li');
+    li.className = 'sys'; li.textContent = text;
+    this.log.appendChild(li);
+    while (this.log.children.length > MAX_LINES) this.log.firstChild.remove();
+    setTimeout(() => li.classList.add('old'), SHOW_MS);
+  }
+
   // mensagem do servidor: nome na cor do time (vermelho = inimigo, azul = seu time, sem time = tinta)
   add(e, mine, enemy) {
     if (!this.on) return;

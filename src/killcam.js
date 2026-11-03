@@ -1,38 +1,39 @@
-// Kill cam em quadrinhos: quando voce cai, tira duas fotos da cena (o rosto de quem te pegou e o que ele
-// viu ate voce) num alvo pequeno do proprio renderizador e monta uma tira de 3 quadrinhos de jornal:
+// Kill cam em quadrinhos: quando voce cai, tira uma foto da cena (o rosto de quem te pegou) num alvo pequeno do
+// proprio renderizador e monta uma tira de 3 quadrinhos de jornal:
 // 1) quem foi, 2) o tiro (onomatopeia + distancia), 3) PLAFT! com voce. Visual de gibi fica no CSS.
 import * as THREE from 'three';
 
 const W = 384, H = 256;
-let rt = null, buf = null, cv = null;
+let rt = null, buf = null, cv = null, lastUrl = null;
 const cam = new THREE.PerspectiveCamera(42, W / H, 0.05, 300);
 
-function snap(renderer, scene) {
+// 03/11 (desempenho): a leitura da placa era sincrona (readRenderTargetPixels para tudo esperando a GPU) + toDataURL,
+// no quadro da morte: ~150 ms de tela parada. Agora le assincrono (WebGL2) e codifica com toBlob
+async function snap(renderer, scene) {
   if (!rt) { rt = new THREE.WebGLRenderTarget(W, H); rt.texture.colorSpace = THREE.SRGBColorSpace; }
   buf ||= new Uint8Array(W * H * 4);
   cv ||= Object.assign(document.createElement('canvas'), { width: W, height: H });
   const prev = renderer.getRenderTarget();
   renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prev);
-  renderer.readRenderTargetPixels(rt, 0, 0, W, H, buf);
+  if (renderer.readRenderTargetPixelsAsync && renderer.capabilities.isWebGL2) await renderer.readRenderTargetPixelsAsync(rt, 0, 0, W, H, buf);
+  else renderer.readRenderTargetPixels(rt, 0, 0, W, H, buf);
   const g = cv.getContext('2d'), img = g.createImageData(W, H);
   for (let y = 0; y < H; y++) img.data.set(buf.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4); // a leitura vem de cabeca pra baixo
   g.putImageData(img, 0, 0);
-  return cv.toDataURL('image/jpeg', 0.82);
+  if (lastUrl) URL.revokeObjectURL(lastUrl); // a foto da morte anterior sai da memoria
+  return (lastUrl = await new Promise(r => cv.toBlob(b => r(b ? URL.createObjectURL(b) : null), 'image/jpeg', 0.82)));
 }
 
-// k: { pos, yaw } de quem matou; v: posicao de quem caiu
-export function shootPanels(renderer, scene, k, v) {
+// k: { pos, yaw } de quem matou; v: posicao de quem caiu. Uma foto so: o close no rosto (o 2o quadrinho e a arma,
+// montada no main; a foto por cima do ombro era tirada e jogada fora)
+export async function shootPanels(renderer, scene, k) {
   const out = [];
   try {
     const fx = -Math.sin(k.yaw), fz = -Math.cos(k.yaw);
-    // 1) close no rosto: na frente dele, um pouco de lado e de baixo (angulo de heroi de gibi)
+    // close no rosto: na frente dele, um pouco de lado e de baixo (angulo de heroi de gibi)
     cam.position.set(k.pos[0] + fx * 2.2 + fz * 0.6, k.pos[1] + 1.2, k.pos[2] + fz * 2.2 - fx * 0.6);
     cam.lookAt(k.pos[0], k.pos[1] + 1.45, k.pos[2]);
-    out.push(snap(renderer, scene));
-    // 2) por cima do ombro dele, olhando onde voce estava
-    cam.position.set(k.pos[0] - fx * 1.1 - fz * 0.5, k.pos[1] + 1.9, k.pos[2] - fz * 1.1 + fx * 0.5);
-    cam.lookAt(v[0], v[1] + 1, v[2]);
-    out.push(snap(renderer, scene));
+    out.push(await snap(renderer, scene));
   } catch (e) { console.warn('kill cam falhou', e); }
   return out;
 }

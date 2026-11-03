@@ -2,7 +2,7 @@
 // A COR DO TIME nunca sai daqui: short e fita do chapeu continuam vermelho/azul; o resto e' livre.
 // lvl = nivel do jogador que libera; elite = so com o Elite da Rovex; acct = so quem tem conta Rovex; rank = faixa da rankeada ja alcancada; r = raridade (0 comum, 1 raro, 2 lendario).
 
-export const LOOK_SLOTS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx'];
+export const LOOK_SLOTS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx', 'skin'];
 
 export const LOOKS = {
   hat: [
@@ -30,6 +30,11 @@ export const LOOKS = {
     { id: 'rovexcap', lvl: 1, r: 2, acct: true },
     { id: 'capcrown', lvl: 1, r: 2, meta: true },  // coroa de tampinhas: set da meta da comunidade (31/10)
     { id: 'laurel', lvl: 1, r: 2, rank: 4 },      // coroa de louros: faixa Mestre da rankeada (31/10)  // bone violeta com o hexagono: so quem tem conta Rovex (31/10)
+    // da Loja (03/11): so comprando
+    { id: 'ufo', lvl: 1, r: 2, shop: true },      // disco voador girando
+    { id: 'nuvem', lvl: 1, r: 2, shop: true },    // nuvem de chuva flutuando
+    { id: 'bolo', lvl: 1, r: 1, shop: true },     // bolo de aniversario com vela
+    { id: 'tubarao', lvl: 1, r: 1, shop: true },  // barbatana de tubarao
   ],
   eyes: [
     { id: 'classic', lvl: 1, r: 0 },     // olho de torta
@@ -85,7 +90,20 @@ export const LOOKS = {
   ],
 };
 
-export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none' };
+// skin animada do corpo (03/11, Loja): camisa e sapato viram pintura animada (shader das camos). Short continua
+// na cor do time, luva e rosto ficam. shop = so comprando na Loja (nao abre por nivel/desafio/Elite).
+LOOKS.skin = [
+  { id: 'none', lvl: 1, r: 0 },
+  { id: 'dragao', lvl: 1, r: 2, shop: true },      // pele de dragao (escamas furta-cor)
+  { id: 'holograma', lvl: 1, r: 2, shop: true },   // holograma com varredura e falha
+  { id: 'tempestade', lvl: 1, r: 2, shop: true },  // ceu de tempestade com relampago
+  { id: 'discoteca', lvl: 1, r: 2, shop: true },   // bola de discoteca
+  { id: 'massinha', lvl: 1, r: 1, shop: true },    // massinha de modelar
+  { id: 'lapis', lvl: 1, r: 1, shop: true },       // rabisco a lapis
+  { id: 'giz', lvl: 1, r: 1, shop: true },         // giz de cera
+  { id: 'planta', lvl: 1, r: 1, shop: true },      // planta azul (papel de projeto)
+];
+export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none', skin: 'none' };
 
 // limpa o que veio de fora: id que nao existe volta pro padrao
 export function cleanLook(l) {
@@ -99,7 +117,7 @@ export function cleanLook(l) {
 export function botLook(id) {
   let h = 2166136261;
   for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
-  const pick = (k) => { const l = LOOKS[k].filter(i => !i.elite && !i.ch); h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; return l[h % l.length].id; };
+  const pick = (k) => { const l = LOOKS[k].filter(i => !i.elite && !i.ch && !i.shop); h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; return l[h % l.length].id; };
   const out = {};
   for (const k of LOOK_SLOTS) out[k] = pick(k);
   if (h % 3) out.fx = 'none'; // efeito so em 1 de cada 3 bots

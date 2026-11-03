@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Previa: Noite dos Borroes</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e9e4d8; overflow: hidden; font-family: 'Bowlby One', Impact, sans-serif; }
+  canvas { display: block; }
+  .tag { position: absolute; transform: translate(-50%, 0); text-align: center; color: #1b1916; pointer-events: none; width: 190px; }
+  .tag b { display: block; font-size: 20px; letter-spacing: 0.5px; }
+  .tag small { display: block; font: 600 13px system-ui, sans-serif; color: #4a453f; margin-top: 2px; }
+  #title { position: absolute; left: 28px; top: 20px; color: #1b1916; }
+  #title b { font-size: 30px; display: block; }
+  #title small { font: 600 15px system-ui, sans-serif; color: #4a453f; }
+</style>
+</head>
+<body>
+<div id="title"></div>
+<script type="module">
+import * as THREE from 'three';
+import { hatchTexture } from '../src/toon.js';
+import { VILLAINS, BOSSES } from '../src/villains.js';
+
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe9e4d8);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6e6a63, 1.4));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-20, 40, -30); scene.add(sun);
+const tex = hatchTexture('#d9d3c6', '#8f897e', { density: 30, cross: true }); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(20, 20);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshToonMaterial({ map: tex })); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+const cam = new THREE.PerspectiveCamera(35, W / H, 0.1, 500);
+
+const INFO = {
+  borrao: ['Borrao', 'basico, vem em bando, anda gingando'],
+  rabisco: ['Rabisco', 'rapido, zigue-zague; o traco se redesenha'],
+  mola: ['Mola Maluca', 'pula de longe por cima da cobertura'],
+  cuspidor: ['Cuspidor', 'fica longe e cospe tinta (poca que deixa lento)'],
+  gordao: ['Gordao do Pote', 'lento e resistente; estoura numa poca'],
+  cartola: ['Cartola', 'a cada 3 ondas; borroes perto dele correm mais'],
+  projecionista: ['O Projecionista', 'chefao da onda 5: o facho congela o quadro; a lente acende antes'],
+  reiTinteiro: ['Rei Tinteiro', 'chefao da onda 10: pena no chao, chuva de tinta, a tampa abre e o olho fica exposto'],
+};
+// boneco de referencia (1,7 m, o tamanho de quem joga)
+function refDummy() {
+  const g = new THREE.Group(), m = new THREE.MeshToonMaterial({ color: 0xb8b2a6, transparent: true, opacity: 0.85 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.9, 4, 10), m); body.position.y = 0.75; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), m); head.position.y = 1.5; g.add(head);
+  return g;
+}
+const tags = [];
+function tag(obj, y, key, extra = '') {
+  const d = document.createElement('div'); d.className = 'tag';
+  d.innerHTML = `<b>${INFO[key][0]}</b><small>${extra || INFO[key][1]}</small>`; document.body.appendChild(d);
+  tags.push({ d, obj, y });
+}
+const live = [];
+function place(make, key, x, z = 0, ry = 0) { const o = make(); o.position.set(x, 0, z); o.rotation.y = ry; scene.add(o); live.push(o); return o; }
+// a frente dos viloes e -Z e a camera fica em -Z: ja olham pra ela (x positivo = esquerda da tela)
+
+const view = new URLSearchParams(location.search).get('v') || 'viloes';
+const T = document.getElementById('title');
+if (view === 'viloes') {
+  T.innerHTML = '<b>Noite dos Borroes: os viloes</b><small>escala real, ao lado de quem joga (cinza, 1,7 m)</small>';
+  const keys = Object.keys(VILLAINS), gap = 3.0;
+  keys.forEach((k, i) => { const x = ((keys.length - 1) / 2 - i) * gap + 1.2; const o = place(VILLAINS[k], k, x, 0, (i - 2.5) * 0.08); tag(o, -0.15, k); });
+  const d = refDummy(); d.position.set(-((keys.length - 1) / 2) * gap - 0.8, 0, 0.3); scene.add(d);
+  cam.position.set(0, 2.4, -18.5); cam.lookAt(0, 1.0, 0);
+} else if (view === 'chefoes') {
+  T.innerHTML = '<b>Noite dos Borroes: os chefoes</b><small>com quem joga do lado (cinza, 1,7 m)</small>';
+  const a = place(BOSSES.projecionista, 'projecionista', -6.5, 2, -0.5); tag(a, -0.6, 'projecionista');
+  const b = place(BOSSES.reiTinteiro, 'reiTinteiro', 7, 3, 0.2); tag(b, -0.6, 'reiTinteiro');
+  for (const x of [-3, 1.6]) { const d = refDummy(); d.position.set(x, 0, -2); scene.add(d); }
+  cam.position.set(0, 6, -27); cam.lookAt(0, 4, 0);
+} else { // close de um so: ?v=borrao
+  const make = VILLAINS[view] || BOSSES[view];
+  const o = place(make, view, 0, 0, -0.45);
+  const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3()), h = Math.max(size.y, size.x * 0.8);
+  T.innerHTML = `<b>${INFO[view][0]}</b><small>${INFO[view][1]}</small>`;
+  const d = refDummy(); d.position.set(-Math.max(1.2, size.x * 0.6 + 0.6), 0, 0.4); scene.add(d);
+  cam.position.set(h * 0.35, h * 0.62, -h * 2.4); cam.lookAt(0, h * 0.45, 0);
+}
+
+const t0 = performance.now();
+const v3 = new THREE.Vector3();
+function frame() {
+  const t = window.__t ?? (performance.now() - t0) / 1000;
+  for (const o of live) o.userData.anim?.(t);
+  renderer.render(scene, cam);
+  for (const { d, obj, y } of tags) { v3.copy(obj.position).setY(y); v3.project(cam); d.style.left = ((v3.x + 1) / 2 * W) + 'px'; d.style.top = ((1 - v3.y) / 2 * H + 8) + 'px'; }
+  requestAnimationFrame(frame);
+}
+frame();
+window.__ready = true;
+</script>
+</body>
+</html>

@@ -11,13 +11,13 @@ export const ACTIONS = [
   ['reload', 'k_reload', ['KeyR'], 'X'], ['cycle', 'k_swap', [], 'Y'], ['last', 'k_last', ['KeyQ'], null],
   ['melee', 'k_melee', ['KeyV'], 'R3'], ['frag', 'k_frag', ['KeyG'], 'LB'], ['flash', 'k_flash', ['KeyF'], 'RB'],
   ['streak', 'k_streak', ['KeyX'], 'UP'], ['inspect', 'k_inspect', ['KeyI'], 'DOWN'], ['field', 'k_field', ['KeyZ'], 'RIGHT'],
-  ['ping', 'k_ping', ['KeyB', 'Mouse1'], 'LEFT'], ['use', 'k_use', ['KeyE'], null],
+  ['ping', 'k_ping', ['KeyB', 'Mouse1'], 'LEFT'], ['use', 'k_use', ['KeyE'], null], ['gadget', 'k_gadget', ['KeyH'], 'LEFT'], // gadget divide o direcional esquerdo com o marcar (battle royale)
   ['leanL', 'k_leanL', ['KeyQ'], null], ['leanR', 'k_leanR', ['KeyE'], null], ['map', 'k_spec', ['KeyM'], null],
 ];
 export const PAD_BTN = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, L3: 10, R3: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
 const PAD_FIXED = ['SELECT', 'START'];
 // pares que podem dividir a tecla de proposito (E = usar e inclinar pra direita; Q = ultima arma e inclinar pra esquerda)
-const SHARE = [['use', 'leanR'], ['last', 'leanL']];
+const SHARE = [['use', 'leanR'], ['last', 'leanL'], ['ping', 'gadget']];
 const shareOk = (a, b) => SHARE.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
 export const FIXED_KEYS = ['Escape', 'Tab', 'Digit1', 'Digit2', 'Digit3', 'KeyP'];
 

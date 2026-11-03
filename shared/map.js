@@ -1,5 +1,6 @@
 // Mapas da Rubber Riot: dados puros (navegador e servidor) + fisica/raio por mapa.
 // Caixas sao AABB { min:[x,y,z], max:[x,y,z], kind, ... }. Cada sala carrega o seu mapa.
+import { MOBS } from './mobs.js';
 
 function builder(arena) {
   const boxes = [];
@@ -592,13 +593,218 @@ function apito() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito };
+// ---------- Banco Ferradura (Roube o Cofre, 03/11) ----------
+// Quarteirao de cidade de 1930. Norte: praca com coreto (a defesa nasce ali). Meio: o banco de marmore, salao
+// em cima de um embasamento de 3 m (escadaria na frente, portas dos lados) e o cofre redondo no SUBSOLO: fosso
+// aberto no meio do salao, com duas escadas descendo. Terceira rota: o duto de ventilacao, do beco dos fundos
+// direto pro fosso, so agachado (bot nao cabe; e a rota de quem e esperto). Sul: o beco com a van de fuga.
+function ferradura() {
+  const A = 46, { boxes, box, stairs, walls } = builder(A);
+  walls(9);
+  const HALL = 3, TOP = 11;
+  // salao: embasamento de marmore em volta do fosso do cofre (x -9..9, z -12..4)
+  box(-12.5, 1, 7, 26, HALL, 0, 'marble'); box(12.5, 1, 7, 26, HALL, 0, 'marble');
+  box(0, 9.5, 18, 11, HALL, 0, 'marble'); // frente do salao (vai ate a porta)
+  // duas escadas do salao pro cofre, nos fundos do fosso
+  stairs(-3, -8, -1, 0, 3, 6, 0.5, 1); stairs(3, -8, 1, 0, 3, 6, 0.5, 1);
+  // balaustrada em volta do fosso (vao no alto das escadas)
+  for (const sx of [-1, 1]) {
+    box(sx * 9.15, -1.25, 0.3, 10.5, 1, HALL, 'rail');
+    box(sx * 9.15, -10.75, 0.3, 2.5, 1, HALL, 'rail');
+  }
+  box(-4.5, 4.15, 9, 0.3, 1, HALL, 'rail'); box(4.5, 4.15, 9, 0.3, 1, HALL, 'rail');
+  // paredes do banco (1 m), com porta na frente e dos dois lados; atras, so o buraco do duto
+  box(-10, 14.5, 14, 1, TOP, 0, 'marble'); box(10, 14.5, 14, 1, TOP, 0, 'marble'); box(0, 14.5, 6, 1, TOP - 7, 7, 'marble');
+  for (const sx of [-1, 1]) {
+    box(sx * 16.5, -7.5, 1, 11, TOP, 0, 'marble'); box(sx * 16.5, 8.5, 1, 13, TOP, 0, 'marble'); box(sx * 16.5, 0, 1, 4, TOP - 6, 6, 'marble');
+    box(sx * 16.5, 0, 1, 4, HALL, 0, 'marble'); // soleira da porta do lado
+    stairs(sx * 23, 0, -sx, 0, 6, 6, 0.5, 1); // degraus da rua do lado ate a porta (mais largos que a porta: bot nao engancha na quina)
+  }
+  box(-9.1, -12.5, 15.8, 1, TOP, 0, 'marble'); box(9.1, -12.5, 15.8, 1, TOP, 0, 'marble');
+  box(0, -12.5, 2.4, 1, TOP - 1.35, 1.35, 'marble'); // em cima do duto
+  // telhado com claraboia em cima do fosso
+  box(0, 9.5, 34, 11, 0.6, TOP, 'bankroof'); box(-13, -4, 8, 18, 0.6, TOP, 'bankroof'); box(13, -4, 8, 18, 0.6, TOP, 'bankroof');
+  // fachada: escadaria, colunas e frontao com o nome
+  stairs(0, 21, 0, -1, 8, 6, 0.5, 1);
+  for (const x of [-9, -6, 6, 9]) box(x, 16.5, 1.1, 1.1, TOP, 0, 'column');
+  box(0, 16.5, 22, 3, 1.2, TOP, 'marble', { sign: 'bank' });
+  // dentro: balcao dos caixas na frente do salao, mesas dos lados, pilares
+  box(0, 8, 14, 1.2, 1.2, HALL, 'counter');
+  for (const sx of [-1, 1]) {
+    box(sx * 12.5, -5, 1.4, 5, 1.1, HALL, 'counter');
+    for (const z of [-9, 9]) box(sx * 12.5, z, 1, 1, TOP - HALL, HALL, 'column');
+    box(sx * 6, 2.6, 2, 1.4, 1.4, 0, 'crate'); // malotes no subsolo (protecao perto do cofre)
+  }
+  // duto de ventilacao: chapa do beco ate o fosso, 1,35 m de altura por dentro (agachado passa, em pe nao; bot passa agachado desde 03/11: nav.js low)
+  box(-1.35, -17, 0.3, 8, 2.6, 0, 'duct'); box(1.35, -17, 0.3, 8, 2.6, 0, 'duct'); box(0, -17, 3, 8, 1.25, 1.35, 'duct'); // alto por fora: bot nao pula em cima
+  // praca com coreto
+  box(0, 31, 8, 8, 0.5, 0, 'coreto');
+  for (const [x, z] of [[-3.4, 27.6], [3.4, 27.6], [-3.4, 34.4], [3.4, 34.4]]) box(x, z, 0.35, 0.35, 3.5, 0.5, 'post');
+  box(0, 31, 9, 9, 0.4, 4, 'coretoroof');
+  for (const sx of [-1, 1]) {
+    box(sx * 9, 31, 1, 3.4, 0.8, 0, 'bench');
+    box(sx * 14, 26, 1, 7, 1.1, 0, 'hedge'); box(sx * 14, 37, 1, 7, 1.1, 0, 'hedge');
+    box(sx * 30, 41, 16, 8, 9, 0, 'house', { roof: 'flat', seed: 20 + sx, team: 'blue' });
+    for (const z of [22, 40]) box(sx * 19, z, 0.35, 0.35, 4.2, 0, 'lamp');
+  }
+  // ruas dos lados: casas na borda, carro parado, caixotes
+  for (const sx of [-1, 1]) {
+    box(sx * 38, 22, 12, 10, 8, 0, 'house', { roof: 'peak', seed: 24 + sx });
+    box(sx * 38, 4, 12, 12, 10, 0, 'house', { roof: 'flat', seed: 26 + sx });
+    box(sx * 38, -14, 12, 10, 8, 0, 'house', { roof: 'peak', seed: 28 + sx });
+    box(sx * 26, sx * 9, 2.4, 4.6, 1.9, 0, 'car', { seed: sx + 1 });
+    box(sx * 28, -6, 2.2, 2.2, 1.5, 0, 'crate'); box(sx * 21, 12, 2, 2, 1.4, 0, 'crate');
+    for (const z of [-20, 4]) box(sx * 30, z, 0.35, 0.35, 4.2, 0, 'lamp');
+  }
+  // beco dos fundos: predios atras, latas de lixo e caixotes
+  for (const sx of [-1, 1]) {
+    box(sx * 12, -42, 18, 7, 8, 0, 'house', { roof: 'flat', seed: 30 + sx, team: 'red' });
+    box(sx * 36, -37, 16, 9, 7, 0, 'house', { roof: 'peak', seed: 32 + sx });
+    box(sx * 7, -21, 2.6, 1.4, 1.5, 0, 'dumpster');
+    box(sx * 14, -26, 2.4, 2.4, 1.6, 0, 'crate'); box(sx * 14.6, -25.4, 1.3, 1.3, 1.1, 1.6, 'crate');
+    box(sx * 24, -24, 2.6, 1.4, 1.5, 0, 'dumpster');
+    box(sx * 20, -32, 2.2, 2.2, 1.5, 0, 'crate');
+  }
+  return {
+    id: 'ferradura', arena: A, boxes, theme: 'ferradura',
+    spawns: {
+      red: [[-8, -32], [8, -32], [-16, -30], [16, -30], [0, -34], [-26, -30], [26, -30], [-4, -28]],
+      blue: [[-8, 40], [8, 40], [-18, 34], [18, 34], [0, 42], [-24, 30], [24, 30], [4, 38]],
+      ffa: [[-40, -28], [40, -28], [-40, 34], [40, 34], [0, -30], [0, 40], [-24, 0], [24, 0], [-12, 5], [12, 5],
+        [0, -2], [-20, -20], [20, -20], [-10, 24], [10, 24], [-28, 16], [28, 16]],
+    },
+    flagBase: { red: [0, 0, -32], blue: [0, 0, 40] },
+    zones: [{ id: 'A', pos: [-24, 0, -6], r: 4.5 }, { id: 'B', pos: [0, 3, 10], r: 4 }, { id: 'C', pos: [24, 0, -6], r: 4.5 }],
+    pickups: [
+      { kind: 'wpn', wpn: 'shotgun', pos: [-12.5, 3, 4] }, { kind: 'wpn', wpn: 'shotgun', pos: [12.5, 3, 4] },
+      { kind: 'wpn', wpn: 'sniper', pos: [0, 0, 24] }, { kind: 'wpn', wpn: 'rifle', pos: [-24, 0, -20] }, { kind: 'wpn', wpn: 'smg', pos: [24, 0, -20] },
+      { kind: 'hp', pos: [-6, 0, -10] }, { kind: 'hp', pos: [6, 0, -10] }, { kind: 'hp', pos: [-24, 0, 14] }, { kind: 'hp', pos: [24, 0, 14] },
+      { kind: 'hp', pos: [0, 0, -24] }, { kind: 'hp', pos: [-12.5, 3, -10] }, { kind: 'hp', pos: [12.5, 3, -10] },
+    ],
+  };
+}
+
+// ---------- Estudio Tinteiro (Noite dos Borroes, 03/11) ----------
+// Estudio de animacao abandonado, de noite. Comeca na Sala de Animacao (meio, mesas de desenho); quatro portas
+// pagas abrem as salas: Pintura (oeste), Arquivo de Rolos (leste), Cabine de Projecao (norte, com a cabine no
+// alto) e o Telhado (sul, terraco 3 m acima). Os viloes saem das pocas de tinta das salas abertas.
+// Porta fechada = caixa solida que mexe (M.dyn): a grade de navegacao nao ve porta, mas sala fechada e
+// beco sem saida, entao rota nenhuma passa por ela.
+// 03/11 (pedido dele): a Floresta em volta do estudio. A arena cresceu (34 -> 60) e o estudio continua igual no
+// meio (S = 34), com a parede de fora propria; a porta paga na parede oeste da Pintura da pra floresta aberta.
+function tinteiro() {
+  const S = 34, A = 60, { boxes, box, stairs } = builder(A);
+  const WH = 7, EH = 12, DZ = 3; // EH: parede de fora alta (nem do terraco pulando passa); DZ: z da porta da floresta
+  box(0, S + 0.5, S * 2 + 2, 1, EH, 0, 'studioext'); box(0, -S - 0.5, S * 2 + 2, 1, EH, 0, 'studioext');
+  box(S + 0.5, 0, 1, S * 2, EH, 0, 'studioext');
+  box(-S - 0.5, (-S + DZ - 1.5) / 2, 1, S + DZ - 1.5, EH, 0, 'studioext'); box(-S - 0.5, (DZ + 1.5 + S) / 2, 1, S - DZ - 1.5, EH, 0, 'studioext');
+  box(-S - 0.5, DZ, 1, 3, EH - 4.2, 4.2, 'studioext'); // em cima da porta
+  // borda da floresta: muro invisivel (o desenho e mata fechada la fora)
+  box(0, -A - 1, A * 2 + 4, 2, 9, 0, 'forestedge'); box(0, A + 1, A * 2 + 4, 2, 9, 0, 'forestedge');
+  box(-A - 1, 0, 2, A * 2 + 4, 9, 0, 'forestedge'); box(A + 1, 0, 2, A * 2 + 4, 9, 0, 'forestedge');
+  // paredes da sala do meio, com o vao de 3 m de cada porta
+  for (const s of [-1, 1]) {
+    box(-7.25, s * 12.5, 11.5, 1, WH, 0, 'studiowall'); box(7.25, s * 12.5, 11.5, 1, WH, 0, 'studiowall');
+    box(s * 12.5, -7.25, 1, 11.5, WH, 0, 'studiowall'); box(s * 12.5, 7.25, 1, 11.5, WH, 0, 'studiowall');
+    box(s * 12.5, 0, 1, 3, WH - 4.2, 4.2, 'studiowall'); box(0, s * 12.5, 3, 1, WH - 4.2, 4.2, 'studiowall'); // em cima das portas
+  }
+  // cantos fechados (fora das salas)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    box(sx * 23.5, sz * 23.5, 21, 21, 9, 0, 'studiowall');
+    box(sx * 13.25, sz * 13.25, 1.5, 1.5, WH, 0, 'studiowall'); // tampa a quina: a sala de lado e a de frente so se tocavam num ponto (rota passava, corpo nao)
+  }
+  // Sala de Animacao: mesas de desenho (protecao baixa) e o lustre no meio
+  for (const [x, z] of [[-6, -5], [6, 5], [-6, 5], [6, -5]]) box(x, z, 3, 1.6, 1.1, 0, 'desk');
+  box(0, 0, 2.4, 2.4, 0.9, 0, 'desk', { light: 1 });
+  // Pintura (oeste): latas de tinta e cavaletes
+  box(-20, -7, 2.4, 2.4, 1.6, 0, 'vat'); box(-26, 6, 3, 3, 2, 0, 'vat'); box(-30, -2, 2, 2, 1.4, 0, 'vat');
+  box(-17, 6, 0.6, 2.2, 2.4, 0, 'easel'); box(-24, -1, 0.6, 2.2, 2.4, 0, 'easel');
+  // Arquivo de Rolos (leste): estantes de lata de filme em fileira
+  for (const z of [-8, 0, 8]) box(23, z, 9, 1.2, 2.6, 0, 'shelf');
+  // Cabine de Projecao (norte): a cabine e um bloco de 3 m com escada; dali se ve a sala toda
+  box(0, 29, 14, 8, 3, 0, 'booth'); stairs(-10, 22, 0, 1, 3, 6, 0.5, 0.75); box(-9, 27.5, 4.5, 3, 3, 0, 'booth'); // patamar da escada ate a cabine
+  box(9, 20, 2.4, 2.4, 1.6, 0, 'crate'); box(-4, 17, 2.4, 1.2, 1.2, 0, 'crate');
+  // Telhado (sul): terraco 3 m acima, com escada larga da porta; caixas d'agua e chamines
+  box(0, -26, 26, 16, 3, 0, 'roofdeck'); stairs(0, -13, 0, -1, 6, 6, 0.5, 0.833); // a escada sobe da porta ate a beira do terraco
+  box(-7, -27, 2.4, 2.4, 2.6, 3, 'tank'); box(8, -21, 1.4, 1.4, 2.4, 3, 'chimney'); box(-9, -19, 1.2, 1.2, 2, 3, 'chimney');
+  // ---- Floresta (anel de 26 m em volta do estudio). So arvore grande, pedra e tronco caido tem corpo (colisao
+  // e laco em todas as caixas: pouca peca solida); arbusto, cogumelo e capim sao so desenho (cliente)
+  const F = {
+    pools: [[-48, -6], [-50, 14], [-43, 29], [-45, -27]],
+    clear: [[-46, 3, 6], [-38.5, -8, 2.5], [-38.5, 12, 2.5], [-38.5, -16, 2.5]], // clareira na saida da porta e na frente das maquinas
+    // riacho raso no norte (so desenho: da pra atravessar andando)
+    creek: Array.from({ length: 25 }, (_, i) => { const x = -A + i * (A * 2) / 24; return [x, 48 + Math.sin(x / 9) * 3 + Math.sin(x / 4.1) * 0.8]; }),
+  };
+  let seed = 311; const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const nearCreek = (x, z, r) => F.creek.some(([cx, cz], i) => i && Math.hypot(x - (cx + F.creek[i - 1][0]) / 2, z - (cz + F.creek[i - 1][1]) / 2) < r + 2.6);
+  const busy = (x, z, r) => Math.max(Math.abs(x), Math.abs(z)) < S + 3 + r || Math.max(Math.abs(x), Math.abs(z)) > A - 1.5 - r
+    || F.pools.some(([px, pz]) => Math.hypot(x - px, z - pz) < 3.5 + r) || F.clear.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr + r)
+    || (x < -S && x > -S - 7 && z > -20 && z < 16) || nearCreek(x, z, r); // corredor rente a parede (maquinas) livre
+  for (let gx = -A + 3; gx <= A - 3; gx += 5) for (let gz = -A + 3; gz <= A - 3; gz += 5) {
+    const x = gx + (rng() - 0.5) * 3.6, z = gz + (rng() - 0.5) * 3.6, r = rng();
+    if (r < 0.34) { const t = 0.42 + rng() * 0.3; if (!busy(x, z, t + 1)) box(x, z, t * 2, t * 2, 9, 0, 'tree'); }
+    else if (r < 0.43) { const s = 1.6 + rng() * 1.8; if (!busy(x, z, s / 2 + 0.5)) box(x, z, s, s * (0.7 + rng() * 0.5), 0.9 + rng() * 1.2, 0, 'rock'); }
+    else if (r < 0.47) { const L = 4 + rng() * 2.5, along = rng() < 0.5; if (!busy(x, z, L / 2 + 0.5)) box(x, z, along ? L : 0.95, along ? 0.95 : L, 0.85, 0, 'log'); }
+  }
+  return {
+    id: 'tinteiro', arena: A, studio: S, forest: F, boxes, theme: 'tinteiro',
+    portal: { r: S + 0.5, in: [-S + 1.5, DZ], out: [-S - 2.5, DZ], k: (S + 1 + A) / 2 }, // nav.hop: rota estudio <-> floresta pela porta
+    spawns: {
+      red: [[-3, -2.5], [3, 2.5], [-3, 2.5], [3, -2.5], [0, -4], [0, 4], [-4, 0], [4, 0]],
+      blue: [[-9, 9], [9, -9]],
+      ffa: [[-3, -2.5], [3, 2.5], [-3, 2.5], [3, -2.5]],
+    },
+    flagBase: { red: [0, 0, -6], blue: [0, 0, 6] },
+    zones: [{ id: 'A', pos: [-6, 0, 0], r: 3 }, { id: 'B', pos: [0, 0, 0], r: 3 }, { id: 'C', pos: [6, 0, 0], r: 3 }],
+    pickups: [],
+    bor: {
+      rooms: ['hub', 'pintura', 'arquivo', 'cabine', 'telhado', 'floresta'],
+      doors: [
+        { id: 'pintura', price: 750, x: -12.5, z: 0, alongZ: true },
+        { id: 'arquivo', price: 750, x: 12.5, z: 0, alongZ: true },
+        { id: 'cabine', price: 1250, x: 0, z: 12.5 },
+        { id: 'telhado', price: 1250, x: 0, z: -12.5 },
+        { id: 'floresta', price: 1500, x: -S - 0.5, z: DZ, alongZ: true }, // parede oeste da Pintura
+      ],
+      // armas pintadas na parede: pos = onde fica quem compra; face = pra onde a pintura olha
+      stations: [
+        { wpn: 'smg', price: 500, room: 'hub', pos: [-11.4, 4.5], face: [1, 0] },
+        { wpn: 'shotgun', price: 750, room: 'hub', pos: [11.4, -4.5], face: [-1, 0] },
+        { wpn: 'rifle', price: 1000, room: 'arquivo', pos: [32.4, 4], face: [-1, 0] },
+        { wpn: 'sniper', price: 1000, room: 'cabine', pos: [-4, 32.4], face: [0, -1] },
+        { wpn: 'minigun', price: 3000, room: 'telhado', pos: [6, -32.4], face: [0, 1] },
+        { wpn: 'shotgun', price: 750, room: 'pintura', pos: [-32.4, -6], face: [1, 0] },
+        { wpn: 'rifle', price: 1000, room: 'floresta', pos: [-S - 2.1, -8], face: [-1, 0] }, // parede de fora do estudio
+      ],
+      milk: [{ room: 'hub', pos: [-9.5, -10.4], face: [0, 1] }, { room: 'arquivo', pos: [30, -11], face: [0, 1] }, { room: 'floresta', pos: [-S - 2.1, 12], face: [-1, 0] }],
+      // Caixa de Surpresas do Nanquim: comeca no 1o lugar; a mola rindo leva pra outro (pos = onde fica quem usa)
+      box: [
+        { room: 'hub', pos: [4.5, -10.4], face: [0, 1] }, { room: 'arquivo', pos: [27, 11.4], face: [0, -1] },
+        { room: 'cabine', pos: [11.4, 24], face: [-1, 0] }, { room: 'pintura', pos: [-20, 11.4], face: [0, -1] },
+        { room: 'floresta', pos: [-S - 2.1, -16], face: [-1, 0] },
+      ],
+      // pocas de tinta de onde saem os viloes (por sala)
+      pools: [
+        { room: 'hub', pos: [-9.5, 9.5] }, { room: 'hub', pos: [9.5, -9.5] }, { room: 'hub', pos: [9.5, 9.5] },
+        { room: 'pintura', pos: [-31, 9] }, { room: 'pintura', pos: [-31, -9] }, { room: 'pintura', pos: [-18, -10] },
+        { room: 'arquivo', pos: [31, 10] }, { room: 'arquivo', pos: [31, -4] }, { room: 'arquivo', pos: [17, 11] },
+        { room: 'cabine', pos: [10, 31] }, { room: 'cabine', pos: [-11, 31] }, { room: 'cabine', pos: [11, 17] },
+        { room: 'telhado', pos: [-11, -31] }, { room: 'telhado', pos: [11, -31] }, { room: 'telhado', pos: [0, -31] },
+        ...F.pools.map(pos => ({ room: 'floresta', pos })),
+      ],
+    },
+  };
+}
+
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro };
+export const PVE_ONLY = ['tinteiro']; // Noite dos Borroes: so a noite usa (e a noite so usa ele)
+export const HEIST_ONLY = ['ferradura']; // mapa feito pro Roube o Cofre (fora dele nao entra na lista)
 export const ESCORT_MAPS = ['bonde', 'apito']; // mapas com trilho (so a escolta usa)
 // mapas que aparecem na escolha do lobby (a ilha e so do battle royale)
 export const PICK_MAPS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria'];
 export const MAP_IDS = Object.keys(BUILDERS);
 // mapa sugerido por modo
-export const MODE_MAP = { escort: 'bonde', br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
+export const MODE_MAP = { borroes: 'tinteiro', heist: 'ferradura', escort: 'bonde', br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
 // pontos de bomba (x, z) perto do lado da defesa (azul nasce em +z); a altura sai da grade
 export const BOMB_SITES = {
   vila: { A: [-20, 27], B: [20, 27] },
@@ -606,9 +812,10 @@ export const BOMB_SITES = {
   fronteira: { A: [-30, 38], B: [30, 38] },
   estaleiro: { A: [-13, 15], B: [13, 15] },
   refinaria: { A: [-17, 21], B: [24, 15] },
+  ferradura: { A: [0, -2], B: [-12.5, 8] }, // cofre no fosso do subsolo
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
-const MINIGUN_AT = { apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+const MINIGUN_AT = { ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 // mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
 // So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
 const MAP_PACE = { estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
@@ -624,7 +831,7 @@ export function getMap(id) {
   if (!BUILDERS[id]) id = 'vila';
   if (cache[id]) return cache[id];
   const M = BUILDERS[id]();
-  if (id !== 'ilha') M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
+  if (id !== 'ilha' && id !== 'tinteiro') M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
   return (cache[id] = M);
 }
 
@@ -718,6 +925,9 @@ function bounds(M, pos, rad) {
   return [-lim, lim, -lim, lim];
 }
 
+// cabe em pe aqui? (03/11: duto do Banco Ferradura so passa agachado; levantar la dentro jogava o boneco pra cima do duto)
+export const headroom = (M, pos, rad = 0.4, height = 1.7) => !blockedAbove(M.boxes, pos, rad, height, pos[1]);
+
 function blockedAbove(boxes, pos, rad, height, newY) {
   const p = [pos[0], newY + 0.01, pos[2]];
   for (const b of boxes) if (overlap(p, rad, height - 0.02, b)) return true;
@@ -725,7 +935,7 @@ function blockedAbove(boxes, pos, rad, height, newY) {
 }
 
 // peca redonda em pe (tanque, silo, tonel, pilar, poste, pedra): raio no chao; 0 = caixa comum
-const ROUND_BODY = { pillar: 1, post: 1, vat: 1, tank: 1, silo: 1, rock: 1.05 };
+const ROUND_BODY = { pillar: 1, post: 1, vat: 1, tank: 1, silo: 1, rock: 1.05, tree: 1 };
 function roundR(b) { const k = ROUND_BODY[b.kind]; return k ? Math.min(b.max[0] - b.min[0], b.max[2] - b.min[2]) / 2 * k : 0; }
 function overlap(pos, rad, height, b) {
   const r = roundR(b);
@@ -748,7 +958,7 @@ export function clampArena(M, pos, rad = 0.4) {
 // Raio contra o mapa. Devolve distancia (Infinity se nada) e normal.
 // Forma de verdade dentro da caixa (30/10: a bala batia no canto invisivel da caixa do pilar redondo).
 // 31/10: o corpo tambem bate no cilindro de verdade (antes o canto da caixa do tanque segurava a 1 m do desenho).
-const ROUND = { pillar: 1.15, post: 1, vat: 1, tank: 1, silo: 1 }; // cilindro em pe (pilar afina pra cima: raio medio)
+const ROUND = { pillar: 1.15, post: 1, vat: 1, tank: 1, silo: 1, tree: 1 }; // cilindro em pe (pilar afina pra cima: raio medio)
 function shapeHit(b, o, d, tmin, tmax) {
   const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, cz = (b.min[2] + b.max[2]) / 2;
   const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], dd = b.max[2] - b.min[2];
@@ -842,15 +1052,17 @@ export function wallThickness(M, a, b) {
 // Hitbox de personagem: corpo (AABB) + cabeca (esfera)
 export function rayPlayer(o, d, p, maxDist) {
   const crouch = p.anim === 'crouch' || p.anim === 'slide';
-  const bodyH = crouch ? 0.9 : 1.3;
-  const headY = p.pos[1] + (crouch ? 1.15 : 1.6);
+  const hb = p.mob ? MOBS[p.mob]?.hb : null; // vilao da noite: caixa da ficha (chefao de 6 m, borrao baixinho)
+  const bodyH = hb ? hb.h : crouch ? 0.9 : 1.3;
+  const headY = p.pos[1] + (hb ? hb.head : crouch ? 1.15 : 1.6);
+  const hr = hb ? hb.hr : 0.34;
   const hc = [p.pos[0] - o[0], headY - o[1], p.pos[2] - o[2]];
   const tc = hc[0] * d[0] + hc[1] * d[1] + hc[2] * d[2];
   if (tc > 0 && tc < maxDist) {
     const dd = hc[0] * hc[0] + hc[1] * hc[1] + hc[2] * hc[2] - tc * tc;
-    if (dd < 0.34 * 0.34) return { dist: tc - Math.sqrt(0.34 * 0.34 - dd), head: true };
+    if (dd < hr * hr) return { dist: tc - Math.sqrt(hr * hr - dd), head: true };
   }
-  const r = 0.48;
+  const r = hb ? hb.r : 0.48;
   const b = { min: [p.pos[0] - r, p.pos[1], p.pos[2] - r], max: [p.pos[0] + r, p.pos[1] + bodyH, p.pos[2] + r] };
   let tmin = 0, tmax = maxDist;
   for (let a = 0; a < 3; a++) {

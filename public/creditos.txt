@@ -1,0 +1,13 @@
+Rubber Riot - creditos de modelos 3D de terceiros (licenca CC-BY 4.0, uso com atribuicao)
+
+- "Lowpoly Guns Package" por Ugur Yakisik (https://sketchfab.com/UgurYksk)
+  https://sketchfab.com/3d-models/lowpoly-guns-package-4101b10eff5348a4b3dfca770fc5946d
+  Usado em: Pipocadeira (fuzil), Mestre-Cuca (sniper), Bazuca e foguete.
+
+- "Sawed off shotgun Low Poly" por Mgt_Ganm12 (https://sketchfab.com/Mgt_Ganm12)
+  https://sketchfab.com/3d-models/sawed-off--shotgun--low--poly-c5a40a74c99c404abecc4029a88abdc4
+  Usado em: Trabuquinho (secundaria).
+
+Licenca: http://creativecommons.org/licenses/by/4.0/
+
+Modelos do Roube o Cofre (cofre e van): gerados por IA no Tripo (tripo3d.ai) com a conta da Fokus Studios.

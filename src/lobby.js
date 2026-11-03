@@ -3,16 +3,28 @@ import { t, modeName, modeDesc, eliteTag } from './i18n.js';
 import { badgeSvg } from './rank.js';
 import { audio } from './audio.js';
 import * as rovex from './rovex.js';
-import { TEAM_MAX, MODES, BR } from '../shared/weapons.js';
-import { LIMIT_MODES, TIME_MODES, MAP_IDS } from '../shared/core.js';
+import { TEAM_MAX, TEAM_MAX_BLITZ, MODES, BR } from '../shared/weapons.js';
+import { LIMIT_MODES, TIME_MODES, MAP_IDS, RANKED_MODES } from '../shared/core.js';
+import { HEIST_ONLY } from '../shared/map.js';
+import { BLITZ_BASE, BLITZ_MAPS } from '../shared/weapons.js';
 import { currentEvent } from '../shared/events.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const TIPS = 12;
+// categorias da tela de modos (03/11, pedido dele): ordem das abas e dos cartoes dentro de cada uma
+const MODE_CATS = [
+  ['especial', ['blitz', 'blitz_ctf', 'blitz_dom']], // primeiro (pedido dele 03/11)
+  ['casual', ['tdm', 'ffa', 'gungame', 'infect']],
+  ['competitivo', ['escort', 'heist', 'ctf', 'dom', 'bomb']],
+  ['br', ['br', 'bounce', 'duo']],
+  ['pve', ['borroes', 'arte']],
+];
+const HOT_MODES = ['ctf']; // selo "HOT" no cartao
 
 export class Lobby {
-  constructor({ onReady, onLeave, onStart, onTeam, onCfg }) {
+  constructor({ onReady, onLeave, onStart, onTeam, onCfg, onKick }) {
+    this.onKick = onKick;
     this.onCfg = onCfg; this.cfgPrev = null;
     $('lbModesClose').onclick = () => this.closeModes();
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('lbModes').hidden) this.closeModes(); });
@@ -45,7 +57,7 @@ export class Lobby {
       this.closeFriends(); audio.play('ui_click', { ui: true });
       const m = this.lastMsg, me = m?.players.find(p => p.id === this.myId); if (!me) return;
       const to = me.team === 'red' ? 'blue' : 'red', n = m.players.filter(p => !p.bot && p.id !== this.myId && p.team === to).length;
-      if (n < TEAM_MAX) onTeam(to);
+      if (n < (m.blitz ? TEAM_MAX_BLITZ : TEAM_MAX)) onTeam(to);
     };
   }
 
@@ -123,21 +135,39 @@ export class Lobby {
     for (const p of m.players) if (!p.bot && p.id !== myId && p.team in n) n[p.team]++;
     for (const b of $('lbSide').querySelectorAll('[data-side]')) {
       const k = b.dataset.side;
-      b.hidden = n[k] >= TEAM_MAX;
-      b.querySelector('.n').textContent = t('sideCount', { n: n[k], max: TEAM_MAX });
+      const max = m.blitz ? TEAM_MAX_BLITZ : TEAM_MAX; // blitz: 12 por lado
+      b.hidden = n[k] >= max;
+      b.querySelector('.n').textContent = t('sideCount', { n: n[k], max });
     }
   }
 
-  // popup de modos (so o host): tocar num cartao troca o modo da sala
+  // popup de modos (so o host): abas por categoria (03/11 pedido dele) e cartoes; tocar num cartao troca o modo
   openModes(c) {
-    const g = $('lbModesGrid');
-    g.innerHTML = Object.keys(MODES).map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}"><b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em><small>${esc(modeDesc(k))}</small></button>`).join('');
-    for (const b of g.querySelectorAll('[data-m]')) b.onclick = () => {
-      const v = b.dataset.m; this.closeModes();
-      if (v === c.mode) return;
-      audio.play('ui_click', { ui: true });
-      this.onCfg?.({ mode: v, map: v === 'br' || v === 'duo' ? 'auto' : c.map, bots: c.bots, difficulty: c.difficulty, limit: 0, time: 0 }); // meta e tempo de outro modo nao servem
+    const g = $('lbModesGrid'), tabs = $('lbModesTabs');
+    const catOf = (k) => MODE_CATS.find(([, list]) => list.includes(k))?.[0] || 'casual';
+    let cur = catOf(c.mode);
+    const show = (cat) => {
+      cur = cat;
+      for (const b of tabs.querySelectorAll('[data-cat]')) { const on = b.dataset.cat === cat; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; }
+      $('lbModes').dataset.cat = cat;
+      $('lbModesSub').textContent = t('mcatd_' + cat);
+      const list = MODE_CATS.find(([k]) => k === cat)[1].filter(k => MODES[k]);
+      g.innerHTML = list.map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}">${HOT_MODES.includes(k) ? `<i class="hot-pill">${esc(t('hotPill'))}</i>` : ''}<b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em>${BLITZ_BASE[k] ? `<i class="blitz-pill">${esc(t('blitzPill'))}</i>` : ''}<small>${esc(modeDesc(k))}</small></button>`).join('');
+      for (const b of g.querySelectorAll('[data-m]')) b.onclick = () => {
+        const v = b.dataset.m; this.closeModes();
+        if (v === c.mode) return;
+        audio.play('ui_click', { ui: true });
+        this.onCfg?.({ mode: v, map: v === 'br' || v === 'duo' ? 'auto' : c.map, bots: c.bots, difficulty: c.difficulty, limit: 0, time: 0 }); // meta e tempo de outro modo nao servem
+      };
     };
+    tabs.innerHTML = MODE_CATS.map(([cat, list]) => `<button role="tab" data-cat="${cat}"><span>${esc(t('mcat_' + cat))}</span><i>${list.filter(k => MODES[k]).length}</i></button>`).join('');
+    for (const b of tabs.querySelectorAll('[data-cat]')) b.onclick = () => { if (b.dataset.cat !== cur) { audio.play('ui_hover', { ui: true, vol: 0.5 }); show(b.dataset.cat); } };
+    tabs.onkeydown = (e) => { // setas trocam de aba (teclado/controle)
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const ids = MODE_CATS.map(([k]) => k), i = (ids.indexOf(cur) + (e.key === 'ArrowRight' ? 1 : ids.length - 1)) % ids.length;
+      show(ids[i]); tabs.querySelector(`[data-cat="${ids[i]}"]`)?.focus(); e.preventDefault();
+    };
+    show(cur);
     $('lbModes').hidden = false;
     audio.play('ui_click', { ui: true, vol: 0.6 });
     g.querySelector('[aria-checked="true"]')?.focus();
@@ -149,17 +179,21 @@ export class Lobby {
     const c = m.cfg, el = $('lbCfg');
     el.hidden = !c || m.phase !== 'lobby';
     if (el.hidden) return;
-    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce';
+    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce', night = raw === 'borroes' || raw === 'arte';
     const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     const rows = [
       ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito')], br ? 'ilha' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : raw === 'heist' ? ['auto', ...HEIST_ONLY, ...MAP_IDS.filter(x => x !== 'ilha')] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito')], br ? 'ilha' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
-      br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: 15 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)],
+      br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)], // blitz: ate 24
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
+      // Arte-Final: onda que vence a noite (10 a 50)
+      ...(raw === 'arte' ? [['wave', [10, 15, 20, 25, 30, 40, 50], Math.max(10, Math.min(50, c.limit || MODES.arte.limit)), (v) => String(v)]] : []),
       ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
       ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
+      // rankeada na sala de amigos (02/11): linha SEMPRE a vista; nos modos sem rankeada fica travada e diz onde vale
+      RANKED_MODES.includes(raw) ? ['ranked', [false, true], !!c.ranked, (v) => t(v ? 'cfgRkOn' : 'cfgRkOff')] : ['ranked', [false], false, () => t('cfgRkNo')],
       // evento de fim de semana: o host liga/desliga (so aparece quando tem evento no ar ou a sala ja esta nele)
       ...(currentEvent() || c.mut ? [['mut', ['', currentEvent() || c.mut], c.mut || '', (v) => v ? t('ev_' + v) : t('evOff')]] : []),
     ];
@@ -191,8 +225,8 @@ export class Lobby {
     for (const b of $('lbCfgList').querySelectorAll('.ar')) b.onclick = () => {
       const k = b.closest('li').dataset.k, row = rows.find(r => r[0] === k), list = row[1];
       const v = list[(Math.max(0, list.indexOf(row[2])) + Number(b.dataset.d) + list.length) % list.length];
-      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0, mut: c.mut || '' };
-      if (k === 'players') next.bots = v - 1; else next[k] = v;
+      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0, mut: c.mut || '', ranked: !!c.ranked };
+      if (k === 'players') next.bots = v - 1; else if (k === 'wave') next.limit = v; else next[k] = v;
       if (k === 'mode') { next.limit = 0; next.time = 0; if (v === 'br' || v === 'duo') next.map = 'auto'; } // meta e tempo de outro modo nao servem
       audio.play('ui_click', { ui: true, vol: 0.6 });
       this.onCfg?.(next);
@@ -207,7 +241,8 @@ export class Lobby {
     this.renderSide(m, myId);
     this.renderCfg(m, m.host === myId);
     $('lbMap').textContent = t('map_' + m.map);
-    $('lbMode').textContent = modeName(m.duo ? 'duo' : m.bounce ? 'bounce' : m.mode);
+    $('lbMode').textContent = modeName(m.duo ? 'duo' : m.bounce ? 'bounce' : m.blitz || m.mode);
+    $('lbBlitz').hidden = !m.blitz; // blitz = evento fixo com XP em dobro: selo ao lado do modo
     // evento de fim de semana ligado na sala: etiqueta propria ao lado do modo (toda a sala ve)
     const mut = m.cfg?.mut; $('lbEv').hidden = !mut; if (mut) $('lbEv').textContent = t('ev_' + mut);
     const host = m.host === myId;
@@ -225,8 +260,10 @@ export class Lobby {
     $('lbPlayers').innerHTML = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span></li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span>${host && !me && !p.bot ? `<button class="lb-kick" data-kick="${esc(p.id)}" aria-label="${esc(t('lbKick', { n: p.name }))}" title="${esc(t('lbKick', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>` : ''}</li>`;
     }).join('');
+    // host tira alguem (02/11): sai na hora e pode voltar pelo codigo (a lista redesenha 4x/s, entao um toque so)
+    for (const b of $('lbPlayers').querySelectorAll('.lb-kick')) b.onclick = () => { audio.play('ui_back', { ui: true }); this.onKick?.(b.dataset.kick); };
     // carimbo so anima em quem acabou de ficar pronto
     const now = new Set(list.filter(p => p.ready).map(p => p.id));
     for (const li of $('lbPlayers').children) if (this.okIds.has(li.dataset.id)) li.querySelector('.stamp').style.animation = 'none';

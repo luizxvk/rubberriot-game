@@ -3,6 +3,7 @@ import { LOOKS, DEFAULT_LOOK, cleanLook } from '../shared/looks.js';
 import { unlockLevel, progressInfo, rankData, metaOwned } from './progress.js';
 import { unlockDone } from './challenges.js';
 import { me as rovexMe } from './rovex.js';
+import { shopOwned } from './shopstore.js';
 
 const KEY = 'rr_look_v1';
 export function getLook() {
@@ -15,6 +16,7 @@ export function saveLook(l) { try { localStorage.setItem(KEY, JSON.stringify(cle
 export function lookOpen(slot, id) {
   const it = LOOKS[slot]?.find(i => i.id === id);
   if (!it) return false;
+  if (it.shop) return !!progressInfo().unlockAll || shopOwned(slot + ':' + id); // so da Loja
   if (it.elite) return !!rovexMe?.elite;
   if (it.acct) return !!rovexMe; // premio de quem tem conta Rovex (guest ve trancado)
   if (it.meta) return metaOwned(); // set da meta da comunidade

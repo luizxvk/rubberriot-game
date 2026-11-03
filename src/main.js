@@ -1,17 +1,23 @@
 import * as THREE from 'three';
+import { offscreen } from './offscreen.js';
 import { buildWorld, buildObjectives, FX, LASER_BODY } from './world.js';
 import { EscortView } from './escortview.js';
 import { rankResult, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
 import { Character } from './character.js';
+import { MobChar } from './mobchar.js';
+import { Flashlights } from './flashlight.js';
+let flash = null; // lanterna (so no Estudio Tinteiro escuro)
 import { ViewModel } from './viewmodel.js';
 import { makePipeline } from './post.js';
 import { Tutorial, keyLabel } from './tutorial.js';
 import { Range } from './range.js';
 import { trainBox } from '../shared/escort.js';
-import { useBinds } from './binds.js';
+import { heistBoxes } from '../shared/heist.js';
+import { borDoorBoxes } from '../shared/borroes.js';
+import { useBinds, bindLabel } from './binds.js';
 import * as ARS from './arsenal.js'; // so pro atalho de depuracao window.__A
 import { Player } from './player.js';
-import { metaGet, metaPost, pushSoon, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
+import { metaGet, metaPost, pushSoon, sessionPing, requestReset, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
 import { Hud, STREAK_SVG } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer, setRawMouse } from './input.js';
 import { Pad } from './gamepad.js';
@@ -19,7 +25,7 @@ import { LocalNet, WsNet, SplitNet } from './net.js';
 import { SS } from './ssboot.js';
 import { Chat } from './chat.js';
 import { audio } from './audio.js';
-import { MODES, WEAPONS, STREAKS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES } from '../shared/weapons.js';
+import { MODES, WEAPONS, STREAKS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS } from '../shared/weapons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
 import { EV, currentEvent, META, metaWeek } from '../shared/events.js';
 import { wantedPoster, shareFile, ClipRec } from './share.js';
@@ -29,6 +35,7 @@ import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFit
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
 import { ink, PAL } from './toon.js';
+import { SKIN_CODE, skinMat } from './looks3d.js';
 import { MUZZLE_LVL, BODY_MIN_LVL, addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
@@ -43,14 +50,17 @@ import { shootPanels, stripHtml } from './killcam.js';
 import { Replay } from './replay.js';
 import { startHomeTour, homeTourSeen } from './hometour.js';
 import { FieldView } from './fieldview.js';
+import { StrikeView, bomberMesh } from './strikeview.js';
+import { HeistView } from './heistview.js';
+import { BorView } from './borview.js';
 import { SKILL_ICONS } from './skillicons.js';
-import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun, buildPartPreview, bpLoadout, defaultLoadout } from './arsenal.js';
+import { CATEGORY, LASERS, partName, unlockedLoadout, buildGun, disposeGun, buildPartPreview, bpLoadout, defaultLoadout, infectLoadout } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------- ajustes ----------
-const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, draw: isTouch ? 'mid' : 'far', hudMode: 'full' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { v: 3, primary: 'smg', fov: 90, sens: 1, adsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, draw: isTouch ? 'mid' : 'far', hudMode: 'full' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -67,7 +77,20 @@ const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
 // celular sem memoria de video perde o contexto do WebGL (tela fica branca/preta): segura o contexto pro
 // navegador devolver (o three refaz tudo na volta) e manda o aviso pro servidor
-canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); reportaErro(new Error('webgl contexto perdido'), 'gl ' + G.state + '/' + G.mode); });
+// log 02/11: 3 celulares Android perderam o contexto no meio da partida = a "tela branca" que relataram. Agora: aviso
+// na tela, resolucao cai um degrau (menos memoria de video na volta) e, se o navegador nao devolver em 5 s, recarrega
+let glLostT = 0;
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  reportaErro(new Error('webgl contexto perdido'), 'gl ' + G.state + '/' + G.mode);
+  $('glLost').hidden = false;
+  settings.res = Math.max(0.5, Math.round((settings.res - 0.15) * 100) / 100);
+  if (isTouch) settings.draw = 'near';
+  try { localStorage.setItem('rr_settings', JSON.stringify(settings)); } catch { /* */ }
+  clearTimeout(glLostT);
+  glLostT = setTimeout(() => location.reload(), 5000);
+});
+canvas.addEventListener('webglcontextrestored', () => { clearTimeout(glLostT); $('glLost').hidden = true; applySettings(); });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 // distancia de desenho (Ajustes > Graficos): curta/media/longa, em metros
@@ -97,7 +120,7 @@ function thermalMask() {
   scopeCam.layers.set(0); scene.overrideMaterial = null; scene.background = bg; scene.fog = fog;
 }
 const vm = new ViewModel();
-const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onCfg: (cfg) => { try { localStorage.setItem('rr_lastcfg', JSON.stringify(cfg)); } catch { /* */ } G.net && G.net.send({ t: 'cfg', ...cfg }); }, onLeave: () => quitGame() });
+const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onCfg: (cfg) => { try { localStorage.setItem('rr_lastcfg', JSON.stringify(cfg)); } catch { /* */ } G.net && G.net.send({ t: 'cfg', ...cfg }); }, onLeave: () => quitGame(), onKick: (id) => G.net && G.net.send({ t: 'kick', id }) });
 const laserDot = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -125,7 +148,7 @@ const { composer, film, vmPass } = makePipeline(renderer, scene, camera, vm);
 
 function applySettings() {
   document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1)); // tela dividida: 2-4 desenhos por quadro
+  renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1)); // tela dividida: 2-4 desenhos por quadro
   resize();
   film.uniforms.grain.value = settings.grain;
   film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
@@ -166,9 +189,7 @@ function setLookPreview(look, team) {
   if (!lookChar || lookTeamCur !== team) {
     if (lookChar) lookScene.remove(lookChar.root);
     lookChar = new Character(team, '', look); lookChar.tag.visible = false; lookChar.shadow.visible = true;
-    // com a arma principal na mao (a pose dos bracos e' de quem segura arma; sem ela a mao entrava no corpo)
-    const prim = PRIMARIES.includes(settings.primary) ? settings.primary : 'smg';
-    try { lookChar.setWeapon(prim, G.loadouts?.[prim] || null); } catch { /* arsenal ainda carregando: fica sem */ }
+    // sem arma (03/11, pedido dele): a vitrine mostra so o boneco, na pose de maos na cintura (anim 'pose')
     lookTeamCur = team; lookScene.add(lookChar.root);
   } else lookChar.setLook(look);
 }
@@ -197,7 +218,7 @@ const G = {
   state: 'menu', // menu | game
   paused: false, shakeAmt: 0, deathPos: null, killer: null, t: 0, timeScale: 1, slowT: 0,
   seen: new Map(), // id -> ate quando aparece no radar (atirou)
-  nadeMeshes: new Map(), blimpMeshes: [], remoteLo: new Map(), remoteTracer: new Map(), remoteLook: new Map(), remoteBp: new Map(), pings: new Map(), brDrops: [], ladder: GUN_LADDER, flashT: 0,
+  nadeMeshes: new Map(), blimpMeshes: [], remoteLo: new Map(), remoteTracer: new Map(), remoteLook: new Map(), remoteBp: new Map(), pings: new Map(), brDrops: [], gunDrops: new Map(), ladder: GUN_LADDER, flashT: 0,
   isEnemy(r) { if (r.id === this.myId) return false; return !(MODES[this.mode].teams || this.duo) || r.team !== this.myTeam; },
   shake(a) { this.shakeAmt = Math.min(0.6, this.shakeAmt + a); },
   onHitConfirm(point, head, dmg, victim) {
@@ -226,7 +247,10 @@ const BOTS_ONLY_XP = 0.3;
 const onlyBots = () => !(G.snap?.players || []).some(p => !p.bot && p.id !== G.myId);
 // fim de semana (sabado e domingo, hora local): XP em dobro em tudo, soma com o do Elite
 const weekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
-const xpMult = () => (rovexMe?.elite ? 2 : 1) * (weekend() ? 2 : 1) * (onlyBots() ? BOTS_ONLY_XP : 1);
+// blitz (02/11): evento fixo, XP em dobro (soma com Elite e fim de semana)
+const xpMult = () => (rovexMe?.elite ? 2 : 1) * (weekend() ? 2 : 1) * (G.blitz ? BLITZ_XP : 1) * (onlyBots() && G.mode !== 'borroes' ? BOTS_ONLY_XP : 1);
+// Noite dos Borroes (03/11, pedido dele): abate de vilao rende bem menos que abate de gente (a noite acumula centenas)
+const BOR_XP = 0.2, BOR_XP_KINDS = ['kill', 'head', 'assist'];
 function wkndBadge() {
   const on = weekend(), b = $('wknd'), n = $('wkndNote');
   b.hidden = !on; if (!on) { n.hidden = true; b.setAttribute('aria-expanded', 'false'); }
@@ -252,6 +276,35 @@ $('evPlay').onclick = () => {
   startGame(new LocalNet({ mode, map: c.map || 'auto', bots: Number.isFinite(c.bots) && c.bots > 0 ? c.bots : 7, difficulty: c.difficulty || 1, mut: G.evNow() }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap')));
 };
 evBadge(); setInterval(evBadge, 60000);
+
+// uma conta, um aparelho (02/11, pedido dele): logado, o jogo avisa a Rovex a cada 60 s. Outro aparelho jogando
+// com a mesma conta = popup (Contestar passa a conta pra este aparelho; o outro recebe o mesmo aviso no proximo toque)
+let dupOpen = false;
+function dupShow() {
+  if (dupOpen) return;
+  dupOpen = true;
+  if (G.state === 'game' || G.state === 'lobby') quitGame();
+  $('dupMsg').hidden = true; $('dupTake').disabled = false; $('dupReset').disabled = false;
+  $('dupAcct').hidden = false;
+  audio.play('ui_back', { ui: true });
+  $('dupTake').focus();
+}
+async function dupCheck(tomar = false) {
+  if (!rovexMe || SS) return; // tela dividida: a mesma pessoa pode estar no sofa e no celular? nao derruba a partida de todo mundo
+  const r = await sessionPing(tomar);
+  if (r?.outro) dupShow();
+  else if (tomar || dupOpen) { dupOpen = false; $('dupAcct').hidden = true; }
+}
+$('dupTake').onclick = () => { audio.play('ui_click', { ui: true }); $('dupTake').disabled = true; dupCheck(true); };
+$('dupReset').onclick = async () => {
+  audio.play('ui_click', { ui: true }); $('dupReset').disabled = true;
+  const ok = await requestReset();
+  $('dupMsg').textContent = t(ok ? 'dupResetOk' : 'dupResetErr', { e: rovexMe?.email || '' }); $('dupMsg').hidden = false;
+  if (!ok) $('dupReset').disabled = false;
+};
+setTimeout(() => dupCheck(), 1500);
+setInterval(() => { if (!document.hidden) dupCheck(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) dupCheck(); }); // voltou pra aba: confere na hora
 
 function chEvent(e) {
   if (G.state !== 'game' || G.tutorial || G.range) return; // treino e campo de tiro nao contam desafio
@@ -285,7 +338,7 @@ function tutorialReward() {
     const bodies = [];
     for (const [cat, C] of Object.entries(CATEGORY)) C.bodies.forEach((id, i) => { if (i > 0 && !partUnlocked(cat, i, id)) bodies.push({ wpn: cat, body: id }); });
     const b = bodies[Math.floor(Math.random() * bodies.length)] || {};
-    const camos = CAMOS.filter(c => c.req && !c.legend && !c.elite && !c.prestige && !camoUnlocked(b.wpn || 'smg', c));
+    const camos = CAMOS.filter(c => c.req && !c.shop && !c.legend && !c.elite && !c.prestige && !camoUnlocked(b.wpn || 'smg', c));
     const c = camos[Math.floor(Math.random() * camos.length)];
     return { wpn: b.wpn || null, body: b.body || null, camo: c ? c.id : null };
   });
@@ -294,12 +347,17 @@ function tutorialReward() {
 
 function gainXp(kind, wpn = null, mult = 1) {
   if (G.state !== 'game' || G.tutorial || G.range) return; // treino e campo de tiro nao dao XP
+  // Noite dos Borroes: o jogador ganha 20% nos abates de vilao, a ARMA ganha cheio (o foco e upar arma);
+  // Rascunho: a arma e a de fabrica, entao o XP vai pro modelo de fabrica (Estalo etc.), nao pro montado no Arsenal
+  const night = G.mode === 'borroes', base = Math.round((XP[kind] || 0) * mult * xpMult());
+  if (night && BOR_XP_KINDS.includes(kind)) mult *= BOR_XP;
   const amount = Math.round((XP[kind] || 0) * mult * xpMult());
-  if (!amount) return;
-  if (onlyBots() && !G.botXpWarned) { G.botXpWarned = true; hud.message(t('botsOnlyXp', { n: Math.round(BOTS_ONLY_XP * 100) }), 3); }
+  if (!amount && !base) return;
+  if (onlyBots() && !night && !G.botXpWarned) { G.botXpWarned = true; hud.message(t('botsOnlyXp', { n: Math.round(BOTS_ONLY_XP * 100) }), 3); }
   G.matchXp = (G.matchXp || 0) + amount;
   logXp(kind, amount);
-  addXp(kind, amount, WEAPONS[wpn] ? wpn : null);
+  const ras = night && G.snap?.bor && !G.snap.bor.art && CATEGORY[wpn] && wpn !== 'melee';
+  addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : null, night ? base : amount);
   hud.xpPop(`+${amount} ${t('xp_' + kind)}`);
 }
 // o que abre exatamente neste nivel (pra avisar na hora)
@@ -325,7 +383,7 @@ let shotR = null, shotScene = null, shotCam = null;
 function unlockShot(u) {
   if (!CATEGORY[u.wpn]) return null;
   if (!shotR) {
-    shotR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); shotR.setSize(260, 130);
+    shotR = offscreen(); // dividido com a Loja (um contexto WebGL so)
     shotScene = new THREE.Scene();
     shotScene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); shotScene.add(dl);
     shotCam = new THREE.OrthographicCamera(-1, 1, 0.5, -0.5, 0.01, 10); shotCam.position.set(3, 0.6, 0); shotCam.lookAt(0, 0, 0);
@@ -343,8 +401,13 @@ function unlockShot(u) {
   const solo = !gun.userData.muzzle; // peca sozinha: mais respiro em volta
   const k = Math.max(box.max.z - box.min.z, (box.max.y - box.min.y) * 2) * (solo ? 0.8 : 0.56);
   Object.assign(shotCam, { left: -k, right: k, top: k / 2, bottom: -k / 2 }); shotCam.updateProjectionMatrix();
+  // renderizador dividido com a Loja: a previa ao vivo usa o mesmo canvas (tamanho dela volta depois da foto)
+  const live = shotR.domElement.isConnected, was = shotR.getSize(new THREE.Vector2());
+  shotR.setSize(260, 130, false); shotR.setScissorTest(false);
   shotR.render(shotScene, shotCam); shotScene.remove(gun);
-  return shotR.domElement.toDataURL();
+  const url = shotR.domElement.toDataURL();
+  if (live) shotR.setSize(was.x, was.y, false);
+  return url;
 }
 onProgress((e) => {
   if (G.state !== 'game' || (!e.levelUp && !e.wpnUp && !e.catUp)) return;
@@ -377,6 +440,7 @@ function gunName(id, wpn) {
   if (!WEAPONS[wpn]) return t('w_' + wpn);
   if (wpn === 'fists' || wpn === 'minigun') return wName(wpn);
   if (G.mode === 'gungame') { const pl = G.snap?.players?.find(x => x.id === id); const b = G.ladder[Math.min(pl?.gunLvl || 0, G.ladder.length - 1)]?.body; if (b) return partName('body', b); }
+  if (G.mode === 'borroes' && G.snap?.bor && !G.snap.bor.art && CATEGORY[wpn]) return partName('body', G.boxBody?.get(id)?.[wpn] || CATEGORY[wpn].bodies[0]); // Rascunho: modelo de fabrica (ou o da Caixa)
   const bp = id === G.myId ? G.player?.brBp?.[wpn] : G.remoteBp.get(id)?.[wpn];
   if (bp) return t(bp);
   const lo = id === G.myId ? G.player?.lo?.(wpn) : G.remoteLo.get(id)?.[wpn];
@@ -385,6 +449,7 @@ function gunName(id, wpn) {
 }
 G.gunName = gunName;
 G.vmScopeKind = () => vm.gun?.userData?.scope?.kind || null; // luneta na mao (variavel: a rodinha troca o zoom)
+if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet({ lobby: false, ...o }), 'Teste'); // teste: partida solo direto (so no dev)
 window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
@@ -450,6 +515,7 @@ function setMap(id) {
   brView && brView.dispose(); brView = G.brView = G.M.id === 'ilha' ? new BrView(scene, G.M) : null; // loot, caixote e iris do battle royale
   fieldView && fieldView.dispose(); fieldView = G.fieldView = new FieldView(scene); // molas, buracos e guarda-chuvas
   escView && escView.dispose(); escView = G.escView = G.M.track ? new EscortView(scene, G.M) : null; // trilho e Bonde da Tinta (escolta)
+  flash && flash.dispose(); flash = G.M.theme === 'tinteiro' ? new Flashlights(scene) : null; // estudio escuro: todo mundo de lanterna
   hud.setMap(G.M);
 }
 
@@ -468,10 +534,21 @@ G.tracerOf = (id) => id === G.myId ? settings.tracer : G.remoteTracer.get(id) ||
 
 function lookOf(p) { return G.remoteLook.get(p.id) || (p.bot ? botLook(p.id) : null); }
 
+// peca nova no meio da partida (arma de outro com camo que ainda nao apareceu): compila em segundo plano e so
+// mostra quando o shader esta pronto. Antes a 1a aparicao de cada camo travava o quadro compilando (03/11)
+function warmLater(obj) {
+  if (!renderer.compileAsync || G.state !== 'game') return;
+  const n = (obj.userData.warmN = (obj.userData.warmN || 0) + 1);
+  const show = () => { if (obj.userData.warmN === n) obj.visible = true; };
+  const p = renderer.compileAsync(obj, camera, scene); // pega os materiais agora (so percorre o que esta visivel)...
+  obj.visible = false; // ...e esconde ate o shader ficar pronto
+  p.then(show, show);
+}
+
 function remoteFor(p) {
   let r = G.remotes.get(p.id);
   if (!r) {
-    r = { id: p.id, char: new Character(p.team, p.name, lookOf(p)), pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
+    r = { id: p.id, mob: p.mob || null, char: p.mob ? new MobChar(p.mob) : new Character(p.team, p.name, lookOf(p)), pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
     scene.add(r.char.root);
     G.remotes.set(p.id, r);
   }
@@ -481,7 +558,7 @@ function remoteFor(p) {
 function onSnap(s) {
   G.snap = s;
   if (s.mut !== G.mutSeen) { G.mutSeen = s.mut; if (s.mut && G.state === 'game') { hud.message(t('evOn', { e: t('ev_' + s.mut) }), 3.5); audio.play('ringbell', { vol: 0.6, ui: true }); } } // evento de fim de semana: anuncia na entrada
-  G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen;
+  G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen; G.blitz = s.blitz || false;
   if (s.map && s.map !== G.M.id) setMap(s.map);
   const seen = new Set();
   for (const p of s.players) {
@@ -492,14 +569,16 @@ function onSnap(s) {
         hud.hp(p.hp);
         hud.armor(p.armor || 0, s.mode === 'br' || p.armor > 0); // colete de campo aparece em todo modo
         document.body.classList.toggle('mode-br', s.mode === 'br');
+        document.body.classList.toggle('mode-pve', s.mode === 'borroes'); // noite dos borroes: sem sequencias na tela
         if (!p.alive && G.player.alive) {
           G.player.alive = false;
           // caiu enquanto a conexao estava fora (o aviso do abate se perdeu): abre a tela de espera do mesmo jeito
           if ($('dead').hidden) { G.deathPos = [...G.player.pos]; G.killer = null; $('dead').hidden = false; document.body.classList.add('is-dead'); $('deadBy').textContent = ''; }
         }
         G.myTeam = p.team;
+        document.body.classList.toggle('spawn-prot', !!p.pt && p.alive); // escudo de nascimento: borda azul na tela
         // dupla: caido (rasteja, sem atirar) ate o parceiro encher a bomba
-        const down = G.duo && p.alive && p.dn > 0;
+        const down = (G.duo || G.mode === 'borroes') && p.alive && p.dn > 0; // noite dos borroes: mesmo caido da dupla
         if (down !== !!G.down) { G.down = down; document.body.classList.toggle('is-down', down); if (!down) hud.down(null); }
         if (down) hud.down({ t: p.dn, rv: (p.rv || 0) / BR.duo.revive });
         if (p.nades) G.player.nades = { ...p.nades };
@@ -509,17 +588,22 @@ function onSnap(s) {
     seen.add(p.id);
     const r = remoteFor(p);
     // trocou de time (infectado): o boneco e' refeito na cor nova
-    if (p.team !== r.team) { scene.remove(r.char.root); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
+    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); disposeGun(r.char.gun); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team;
     r.kills = p.kills; r.hp = p.hp; r.dn = p.dn || 0; r.rv = p.rv || 0;
+    if (r.mob) { r.mh = p.mh; r.hk = p.hk; r.char.setHp(p.hp / (p.mh || 1)); if (p.mob === 'reiTinteiro') r.char.boss({ lid: p.hk ? 1 : 0 }); }
+    if (p.pt && p.alive && !r.prot && fx) { r.prot = fx.protBubble(); r.char.root.add(r.prot); } // escudo de nascimento: bolha em volta
+    if (r.prot) r.prot.visible = !!p.pt && p.alive;
     const rbp = G.mode === 'br' ? G.remoteBp.get(p.id)?.[p.wpn] : null;
-    const lo = G.mode === 'gungame' ? { body: G.ladder[Math.min(p.gunLvl || 0, G.ladder.length - 1)].body } : rbp ? bpLoadout(rbp) : G.remoteLo.get(p.id)?.[p.wpn] || null;
+    const ras = G.mode === 'borroes' && G.snap?.bor && !G.snap.bor.art && CATEGORY[p.wpn] && p.wpn !== 'melee'; // Rascunho: todo mundo com a arma de fabrica (pistola = Estalo)
+    const rb = ras && G.boxBody?.get(p.id)?.[p.wpn];
+    const lo = G.mode === 'gungame' ? { body: G.ladder[Math.min(p.gunLvl || 0, G.ladder.length - 1)].body } : ras ? ((G.rasLo ||= {})[p.wpn + rb] ||= infectLoadout(p.wpn, rb ? { body: rb } : undefined)) : rbp ? bpLoadout(rbp) : G.remoteLo.get(p.id)?.[p.wpn] || null;
     const loKey = p.wpn + JSON.stringify(lo);
-    if (r.loKey !== loKey) { r.loKey = loKey; r.wpn = p.wpn; r.char.setWeapon(p.wpn, lo); }
+    if (r.loKey !== loKey) { r.loKey = loKey; r.wpn = p.wpn; r.char.setWeapon(p.wpn, lo); warmLater(r.char.gunHolder); }
   }
-  for (const [id, r] of G.remotes) if (!seen.has(id)) { scene.remove(r.char.root); G.remotes.delete(id); }
+  for (const [id, r] of G.remotes) if (!seen.has(id)) { scene.remove(r.char.root); disposeGun(r.char.gun); G.remotes.delete(id); }
   // granadas voando
   const alive = new Set();
   for (const n of s.nades || []) {
@@ -527,21 +611,71 @@ function onSnap(s) {
     let m = G.nadeMeshes.get(n.id);
     if (!m) { m = fx.nadeMesh(n.kind); scene.add(m); G.nadeMeshes.set(n.id, m); m.position.fromArray(n.pos); }
     m.userData.to = n.pos;
+    if (n.d) { m.userData.rocket = true; m.lookAt(m.position.x - n.d[0], m.position.y - n.d[1], m.position.z - n.d[2]); } // foguete: ogiva (-Z) pra onde vai
   }
   for (const [id, m] of G.nadeMeshes) if (!alive.has(id)) { scene.remove(m); G.nadeMeshes.delete(id); }
   // dirigiveis
   const bl = s.blimps || [];
   // dirigivel nasce ja la no alto (antes nascia na origem e subia do chao)
-  while (G.blimpMeshes.length < bl.length) { const b = bl[G.blimpMeshes.length], m = fx.blimpMesh(b.team); m.position.fromArray(b.pos); scene.add(m); G.blimpMeshes.push(m); }
-  while (G.blimpMeshes.length > bl.length) scene.remove(G.blimpMeshes.pop());
-  bl.forEach((b, i) => { Object.assign(G.blimpMeshes[i].userData, { to: b.pos, id: b.id, owner: b.owner, team: b.team, hp: b.hp }); });
+  // casa pelo id: agora tem dirigivel e balao bombardeiro (pela posicao na lista um virava o outro)
+  const blIds = new Set(bl.map(b => b.id));
+  G.blimpMeshes = G.blimpMeshes.filter(m => { if (blIds.has(m.userData.id)) return true; scene.remove(m); return false; });
+  for (const b of bl) {
+    let m = G.blimpMeshes.find(x => x.userData.id === b.id);
+    if (!m) { m = b.k === 'bomber' ? bomberMesh(b.team) : fx.blimpMesh(b.team); m.position.fromArray(b.pos); m.userData.bomber = b.k === 'bomber'; scene.add(m); G.blimpMeshes.push(m); }
+    Object.assign(m.userData, { to: b.pos, id: b.id, owner: b.owner, team: b.team, hp: b.hp });
+  }
+  G.strikes?.sync(s, (x, z) => floorAt(G.M, x, z));
+  // Roube o Cofre: cofre, van, bolsas e barra; quem esta com a bolsa fica lento e so de pistola (player.js)
+  if (s.heist) { G.heistView ||= new HeistView(scene); G.heistView.sync(s.heist, (id) => id === G.myId ? G.player?.pos : G.remotes.get(id)?.pos, G.myId); if (G.player) { G.player.bagged = s.heist.bags.some(b => b[1] === 1 && b[2] === G.myId); if (G.player.bagged && G.player.wpn !== 'pistol') G.player.equip('pistol'); } }
+  else if (G.heistView) { G.heistView.dispose(); G.heistView = null; if (G.player) G.player.bagged = false; }
+  // Noite dos Borroes: portas, armas na parede, leite, pocas, bolas de tinta e rolos
+  if (s.bor) { if (!G.borView) { G.borView = new BorView(scene, G.M); G.borView.setNames((w) => gunName(G.myId, w), (w) => G.player?.lo(w)); } G.borView.sync(s.bor); }
+  else if (G.borView) { G.borView.dispose(); G.borView = null; hud.prompt(null); }
   if (G.state === 'game') hud.score(s, G.me, s.players);
+}
+
+// parceiro caido (03/11, pedido dele): selo vermelho em cima dele, visto atraves da parede, com o tempo que falta,
+// a distancia e a bomba enchendo; fora da tela gruda na borda com seta apontando
+const _dv = new THREE.Vector3(), _dm = new Map();
+function downMarks() {
+  const on = G.state === 'game' && (G.duo || G.mode === 'borroes') && G.player;
+  const seen = new Set();
+  if (on) for (const r of G.remotes.values()) {
+    if (r.mob || !r.alive || !(r.dn > 0) || r.team !== G.myTeam) continue;
+    seen.add(r.id);
+    let el = _dm.get(r.id);
+    if (!el) {
+      el = document.createElement('div'); el.className = 'down-mark';
+      el.style.cssText = 'position:absolute;left:0;top:0;z-index:6;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px;font:13px "Bowlby One",sans-serif;color:#faf8f2;text-shadow:0 2px 0 #141210;transform:translate(-50%,-100%)';
+      el.innerHTML = '<i style="font-style:normal;font-size:20px;line-height:1;transition:none">▼</i><b style="background:#c23a2a;border:3px solid #141210;border-radius:10px;padding:2px 9px;box-shadow:0 3px 0 #141210;white-space:nowrap"></b><span style="width:64px;height:6px;border:2px solid #141210;border-radius:4px;background:#141210;overflow:hidden"><u style="display:block;height:100%;width:0;background:#f2c14e"></u></span>';
+      document.getElementById('hud').appendChild(el); _dm.set(r.id, el);
+    }
+    _dv.set(r.pos[0], r.pos[1] + 1.4, r.pos[2]).project(camera);
+    const behind = _dv.z > 1, W = innerWidth, H = innerHeight;
+    let x = (_dv.x * 0.5 + 0.5) * W, y = (-_dv.y * 0.5 + 0.5) * H;
+    if (behind) { x = W - x; y = H - y; }
+    const m = 60, off = behind || x < m || x > W - m || y < m + 40 || y > H - m;
+    let ang = 0;
+    if (off) { // gruda na borda e a seta aponta pra ele
+      const cx = W / 2, cy = H / 2, dx = x - cx, dy = y - cy, k = Math.min((W / 2 - m) / Math.abs(dx || 1e-6), (H / 2 - m - 20) / Math.abs(dy || 1e-6));
+      x = cx + dx * k; y = cy + dy * k; ang = Math.atan2(dy, dx) * 180 / Math.PI - 90;
+    }
+    el.style.left = x.toFixed(0) + 'px'; el.style.top = y.toFixed(0) + 'px';
+    el.children[0].style.transform = `rotate(${off ? ang + 180 : 0}deg)`; el.children[0].style.order = off ? -1 : 0;
+    const d = Math.round(Math.hypot(r.pos[0] - G.player.pos[0], r.pos[2] - G.player.pos[2]));
+    const txt = `${t('down_tag')} ${Math.ceil(r.dn)}s · ${d}m`;
+    if (el.children[1].textContent !== txt) el.children[1].textContent = txt;
+    el.children[2].firstChild.style.width = Math.min(100, (r.rv || 0) / BR.duo.revive * 100).toFixed(0) + '%';
+    el.style.opacity = r.dn < 8 && Math.floor(G.t * 4) % 2 ? '0.45' : '1'; // pouco tempo: pisca
+  }
+  for (const [id, el] of _dm) if (!seen.has(id)) { el.remove(); _dm.delete(id); }
 }
 
 function nameOf(id) {
   if (id === G.myId) return t('youCap');
   const p = G.snap?.players.find(x => x.id === id);
-  return p ? p.name : '?';
+  return p ? (p.mob ? t('mob_' + p.mob) : p.name) : '?';
 }
 function teamCls(id) {
   const p = G.snap?.players.find(x => x.id === id);
@@ -555,6 +689,7 @@ function posOf(id) {
 function onEvent(e) {
   const inGame = G.state === 'game';
   G.tutorial?.onEvent(e); G.range?.onEvent(e);
+  if (e.k === 'spawn') G.boxBody?.delete(e.id); // renasceu so com a Estalo: o modelo da Caixa vai embora
   switch (e.k) {
     case 'spawn':
       if (e.id === G.myId && G.player) {
@@ -566,7 +701,9 @@ function onEvent(e) {
         $('specBar').hidden = true; $('dead').classList.remove('spec');
         if (e.team) G.myTeam = e.team;
         if (e.mode) G.mode = e.mode; // o modo da sala pode ter acabado de mudar (o kit depende dele)
+        if (G.pendingLo) { G.pendingLo = false; G.loadouts = matchLoadouts(); } // montagem guardada vale agora
         G.player.spawn(e);
+        if (G.loNow) { G.loNow = false; G.player.rearm?.(); }
         G.shieldT = 0; vm.umbOn = false; G.ringWait = false; G.bounceBack = false;
         if (G.mode === 'br' && inGame) setTimeout(() => tip('ping'), 9000); // marcacao: dica de primeira vez (depois da do modo)
         if (e.air && G.bounce) hud.alert(t('bounceDrop'), t(settings.autoChute ? 'bounceDropAuto' : (isTouch ? 'bounceDropTouch' : 'bounceDropKey')), 'red');
@@ -598,6 +735,8 @@ function onEvent(e) {
       break;
     }
     case 'swing': { const r = G.remotes.get(e.id); r?.char.swing?.(); break; } // golpe visto de fora (01/11)
+    case 'borSpit': case 'borSummon': { const r = G.remotes.get(e.id); r?.char.swing?.(); break; } // vilao atacando de longe: mesmo bote
+    case 'borLeap': { const r = G.remotes.get(e.id); r?.char.leap?.(); break; }
     case 'hurt':
       if (e.v === G.myId && G.player) {
         audio.play('hit', { vol: 0.7, key: 'hurt', max: 2 });
@@ -637,9 +776,9 @@ function onEvent(e) {
       }
       const wn = gunName(e.a, e.wpn);
       const html = e.a ? `<span class="${teamCls(e.a)}">${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
-      if (inGame) hud.feed(html, e.a === G.myId || e.v === G.myId);
+      if (inGame && G.mode !== 'borroes') hud.feed(html, e.a === G.myId || e.v === G.myId); // noite dos borroes: sem killfeed (pedido dele)
       if (e.a === G.myId && inGame) {
-        chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head, streak: e.streak || 0 });
+        chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head, streak: e.streak || 0, body: G.player?.lo(e.wpn)?.body }); // body: desafio de um modelo (gadgets)
         G.player?.scavenge?.(); // skill catador
         // multiabate: 3 derrubados em 4 s (desafio de elite)
         const now = performance.now() / 1000;
@@ -672,15 +811,18 @@ function onEvent(e) {
         const kr = e.a && e.a !== G.myId ? G.remotes.get(e.a) : null, cm = $('comic');
         cm.hidden = true;
         if (kr?.pos && inGame) {
-          const imgs = shootPanels(renderer, scene, { pos: kr.pos, yaw: kr.yaw || 0 }, G.deathPos);
-          const wn = gunName(e.a, e.wpn);
+          const wn = gunName(e.a, e.wpn), dpos = G.deathPos, life = G.lifeN = (G.lifeN || 0) + 1;
           // quadro do meio: a arma de quem te pegou, inteira e de lado, com o nome do modelo (pedido dele 01/11)
           const kbp = G.remoteBp.get(e.a)?.[e.wpn];
           const klo = kbp ? bpLoadout(kbp) : G.mode === 'gungame' ? { body: G.ladder[Math.min(G.snap?.players?.find(x => x.id === e.a)?.gunLvl || 0, G.ladder.length - 1)]?.body } : G.remoteLo.get(e.a)?.[e.wpn] || defaultLoadout(e.wpn);
-          imgs[1] = CATEGORY[e.wpn] ? unlockShot({ wpn: e.wpn, lo: klo }) : null;
-          cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, dist: Math.round(Math.hypot(kr.pos[0] - G.deathPos[0], kr.pos[2] - G.deathPos[2])), head: e.head, t, icon: STREAK_SVG[e.wpn] || null });
-          cm.hidden = false; cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
-          audio.play('comic', { ui: true, vol: 0.55 });
+          // foto lida da placa sem travar (03/11): a tira entra quando fica pronta, se voce ainda estiver na tela de morte
+          shootPanels(renderer, scene, { pos: kr.pos, yaw: kr.yaw || 0 }).then(imgs => {
+            if (life !== G.lifeN || G.player?.alive || G.state !== 'game') return;
+            imgs[1] = CATEGORY[e.wpn] ? unlockShot({ wpn: e.wpn, lo: klo }) : null;
+            cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, dist: Math.round(Math.hypot(kr.pos[0] - dpos[0], kr.pos[2] - dpos[2])), head: e.head, t, icon: STREAK_SVG[e.wpn] || null });
+            cm.hidden = false; cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
+            audio.play('comic', { ui: true, vol: 0.55 });
+          });
         }
       }
       break;
@@ -694,6 +836,23 @@ function onEvent(e) {
     case 'bounce':
       if (inGame) audio.play('step2', { pos: e.pos, vol: 0.5, rate: 1.6, key: 'bnc', max: 3 });
       break;
+    case 'flame': // lanca-chamas de outro (o meu desenha na hora em que aperto)
+      if (inGame && e.id !== G.myId && e.o && e.d) { fx.flame(e.o, e.d); if (Math.random() < 0.5) audio.play('flamer', { pos: e.o, vol: 0.5, key: 'flamer', max: 2 }); }
+      break;
+    case 'rocketOut': // Bazuca de outro: o chiado sai de onde ele esta
+      if (inGame && e.id !== G.myId) audio.play('rocket', { pos: e.pos, vol: 0.9, key: 'rocket', max: 3 });
+      break;
+    case 'rocketBoom': { // foguete estourou: explosao grande, KABUM! e, no acerto direto, o boneco voa
+      if (!inGame) break;
+      fx.explosion(e.pos); fx.explosion([e.pos[0] + 0.8, e.pos[1] + 0.7, e.pos[2]]); fx.word('KABUM!', [e.pos[0], e.pos[1] + 1.4, e.pos[2]], 2.4, 0.9);
+      audio.play('explosion', { pos: e.pos, vol: 1, key: 'boom', max: 3 });
+      if (G.player && G.player.alive) {
+        const p = G.player.pos, c = [p[0], p[1] + 0.9, p[2]], d = Math.hypot(c[0] - e.pos[0], c[1] - e.pos[1], c[2] - e.pos[2]);
+        if (d < 30) G.shake(0.7 * (1 - d / 30));
+        if (d < 5.5) { const k = (1 - d / 5.5) * 9 / Math.max(d, 0.6); G.player.impulse([(c[0] - e.pos[0]) * k, 3 + (1 - d / 5.5) * 5, (c[2] - e.pos[2]) * k]); }
+      }
+      break;
+    }
     case 'boom': {
       fx.explosion(e.pos);
       if (e.big) { fx.explosion([e.pos[0] + 1.5, e.pos[1] + 1, e.pos[2]]); fx.explosion([e.pos[0] - 1.5, e.pos[1] + 2, e.pos[2] + 1]); G.shake(0.6); }
@@ -747,6 +906,35 @@ function onEvent(e) {
       if (e.kind === 'nuke' && inGame) { audio.play('nukealarm', { ui: true, vol: 0.7, jitter: 0 }); if (e.id !== G.myId) hud.message(t('nukeGot', { n: nameOf(e.id) }), 3); }
       if (e.id === G.myId && inGame) { hud.message(t('streakReady', { s: t('s_' + e.kind), k: t(pad.active ? 'how_pad' : isTouch ? 'how_touch' : 'how_kb') }), 2.4); audio.play('pickup', { vol: 0.7, ui: true, rate: 0.8 }); }
       break;
+    // Roube o Cofre
+    case 'heistCrack':
+      if (inGame && e.state === 'crack') audio.play('safetick', { pos: G.snap?.heist?.vault, vol: 0.8, key: 'safe', max: 1 });
+      break;
+    case 'heistOpen':
+      if (inGame) { const atk = G.snap?.heist?.atk === G.myTeam; hud.alert(t('hsOpen'), t(atk ? 'hsOpenSub' : 'hsDefSub'), atk ? (G.myTeam || 'red') : 'enemy'); audio.play('siren', { vol: 0.9, ui: true, key: 'siren', max: 1 }); }
+      break;
+    case 'heistBag':
+      if (!inGame) break;
+      if (e.act === 'take') { if (e.id === G.myId) { hud.message(t('hsYouBag'), 2.4); audio.play('pickup', { ui: true, vol: 0.7 }); } else hud.message(t('hsTake', { n: nameOf(e.id) }), 1.8); }
+      else if (e.act === 'drop') { hud.message(t('hsDrop'), 1.8); audio.play('land', { pos: e.pos, vol: 0.8 }); }
+      else if (e.act === 'return') hud.message(t('hsReturn'), 1.8);
+      else if (e.act === 'bank') { hud.message(t('hsBank', { v: 1000, s: e.bonus }), 2.2); audio.play('cashreg', { vol: 0.85, ui: true, key: 'cash', max: 2 }); if (e.id === G.myId) gainXp('streak'); }
+      break;
+    case 'heistRound':
+      if (inGame) { const mine = e.win === G.myTeam; hud.alert(t('hsWinR', { t: t(e.win === 'red' ? 'h_red' : 'h_blue') }), t(e.why === 'quota' ? 'hsWhyQuota' : 'hsWhyTime') + ` · ${e.wins.red} x ${e.wins.blue}`, mine ? (G.myTeam || 'red') : 'enemy'); audio.play(mine ? 'win' : 'lose', { ui: true, vol: 0.6 }); }
+      break;
+    case 'heistNew':
+      if (inGame) { const atk = e.atk === G.myTeam; hud.alert(t(atk ? 'hsAtk' : 'hsDef'), t(atk ? 'hsAtkSub' : 'hsDefSub'), atk ? (G.myTeam || 'red') : 'enemy'); }
+      break;
+    case 'trainWarn': // trem desgovernado: apito e aviso (o trilho vermelho vem pelo estado)
+      if (inGame) { audio.play('trainwhistle', { pos: [e.a[0], 1, e.a[1]], vol: 1, key: 'train', max: 1 }); hud.message(t('trainWarn'), 2.4); }
+      break;
+    case 'fireDrop': // balao bombardeiro largou fogo
+      if (inGame) { G.strikes?.fireDrop(e.o, e.at); if (Math.random() < 0.35) audio.play('firedrop', { pos: e.at, vol: 0.6, key: 'fdrop', max: 3 }); }
+      break;
+    case 'erase': // mao do animador apagou alguem
+      if (inGame) { fx.word(t('erased'), [e.pos[0], e.pos[1] + 2.2, e.pos[2]], 2.4, 0.9); fx.puff([e.pos[0], e.pos[1] + 1, e.pos[2]], 8, 1, PAL.white, 0.7); audio.play('eraser', { pos: e.pos, vol: 0.9, key: 'erase', max: 2 }); G.strikes?.erased(e.id, e.pos); if (e.id === G.myId) G.strikes?.paper(); }
+      break;
     case 'blimpDown': // dirigivel estourado a tiro: explode, some e a sala pode chamar outra sequencia
       if (!inGame) break;
       fx.explosion(e.pos); fx.explosion([e.pos[0] + 2, e.pos[1] - 1, e.pos[2] + 1]); fx.explosion([e.pos[0] - 2, e.pos[1] + 1, e.pos[2] - 2]);
@@ -759,6 +947,8 @@ function onEvent(e) {
       if (inGame) {
         const mine = e.id === G.myId, ally = (MODES[G.mode].teams || G.duo) && e.team === G.myTeam;
         if (mine) { gainXp('streak'); vm.callStreak(e.kind); chEvent({ type: 'streak', kind: e.kind }); }
+        if (e.kind === 'hand') G.strikes?.paper(); // a tela vira folha de papel pra todo mundo
+        if (e.kind === 'plane' || e.kind === 'bomber') audio.play(e.kind === 'plane' ? 'planefly' : 'bomberdrone', { vol: e.kind === 'bomber' ? 1 : 0.8, ui: true, key: e.kind, max: 1 });
         // Torta Atomica: aviso grande pra todo mundo, com o nome de quem pediu
         if (e.kind === 'nuke') hud.alert(t(mine ? 'nukeYou' : ally ? 'nukeAlly' : 'nukeEnemy', { n: nameOf(e.id) }), t(mine ? 'nukeYouSub' : ally ? 'nukeAllySub' : 'nukeEnemySub', { t: e.delay || 6 }), mine || ally ? 'blue' : 'red');
         else hud.message(t(mine || ally ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }), 2.6);
@@ -776,12 +966,12 @@ function onEvent(e) {
       if (e.id !== G.myId) { const m = G.remoteBp.get(e.id) || {}; if (e.bp) m[e.wpn] = e.bp; else delete m[e.wpn]; G.remoteBp.set(e.id, m); }
       break;
     case 'lo':
-      if (e.id !== G.myId) { G.remoteLo.set(e.id, e.los || {}); G.remoteTracer.set(e.id, e.tracer || 'chalk'); }
+      if (e.id !== G.myId) { G.remoteLo.set(e.id, e.los || {}); audio.preloadGuns(Object.values(e.los || {}).map(l => l?.body)); G.remoteTracer.set(e.id, e.tracer || 'chalk'); }
       break;
     // ---------- equipamento de campo ----------
     case 'field': {
       const pos = e.id === G.myId ? G.player?.pos : posOf(e.id);
-      if (e.id === G.myId) { G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
+      if (e.id === G.myId) { G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); G.stimBoostT = FIELD.stim.boostT; if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
       // estimulante = chiado da bomba de ar; colete = o som de pegar item (sem som proprio ainda)
       if (inGame) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind === 'stim' ? 'pump' : e.kind === 'vest' ? 'pickup' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
       break;
@@ -830,7 +1020,7 @@ function onEvent(e) {
       if (!inGame) break;
       const mine = e.id === G.myId, mate = !mine && G.snap?.players.find(o => o.id === e.id)?.team === G.myTeam;
       hud.feed(t(mine ? 'duo_feedMe' : 'duo_feed', { n: esc(nameOf(e.id)) }));
-      if (mine) { tip('duo'); hud.alert(t('duo_downMe'), t('duo_downMeSub'), 'red'); audio.play('death', { ui: true, vol: 0.5, rate: 0.7 }); }
+      if (mine) { tip(G.mode === 'borroes' ? 'borroes' : 'duo'); hud.alert(t('duo_downMe'), t('duo_downMeSub'), 'red'); audio.play('death', { ui: true, vol: 0.5, rate: 0.7 }); }
       else if (mate) { hud.alert(t('duo_downMate', { n: nameOf(e.id) }), t(isTouch ? 'duo_pumpTouch' : G.pad?.active ? 'duo_pumpPad' : 'duo_pump'), 'red'); audio.play('hurt', { ui: true, vol: 0.5 }); }
       if (e.pos) fx.word('UFA!', [e.pos[0], e.pos[1] + 1.4, e.pos[2]], 1.4, 0.7);
       break;
@@ -872,9 +1062,33 @@ function onEvent(e) {
       if (inGame && e.v === G.myId) hud.alert(t('br_place', { n: e.place }), t('br_placeSub'), 'red');
       else if (inGame && e.n <= 3 && e.n > 1) hud.message(t('br_lastN', { n: e.n }), 2);
       break;
-    case 'take': if (e.id === G.myId && G.player) G.player.take(e.wpn); break;
+    case 'take': if (e.id === G.myId && G.player) { const was = G.player.wpn, back = G.player.lastWpn; G.player.take(e.wpn); if (e.wpn === 'rpg' && was === 'rpg') { G.player.equip(G.player.owned.includes(back) ? back : G.player.owned[0]); hud.weapon(G.player); } } break; // Bazuca acabou: volta pra arma de antes
+    case 'gunDrop': { // arma largada de quem morreu (some em 10 s)
+      if (!inGame) break;
+      const lo = e.lo ? { ...e.lo, laser: null } : null, gun = buildGun(e.wpn, lo);
+      if (!gun) break;
+      const g = new THREE.Group(); gun.scale.setScalar(1.5); gun.rotation.set(0, Math.random() * 6.28, Math.PI / 2); g.add(gun);
+      g.position.set(e.pos[0], e.pos[1] + 0.18, e.pos[2]); g.userData = { born: G.t, y: e.pos[1] + 0.18, wpn: e.wpn, name: e.lo?.cvName || (e.lo?.body ? partName('body', e.lo.body) : wName(e.wpn)), pos: e.pos };
+      scene.add(g); G.gunDrops.set(e.id, g);
+      break;
+    }
+    case 'gunGone': {
+      const g = G.gunDrops.get(e.id);
+      if (g) { scene.remove(g); disposeGun(g); G.gunDrops.delete(e.id); }
+      if (e.by === G.myId) audio.play('pickup', { vol: 0.7, ui: true });
+      break;
+    }
     case 'give':
+      if (e.id === G.myId && G.player && e.pick) { // pegou do chao: fica com a montagem de quem largou ate morrer
+        // arma de bot vem sem montagem: e a de fabrica (a que ele tinha na mao), nunca a da sua conta (03/11)
+        G.player.pickLo = { ...(G.player.pickLo || {}), [e.wpn]: e.lo || defaultLoadout(e.wpn) };
+        G.player.give(e.wpn, false); G.player.equip(e.wpn, true); hud.weapon(G.player);
+        hud.message(t('gunPicked', { w: e.lo?.cvName || (e.lo?.body ? partName('body', e.lo.body) : wName(e.wpn)) }), 2);
+        break;
+      }
+      if (e.id === G.myId && G.player && e.wpn === 'rpg') { G.player.give('rpg', false); G.player.equip('rpg'); hud.weapon(G.player); break; } // Bazuca: entra junto das suas armas (o force apagava todas, 03/11)
       if (e.id === G.myId && G.player && e.refill) { G.player.give(e.wpn, false); hud.weapon(G.player); break; }
+      if (e.id === G.myId && G.player && G.mode === 'borroes') { G.player.give(e.wpn, false); G.player.equip(e.wpn, true); hud.weapon(G.player); audio.play('pickup', { vol: 0.6, ui: true }); break; } // noite: compra entra junto das outras (o force apagava a Estalo)
       if (e.id === G.myId && G.player && G.mode === 'infect') { G.player.forced = true; G.player.give(e.wpn, true, !!e.force); hud.weapon(G.player); break; }
       if (e.id === G.myId && G.player) {
         G.player.forced = G.mode === 'gungame';
@@ -928,9 +1142,59 @@ function onEvent(e) {
     case 'notReady': // host tentou iniciar com gente sem dar pronto
       $('lbStatus').textContent = t('notReady', { n: e.n });
       break;
+    case 'teamNo': // pedido de troca de time recusado (pausa)
+      hud.message(t('teamNo_' + e.why, { n: e.n }), 2.6); audio.play('ui_back', { ui: true });
+      break;
+    case 'teamSwap':
+      if (e.id === G.myId) { G.myTeam = e.team; hud.message(t('teamSwapYou', { t: t(e.team === 'red' ? 'h_red' : 'h_blue') }), 2.6); }
+      else if (inGame) hud.feed(esc(t('teamSwapThem', { n: e.name, t: t(e.team === 'red' ? 'h_red' : 'h_blue') })));
+      break;
     case 'msg':
       if (inGame) hud.feed(esc(e.key ? t(e.key, { n: e.name }) : e.text));
+      if (inGame && ['joined', 'left', 'leftAfk', 'kicked'].includes(e.key) && e.name !== G.myName) chat.sys(t(e.key, { n: e.name })); // entrou/saiu: aparece no chat tambem (03/11)
       break;
+    // Noite dos Borroes: avisos de onda, compras e a Caixa de Surpresas do Nanquim
+    case 'borWave': if (inGame) hud.alert(G.snap?.bor?.goal ? t('bor_goal', { n: e.n, g: G.snap.bor.goal }) : t('bor_wave', { n: e.n }), e.boss ? t('bor_boss', { n: t('mob_' + e.boss) }) : '', 'red'); break;
+    case 'borClear': if (inGame) hud.alert(t('bor_clear', { n: e.n }), t('bor_clearSub'), 'blue'); break;
+    case 'borDoor': if (inGame) hud.message(t('bor_doorFeed', { a: nameOf(e.by), r: t('bor_room_' + e.id) }), 2.6); break;
+    // chefoes (03/11): o servidor ja mandava, o cliente nao mostrava nada
+    case 'borBeam': { // Projecionista: warn 1 = lente acendendo (atire nela!), warn 0 = facho saiu
+      const r = G.remotes.get(e.id);
+      r?.char.boss?.(e.warn ? { warn: true } : { fire: true });
+      if (!inGame) break;
+      if (e.warn) { hud.alert(t('bor_beam'), '', 'red'); audio.play('chargeup', { pos: r?.pos, vol: 0.8, jitter: 0 }); }
+      else { audio.play('laser', { pos: r?.pos, vol: 0.9, rate: 0.6, jitter: 0 }); if (r?.pos) fx.word('FLASH!', [r.pos[0], r.pos[1] + 6, r.pos[2]], 3, 0.7); }
+      break;
+    }
+    case 'borFreeze': // o facho pegou alguem: congela o quadro
+      if (e.id === G.myId && inGame) { hud.alert(t('bor_frozen'), '', 'blue'); audio.play('iris', { ui: true, vol: 0.7, rate: 1.4 }); G.flashT = Math.max(G.flashT, 0.35); G.shake(0.25); }
+      else { const r = G.remotes.get(e.id); if (r?.pos && inGame) fx.word('CLIC!', [r.pos[0], r.pos[1] + 2.2, r.pos[2]], 1.4, 0.6); }
+      break;
+    case 'borSlam': { // Rei Tinteiro: warn 1 = pena erguida (PULA!), warn 0 = onda no chao
+      const r = G.remotes.get(e.id);
+      if (e.warn) { r?.char.swing?.(); if (inGame) { hud.alert(t('bor_slam'), '', 'red'); audio.play('whoosh', { pos: r?.pos, vol: 0.9, rate: 0.7, jitter: 0 }); } break; }
+      const at = e.at || r?.pos; if (!at || !inGame) break;
+      fx.splat([at[0], at[1], at[2]], 7, 0x141210); fx.puff([at[0], at[1] + 0.4, at[2]], 12, 3.2, 0x2a2724, 0.8);
+      fx.word('KA-BLAM!', [at[0], at[1] + 3, at[2]], 3.4, 0.8);
+      audio.play('explosion', { pos: at, vol: 0.9, rate: 0.7 });
+      G.shake(0.7);
+      break;
+    }
+    case 'borPhase': { // Rei Tinteiro mudou de fase: 2 = chuva de tinta, 3 = tampa aberta (olho exposto)
+      G.remotes.get(e.id)?.char.boss?.({ lid: e.n >= 3 });
+      if (inGame && e.n >= 2) { hud.alert(t(e.n >= 3 ? 'bor_phase3' : 'bor_phase2'), '', 'red'); audio.play('nukealarm', { ui: true, vol: 0.45, jitter: 0 }); G.shake(0.4); }
+      break;
+    }
+    case 'borBuy': if (inGame && e.id === G.myId) hud.message(t('bor_bought', { w: gunName(e.id, e.wpn) }), 2); break;
+    case 'borMilk': if (inGame && e.id === G.myId) hud.message(t('bor_milkDone'), 2); break;
+    case 'borPoor': if (inGame) hud.message(t('bor_poor', { n: Math.max(1, e.need - (G.me?.cs || 0)) }), 1.8); break;
+    case 'borWait': if (inGame) hud.message(t('bor_wait', { n: e.s }), 1.8); break;
+    case 'borBox': if (inGame && e.id === G.myId) hud.message(t('bor_boxSpin'), 2.6); break;
+    case 'borBoxGot': if (inGame) { if (e.body) { G.boxBody ||= new Map(); G.boxBody.set(e.id, { ...(G.boxBody.get(e.id) || {}), [e.wpn]: e.body }); if (e.id === G.myId && G.player?.wpn === e.wpn) { G.player.equip(e.wpn, true); hud.weapon(G.player); } } hud.message(t('bor_boxGot', { a: nameOf(e.id), w: gunName(e.id, e.wpn) }), 2.6); } break;
+    case 'borBoxMove': if (inGame) hud.alert(t('bor_boxMove', { r: t('bor_room_' + (G.M?.bor?.box[e.at]?.room || 'hub')) }), '', 'blue'); break;
+    case 'borDrop': if (inGame) audio.play('pickup', { vol: 0.5, ui: true, rate: 1.4 }); break;
+    case 'borPower': if (inGame) { hud.alert(t('dr_' + e.d), `${t('bor_dropBy', { a: nameOf(e.by) })} · ${t('drd_' + e.d)}`, 'blue'); audio.play('unlock', { vol: 0.7, ui: true, jitter: 0 }); if (e.d === 'borracha') G.shake(0.6); } break; // G.shake e funcao (03/11: virava numero e o tiro quebrava: sem som e sem dano)
+    case 'borPowerEnd': if (inGame) hud.message(t('bor_dropEnd', { n: t('dr_' + e.d) }), 2); break;
     case 'end':
       if (inGame) {
         G.slowT = 1.4;
@@ -1088,10 +1352,12 @@ $('endClip').onclick = () => { audio.play('ui_click', { ui: true }); makeClip();
 
 function showEnd(winner) {
   funil('terminou');
-  const inf = G.mode === 'infect';
-  const won = inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
+  const inf = G.mode === 'infect', bor = G.mode === 'borroes' && G.snap?.bor;
+  const solo = bor && (G.snap?.players || []).filter(p => !p.mob && !p.bot).length < 2;
+  const won = bor ? (winner === 'red' ? `${t('bor_win')} (${t('bor_winSub', { g: bor.goal || bor.wave })})` : t(solo ? 'bor_endSolo' : 'bor_end', { n: bor.wave }))
+    : inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
   $('endWin').textContent = won;
-  const ps = [...(G.snap?.players || [])].sort((a, b) => b.score - a.score).slice(0, 8);
+  const ps = [...(G.snap?.players || [])].filter(p => !p.mob).sort((a, b) => b.score - a.score).slice(0, 8);
   $('endBoard').innerHTML = ps.map(p => `<div class="${p.id === G.myId ? 'me' : ''}"><span>${esc(p.name)}</span><span>${t('endKills', { n: p.kills })}</span></div>`).join('');
   // progresso: XP por tipo, nivel subindo na barra e tudo o que liberou
   const L = G.matchLog || newMatchLog();
@@ -1147,6 +1413,11 @@ function animateEndXp(from, to, gained) {
 function onMsg(m) {
   if (m.t === 'snap') onSnap(m);
   else if (m.t === 'ev') onEvent(m);
+  else if (m.t === 'kicked') { // host tirou da sala ou ficou parado demais: volta pro menu com o aviso (sem reconectar)
+    G.kickedWhy = m.why === 'afk' ? 'kickedAfk' : 'kickedHost';
+    if (G.net) G.net.onclose = () => {};
+    quitGame().then(() => { ui.go('mp'); $('mpErr').textContent = t(G.kickedWhy); });
+  }
   else if (m.t === 'welcome') {
     G.myId = m.id; G.myTeam = m.team; G.mode = m.mode; G.duo = !!m.duo; G.bounce = !!m.bounce;
     if (m.map) setMap(m.map);
@@ -1215,6 +1486,12 @@ function matchLoadouts() {
   return all;
 }
 
+// troca de arma/montagem na partida: o servidor guarda e aplica no renascimento; a arma na mao tambem so troca la
+function applyLoadoutLater(quiet) {
+  if (G.range || G.tutorial || !G.player?.alive) { G.loadouts = matchLoadouts(); sendLoadout(); G.player?.rearm(); return; } // morto/treino: ja vale
+  G.pendingLo = true; G.loNow = true; sendLoadout();
+  if (!quiet) hud.message(t('loNextSpawn'), 2.2);
+}
 function sendLoadout() {
   if (!G.net) return;
   const los = {};
@@ -1225,7 +1502,7 @@ function sendLoadout() {
   // equipamento de campo (um so; o nivel tem que ter liberado). O botao de toque mostra o icone dele.
   G.field = G.tutorial?.fieldOverride || (FIELD[settings.field] && unlockLevel() >= FIELD[settings.field].lvl ? settings.field : null); // treino: a Mola emprestada vale
   setFieldHud(G.field);
-  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: progressInfo().level, ul: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field, streaks: G.streaks });
+  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: progressInfo().level, ul: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field, streaks: G.streaks, now: !!(G.range || G.tutorial) }); // now: campo de treino/tutorial trocam na hora; na partida vale no proximo renascimento
   if (G.tutorial?.fieldOverride) { const me = G.net.core?.players.get(G.myId); if (me) me.field = G.tutorial.fieldOverride; } // o servidor local checa o nivel; no treino passa
   G.net.send({ t: 'look', look: wornLook() }); // visual do boneco (os outros veem)
   G.net.send({ t: 'dev', v: devNow() });
@@ -1289,11 +1566,15 @@ function startAttract() {
 
 function clearRemotes() {
   replay.reset(scene); document.body.classList.remove('replay');
-  for (const r of G.remotes.values()) scene.remove(r.char.root);
+  for (const r of G.remotes.values()) { scene.remove(r.char.root); disposeGun(r.char.gun); }
   G.remotes.clear();
+  for (const g of G.gunDrops.values()) { scene.remove(g); disposeGun(g); } G.gunDrops.clear();
   for (const m of G.nadeMeshes.values()) scene.remove(m);
   G.nadeMeshes.clear();
   while (G.blimpMeshes.length) scene.remove(G.blimpMeshes.pop());
+  G.strikes?.clear();
+  if (G.heistView) { G.heistView.dispose(); G.heistView = null; }
+  if (G.borView) { G.borView.dispose(); G.borView = null; }
   G.remoteLo.clear();
 }
 
@@ -1333,6 +1614,14 @@ async function warmGuns() {
     vm.scene.add(grp);
     if (renderer.compileAsync) await renderer.compileAsync(vm.scene, vm.camera); else renderer.compile(vm.scene, vm.camera);
     vm.scene.remove(grp);
+    // 03/11 (bateria de desempenho): a cena da partida tambem (mapa, bonecos e armas de quem ja esta na sala) + as
+    // 8 skins animadas. Sem isso a 1a imagem compilava tudo junto: 0,5 s (contra todos) a 1 s (noite) de tela parada.
+    // compileAsync usa a compilacao paralela do navegador (KHR_parallel_shader_compile): o carregamento nao trava
+    const skins = new THREE.Group(), tiny = new THREE.BoxGeometry(0.01, 0.01, 0.01);
+    for (const id of Object.keys(SKIN_CODE)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
+    skins.position.copy(camera.position); scene.add(skins);
+    if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera);
+    scene.remove(skins); tiny.dispose();
   } catch (e) { console.warn('aquecimento das armas falhou', e); }
 }
 
@@ -1349,8 +1638,8 @@ async function beginMatch(join) {
   G.state = 'game';
   funil('jogou');
   audio.music(true, G.mode === 'br' || G.duo ? 'music_br' : 'music_m' + (1 + Math.floor(Math.random() * 4)));
-  G.plafts = 0; G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); G.countEnd = 0; G.spec = { i: 0, map: false };
-  input.mode = G.mode;
+  G.plafts = 0; G.gadgetTold = null; G.gadgetShown = null; G.stimBoostT = 0; G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); setTimeout(() => { if (G.blitz && G.state === 'game') hud.message(t('blitzOn'), 3); }, 5000); G.countEnd = 0; G.spec = { i: 0, map: false };
+  input.mode = G.mode; setFireButton(input); // botoes do modo (usar, inclinar, marcar) valem a partir desta partida
   // avisa o servidor que carregou: quando o ultimo avisar, sai a contagem pra todo mundo
   G.net?.send({ t: 'loaded' });
   // dicas de primeira vez (uma vez so cada): modo, equipamento e balas especiais da classe
@@ -1538,8 +1827,8 @@ function closeLobbySmith(ready) {
   if ($('menu').hidden) return;
   tipClose(); // dica da tela de cima (skills) nao fica em cima da sala
   $('menu').hidden = true; ui.go('home');
-  if (G.state === 'game') { // aberto da pausa: a arma montada vale na hora e volta pro tiroteio
-    G.loadouts = matchLoadouts(); sendLoadout(); G.player?.rearm();
+  if (G.state === 'game') { // aberto da pausa: a arma montada vale no PROXIMO renascimento (pedido dele 03/11) e volta pro tiroteio
+    applyLoadoutLater();
     $('hud').hidden = false; document.body.classList.remove('game-smith');
     if (ready) setPaused(false); else { $('pause').hidden = false; renderPausePick(); } // Esc/voltar: cai na pausa (Esc nao destrava o mouse)
     return;
@@ -1583,9 +1872,9 @@ function renderPausePick() {
   const list = PRIMARIES;
   $('pkList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
   $('pkList').querySelectorAll('button').forEach(b => b.onclick = () => {
-    settings.primary = b.dataset.w; saveSettings(); sendLoadout(); G.player?.rearm();
+    settings.primary = b.dataset.w; saveSettings(); applyLoadoutLater(true);
     audio.play('pickup', { ui: true, vol: 0.5 });
-    hud.message(t(G.player?.alive ? 'swapNow' : 'nextSpawn', { w: G.loadouts[b.dataset.w]?.body ? partName('body', G.loadouts[b.dataset.w].body) : wName(b.dataset.w) }), 2);
+    hud.message(t('nextSpawn', { w: G.loadouts[b.dataset.w]?.body ? partName('body', G.loadouts[b.dataset.w].body) : wName(b.dataset.w) }), 2);
     renderPausePick();
   });
 }
@@ -1595,6 +1884,8 @@ function setPaused(p) {
   G.paused = p;
   if (p) renderPausePick();
   $('pauseHud').hidden = !isTouch;
+  // trocar de time (02/11): so em modo de time escolhivel e com sala de verdade (o servidor confere vaga e espera de 6 min)
+  $('pauseTeam').hidden = !(MODES[G.mode]?.teams && !G.duo && !['infect', 'bomb', 'br'].includes(G.mode) && !G.tutorial && !G.range && !SS);
   $('pause').hidden = !p;
   input.enabled = !p;
   if (p) { input.keys.clear(); input.mouse.fire = input.mouse.ads = false; input.touch.fire = false; }
@@ -1675,7 +1966,8 @@ function startRange(cat, body) {
   G.range.primary = settings.primary; // devolve a principal salva na saida
   rangeCat = cat;
   $('menu').hidden = true;
-  startGame(new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 9999, time: 3600 }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.range?.dispose(); G.range = null; });
+  const rangeNet = new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 9999, time: 3600 }); rangeNet.core.noDrops = true; // campo de treino: alvo nao larga arma
+  startGame(rangeNet, settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.range?.dispose(); G.range = null; });
 }
 $('rangeBack').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
 
@@ -1691,7 +1983,8 @@ const ui = initMenus({
       G.field = f; G.fieldK = 1; if (me) me.fieldCharge = 1; // treino: a Mola emprestada ja vem cheia
       setFieldHud(f);
     } });
-    startGame(new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 500, time: 1800 }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.tutorial?.dispose(); G.tutorial = null; });
+    const tutNet = new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 500, time: 1800 }); tutNet.core.noDrops = true;
+    startGame(tutNet, settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.tutorial?.dispose(); G.tutorial = null; });
   },
   onRange: (cat, body) => startRange(cat, body),
   bindsChanged: () => { input.kbMap = null; input.padMap = null; },
@@ -1750,7 +2043,12 @@ function frame() {
   if (!Number.isFinite(G.flashT)) G.flashT = 0;
   G.flashT = Math.max(0, G.flashT - realDt);
   film.uniforms.flash.value = G.state === 'game' ? Math.min(1, G.flashT) : 0;
-  try { frameBody(now, realDt); } catch (e) { reportaErro(e, 'frame ' + G.state + '/' + G.mode + '/' + (ui.screen || '')); }
+  try { frameBody(now, realDt); } catch (e) {
+    reportaErro(e, 'frame ' + G.state + '/' + G.mode + '/' + (ui.screen || ''));
+    // o quadro quebrou antes de desenhar: desenha assim mesmo (senao a tela congelava no ultimo quadro, branco do
+    // clarao da flash/Torta ou da abertura: 02/11, tela branca permanente e tela branca ao comecar)
+    try { composer.render(realDt); } catch { /* */ }
+  }
 }
 function frameBody(now, realDt) {
   // camera lenta no abate final
@@ -1766,7 +2064,7 @@ function frameBody(now, realDt) {
   if (ui.screen === 'look' && G.state === 'menu' && lookChar) {
     menuT += realDt;
     lookChar.root.rotation.y = Math.PI + Math.sin(menuT * 0.45) * 0.7 + lookDrag;
-    lookChar.update(realDt, { anim: 'idle', alive: true, speed: 0, t: menuT, pitch: 0 });
+    lookChar.update(realDt, { anim: 'pose', alive: true, speed: 0, t: menuT, pitch: 0 });
     // o boneco no meio do espaco livre a esquerda do cartao (mede o cartao de verdade)
     lookCam.aspect = innerWidth / innerHeight;
     const free = Math.max(160, $('scr-look').getBoundingClientRect().left - 12);
@@ -1808,6 +2106,24 @@ function frameBody(now, realDt) {
   if (G.state === 'lobby') lobby.frame();
   lineupFrame(realDt);
   world.update(G.t, dt);
+  world.cull?.(camera.position); // Floresta: miolo do estudio some quando a camera esta na mata
+  G.strikes?.update(dt, G.t, G.blimpMeshes);
+  if (G.heistView) { G.heistView.update(dt, G.t); G.heistView.hud(G.snap?.heist, G.myTeam, G.state === 'game'); }
+  downMarks();
+  if (G.borView) {
+    G.borView.update(dt, G.t);
+    const P = G.player, ok = G.state === 'game' && P?.alive && !G.down;
+    let pr = ok ? G.borView.prompt(P.pos, P.owned, isTouch ? t('bor_holdTouch') : t('bor_hold', { k: G.pad?.active ? 'X' : 'E' })) : null;
+    // parceiro caido perto: segurar usar levanta (mesma bomba da dupla)
+    G.pumpMate = null;
+    if (ok) for (const r of G.remotes.values()) {
+      if (r.mob || !r.alive || !(r.dn > 0) || r.team !== G.myTeam || (r.pos[0] - P.pos[0]) ** 2 + (r.pos[2] - P.pos[2]) ** 2 > BR.duo.reviveR ** 2) continue;
+      G.pumpMate = r;
+      pr = r.rv > 0 ? t('duo_pumping', { p: Math.min(99, Math.round(r.rv / BR.duo.revive * 100)) }) : t(isTouch ? 'duo_pumpTouch' : G.pad?.active ? 'duo_pumpPad' : 'duo_pump');
+    }
+    hud.prompt(pr);
+    if (input.useBtn) input.useBtn.classList.toggle('can', !!pr); // toque: a mao pulsa quando da pra comprar/abrir/levantar ali
+  }
   objectives.update(G.t, G.snap, G.mode, (id) => id === G.myId ? { me: true } : G.remotes.get(id));
   escView?.update(G.t, dt, G.snap?.esc); escHud(G.snap?.esc);
   fieldView?.update(G.t, dt, G.snap, G.remotes);
@@ -1863,7 +2179,18 @@ function frameBody(now, realDt) {
     }
   }
   fx.update(dt);
-  for (const m of G.nadeMeshes.values()) if (m.userData.to) { m.position.lerp(tmpV.fromArray(m.userData.to), Math.min(1, dt * 18)); m.rotation.x += dt * 8; }
+  // armas largadas: giram devagar, piscam nos 2 s finais e somem sozinhas se o aviso do servidor se perder
+  if (G.player) { // gadget de baixo do cano: plaquinha com o tanque/cartuchos e o botao de toque so quando tem
+    const gid = G.player.alive ? G.player.gadgetId() : null;
+    if (gid !== G.gadgetShown) {
+      G.gadgetShown = gid; document.body.classList.toggle('has-gadget', !!gid);
+      if (gid && !(G.gadgetTold ||= new Set()).has(gid)) { G.gadgetTold.add(gid); hud.message(t(isTouch ? 'gdHintTouch' : 'gdHint', { g: t(gid), k: bindLabel(settings, 'gadget', G.pad?.active ? 1 : 0) }), 3); } // 1a vez na partida: diz o botao
+    }
+    hud.gadget(gid, gid === 'gd_flame' ? G.player.flameFuel / GADGETS.gd_flame.fuel : G.player.ubShells, { ...settings, padActive: !!G.pad?.active });
+  }
+  { const rk = vm.gun?.userData.rocket; if (rk && G.player) rk.visible = (G.player.ammo?.rpg?.mag || 0) > 0 && !(G.player.reloadT > 0); } // Bazuca: foguete na boca
+  for (const [id, g] of G.gunDrops) { const age = G.t - g.userData.born; g.rotation.y += dt * 0.8; g.position.y = g.userData.y + Math.sin(G.t * 3 + id) * 0.04; g.visible = age < 8 || Math.floor(age * 8) % 2 === 0; if (age > 11) { scene.remove(g); disposeGun(g); G.gunDrops.delete(id); } }
+  for (const m of G.nadeMeshes.values()) if (m.userData.to) { m.position.lerp(tmpV.fromArray(m.userData.to), Math.min(1, dt * 18)); if (m.userData.rocket) { if (Math.random() < dt * 30) fx.puff(m.position.toArray(), 1, 0.35, 0x8a8478, 0.5); } else m.rotation.x += dt * 8; } // foguete nao gira: solta fumaca
   for (const m of G.blimpMeshes) if (m.userData.to) {
     const prev = m.position.clone();
     m.position.lerp(tmpV.fromArray(m.userData.to), Math.min(1, dt * 4));
@@ -1892,6 +2219,7 @@ function frameBody(now, realDt) {
     r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || camD < 30);
     if (r.team && r.team === G.myTeam) r.char.sharpTag(renderer);
   }
+  flash?.update(camera, G.remotes, G.myTeam, G.state !== 'game' || !!G.player?.alive);
 
   let scopeOn = false;
   if (G.state === 'game' && G.player) {
@@ -1899,7 +2227,20 @@ function frameBody(now, realDt) {
     if (inp.pause) setPaused(!G.paused);
     const p = G.player;
     G.pumping = !!(G.pumpMate && inp.use); // enchendo a bomba: fica parado em cima do parceiro
-    if (G.M) G.M.dyn = G.snap?.esc ? [trainBox(G.M, G.snap.esc.d)] : null; // bonde solido: voce nao atravessa e a bala para nele (01/11)
+    // arma no chao (03/11): perto aparece "E pegar X"; so pega apertando usar (antes trocava sozinho ao passar)
+    if (G.gunDrops.size && p.alive && G.mode !== 'br') {
+      let near = null, best = 2.2 * 2.2;
+      for (const [id, g] of G.gunDrops) { const q = g.userData.pos, d2 = (q[0] - p.pos[0]) ** 2 + (q[2] - p.pos[2]) ** 2; if (d2 < best && Math.abs(q[1] - p.pos[1]) < 1.6) { best = d2; near = [id, g]; } }
+      G.dropNear = near ? near[0] : null;
+      if (near) {
+        hud.prompt(t(isTouch ? 'gunTakeTouch' : 'gunTake', { k: bindLabel(settings, 'use', G.pad?.active ? 1 : 0), w: near[1].userData.name }));
+        if (inp.use && !G.useWas) G.net?.send({ t: 'pickGun', id: near[0] });
+      } else if (G.dropPrompt) hud.prompt(null);
+      G.dropPrompt = !!near;
+      if (input.useBtn && G.mode !== 'bomb' && G.mode !== 'borroes') input.useBtn.hidden = !near; // toque: botao de usar aparece perto da arma
+    } else if (G.dropPrompt) { hud.prompt(null); G.dropPrompt = false; if (input.useBtn && G.mode !== 'bomb' && G.mode !== 'br' && G.mode !== 'borroes') input.useBtn.hidden = true; }
+    G.useWas = !!inp.use;
+    if (G.M) G.M.dyn = G.snap?.esc ? [trainBox(G.M, G.snap.esc.d)] : G.snap?.heist ? heistBoxes(G.snap.heist) : G.snap?.bor ? borDoorBoxes(G.M, G.snap.bor.doors) : null; // bonde (01/11), cofre e van (03/11) e portas fechadas da noite solidos: voce nao atravessa e a bala para
     if (!G.paused) p.update(dt, inp);
     ctxHint(realDt, p);
     nadeArc(p);
@@ -1912,7 +2253,8 @@ function frameBody(now, realDt) {
     const zoom = p.zoomNow || W.zoom || 1;
     // luneta 3D: fora da lente so um zoom leve; dentro da lente, o zoom de verdade
     const outer = big ? 1.2 : zoom;
-    const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0)) / (1 + (outer - 1) * p.adsK);
+    G.stimBoostT = Math.max(0, (G.stimBoostT || 0) - realDt);
+    const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0) + (G.stimBoostT > 0 && p.alive ? FIELD.stim.fov : 0)) / (1 + (outer - 1) * p.adsK); // estimulante: FOV abre um tico e volta suave
     // distancia de desenho (Ajustes): o que passa do corte nem e desenhado; a nevoa fecha antes pra nada sumir seco
     const dd = DRAW_DIST[settings.draw] || DRAW_DIST.far;
     if (camera.far !== dd) camera.far = dd;
@@ -1986,7 +2328,7 @@ function frameBody(now, realDt) {
     if (SR) { // espectador: a arma do outro anda e corre como a dele
       const sp = SR.speed || 0, run = SR.anim === 'sprint' || SR.anim === 'tac';
       vm.update({ dt: realDt, moving: sp > 1.5 && SR.anim !== 'jump', speed: sp, sprint: run, tac: SR.anim === 'tac', ads: 0, crouch: SR.anim === 'crouch', air: SR.anim === 'jump', pistolSprint: run && SR.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false });
-    } else vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, slide: p.slideT > 0, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: settings.gunSway === false && !isTouch ? 0 : inp.lookX, lookDY: settings.gunSway === false && !isTouch ? 0 : inp.lookY, firing: p.firing });
+    } else vm.update({ dt: realDt, moving: Math.hypot(p.vel[0], p.vel[2]) > 1.5 && p.onGround, speed: Math.hypot(p.vel[0], p.vel[2]), sprint: p.sprint, tac: p.tac, ads: p.adsK, crouch: p.crouch, slide: p.slideT > 0, air: !p.onGround, pistolSprint: p.sprint && p.wpn === 'pistol', lookDX: settings.gunSway === false && !isTouch ? 0 : inp.lookX, lookDY: settings.gunSway === false && !isTouch ? 0 : inp.lookY, firing: p.firing, gadget: (p.gadgetPoseT || 0) > 0, reloadPaused: p.reloadT > 0 && (p.sprint || p.tac) && !G.skills?.includes('pique') });
     if (!SR && G.specVm && p.alive) { G.specVm = null; vm.setWeapon(p.wpn, p.lo(p.wpn), true); vm.setGloves(wornLook()); } // voltou: a sua arma e a sua luva
     vmPass.enabled = (p.alive || !!SR) && !G.down; // caido: sem arma na mao
     const inAir = p.alive && p.air && G.bounce;
@@ -2077,11 +2419,12 @@ function frameBody(now, realDt) {
 }
 
 $('deadGo').onclick = () => G.net?.send({ t: 'respawn' });
+hud.onStreakTap = (id) => { G.streakKind = id; input.edges.add('STREAK'); }; // celular: tocou num selo pronto
+$('pauseTeam').onclick = () => { audio.play('ui_click', { ui: true }); G.net?.send({ t: 'team' }); setPaused(false); };
 $('endLobby').onclick = () => {
   audio.play('ui_click', { ui: true });
   G.net?.send({ t: 'toLobby' });
-  // quem nao e o host espera ele (ou todo mundo apertar)
-  if (G.snap?.host && G.snap.host !== G.myId) { $('endLobby').disabled = true; $('endNext').textContent = t('endWaitHost'); }
+  $('endLobby').disabled = true; // qualquer um leva a sala (02/11)
 };
 $('specNext').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.i++; G.spec && (G.spec.map = false); };
 $('specMap').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.map = !G.spec.map; };
@@ -2171,25 +2514,31 @@ $('installApp').onclick = async () => {
 $('igOk').onclick = () => { audio.play('ui_back', { ui: true }); $('installGuide').hidden = true; };
 $('installGuide').onclick = (e) => { if (e.target === $('installGuide')) $('installGuide').hidden = true; };
 
-// tela cheia: no menu inicial e na pausa (iPhone nao deixa pagina ir pra tela cheia: o botao some)
+// tela cheia: no menu inicial e na pausa. iPad usa o webkit; iPhone nao deixa pagina ir pra tela cheia (03/11): o
+// botao abre o guia "Adicionar a Tela de Inicio" (aberto por la o jogo roda sem a barra do Safari)
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
 const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+const iosNoFs = !fsOk && /iP(hone|od|ad)/.test(navigator.userAgent) && !navigator.standalone;
 const syncFs = () => {
-  const on = !!document.fullscreenElement;
-  $('fsMenu').hidden = !fsOk; $('pauseFs').hidden = !fsOk;
+  const on = !!fsEl();
+  $('fsMenu').hidden = !fsOk && !iosNoFs; $('pauseFs').hidden = !fsOk && !iosNoFs;
   $('fsMenu').classList.toggle('on', on);
   $('fsMenu').setAttribute('aria-label', t(on ? 'fsOff' : 'fsOn'));
   $('pauseFs').textContent = t(on ? 'fsOff' : 'fsOn');
 };
 const toggleFs = async () => {
   audio.play('ui_click', { ui: true });
+  if (iosNoFs) { $('installGuide').hidden = false; return; }
   try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); if (G.state === 'game' && isTouch) await screen.orientation?.lock?.('landscape').catch(() => {}); }
+    const de = document.documentElement;
+    if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else { await (de.requestFullscreen ? de.requestFullscreen({ navigationUI: 'hide' }) : de.webkitRequestFullscreen?.()); if (G.state === 'game' && isTouch) await screen.orientation?.lock?.('landscape').catch(() => {}); }
   } catch { /* navegador recusou */ }
 };
 $('fsMenu').onclick = toggleFs;
 $('pauseFs').onclick = toggleFs;
 document.addEventListener('fullscreenchange', syncFs);
+document.addEventListener('webkitfullscreenchange', syncFs); // iPad
 syncFs();
 
 // ---------- partida ----------
@@ -2213,12 +2562,13 @@ const BOOT_T = performance.now();
   }
   fx = new FX(scene);
   G.fx = fx;
+  G.strikes = new StrikeView(scene, fx); // Biplano, Trem, Balao Bombardeiro, Mao do Animador
   if (SS) {
     // tela dividida: sem abertura nem cartaz; entra direto na partida da pagina de cima
     $('splash')?.remove(); $('menu').classList.remove('intro'); $('menu').hidden = true;
     window.__ssWake = () => audio.init(); // a pagina de cima chama no primeiro clique/tecla (som precisa de gesto)
     // o quadro so comeca depois de conectar: o 'welcome' (na fila) monta o mapa antes do primeiro desenho
-    startGame(new SplitNet(SS.slot), settings.name || 'Jogador ' + (SS.slot + 1)).catch(e => console.warn('tela dividida', e)).finally(frame);
+    startGame(new SplitNet(SS.slot), rovexMe?.name || settings.name || 'Jogador ' + (SS.slot + 1)).catch(e => console.warn('tela dividida', e)).finally(frame);
     return;
   }
   startAttract();

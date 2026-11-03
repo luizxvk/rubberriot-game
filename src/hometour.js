@@ -13,7 +13,6 @@ const STEPS = [
   ['#scr-home [data-go=skills]', 'skTab', 'ht_skills'],
   ['#scr-home [data-go=challenges]', 'challenges', 'ht_ch'],
   ['#scr-home [data-go=settings]', 'settings', 'ht_set'],
-  ['#scr-home [data-go=controls]', 'controls', 'ht_ctl'],
 ];
 
 export function homeTourSeen() { try { return !!localStorage.getItem(KEY); } catch { return true; } }
@@ -75,7 +74,10 @@ export function startHomeTour({ touch = false } = {}) {
     place();
     root.querySelector('#htNext').focus({ preventScroll: true });
   };
-  const close = () => { removeEventListener('resize', place); removeEventListener('keydown', key, true); root.remove(); };
+  const close = () => { clearInterval(watch); removeEventListener('resize', place); removeEventListener('keydown', key, true); root.remove(); };
+  // so existe na tela inicial (03/11: ficava aberto por cima da partida/lobby quando a pessoa saia do menu)
+  const home = document.getElementById('scr-home');
+  const watch = setInterval(() => { if (!home || home.hidden || !home.offsetParent || document.body.classList.contains('in-game')) close(); }, 200);
   const next = () => { audio.play('ui_click', { ui: true }); if (++i >= steps.length) close(); else show(); };
   const key = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); audio.play('ui_back', { ui: true }); close(); }

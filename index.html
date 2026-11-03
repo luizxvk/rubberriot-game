@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#141210">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Rubber Riot - Free Rubber-Hose FPS in Your Browser</title>
 <meta name="description" content="Rubber Riot is a free multiplayer FPS with 1930s cartoon style that runs right in your browser. Anvil killstreaks, a boxing ring to fight your way back, duo revives with a bicycle pump, battle royale and custom guns. No download.">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -97,6 +98,15 @@ html.touch-boot .boot { display: grid; }
   .boot-state { grid-column: 1 / -1; text-align: center; }
 }
 @media (prefers-reduced-motion: reduce) { .boot-title span, .boot-spark, .boot.ready .boot-state { animation: none; } .boot-rope { transition: none; } }
+/* 03/11 (pedido dele): tela cheia no celular, sem cartao flutuando no fundo escuro */
+.boot { padding: 0; background: #ece9e1; }
+.boot-card { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+.boot-card > * { width: min(380px, 100%); }
+@media (max-height: 460px) and (orientation: landscape) {
+  .boot-card { width: 100%; display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 360px); justify-content: center; align-content: center; }
+  .boot-card > * { width: auto; }
+}
 </style>
 </head>
 <body>
@@ -183,6 +193,7 @@ html.touch-boot .boot { display: grid; }
       <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="pt">PT</button></div>
       <!-- instalar (sempre a vista; sem o atalho do Chrome abre o guia) e tela cheia. Icones: Material Icons (Apache 2.0) -->
       <div class="app-tools">
+        <div class="zbal" id="homeBal" role="group" hidden></div>
         <button class="tool" id="installApp" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><span data-i18n="installApp">Instalar app</span></button>
         <button class="tool icon" id="fsMenu" data-i18n-aria="fsOn" aria-label="Tela cheia" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
       </div>
@@ -223,8 +234,10 @@ html.touch-boot .boot { display: grid; }
         <button data-go="look" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 18.2 13 11.75v-.91a3.496 3.496 0 0 0-.18-6.75A3.51 3.51 0 0 0 8.5 7.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5c0 .84-.69 1.52-1.53 1.5-.54-.01-.97.45-.97.99v1.76L2.4 18.2c-.77.58-.36 1.8.6 1.8h18c.96 0 1.37-1.22.6-1.8zM6 18l6-4.5 6 4.5H6z"/></svg><span data-i18n="look">Visual</span></button>
         <button data-go="skills" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 8.57a1.43 1.43 0 1 0 0 2.86 1.43 1.43 0 0 0 0-2.86z"/><path d="M13 3C9.25 3 6.2 5.94 6.02 9.64L4.1 12.2a.5.5 0 0 0 .4.8H6v3c0 1.1.9 2 2 2h1v3h7v-4.68A6.999 6.999 0 0 0 13 3zm3 7c0 .13-.01.26-.02.39l.83.66c.08.06.1.16.05.25l-.8 1.39c-.05.09-.16.12-.24.09l-.99-.4c-.21.16-.43.29-.67.39L14 13.83c-.01.1-.1.17-.2.17h-1.6c-.1 0-.18-.07-.2-.17l-.15-1.06c-.25-.1-.47-.23-.68-.39l-.99.4c-.09.03-.2 0-.25-.09l-.8-1.39a.19.19 0 0 1 .05-.25l.84-.66c-.01-.13-.02-.26-.02-.39s.02-.27.04-.39l-.85-.66c-.08-.06-.1-.16-.05-.26l.8-1.38c.05-.09.15-.12.24-.09l1 .4c.2-.15.43-.29.67-.39L12 6.17c.02-.1.1-.17.2-.17h1.6c.1 0 .18.07.2.17l.15 1.06c.24.1.46.23.67.39l1-.4c.09-.03.2 0 .24.09l.8 1.38a.2.2 0 0 1-.05.26l-.85.66c.03.12.04.25.04.39z"/></svg><span data-i18n="skTab">Skills</span></button>
         <button data-go="challenges" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg><span data-i18n="lbCh">Desafios</span></button>
+        <button data-go="shop" class="bill-item shop-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zm-2.99-3.9 1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-.94.47-.61 0-1.14-.49-1.21-1.14L16.98 5l1.93-.01zM13 5h1.96l.54 4.52c.05.39-.07.78-.33 1.07-.22.26-.54.41-.95.41-.67 0-1.22-.59-1.22-1.31V5zM8.49 9.52 9.04 5H11v4.69c0 .72-.55 1.31-1.29 1.31-.34 0-.65-.15-.89-.41-.25-.29-.37-.68-.33-1.070zm-4.45-.16L5.050 5h1.97l-.58 4.86c-.08.65-.6 1.14-1.21 1.14-.49 0-.8-.29-.93-.47-.27-.32-.36-.75-.26-1.17zM5 19v-6.03c.08.01.15.03.23.03.87 0 1.66-.36 2.24-.95.6.6 1.4.95 2.31.95.87 0 1.65-.36 2.23-.93.59.57 1.39.93 2.29.93.84 0 1.640-.35 2.24-.95.58.59 1.37.95 2.24.95.08 0 .15-.02.23-.03V19H5z"/></svg><span data-i18n="shop">Loja</span></button>
         <button data-go="settings" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg><span data-i18n="settings">Ajustes</span></button>
-        <button data-go="controls" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.58 16.09l-1.09-7.66C20.21 6.46 18.52 5 16.53 5H7.47C5.48 5 3.79 6.46 3.51 8.43l-1.09 7.66C2.2 17.63 3.39 19 4.94 19c.68 0 1.32-.27 1.8-.75L9 16h6l2.25 2.25c.48.48 1.13.75 1.8.75 1.56 0 2.75-1.37 2.53-2.91zM11 11H9v2H8v-2H6v-1h2V8h1v2h2v1zm4-1c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm2 3c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg><span data-i18n="controls">Controles</span></button>
+        <!-- anuncios (03/11): no celular/tela estreita fica aqui, no lugar dos Controles (que foram pros Ajustes) -->
+        <div class="ann ann-in" id="annIn" role="region" aria-roledescription="carrossel" data-i18n-aria="annTitle" aria-label="Novidades"></div>
       </nav>
     </div>
   </section>
@@ -237,6 +250,9 @@ html.touch-boot .boot { display: grid; }
   </aside>
 
   <!-- salas de amigos abertas agora (so com conta Rovex; some sem nenhuma) -->
+  <!-- anuncios no PC (03/11): canto direito da tela, estilo cartaz -->
+  <aside class="ann ann-side" id="annSide" role="region" aria-roledescription="carrossel" data-i18n-aria="annTitle" aria-label="Novidades"></aside>
+
   <aside class="news friends" id="friendRooms" aria-labelledby="frTitle" hidden>
     <header><h2 id="frTitle" data-i18n="frTitle">Amigos jogando</h2><span class="fr-n" id="frCount"></span></header>
     <ul id="frList"></ul>
@@ -305,6 +321,27 @@ html.touch-boot .boot { display: grid; }
     <div class="pf" id="pfBody"></div>
   </section>
 
+  <!-- loja (03/11): vitrine estilo Fortnite, itens em previa (src/shop.js). Icone de fechar: Material Icons (Apache 2.0) -->
+  <section class="card wide shop-card" id="scr-shop" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="shop">Loja</h2><div class="zbal shop-zbal" id="shopBal" role="group" hidden></div></header>
+    <div class="shop" id="shopPane"></div>
+    <div class="shop-pop" id="shopPop" role="dialog" aria-modal="true" aria-labelledby="shopPopName" hidden>
+      <div class="sp-box">
+        <div class="sp-art"></div>
+        <div class="sp-info">
+          <button class="lb-x" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+          <small class="sp-rar" id="shopPopRar"></small>
+          <h3 id="shopPopName"></h3>
+          <p id="shopPopDesc"></p>
+          <ul class="sp-gives" id="shopPopGives" aria-label="Inclui"></ul>
+          <p class="sp-price" id="shopPopPrice"></p>
+          <button class="big" id="shopBuy" data-i18n="shopBuy">Comprar</button>
+          <p class="sp-soon" id="shopPopSoon" role="status" data-i18n="shopSoon" hidden>Compra com Zions chega em breve</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- skills passivas: secao propria (separada das armas); 2 medalhoes (slots) + cartas. Icones Material Icons (Apache 2.0) -->
   <section class="card wide" id="scr-skills" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="skTab">Skills</h2></header>
@@ -313,12 +350,12 @@ html.touch-boot .boot { display: grid; }
   </section>
 
   <section class="card" id="scr-settings" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="settings">Ajustes</h2></header>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="settings">Ajustes</h2><button class="set-keys" id="setKeys"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg><span data-i18n="sg_keys">Redefinir comandos</span></button></header>
     <div class="settings" id="settingsList"></div>
   </section>
 
   <section class="card" id="scr-controls" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="controls">Controles</h2></header>
+    <header class="card-head"><button class="back" data-go="settings" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="controls">Controles</h2></header>
     <div class="keys-tabs" role="tablist"><button role="tab" data-kt="kb" aria-selected="true" data-i18n="ctlKb">Teclado e mouse</button><button role="tab" data-kt="pad" aria-selected="false" data-i18n="ctlPad">Controle</button><button role="tab" data-kt="touch" aria-selected="false" data-i18n="ctlTouch">Toque</button></div>
     <dl class="keys" id="keyList"></dl>
   </section>
@@ -330,7 +367,7 @@ html.touch-boot .boot { display: grid; }
 <section id="lobby" hidden>
   <header class="lb-marquee">
     <h2 class="lb-map" id="lbMap">Vila</h2>
-    <p class="lb-mode" id="lbMode"></p><p class="lb-mode lb-ev" id="lbEv" hidden></p>
+    <p class="lb-mode" id="lbMode"></p><p class="lb-mode lb-ev" id="lbEv" hidden></p><p class="lb-mode lb-ev lb-blitz" id="lbBlitz" data-i18n="blitzPill" hidden>Evento · 2x XP</p>
     <p class="lb-ver" id="lbVer"></p>
     <div class="lb-room" id="lbRoom" hidden>
       <span data-i18n="lbRoomLbl">Sala</span><b id="lbRoomCode"></b>
@@ -364,6 +401,8 @@ html.touch-boot .boot { display: grid; }
   <!-- host escolhe o modo num cartaz com todos (nome, times/solo e o que e) -->
   <div class="lb-modes" id="lbModes" hidden role="dialog" aria-labelledby="lbModesTitle">
     <header><h3 id="lbModesTitle" data-i18n="cfgPickMode">Escolha o modo</h3><button class="lb-x" id="lbModesClose" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></header>
+    <nav class="lb-modes-tabs" id="lbModesTabs" role="tablist" aria-labelledby="lbModesTitle"></nav>
+    <p class="lb-modes-sub" id="lbModesSub"></p>
     <div class="lb-modes-grid" id="lbModesGrid" role="radiogroup" aria-labelledby="lbModesTitle"></div>
   </div>
   <!-- configuracao da partida: o host mexe nas setas, a sala toda ve mudar na hora -->
@@ -479,6 +518,23 @@ html.touch-boot .boot { display: grid; }
   </div>
 </div>
 
+<!-- conta aberta em outro aparelho (02/11): Contestar (jogar aqui) ou recuperar a senha pela Rovex. Icone: Material Icons (Apache 2.0) -->
+<div id="dupAcct" class="overlay dup-acct" hidden role="alertdialog" aria-modal="true" aria-labelledby="dupTitle" aria-describedby="dupBody">
+  <div class="card small dup-card">
+    <svg class="dup-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/></svg>
+    <h2 id="dupTitle" data-i18n="dupTitle">Conta em uso</h2>
+    <p id="dupBody" data-i18n="dupBody">Esta conta esta sendo jogada em outro dispositivo agora.</p>
+    <p class="dup-msg" id="dupMsg" role="status" hidden></p>
+    <div class="dup-acts">
+      <button class="big" id="dupTake" data-i18n="dupTake">Contestar e jogar aqui</button>
+      <button class="plain" id="dupReset" data-i18n="dupReset">Nao fui eu: recuperar senha Rovex</button>
+    </div>
+  </div>
+</div>
+
+<!-- celular sem memoria de video: o navegador desligou o 3D um instante (02/11) -->
+<div id="glLost" class="overlay gl-lost" hidden role="alert"><div class="card small"><h2 data-i18n="glLostT">Recarregando os graficos</h2><p data-i18n="glLostB">O aparelho ficou sem memoria de video. Baixamos a resolucao pra nao acontecer de novo.</p></div></div>
+
 <div id="pause" class="overlay" hidden>
   <div class="card small">
     <h2 data-i18n="intermission">Intervalo</h2>
@@ -486,6 +542,7 @@ html.touch-boot .boot { display: grid; }
     <div class="pk rg" id="rangePick" hidden><p class="pk-lbl" data-i18n="rangeLbl">Testar arma (todas, ate as bloqueadas)</p><div class="rg-tabs" id="rgTabs" role="tablist"></div><div class="pk-list rg-list" id="rgList" role="radiogroup"></div></div>
     <button class="big" id="resume" data-i18n="resume">Voltar pro tiroteio</button>
     <button class="plain" id="pauseSmith" data-i18n="lbSmith">Montar arma</button>
+    <button class="plain" id="pauseTeam" data-i18n="teamSwapBtn" hidden>Trocar de time</button>
     <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botoes</button>
     <button class="plain" id="pauseFs" data-i18n="fsOn" hidden>Tela cheia</button>
     <button class="plain" id="pauseSettings" data-i18n="settings">Ajustes</button>

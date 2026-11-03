@@ -1,6 +1,7 @@
 // Progressao: XP do jogador (nivel 1..55) e de cada CORPO de arma (modelo, nivel 1..20; cada um o seu).
 // Pecas do Arsenal e camuflagens desbloqueiam por nivel. Fica salvo neste aparelho.
 import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted, wasUnlocked } from './challenges.js';
+import { shopOwned } from './shopstore.js';
 import { pushSoon, me as rovexMe } from './rovex.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
@@ -92,17 +93,18 @@ export function onProgress(fn) { listeners.add(fn); return () => listeners.delet
 function emit(ev) { for (const fn of listeners) fn(ev); }
 
 // ganha XP; devolve o que subiu de nivel pra mostrar na tela
-export function addXp(kind, amount = XP[kind] || 0, wpn = null) {
-  if (!amount) return;
-  const key = wpn ? keyOf(wpn) : null, cBefore = wpn ? catLevel(wpn) : 0;
-  const before = level(), wBefore = wpn ? wpnLevel(wpn) : 0;
+// wpnAmount: XP que vai pra arma (Noite dos Borroes: a arma ganha cheio, o jogador ganha menos); body: modelo usado
+export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpnAmount = amount) {
+  if (!amount && !wpnAmount) return;
+  const key = wpn ? keyOf(wpn, body) : null, cBefore = wpn ? catLevel(wpn) : 0;
+  const before = level(), wBefore = wpn ? wpnLevel(wpn, body) : 0;
   data.xp += amount;
-  if (key) data.wpn[key] = (data.wpn[key] || 0) + amount;
+  if (key) data.wpn[key] = (data.wpn[key] || 0) + wpnAmount;
   if (kind === 'kill') data.kills++;
   if (kind === 'match') data.matches++;
   if (['head', 'assist', 'win', 'streak'].includes(kind)) data.st[kind] = (data.st[kind] || 0) + 1; // Perfil
   save();
-  const after = level(), wAfter = wpn ? wpnLevel(wpn) : 0, cAfter = wpn ? catLevel(wpn) : 0;
+  const after = level(), wAfter = wpn ? wpnLevel(wpn, body) : 0, cAfter = wpn ? catLevel(wpn) : 0;
   emit({ kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
 }
 
@@ -135,6 +137,7 @@ export function reqProgress(wpn, req) {
 }
 
 export function camoUnlocked(wpn, camo) {
+  if (camo.shop) return !!data.unlockAll || shopOwned('camo:' + camo.id); // so da Loja (03/11): nem presente do treino, nem desafio, nem nivel
   if (data.unlockAll || gifted(camo.id)) return true; // presente do treino vale em todas as armas
   if (camo.meta) return metaOwned(); // lendaria da meta da comunidade
   if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite

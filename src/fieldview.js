@@ -1,26 +1,32 @@
 // Equipamento de campo na tela: molas, buracos portateis (par com redemoinho) e o guarda-chuva aberto nos
 // outros jogadores. Tudo vem do snapshot (field: springs/holes; players[].sh = guarda-chuva aberto).
 import * as THREE from 'three';
-import { ink, toon, PAL } from './toon.js';
+import { ink, toon, PAL, geo } from './toon.js';
 
 function springMesh() {
   const g = new THREE.Group();
-  const base = ink(new THREE.CylinderGeometry(0.75, 0.85, 0.12, 18), PAL.dark, 0.03); base.position.y = 0.06; g.add(base);
+  const base = ink(geo(THREE.CylinderGeometry, 0.75, 0.85, 0.12, 18), PAL.dark, 0.03); base.position.y = 0.06; g.add(base);
   const coil = new THREE.Group();
-  for (let i = 0; i < 5; i++) { const r = ink(new THREE.TorusGeometry(0.45, 0.06, 6, 18), PAL.light, 0.02); r.rotation.x = Math.PI / 2; r.position.y = 0.18 + i * 0.12; coil.add(r); }
+  for (let i = 0; i < 5; i++) { const r = ink(geo(THREE.TorusGeometry, 0.45, 0.06, 6, 18), PAL.light, 0.02); r.rotation.x = Math.PI / 2; r.position.y = 0.18 + i * 0.12; coil.add(r); }
   g.add(coil);
-  const top = ink(new THREE.CylinderGeometry(0.65, 0.65, 0.1, 18), PAL.red, 0.03); top.position.y = 0.8; g.add(top);
+  const top = ink(geo(THREE.CylinderGeometry, 0.65, 0.65, 0.1, 18), PAL.red, 0.03); top.position.y = 0.8; g.add(top);
   g.userData = { coil, top };
   return g;
 }
+// pecas do buraco compartilhadas por todos (03/11: cada buraco criava 6 geometrias e 6 materiais que nunca eram liberados)
+let HOLE;
 function holeMesh() {
   // buraco de desenho animado: disco preto achatado com borda de tinta e um redemoinho claro girando
+  HOLE ||= {
+    disc: new THREE.CircleGeometry(0.95, 28), rim: new THREE.RingGeometry(0.95, 1.08, 28), swirl: new THREE.RingGeometry(0.25, 0.32, 20, 1, 0, Math.PI * 1.3),
+    discM: new THREE.MeshBasicMaterial({ color: 0x0b0a09 }), rimM: new THREE.MeshBasicMaterial({ color: PAL.ink, side: THREE.DoubleSide }), swirlM: new THREE.MeshBasicMaterial({ color: PAL.paper, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }),
+  };
   const g = new THREE.Group();
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(0.95, 28), new THREE.MeshBasicMaterial({ color: 0x0b0a09 }));
+  const disc = new THREE.Mesh(HOLE.disc, HOLE.discM);
   disc.rotation.x = -Math.PI / 2; disc.scale.set(1, 0.75, 1); disc.position.y = 0.04; g.add(disc);
-  const rim = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.08, 28), new THREE.MeshBasicMaterial({ color: PAL.ink, side: THREE.DoubleSide }));
+  const rim = new THREE.Mesh(HOLE.rim, HOLE.rimM);
   rim.rotation.x = -Math.PI / 2; rim.scale.set(1, 0.75, 1); rim.position.y = 0.045; g.add(rim);
-  const swirl = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.32, 20, 1, 0, Math.PI * 1.3), new THREE.MeshBasicMaterial({ color: PAL.paper, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
+  const swirl = new THREE.Mesh(HOLE.swirl, HOLE.swirlM);
   swirl.rotation.x = -Math.PI / 2; swirl.position.y = 0.05; g.add(swirl);
   g.userData = { swirl };
   return g;
@@ -28,12 +34,12 @@ function holeMesh() {
 export function umbrellaMesh() {
   // guarda-chuva preto de bolinha clara: cupula de 8 gomos, haste e cabo em gancho
   const g = new THREE.Group();
-  const dome = ink(new THREE.ConeGeometry(0.75, 0.32, 8, 1, true), PAL.ink, 0.03); dome.position.y = 0.16; g.add(dome);
-  const under = new THREE.Mesh(new THREE.ConeGeometry(0.74, 0.3, 8, 1, true), toon(PAL.dark, { side: THREE.BackSide })); under.position.y = 0.15; g.add(under);
-  for (let i = 0; i < 4; i++) { const d = ink(new THREE.SphereGeometry(0.05, 6, 5), PAL.paper, 0.01); const a = i * Math.PI / 2 + 0.4; d.position.set(Math.cos(a) * 0.42, 0.13, Math.sin(a) * 0.42); g.add(d); }
-  const tip = ink(new THREE.SphereGeometry(0.04, 6, 5), PAL.red, 0.01); tip.position.y = 0.34; g.add(tip);
-  const shaft = ink(new THREE.CylinderGeometry(0.018, 0.018, 0.75, 6), PAL.dark, 0.01); shaft.position.y = -0.2; g.add(shaft);
-  const hook = ink(new THREE.TorusGeometry(0.07, 0.022, 6, 10, Math.PI), PAL.red, 0.01); hook.position.set(0.07, -0.58, 0); hook.rotation.z = Math.PI; g.add(hook);
+  const dome = ink(geo(THREE.ConeGeometry, 0.75, 0.32, 8, 1, true), PAL.ink, 0.03); dome.position.y = 0.16; g.add(dome);
+  const under = new THREE.Mesh(geo(THREE.ConeGeometry, 0.74, 0.3, 8, 1, true), toon(PAL.dark, { side: THREE.BackSide })); under.position.y = 0.15; g.add(under);
+  for (let i = 0; i < 4; i++) { const d = ink(geo(THREE.SphereGeometry, 0.05, 6, 5), PAL.paper, 0.01); const a = i * Math.PI / 2 + 0.4; d.position.set(Math.cos(a) * 0.42, 0.13, Math.sin(a) * 0.42); g.add(d); }
+  const tip = ink(geo(THREE.SphereGeometry, 0.04, 6, 5), PAL.red, 0.01); tip.position.y = 0.34; g.add(tip);
+  const shaft = ink(geo(THREE.CylinderGeometry, 0.018, 0.018, 0.75, 6), PAL.dark, 0.01); shaft.position.y = -0.2; g.add(shaft);
+  const hook = ink(geo(THREE.TorusGeometry, 0.07, 0.022, 6, 10, Math.PI), PAL.red, 0.01); hook.position.set(0.07, -0.58, 0); hook.rotation.z = Math.PI; g.add(hook);
   return g;
 }
 
