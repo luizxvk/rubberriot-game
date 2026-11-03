@@ -99,7 +99,7 @@ export const SKILLS = {
   folego: { lvl: 22, after: 4, regen: 8, icon: 'favorite' },                // vida volta sozinha depois de 4 s sem dano
   pavio: { lvl: 26, streak: 1, icon: 'local_fire_department' },             // sequencias custam 1 abate a menos
 };
-export const SKILL_SLOTS = 2;
+export const SKILL_SLOTS = 3; // 03/11 (hotfix, pedido dele): 3o espaco de skill
 // Battle royale: colete absorve parte do dano; iris (zona) fecha em fases; o dirigivel solta caixotes.
 // phases: espera (s), fecha (s), raio final (fracao do raio inicial), dano fora (vida/s)
 export const BR = {
@@ -254,7 +254,7 @@ export const BODY_TRAITS = {
   subfusil_13: { mode: 'auto', rate: 0.9, dmg: 0.95, kick: 0.8, hip: 0.95 },        // sanfona (pacote 2): rapida e controlada
   fusil_1: { mode: 'auto' },
   fusil_2: { mode: 'burst', burst: 3, rate: 0.6, dmg: 1.05, kick: 0.9 },
-  fusil_3: { mode: 'semi', rate: 2.6, dmg: 1.55, spread: 0.5, hip: 1.4, kick: 3.2 }, // de precisao (nerf leve 30/10: era rate 2.4, dmg 1.7, kick 1.4). 03/11 (pedido dele): recuo bem maior (era 1.45)
+  fusil_3: { mode: 'semi', rate: 2.6, dmg: 1.15, spread: 0.5, hip: 1.4, kick: 3.2 }, // de precisao (nerf leve 30/10: era rate 2.4, dmg 1.7, kick 1.4). 03/11 (pedido dele): recuo bem maior (era 1.45) e dano NERFADO 1.55 -> 1.15 (urgente)
   fusil_4: { mode: 'auto', rate: 1.3, dmg: 1.25, kick: 1.25, hip: 1.15 },
   fusil_5: { mode: 'auto', rate: 0.85, dmg: 0.9, hip: 0.85 },
   fusil_6: { mode: 'burst', burst: 4, rate: 0.55, dmg: 0.85 },

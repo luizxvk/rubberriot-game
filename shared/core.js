@@ -1666,7 +1666,11 @@ export class Core {
           if (standable(this.M, x, z)) { to = [x, floorAt(this.M, x, z), z]; break; }
         }
       }
-      ai.path = navPath(this.M, p.pos, to, 8000); // busca curta: rota que nao fecha em 8 mil celulas vira linha reta ate a proxima
+      // duto do banco: cada bot sorteia uma vez se gosta (30%); quem nao gosta contorna pelas portas (03/11, caminhos variados).
+      // Se a volta nao fecha na busca curta, vai pelo duto mesmo (melhor que ir reto na parede)
+      ai.duct ??= Math.random() < 0.3;
+      ai.path = navPath(this.M, p.pos, to, 8000, !ai.duct); // busca curta: rota que nao fecha em 8 mil celulas vira linha reta ate a proxima
+      if (!ai.path && !ai.duct) ai.path = navPath(this.M, p.pos, to, 8000);
       if (!ai.path || !ai.path.length) ai.path = [[goal[0], goal[2]]];
       // cada bot desvia um pouco de cada curva (o caminho mais curto e igual pra todo mundo)
       const sway = ai.sway ??= rnd(-0.9, 0.9);

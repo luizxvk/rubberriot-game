@@ -18,7 +18,7 @@ import { useBinds, bindLabel } from './binds.js';
 import * as ARS from './arsenal.js'; // so pro atalho de depuracao window.__A
 import { Player } from './player.js';
 import { metaGet, metaPost, pushSoon, sessionPing, requestReset, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
-import { Hud, STREAK_SVG } from './hud.js';
+import { Hud, STREAK_SVG, DEATH_SVG } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer, setRawMouse } from './input.js';
 import { Pad } from './gamepad.js';
 import { LocalNet, WsNet, SplitNet } from './net.js';
@@ -85,7 +85,6 @@ canvas.addEventListener('webglcontextlost', (e) => {
   reportaErro(new Error('webgl contexto perdido'), 'gl ' + G.state + '/' + G.mode);
   $('glLost').hidden = false;
   settings.res = Math.max(0.5, Math.round((settings.res - 0.15) * 100) / 100);
-  if (isTouch) settings.draw = 'near';
   try { localStorage.setItem('rr_settings', JSON.stringify(settings)); } catch { /* */ }
   clearTimeout(glLostT);
   glLostT = setTimeout(() => location.reload(), 5000);
@@ -93,8 +92,8 @@ canvas.addEventListener('webglcontextlost', (e) => {
 canvas.addEventListener('webglcontextrestored', () => { clearTimeout(glLostT); $('glLost').hidden = true; applySettings(); });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
-// distancia de desenho (Ajustes > Graficos): curta/media/longa, em metros
-const DRAW_DIST = { near: 95, mid: 170, far: 500 };
+// distancia de desenho (03/11): curta pra todos; a luneta mirando enxerga longe
+const DRAW_DIST = { near: 95, scope: 500 };
 const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.05, 500);
 camera.rotation.order = 'YXZ';
 // luneta 3D: a lente mostra esta camera ampliada (picture-in-picture)
@@ -819,7 +818,7 @@ function onEvent(e) {
           shootPanels(renderer, scene, { pos: kr.pos, yaw: kr.yaw || 0 }).then(imgs => {
             if (life !== G.lifeN || G.player?.alive || G.state !== 'game') return;
             imgs[1] = CATEGORY[e.wpn] ? unlockShot({ wpn: e.wpn, lo: klo }) : null;
-            cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, dist: Math.round(Math.hypot(kr.pos[0] - dpos[0], kr.pos[2] - dpos[2])), head: e.head, t, icon: STREAK_SVG[e.wpn] || null });
+            cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, dist: Math.round(Math.hypot(kr.pos[0] - dpos[0], kr.pos[2] - dpos[2])), head: e.head, t, icon: DEATH_SVG[e.wpn] || null });
             cm.hidden = false; cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
             audio.play('comic', { ui: true, vol: 0.55 });
           });
@@ -1665,7 +1664,7 @@ function backToLobby() {
   audio.music(true, 'music');
   G.paused = false;
   input.enabled = false;
-  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead'); chat.enable(false);
+  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead', 'stim-rush'); G.stimFx = false; chat.enable(false);
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   if (document.pointerLockElement) document.exitPointerLock();
   clearRemotes();
@@ -1789,7 +1788,7 @@ async function quitGame() {
   n && n.close();
   G.player = null; G.myId = null; G.me = null;
   clearRemotes();
-  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead'); chat.enable(false);
+  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead', 'stim-rush'); G.stimFx = false; chat.enable(false);
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   lobby.hide(); hideLoading();
   $('menu').hidden = false;
@@ -2254,9 +2253,13 @@ function frameBody(now, realDt) {
     // luneta 3D: fora da lente so um zoom leve; dentro da lente, o zoom de verdade
     const outer = big ? 1.2 : zoom;
     G.stimBoostT = Math.max(0, (G.stimBoostT || 0) - realDt);
-    const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0) + (G.stimBoostT > 0 && p.alive ? FIELD.stim.fov : 0)) / (1 + (outer - 1) * p.adsK); // estimulante: FOV abre um tico e volta suave
-    // distancia de desenho (Ajustes): o que passa do corte nem e desenhado; a nevoa fecha antes pra nada sumir seco
-    const dd = DRAW_DIST[settings.draw] || DRAW_DIST.far;
+    // estimulante (03/11, pedido dele): o FOV cresce 5% em ESCALA (antes somava graus fixos) e liga as linhas de velocidade
+    const stimOn = G.stimBoostT > 0 && p.alive;
+    const fovT = (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0)) * (stimOn ? 1.05 : 1) / (1 + (outer - 1) * p.adsK);
+    if (stimOn !== !!G.stimFx) { G.stimFx = stimOn; document.body.classList.toggle('stim-rush', stimOn); }
+    // distancia de desenho (03/11, pedido dele): curta pra todos, sem opcao. So a luneta (zoom grande mirando) enxerga longe
+    const longEye = (big || zoom >= 3) && p.adsK > 0.5;
+    const dd = longEye ? DRAW_DIST.scope : DRAW_DIST.near;
     if (camera.far !== dd) camera.far = dd;
     if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = Math.min(b[1], dd * 0.96); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.55); } // rrBase: a nevoa original do mapa
     camera.fov += (fovT - camera.fov) * (1 - Math.exp(-14 * realDt));

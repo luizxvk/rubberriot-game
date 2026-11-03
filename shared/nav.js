@@ -100,7 +100,7 @@ function nearestWalk(g, cx, cz, y) {
 }
 
 // linha reta andavel entre duas celulas (pra esticar a rota)
-function clear(g, a, b) {
+function clear(g, a, b, noLow = false) {
   const dx = b[0] - a[0], dz = b[1] - a[1], n = Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) * 2);
   let px = a[0], pz = a[1];
   for (let i = 1; i <= n; i++) {
@@ -108,7 +108,7 @@ function clear(g, a, b) {
     // a celula e as vizinhas do "corredor" (o bot tem largura)
     for (const [ox, oz] of [[0, 0], [0.35, 0.35], [-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35]]) {
       const cx = Math.floor(x + 0.5 + ox), cz = Math.floor(z + 0.5 + oz);
-      if (!walk(g, cx, cz)) return false;
+      if (!walk(g, cx, cz) || (noLow && g.low[cz * g.N + cx])) return false;
     }
     const cx = Math.round(x), cz = Math.round(z);
     if ((cx !== px || cz !== pz) && !pass(g, px, pz, cx, cz)) return false;
@@ -177,12 +177,13 @@ export function hop(M, from, goal) {
 }
 
 // rota de 'from' ate 'to' (posicoes [x,y,z]); devolve pontos [x,z] ja esticados, ou null
-export function navPath(M, from, to, maxNodes = 60000) {
+// noLow (03/11): o bot que nao gosta do duto contorna (cada bot sorteia; antes todos iam pelo duto, o mais curto)
+export function navPath(M, from, to, maxNodes = 60000, noLow = false) {
   const g = grid(M);
   const s = nearestWalk(g, ...cellOf(g, from[0], from[2]), from[1]), e = nearestWalk(g, ...cellOf(g, to[0], to[2]), to[1]);
   if (!s || !e) return null;
   // enxerga o destino num corredor andavel: nem precisa de busca (o caso comum em campo aberto)
-  if (clear(g, s, e)) return [center(g, ...e)];
+  if (clear(g, s, e, noLow)) return [center(g, ...e)];
   const N = g.N, S = scratch(g);
   if (++S.ep >= 0xffffffff) { S.seen.fill(0); S.done.fill(0); S.ep = 1; }
   const ep = S.ep, cost = S.cost, came = S.came, seen = S.seen, done = S.done;
@@ -202,6 +203,7 @@ export function navPath(M, from, to, maxNodes = 60000) {
       if (!dx && !dz) continue;
       const nx = x + dx, nz = z + dz;
       if (!pass(g, x, z, nx, nz)) continue;
+      if (noLow && g.low[nz * N + nx] && !g.low[z * N + x]) continue; // nao entra no duto (se ja esta dentro, sai)
       if (dx && dz && (!pass(g, x, z, x + dx, z) || !pass(g, x, z, x, z + dz))) continue; // nao corta quina
       const nk = nz * N + nx, c = ck + (dx && dz ? 1.414 : 1) * (g.low[nk] ? 2 : 1); // agachado anda mais devagar
       if (seen[nk] === ep && c >= cost[nk]) continue;
@@ -218,7 +220,7 @@ export function navPath(M, from, to, maxNodes = 60000) {
   let i = 0;
   while (i < cells.length - 1) {
     let j = cells.length - 1;
-    while (j > i + 1 && !clear(g, cells[i], cells[j])) j--;
+    while (j > i + 1 && !clear(g, cells[i], cells[j], noLow)) j--;
     out.push(center(g, ...cells[j]));
     i = j;
   }

@@ -37,6 +37,18 @@ export const STREAK_SVG = {
   blimp: `<path d="M35 22l9-7v15z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="21" cy="22" rx="17" ry="9" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M8 19c6-2 20-2 27 0" stroke="#ece9e1" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M18 31v3M25 31v3" stroke="#141210" stroke-width="2.5"/><rect x="15" y="33" width="13" height="6" rx="2" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/>`,
   nuke: `<path d="M13 23c-5 0-7-3-7-6 0-4 4-6 7-5 1-4 5-6 9-5 3-3 10-2 12 3 4 0 7 3 7 6 0 4-3 7-7 7z" fill="currentColor" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M20 23h8l1.5 9h-11z" fill="currentColor" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M6 33h36l-4 9H10z" fill="#e0a33a" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M9 33c2-3 5-3 7 0 2-3 5-3 7 0 2-3 5-3 7 0 2-3 5-3 7 0 2-3 3-2 4 0" fill="none" stroke="#141210" stroke-width="2"/>`,
 };
+// tela de morte (03/11, hotfix): o que derruba e nao e arma de mao (granada, equipamento, C4, queda, iris) tambem tem
+// icone no quadrinho do meio; as sequencias vem do STREAK_SVG. Mesmo viewBox 48 e traco de tinta
+const INK_S = 'stroke="#141210" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"';
+export const DEATH_SVG = {
+  ...STREAK_SVG,
+  frag: `<circle cx="22" cy="29" r="13" fill="currentColor" ${INK_S}/><path d="M17 16h10v-5H17z" fill="#ece9e1" ${INK_S}/><path d="M27 13c6-1 9 2 9 7" fill="none" ${INK_S}/><circle cx="36" cy="22" r="3" fill="#ece9e1" ${INK_S}/><path d="M16 27h12M22 21v16" stroke="#141210" stroke-width="2" opacity=".5"/>`,
+  flame: `<path d="M24 5c3 7 11 11 11 21a11 11 0 0 1-22 0c0-6 3-9 5-11 0 5 2 7 4 7-1-7 0-12 2-17z" fill="#f08a2a" ${INK_S}/><path d="M24 26c2 3 5 4 5 8a5 5 0 0 1-10 0c0-3 3-5 5-8z" fill="#ffe066" ${INK_S}/>`,
+  ubshot: `<rect x="5" y="20" width="30" height="9" rx="2" fill="currentColor" ${INK_S}/><rect x="9" y="29" width="18" height="6" rx="2" fill="#ece9e1" ${INK_S}/><circle cx="39" cy="22" r="2.5" fill="#141210"/><circle cx="43" cy="18" r="2" fill="#141210"/><circle cx="43" cy="26" r="2" fill="#141210"/>`,
+  bomb: `<rect x="9" y="16" width="30" height="20" rx="3" fill="currentColor" ${INK_S}/><rect x="15" y="21" width="18" height="8" rx="1.5" fill="#141210"/><path d="M18 25h4m4 0h4" stroke="#e8554a" stroke-width="2.5"/><path d="M14 16v-5h6" fill="none" ${INK_S}/>`,
+  fall: `<path d="M24 6v24" fill="none" ${INK_S}/><path d="M15 22l9 10 9-10" fill="none" ${INK_S}/><path d="M8 40h32" fill="none" ${INK_S}/><path d="M14 40l-3 4M24 40v4M34 40l3 4" fill="none" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
+  iris: `<circle cx="24" cy="24" r="17" fill="#141210" ${INK_S}/><circle cx="24" cy="24" r="8" fill="#ece9e1" ${INK_S}/><path d="M24 7v9M24 32v9M7 24h9M32 24h9" stroke="#ece9e1" stroke-width="2.5" stroke-linecap="round"/>`,
+};
 const nextStreak = (n, pavio, mine) => { for (const s of pickStreaks(mine).map(k => STREAKS[k])) { const k = s.kills - (pavio && s.kills > 3 ? 1 : 0); if (k > n) return k - n; } return 0; };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

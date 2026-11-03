@@ -1299,13 +1299,13 @@ body.touchmode .elite-track { top: calc(max(10px, env(safe-area-inset-top)) + 56
 .sk-lock svg { width: 100%; height: 100%; fill: currentColor; display: block; }
 @media (max-width: 760px) {
   .skills { grid-template-columns: 1fr; }
-  .sk-medals { grid-template-columns: 1fr 1fr; }
+  .sk-medals { grid-template-columns: repeat(3, 1fr); } /* 3 espacos (03/11) */
   .sk-ring { width: 76px; height: 76px; } .sk-ring svg { width: 36px; height: 36px; }
   .sk-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
 @media (max-height: 620px) {
   .skills { grid-template-columns: 1fr; gap: 10px; margin-top: 6px; }
-  .sk-medals { grid-template-columns: 1fr 1fr; }
+  .sk-medals { grid-template-columns: repeat(3, 1fr); } /* 3 espacos (03/11) */
   .sk-medal { grid-template-columns: auto 1fr; justify-items: start; align-items: center; column-gap: 10px; padding: 4px 6px; }
   .sk-medal .sk-ring { grid-row: span 2; width: 58px; height: 58px; } .sk-ring svg { width: 28px; height: 28px; } .sk-ring i { font-size: 24px; }
   .sk-medal small { margin-top: 0; align-self: end; } .sk-medal b { text-align: left; align-self: start; }
@@ -2255,7 +2255,7 @@ body.hud-simple:not(.hud-more) .tbtn.frag, body.hud-simple:not(.hud-more) .tbtn.
 body.hud-simple:not(.hud-more) .tbtn.melee, body.hud-simple:not(.hud-more) .tbtn.inspect, body.hud-simple:not(.hud-more) .tbtn.field,
 body.hud-simple:not(.hud-more) .tbtn.ping { display: none !important; }
 body.hud-simple .tbtn.more.lit { background: var(--ink); color: var(--paper); }
-body.hud-simple:not(.touchmode) #streaks { display: none; }
+/* 03/11 (hotfix, pedido dele): a fileira de sequencias aparece tambem no HUD simples (antes sumia no PC) */
 /* pergunta da HUD no tutorial */
 .tut .hud-ask { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .tut .hud-ask button { flex: 1 1 120px; padding: 8px 10px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); font-family: var(--display); font-size: 16px; cursor: pointer; }
@@ -2657,6 +2657,14 @@ body.touchmode #menu.smithing .card.wide { height: 100%; max-height: none; margi
 .zb small { font-family: var(--body); font-weight: 800; font-size: 10px; color: #cfc8ba; text-transform: uppercase; letter-spacing: .03em; }
 .shop-zbal { margin-left: auto; }
 .app-tools .zbal { margin-right: 4px; }
+/* 03/11 (hotfix): no cartaz o saldo empurrava a fileira por cima do EN/PT. A fileira para antes dele e as pilulas ficam
+   compactas (o icone ja diz o que e: moeda = Points, nota = Cash) */
+.poster-frame .app-tools { left: 92px; justify-content: flex-end; align-items: center; min-width: 0; }
+.poster-frame .app-tools .zbal { min-width: 0; flex: 0 1 auto; gap: 4px; }
+.poster-frame .app-tools .zb { padding: 2px 8px 2px 3px; border-width: 2px; }
+.poster-frame .app-tools .zb small { display: none; }
+.poster-frame .app-tools .zb b { font-size: 13px; }
+.poster-frame .app-tools .zb img { height: 18px; } .poster-frame .app-tools .zb.cash img { height: 12px; }
 @media (max-height: 520px) { .zb { padding: 2px 8px 2px 3px; border-width: 2px; } .zb img { height: 18px; } .zb.cash img { height: 12px; } .zb b { font-size: 12px; } .zb small { display: none; } }
 
 /* compra (03/11): 2o toque confirma; mensagem de sucesso em verde */
@@ -2669,3 +2677,13 @@ body.touchmode #menu.smithing .card.wide { height: 100%; max-height: none; margi
 .st-art.img:has(.st-slides) { overflow: hidden; }
 .st-slides { display: flex; width: calc(var(--n) * 100%); height: 100%; transition: transform .7s cubic-bezier(.65, 0, .35, 1); }
 .st-art.img .st-slides img { flex: 1 1 0; min-width: 0; width: auto; }
+
+/* estimulante (03/11, pedido dele): linhas de velocidade nas bordas da tela enquanto o boost dura (centro livre pra mirar) */
+#stimFx { position: fixed; inset: -8%; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(250, 248, 242, .55) 0deg 1.2deg, transparent 1.2deg 7deg);
+  -webkit-mask: radial-gradient(ellipse at center, transparent 42%, #000 78%); mask: radial-gradient(ellipse at center, transparent 42%, #000 78%); }
+body.stim-rush #stimFx { opacity: .55; animation: stimRush .32s linear infinite; }
+@keyframes stimRush { 0% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.04) rotate(1.5deg); } 100% { transform: scale(1) rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { body.stim-rush #stimFx { animation: none; opacity: .35; } }
+/* anuncio 'em breve' (03/11): sem seta de abrir, cursor normal, selo tracejado */
+.ann-slide.soon { cursor: default; } .ann-slide.soon .ann-go { display: none; } .ann-slide.soon em { border: 2px dashed currentColor; padding: 0 6px; border-radius: 6px; }

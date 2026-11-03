@@ -187,7 +187,7 @@ export function initMenus(o) {
     ['range', 'res', 's_res', 0.4, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['seg', 'lang', 's_lang', [['en', 'English'], ['pt', 'Portugues']]],
     ['seg', 'film', 's_film', [['full', 'film_full'], ['color', 'film_color'], ['bw', 'film_bw']]],
-    ['seg', 'draw', 's_draw', [['near', 'draw_near'], ['mid', 'draw_mid'], ['far', 'draw_far']]],
+    // distancia de desenho saiu dos Ajustes (03/11): curta pra todos, longe so pela luneta
     ['toggle', 'invertY', 's_invert'],
     ['toggle', 'holdCrouch', 's_hold'],
     ['seg', 'leanMode', 's_leanMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]],

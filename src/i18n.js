@@ -562,13 +562,17 @@ Object.assign(D.pt, { sg_keys: 'Redefinir comandos', annTitle: 'Novidades', annE
   ann_tag_heist: 'Modo novo', ann_t_heist: 'Roube o Cofre', ann_d_heist: 'Arrombe o cofre, pegue as bolsas e corra ate a van. Melhor de 4.',
   ann_tag_borroes: 'PvE co-op', ann_t_borroes: 'Noite dos Borroes', ann_d_borroes: 'Ondas de viloes de tinta no estudio. Rascunho ou Arte-Final, com amigos ou bots.',
   ann_tag_guns: 'Arsenal', ann_t_guns: 'Armas novas', ann_d_guns: 'Modelos novos, lanca-chamas e escopetinha embaixo do cano. Monte a sua.',
-  ann_tag_streaks: 'Sequencias', ann_t_streaks: 'Chamadas novas', ann_d_streaks: 'Biplano, Trem Desgovernado, Balao Bombardeiro e a Mao do Animador.' });
+  ann_tag_streaks: 'Sequencias', ann_t_streaks: 'Chamadas novas', ann_d_streaks: 'Biplano, Trem Desgovernado, Balao Bombardeiro e a Mao do Animador.',
+  ann_tag_desert: 'Em breve', ann_t_desert: 'Mapa grande no deserto', ann_d_desert: 'Um mapa enorme de areia, canions e ruinas pra muita gente ao mesmo tempo.',
+  ann_tag_newcat: 'Em breve', ann_t_newcat: 'Categoria nova de armas', ann_d_newcat: 'Uma familia inteira de armas novas chegando no Arsenal.' });
 Object.assign(D.en, { sg_keys: 'Rebind controls', annTitle: "What's new", annExtra: 'EXTRA! EXTRA!',
   ann_tag_shop: 'Just in!', ann_t_shop: 'The Shop is open', ann_d_shop: 'Animated skins and exclusive camos. Cosmetic only, no advantage.',
   ann_tag_heist: 'New mode', ann_t_heist: 'Rob the Vault', ann_d_heist: 'Crack the vault, grab the bags and run to the van. Best of 4.',
   ann_tag_borroes: 'PvE co-op', ann_t_borroes: 'Night of the Blots', ann_d_borroes: 'Waves of ink villains in the studio. Draft or Final Art, with friends or bots.',
   ann_tag_guns: 'Arsenal', ann_t_guns: 'New weapons', ann_d_guns: 'New models, plus an underbarrel flamethrower and shotgun. Build yours.',
-  ann_tag_streaks: 'Streaks', ann_t_streaks: 'New call-ins', ann_d_streaks: 'Biplane, Runaway Train, Bomber Balloon and the Animator\'s Hand.' });
+  ann_tag_streaks: 'Streaks', ann_t_streaks: 'New call-ins', ann_d_streaks: 'Biplane, Runaway Train, Bomber Balloon and the Animator\'s Hand.',
+  ann_tag_desert: 'Coming soon', ann_t_desert: 'Big desert map', ann_d_desert: 'A huge map of sand, canyons and ruins for lots of players at once.',
+  ann_tag_newcat: 'Coming soon', ann_t_newcat: 'New weapon class', ann_d_newcat: 'A whole new family of guns coming to the Arsenal.' });
 
 // popup do Rovex Elite (03/11)
 Object.assign(D.pt, { el_sub: 'Assine e libere tudo isso no jogo e na Rovex.', el_on: 'Seu Elite esta ativo. Obrigado por apoiar!', el_join: 'Assinar o Elite', el_manage: 'Meu Elite', el_inGame: 'No Rubber Riot', el_inRovex: 'Na Rovex',
