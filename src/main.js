@@ -1794,7 +1794,7 @@ async function quitGame() {
   $('menu').hidden = false;
   input.enabled = false;
   if (document.pointerLockElement) document.exitPointerLock();
-  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  // 03/11 (hotfix, pedido dele): voltar da partida NAO sai da tela cheia (no celular voltava com as barras do navegador)
   audio.music(true, 'music');
   startAttract();
   if (fromRange) ui.go('arsenal', false, fromRange.cat); else ui.go('home'); // campo de treino volta pro Arsenal (o que estava bloqueado continua)
