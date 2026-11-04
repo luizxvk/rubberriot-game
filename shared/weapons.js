@@ -219,7 +219,7 @@ export const INFECT = { firstIn: 10, survivorKit: ['shotgun', 'pistol'], survivo
 
 // Plantar a Bomba: tempos em segundos, raios em metros
 // Roube o Cofre (03/11): ver shared/heist.js
-export const HEIST = { rounds: 4, time: 180, crack: 15, crackR: 5.5, bags: 8, bagValue: 1000, quota: 5000, bankBonus: 30, dropBack: 20, returnT: 1.5, takeR: 3, touchR: 1.8, vanR: 3.5, atkRespawn: 6, defRespawn: 6, defSpawnMin: 18, carrySlow: 0.8 };
+export const HEIST = { rounds: 4, time: 180, crack: 15, crackR: 5.5, bags: 8, bagValue: 12500, quota: 62500, /* 03/11: cofre de 100 mil (era 8 mil); a meta segue 5 bolsas */ bankBonus: 30, dropBack: 20, returnT: 1.5, takeR: 3, touchR: 1.8, vanR: 3.5, atkRespawn: 6, defRespawn: 6, defSpawnMin: 18, carrySlow: 0.8 };
 export const BOMB = { round: 100, fuse: 35, plant: 3.2, defuse: 6, siteR: 3.4, defuseR: 1.9, blast: 9, roundEnd: 4.5, swapAfter: 3 };
 
 // Pontaria dos bots por nivel (0.7 molenga, 1 esperto, 1.35 afiado).

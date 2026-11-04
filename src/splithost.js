@@ -12,7 +12,7 @@ const EN = (() => { try { return (localStorage.getItem('rr_lang') || navigator.l
 const T = EN ? {
   title: 'Split screen', seat: 'Press A to join', seatSub: 'one controller per screen', leave: 'B leaves', pad: 'Controller {n}', player: 'Player {n}',
   mode: 'Mode', map: 'Map', bots: 'Bots', diff: 'Skill', two: '2 players', twos: { h: 'Top and bottom', v: 'Side by side' }, go: 'Start', back: 'Back to menu', need: 'Plug in a controller and press A',
-  soundOff: 'Click or press any key to turn the sound on', hint: 'Player 1 picks: D-pad moves, A changes, Start starts',
+  soundOff: 'Click or press any key to turn the sound on', hint: 'Any controller picks: D-pad moves, A changes, Start starts',
   qr: 'Scan with your phone to play with your Rovex account', qrOpt: 'optional · code {n}', acct: 'Rovex account', out: 'Sign out', outPad: 'Y signs out', qrWait: 'Generating code...', qrOff: 'No connection: playing as guest',
   modes: { tdm: 'Team Deathmatch', ffa: 'Free-for-All', ctf: 'Capture the Flag', dom: 'Domination', gungame: 'Gun Game', escort: 'Escort' },
   maps: { auto: 'Automatic', vila: 'Village', fabrica: 'Factory', fronteira: 'Frontier', estaleiro: 'Shipyard', refinaria: 'Refinery', ferradura: 'Horseshoe Bank', bonde: 'Tram Hill', apito: 'Whistle Valley' },
@@ -20,7 +20,7 @@ const T = EN ? {
 } : {
   title: 'Tela dividida', seat: 'Aperte A pra entrar', seatSub: 'um controle por tela', leave: 'B sai', pad: 'Controle {n}', player: 'Jogador {n}',
   mode: 'Modo', map: 'Mapa', bots: 'Bots', diff: 'Nivel', two: '2 telas', twos: { h: 'Em cima e embaixo', v: 'Lado a lado' }, go: 'Comecar', back: 'Voltar ao menu', need: 'Ligue um controle e aperte A',
-  soundOff: 'Clique ou aperte uma tecla pra ligar o som', hint: 'Jogador 1 escolhe: direcional anda, A troca, Start comeca',
+  soundOff: 'Clique ou aperte uma tecla pra ligar o som', hint: 'Qualquer controle escolhe: direcional anda, A troca, Start comeca',
   qr: 'Leia com o celular pra jogar com a sua conta Rovex', qrOpt: 'opcional · codigo {n}', acct: 'Conta Rovex', out: 'Sair da conta', outPad: 'Y sai da conta', qrWait: 'Gerando o codigo...', qrOff: 'Sem conexao: joga como convidado',
   modes: { tdm: 'Mata-Mata', ffa: 'Contra Todos', ctf: 'Captura a Bandeira', dom: 'Dominacao', gungame: 'Escada de Armas', escort: 'Escolta' },
   maps: { auto: 'Automatico', vila: 'Vila', fabrica: 'Fabrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', ferradura: 'Banco Ferradura', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito' },
@@ -190,7 +190,6 @@ let navT = 0;
 function pads() { return [...(navigator.getGamepads?.() || [])].filter(g => g && g.connected); }
 function pollSetup(dt) {
   navT -= dt;
-  const p1 = seats.find(s => s != null);
   for (const g of pads()) {
     const now = g.buttons.map(b => !!b?.pressed), was = prev.get(g.index) || [];
     const down = (i) => now[i] && !was[i];
@@ -200,8 +199,7 @@ function pollSetup(dt) {
     if (seat < 0) continue;
     if (down(1)) { seats[seat] = null; signOut(seat); render(); continue; }
     if (down(3) && accts[seat]) { signOut(seat); render(); continue; } // Y: sai da conta (fica no lugar como convidado)
-    if (g.index !== p1) continue;
-    // so o jogador 1 mexe no selo
+    // 03/11 (pedido dele): qualquer controle sentado mexe no selo e inicia (antes so o jogador 1)
     if (down(9)) { start(); return; }
     const ly = g.axes[1] || 0, lx = g.axes[0] || 0;
     const up = down(12) || (ly < -0.6 && navT <= 0), dn = down(13) || (ly > 0.6 && navT <= 0);

@@ -151,7 +151,7 @@ function applySettings() {
   resize();
   film.uniforms.grain.value = settings.grain;
   film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
-  audio.setVolumes({ master: settings.master, music: settings.music, sfx: settings.sfx });
+  audio.setVolumes(SS?.vol || { master: settings.master, music: settings.music, sfx: settings.sfx }); // tela dividida: volume do PC, igual nas telas
   input.settings = settings; useBinds(settings);
   setRawMouse(settings.rawMouse);
   setFireButton(input);

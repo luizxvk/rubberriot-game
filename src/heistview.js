@@ -176,7 +176,7 @@ export class HeistView {
     document.getElementById('hsFill').classList.toggle('money', H.open);
     document.getElementById('hsMarks').hidden = !H.open;
     document.getElementById('hsRed').textContent = H.wins.red; document.getElementById('hsBlue').textContent = H.wins.blue;
-    const st = H.open ? `$${H.money} / $${H.quota}` : H.state === 'contest' ? t('hsContest') : H.state === 'crack' ? t('hsCrack') + ' ' + Math.round(H.crack * 100) + '%' : t('hsVault');
+    const st = H.open ? `$${H.money.toLocaleString('pt-BR')} / $${H.quota.toLocaleString('pt-BR')}` : H.state === 'contest' ? t('hsContest') : H.state === 'crack' ? t('hsCrack') + ' ' + Math.round(H.crack * 100) + '%' : t('hsVault');
     const se = document.getElementById('hsState'); if (se.textContent !== st) se.textContent = st;
     bar.dataset.st = H.state;
     const mine = H.bags.some(b => b[1] === 1 && b[2] === this.myId);

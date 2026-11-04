@@ -2687,3 +2687,10 @@ body.stim-rush #stimFx { opacity: .55; animation: stimRush .32s linear infinite;
 @media (prefers-reduced-motion: reduce) { body.stim-rush #stimFx { animation: none; opacity: .35; } }
 /* anuncio 'em breve' (03/11): sem seta de abrir, cursor normal, selo tracejado */
 .ann-slide.soon { cursor: default; } .ann-slide.soon .ann-go { display: none; } .ann-slide.soon em { border: 2px dashed currentColor; padding: 0 6px; border-radius: 6px; }
+
+/* tela dividida (03/11, pedido dele): cada tela e baixa e caia no layout de celular deitado (vida e sequencias subiam pro
+   topo, por cima do minimapa). Volta o layout do solo, mais compacto: vida + sequencias embaixo a esquerda, municao embaixo
+   a direita, feed no topo a direita */
+html.ss-child .hud-bl { top: auto; bottom: 10px; left: 12px; transform: scale(.82); transform-origin: bottom left; }
+html.ss-child .hud-br { top: auto; bottom: 10px; right: 12px; transform: scale(.82); transform-origin: bottom right; }
+html.ss-child .feed { bottom: auto; top: 10px; }

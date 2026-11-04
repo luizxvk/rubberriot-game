@@ -93,7 +93,7 @@ export class Pad {
       this.navT -= dt;
       const dir = now[B.UP] || ly < -0.6 ? 'up' : now[B.DOWN] || ly > 0.6 ? 'down' : now[B.LEFT] || lx < -0.6 ? 'left' : now[B.RIGHT] || lx > 0.6 ? 'right' : null;
       const fresh = [B.UP, B.DOWN, B.LEFT, B.RIGHT].some(down);
-      const cur = document.activeElement;
+      const cur = active();
       // foco sumiu: a tela se redesenhou depois do clique (arsenal, ajustes, lobby...) ou trocou de tela. Primeiro
       // procura o mesmo botao (ou o que ficou no lugar dele) na mesma tela; so volta pro inicio se a tela mudou (01/11)
       if (cur && cur !== document.body && isShown(cur) && cur !== this.lastEl) { this.lastEl = cur; this.lastSig = sigOf(cur); }
@@ -104,7 +104,7 @@ export class Pad {
         else if (!dlg && this.active && (this.opener || this.openerSig)) { const back = this.opener && isShown(this.opener) ? this.opener : this.openerSig && refind(this.openerSig, focusables()); if (back) setPadFocus(back); this.opener = null; this.openerSig = null; } // o lobby redesenha o botao: acha pelo jeito dele
         this.dlg = dlg;
       } else if (dlg && this.active && cur && !dlg.contains(cur)) { const f = focusables(); if (f.length) setPadFocus(preferred(f)); } // selecao fugiu pra tela de tras: volta pro popup
-      const cur2 = document.activeElement; // (o bloco de cima pode ter mexido no foco)
+      const cur2 = active(); // (o bloco de cima pode ter mexido no foco)
       if (this.active && (!cur2 || cur2 === document.body || !isShown(cur2))) {
         const f0 = focusables();
         if (f0.length) { const back = this.lastSig && refind(this.lastSig, f0); setPadFocus(back || preferred(f0)); }
@@ -116,11 +116,11 @@ export class Pad {
         this.navT = fresh ? 0.38 : 0.13;
       }
       if (!dir) this.navT = 0;
-      if (down(B.A)) { const el = document.activeElement; if (el && el !== document.body) { this.pressed = el; pressFx(el); } else moveFocus('down'); }
+      if (down(B.A)) { const el = active(); if (el && el !== document.body) { this.pressed = el; pressFx(el); } else moveFocus('down'); }
       if (down(B.B)) goBack();
       if (down(B.LB) || down(B.RB)) switchTab(down(B.RB) ? 1 : -1);
       // analogico direito rola a lista que tiver o foco (ou a tela aberta)
-      if (Math.abs(ry) > 0) { const sc = scroller(document.activeElement); if (sc) sc.scrollTop += ry * 900 * dt; }
+      if (Math.abs(ry) > 0) { const sc = scroller(active()); if (sc) sc.scrollTop += ry * 900 * dt; }
       if (down(B.START)) document.getElementById('resume')?.offsetParent && document.getElementById('resume').click();
     }
     hints(this.active && !inGame);
@@ -130,6 +130,10 @@ export class Pad {
 
 const isShown = (el) => el.offsetParent !== null && !el.closest('[hidden], #hud, #touch') && getComputedStyle(el).visibility !== 'hidden';
 // foco do controle: classe propria (o :focus-visible do navegador nem sempre aparece com foco por codigo)
+// tela dividida (03/11): cada tela e um iframe e o foco de verdade e UM so na pagina (focar numa tela tirava o da outra:
+// so um controle via o seletor). La o foco e virtual: guardado aqui, marcado pela classe pad-focus, sem .focus()
+let ssEl = null;
+const active = () => SS ? (ssEl && ssEl.isConnected ? ssEl : document.body) : document.activeElement;
 // assinatura do botao focado: id, data-*, texto, tela onde esta e o lugar na tela
 function sigOf(el) {
   const r = el.getBoundingClientRect();
@@ -150,7 +154,8 @@ function refind(s, list) {
 }
 function setPadFocus(el) {
   document.querySelectorAll('.pad-focus').forEach(e => e.classList.remove('pad-focus'));
-  el.focus({ preventScroll: true }); el.classList.add('pad-focus');
+  if (SS) ssEl = el; else el.focus({ preventScroll: true });
+  el.classList.add('pad-focus');
   el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 // primeiro foco da tela: o botao principal (Jogar, Pronto...) se tiver, senao o primeiro
@@ -213,7 +218,7 @@ function focusables() {
 function moveFocus(dir) {
   const list = focusables();
   if (!list.length) return;
-  const cur = document.activeElement;
+  const cur = active();
   if (!cur || cur === document.body || !list.includes(cur)) { setPadFocus(preferred(list)); return; }
   const box = (el) => el.closest('.card, .end-card, .lb-side, .poster-frame, .tut, section') || document.body, home = box(cur);
   const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
