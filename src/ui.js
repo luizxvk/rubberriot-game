@@ -1,6 +1,7 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
+import { LETHALS, TACTICALS } from '../shared/weapons.js';
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
-import { STREAK_SVG } from './hud.js';
+import { STREAK_SVG, NADE_SVG } from './hud.js';
 import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
 // variante do jogador vale SO no modelo em que foi salva (02/11: aparecia em todas as armas da categoria).
 // Devolve a variante equipada nesta montagem, ou null se ela e de outro modelo / foi apagada
@@ -13,6 +14,9 @@ import { audio } from './audio.js';
 import { renderShop, stopShop, initShop } from './shop.js';
 import { initAnn, startAnn, stopAnn, relangAnn } from './ann.js';
 import { initElitePop } from './elitepop.js';
+import { renderPass } from './passview.js';
+import { RET_PASS } from './pass.js';
+import { initSupport } from './support.js';
 import { renderAllBal } from './zbal.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
@@ -27,7 +31,7 @@ import { getLook, saveLook, lookOpen } from './lookstore.js';
 import { syncOpen, isNew, anyNew, markSeen, newPill } from './newstuff.js';
 import { TIERS, badgeSvg, myTier, peakTier } from './rank.js';
 import { rankData } from './progress.js';
-import { handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits } from './arsenal.js';
+import { isSaber, RET_PATH, retOwned, retColorOwned, handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits, wsOwned, wsFor } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 // mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
@@ -53,14 +57,22 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'ranked', 'profile', 'shop'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'pass'];
   initShop();
   initElitePop(); // banner do Elite abre o popup com os beneficios (03/11)
+  initSupport(); // botao de apoiar no cartaz (04/11)
+  // sem barra de rolagem (regra dele): a roda do mouse anda nas faixas horizontais (pecas, abas, Rovex Pass)
+  addEventListener('wheel', (e) => {
+    const el = e.target.closest?.('.ps-strip, #scr-arsenal .slots, #scr-arsenal .cats');
+    if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    el.scrollLeft += e.deltaY; e.preventDefault();
+  }, { passive: false });
   initAnn((g) => g === 'play' ? $('goSolo')?.click() : ui.go(g)); // anuncios do cartaz: 'play' abre a escolha do modo
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
   ui.go = (name, fromGame = false, startCat = null) => {
+    if (name === 'ranked') name = 'mp'; // a Rankeada mora na tela do Multiplayer (04/11)
     fromLobby = ((fromGame === 'lobby' || fromGame === 'game') && name === 'arsenal') || (fromGame === 'lobby' && (name === 'skills' || name === 'challenges')); // 'game' = aberto da pausa, aplica na hora; skills e desafios tambem abrem da sala (02/11)
     settingsFromGame = fromGame === true;
     // abre na arma principal equipada (antes ficava presa na ultima aba aberta)
@@ -69,19 +81,21 @@ export function initMenus(o) {
     $('smithDone').hidden = !fromLobby;
     $('smithRange').hidden = fromLobby; // campo de treino so do menu (da sala/partida nao)
     if (fromLobby) $('smithDone').textContent = t(fromGame === 'game' ? 'smithNow' : o.lobbyHost() ? 'lbSmithBack' : 'lbSmithReady');
+    const prevScr = ui.screen;
     for (const s of screens) $('scr-' + s).hidden = s !== name;
+    if (prevScr !== name) { const el = $('scr-' + name), back = name === 'home'; el.classList.remove('scr-in', 'scr-back'); void el.offsetWidth; el.classList.add(back ? 'scr-back' : 'scr-in'); } // transicao entre telas do menu (04/11)
     ui.screen = name;
     $('menu').classList.toggle('smithing', name === 'arsenal' || name === 'look');
     $('menu').classList.toggle('home', name === 'home');
     if (name === 'arsenal') { picking = false; renderSmith(); }
     if (name === 'skills') { renderSkills(); tip('skills'); }
-    if (name === 'mp') ui.refreshRooms && ui.refreshRooms();
+    if (name === 'mp') { ui.refreshRooms && ui.refreshRooms(); renderRanked(); }
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
     if (name === 'controls') renderKeys(); else if (binding) stopBinding();
     if (name === 'look') renderLook();
-    if (name === 'ranked') renderRanked();
     if (name === 'profile') renderProfile();
     if (name === 'shop') renderShop(); else stopShop();
+    if (name === 'pass') renderPass(ui.go);
     if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); startAnn(); renderAllBal(); } else stopAnn();
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
@@ -180,6 +194,7 @@ export function initMenus(o) {
     ['range', 'sens', 's_sens', 0.1, 4, 0.05, v => v.toFixed(2)],
     ['range', 'adsSens', 's_adsSens', 0.3, 1.5, 0.05, v => v.toFixed(2)],
     ['range', 'vmFov', 's_vmFov', 45, 75, 1, v => v + '°'],
+    ['range', 'fovScale', 's_fovScale', 1, 1.5, 0.05, v => v.toFixed(2) + 'x'],
     ['range', 'master', 's_master', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'music', 's_music', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'sfx', 's_sfx', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
@@ -215,7 +230,7 @@ export function initMenus(o) {
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: isTouch ? 'touch' : 'ctrl', holdCrouch: 'ctrl', leanMode: 'ctrl', autoSprint: 'ctrl', padSens: 'ctrl', padSmooth: 'ctrl', padAccel: 'ctrl',
     autoFire: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'game',
-    fov: 'video', vmFov: 'video', grain: 'video', res: 'video', film: 'video', draw: 'video', showFps: 'video',
+    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', draw: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
   const grp = (d) => GROUP[d[0] === 'xhair' ? 'xhair' : d[1]] || 'game';
   const TABS = ['ctrl', ...(isTouch ? ['touch'] : []), 'video', 'audio', 'game'];
@@ -263,7 +278,7 @@ export function initMenus(o) {
   // ---------- arsenal ----------
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
-  const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee'];
+  const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee'];
   const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
   const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
 
@@ -538,18 +553,20 @@ export function initMenus(o) {
     }
     syncOpen(openKeys());
     $('catTabs').innerHTML = CATS.map(c => `<button role="tab" aria-selected="${c === cat}" data-c="${c}">${t('cat_' + c)}${anyNew('arsenal|' + c + '|') ? newPill(t('chNew')) : ''}</button>`).join('')
+      + `<button role="tab" class="cat-stk" aria-selected="${cat === 'nades'}" data-c="nades">${t('nadeTab')}</button>`
       + `<button role="tab" class="cat-stk" aria-selected="${cat === 'streaks'}" data-c="streaks">${t('stkTab')}</button>`;
     $('catTabs').querySelectorAll('button').forEach(b => b.onclick = () => { cat = b.dataset.c; slot = 'body'; picking = false; preview = null; audio.play('ui_click', { ui: true }); renderSmith(); });
     // aba Sequencias (02/11, pedido dele): troca o gunsmith pela escolha das sequencias de abate
-    const stk = cat === 'streaks';
+    const stk = cat === 'streaks' || cat === 'nades';
     $('equipBar').hidden = stk; $('smith').hidden = stk; $('stkPane').hidden = !stk;
+    if (cat === 'nades') { renderNadePick(); return; }
     if (stk) { renderStreakPick(); return; }
     // equipar: principal escolhida aqui, pistola sempre como secundaria
     const isPrimary = PRIMARIES.includes(cat);
     const equipped = isPrimary ? S.primary === cat || (!S.primary && cat === 'smg') : true;
     // cabecalho da arma (estilo gunsmith): nome grande + variante, nivel, e equipar do lado
     const loNow = loadouts[cat] || {};
-    const modelName = loNow.body ? partName('body', loNow.body) : wName(cat); // nome proprio do modelo montado
+    const modelName = loNow.ws && wsOwned(loNow.ws) ? t('ws_' + loNow.ws) : loNow.body ? partName('body', loNow.body) : wName(cat); /* skin de modelo: o nome dela */ // nome proprio do modelo montado
     const eqHtml = isPrimary
       ? (equipped ? `<p class="equipped">${t('eqDone', { w: modelName })}</p>` : `<button class="big" id="equipBtn">${t('eqPrimary', { w: modelName })}</button>`)
       : `<p class="equipped">${t(cat === 'melee' ? 'eqMelee' : 'eqSecondary', { w: wName(cat) })}</p>`;
@@ -565,12 +582,12 @@ export function initMenus(o) {
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
-    const slots = cat === 'melee' ? ['body', 'camo'] : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
+    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
       const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && (!lo.scope || IRONS[lo.scope]));
       let val;
-      if (s === 'bp') val = cvOf(cat, lo) && lo.cvName ? `${esc(lo.cvName)} <em class="cv-pill">${t('cvPill')}</em>` : lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
+      if (s === 'bp') val = lo.ws && !lo.bp && !(cvOf(cat, lo) && lo.cvName) ? `<i class="cmini ws-dot"></i> ${t('ws_' + lo.ws)}` : cvOf(cat, lo) && lo.cvName ? `${esc(lo.cvName)} <em class="cv-pill">${t('cvPill')}</em>` : lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
       else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')) || CAMOS[0]; val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
       else if (s === 'ammo') val = `<svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[AMMO[lo.ammo]?.icon || 'radio_button_unchecked']}</svg> ${t('am_' + (lo.ammo || 'none'))}`;
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
@@ -646,7 +663,7 @@ export function initMenus(o) {
 
   // cada modelo guarda a propria montagem (pecas, camo, cores, bala, tracado, reticula): trocar de corpo salva a
   // do modelo atual e traz a do novo; modelo nunca montado comeca limpo (antes herdava tudo, ate a camo da variante)
-  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp', 'cv', 'cvName']; // cv: a variante do jogador volta junto quando ele volta pro modelo
+  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp', 'cv', 'cvName', 'ws']; // cv: a variante do jogador volta junto quando ele volta pro modelo
   function stashBody(lo) {
     if (!lo.body) return;
     lo.saved ||= {};
@@ -681,8 +698,16 @@ export function initMenus(o) {
 
   // ---------- variantes do jogador (02/11) ----------
   // campos da montagem que entram na variante (tudo que muda a arma; o 'saved' por modelo nao)
-  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp'];
+  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp', 'ws'];
   const cvPick = (lo) => Object.fromEntries(CV_KEYS.filter(k => lo[k] != null).map(k => [k, lo[k]]));
+  // skins de MODELO da Loja (04/11): aparecem como variante com o nome delas, so no modelo que elas trocam
+  function wsHtml(lo) {
+    const ids = wsFor(lo.body);
+    if (!ids.length) return '';
+    const opt = (id) => { const own = wsOwned(id), on = lo.ws === id;
+      return `<button class="opt bp ws ${on ? 'on' : ''} ${own ? '' : 'locked'}" data-ws="${id}" ${own ? '' : 'aria-disabled="true"'}><i class="cswatch ws-dot"></i><span class="bp-name">${t('ws_' + id)}</span><small>${t(own ? 'wsSub' : 'shopOnly')}</small></button>`; };
+    return `<div class="cv-block"><p class="pk-h">${t('wsTitle')}</p>${lo.ws ? `<button class="opt bp ws-off" data-ws="">${t('wsOff')}<small>${esc(partName('body', lo.body))}</small></button>` : ''}${ids.map(opt).join('')}</div>`;
+  }
   function customVariantsHtml(lo) {
     const list = (getVariants()[cat] || []).filter(v => v.lo.body === lo.body); // so as deste modelo
     const full = list.length >= VARIANT_MAX;
@@ -740,7 +765,7 @@ export function initMenus(o) {
       // "bom" quando o numero sobe (dano, passo, pente) ou desce (o resto: cadencia lenta, recuo, abertura...)
       const good = (k, v) => (k === 'dmg' || k === 'move' || k === 'mag') ? v > 1 : v < 1;
       const el = eliteToday();
-      p.innerHTML = customVariantsHtml(lo) + `<button class="opt bp-free ${!lo.bp && !lo.cv ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + BP_ORDER.filter(id => BLUEPRINTS[id].wpn === cat).map(id => {
+      p.innerHTML = wsHtml(lo) + customVariantsHtml(lo) + `<button class="opt bp-free ${!lo.bp && !lo.cv ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + BP_ORDER.filter(id => BLUEPRINTS[id].wpn === cat).map(id => {
         const B = BLUEPRINTS[id], open = bpUnlocked(id), cur = lo.bp === id;
         const mods = Object.entries(B.mods).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
         const lock = open ? '' : `<small class="req-ch">${el.reward === id && !el.done ? t('bpToday', { c: t('el_' + el.id, { n: el.n }) }) : t('bpLocked')}</small>${el.reward === id ? `<span class="ubar"><i style="width:${Math.round(el.prog / el.n * 100)}%"></i></span>` : ''}`;
@@ -751,22 +776,24 @@ export function initMenus(o) {
         setVariant(b.dataset.bp || null);
       });
       wireCustomVariants(lo);
+      p.querySelectorAll('[data-ws]').forEach(b => b.onclick = () => {
+        if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; }
+        const L = loadouts[cat]; preview = null;
+        if (b.dataset.ws) L.ws = b.dataset.ws; else delete L.ws;
+        saveLoadouts(loadouts); o.loadoutsChanged(loadouts); audio.play(b.dataset.ws ? 'unlock' : 'swap', { vol: 0.5, ui: true }); renderSmith();
+      });
       return;
     }
     if (slot === 'camo') {
-      // grupos: estaticas, animadas, reativas (cada um com titulo ocupando a linha)
-      const grp = (c) => c.shop ? 'shop' : c.legend || c.meta ? 'legend' : c.react ? 'react' : c.anim ? 'anim' : 'static';
-      let last = null;
-      p.innerHTML = [...CAMOS.filter(c => !c.shop), ...CAMOS.filter(c => c.shop)].map(c => { // as da Loja num grupo so, no fim
-        const g = grp(c), head = g !== last ? `<p class="pk-h">${t('cg_' + g)}</p>` : '';
-        last = g;
-        return head + camoOpt(c);
-      }).join('');
+      // uma secao por origem, cada uma com o titulo uma vez so (04/11: ordenar antes; a lista de CAMOS mistura as origens)
+      const CG = ['static', 'anim', 'react', 'rank', 'special', 'legend', 'pass', 'shop', 'shopreact'];
+      const grp = (c) => c.pass ? 'pass' : c.shop ? (c.react ? 'shopreact' : 'shop') : c.rank != null ? 'rank' : c.legend ? 'legend' : c.prestige || c.meta ? 'special' : c.react ? 'react' : c.anim ? 'anim' : 'static';
+      p.innerHTML = CG.map(g => { const L = CAMOS.filter(c => grp(c) === g); return L.length ? `<p class="pk-h">${t('cg_' + g)}</p>` + L.map(camoOpt).join('') : ''; }).join('');
       function camoOpt(c) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
         // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
-        const req = c.shop && !open ? t('shopOnly') : c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const req = c.pass && !open ? t('passOnly', { n: c.pass }) : c.shop && !open ? t('shopOnly') : c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
         const bar = open || c.shop || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
@@ -800,10 +827,10 @@ export function initMenus(o) {
       return;
     }
     if (slot === 'ret') {
-      p.innerHTML = ['auto', ...RETICLES].map(r => `<button class="opt ${(lo.ret || 'auto') === r ? 'on' : ''}" data-r="${r}">${retIcon(r)}<br>${t('ret_' + r)}</button>`).join('') +
-        Object.entries(RET_COLORS).map(([k, c]) => `<button class="swatch ${(lo.retColor || 'red') === k ? 'on' : ''}" style="background:${c}" data-col="${k}" aria-label="${t('retColor')} ${k}"></button>`).join('');
-      p.querySelectorAll('[data-r]').forEach(b => b.onclick = () => setPart('ret', b.dataset.r === 'auto' ? null : b.dataset.r));
-      p.querySelectorAll('[data-col]').forEach(b => b.onclick = () => setPart('retColor', b.dataset.col));
+      p.innerHTML = ['auto', ...RETICLES].map(r => { const open = retOwned(r); return `<button class="opt ${(lo.ret || 'auto') === r ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'ret' && preview.v === r ? 'peek' : ''}" data-r="${r}" ${open ? '' : 'aria-disabled="true"'}>${retIcon(r)}<br>${t('ret_' + r)}${open ? '' : `<br><small>${t('retShop')}</small>`}</button>`; }).join('') +
+        `<div class="ret-cols"><small>${t('retColor')}</small>` + Object.entries(RET_COLORS).map(([k, c]) => `<button class="swatch ${(lo.retColor || 'red') === k ? 'on' : ''} ${retColorOwned(k) ? '' : 'locked'}" style="background:${c}" data-col="${k}" ${retColorOwned(k) ? '' : `aria-disabled="true" title="${t('passOnly', { n: RET_PASS[k] })}"`} aria-label="${t('retColor')} ${k}"></button>`).join('') + '</div>';
+      p.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek('ret', b.dataset.r); return; } setPart('ret', b.dataset.r === 'auto' ? null : b.dataset.r); });
+      p.querySelectorAll('[data-col]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek('retColor', b.dataset.col); return; } setPart('retColor', b.dataset.col); });
       return;
     }
     if (slot === 'paint' || slot === 'accent') {
@@ -825,7 +852,7 @@ export function initMenus(o) {
     else opts = [null, ...C.handles.filter(h => handleFits(lo.body, cat, h))];
     const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : slot === 'scope' && !lo.scope && cat !== 'sniper' ? 'iron_flip' : lo[slot];
     p.innerHTML = opts.map((id, i0) => {
-      const i = slot === 'scope' ? [null, ...C.scopes].indexOf(id) : i0; // nivel da mira pelo lugar na lista original (as de trilho entraram na frente)
+      const i = slot === 'scope' ? [null, ...C.scopes].indexOf(id) : slot === 'handle' ? [null, ...C.handles].indexOf(id) : i0; /* 04/11: a lista de empunhaduras vem filtrada; pelo indice dela a peca aparecia aberta e a validacao tirava ao equipar */ // nivel da mira pelo lugar na lista original (as de trilho entraram na frente)
       if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
       const open = slot === 'muzzle' ? !id || partUnlocked(cat, i, 'mz:' + id) : IRONS[id] || partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
       const lockCh = !open && id && (LOCKED_BY[cat + ':' + id] || LOCKED_BY[id]);
@@ -839,6 +866,15 @@ export function initMenus(o) {
       b.onclick = () => { if (b.classList.contains('locked')) { peek(slot, b.dataset.id || null); return; } setPart(slot, b.dataset.id || null); };
       b.onpointerenter = () => audio.play('ui_hover', { ui: true, vol: 0.3, key: 'hover', max: 1 });
     });
+  }
+
+  // granadas (04/11, pedido dele): uma letal (G) e uma tatica (F), escolhidas em cartas como as sequencias
+  function renderNadePick() {
+    const L = LETHALS.includes(S.lethal) ? S.lethal : 'frag', T = TACTICALS.includes(S.tactical) ? S.tactical : 'flash';
+    const card = (id, on, grp) => `<button class="stk-card ${on ? 'on' : ''}" data-n="${id}" data-g="${grp}" aria-pressed="${on}"><svg class="stk-ico" viewBox="0 0 48 48" aria-hidden="true">${NADE_SVG[id]}</svg><b class="stk-name">${t('n_' + id)}</b><span class="stk-d">${t('nd_' + id)}</span></button>`;
+    $('stkPane').innerHTML = `<p class="stk-hint">${t('nadeHint')}</p><h3 class="nade-h">${t('nadeLethal')}</h3><div class="stk-cards" role="radiogroup">${LETHALS.map(id => card(id, id === L, 'l')).join('')}</div>`
+      + `<h3 class="nade-h">${t('nadeTac')}</h3><div class="stk-cards" role="radiogroup">${TACTICALS.map(id => card(id, id === T, 't')).join('')}</div>`;
+    $('stkPane').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { if (b.dataset.g === 'l') S.lethal = b.dataset.n; else S.tactical = b.dataset.n; o.saveSettings(); audio.play('ui_click', { ui: true }); renderNadePick(); });
   }
 
   // sequencias de abate: cartas com selo, abates e o que faz; tocar liga/desliga (no maximo STREAK_PICK)
@@ -868,7 +904,14 @@ export function initMenus(o) {
   function renderStats(lo) {
     const W = WEAPONS[cat];
     const st = loadoutStats(cat, lo), base = loadoutStats(cat, defaultLoadout(cat));
-    const rows = [
+    // lamina: so o que vale pra ela (sem pente, recarga, mira nem zoom)
+    const reach = (l) => bodyTrait(l.body)?.range || W.range;
+    const rows = cat === 'melee' ? [
+      [t('st_dmg'), W.dmg, W.dmg, W.dmg],
+      [t('st_rate'), 1 / (W.rate * st.rate), 1 / (W.rate * base.rate), 3],
+      [t('st_range'), reach(lo), reach(defaultLoadout(cat)), 4],
+      [t('st_move'), st.move, base.move, 1.1],
+    ] : [
       [t('st_dmg'), W.dmg * (W.pellets || 1) * st.dmg, W.dmg * (W.pellets || 1) * base.dmg, 130],
       [t('st_rate'), 1 / (W.rate * st.rate), 1 / (W.rate * base.rate), 16],
       [t('st_acc'), 1 / (W.spread * st.spread + 0.004), 1 / (W.spread * base.spread + 0.004), 70],
@@ -884,7 +927,7 @@ export function initMenus(o) {
       const pct = Math.min(100, v / max * 100);
       const d = v - b, rel = b ? d / b : 0;
       const cls = Math.abs(rel) < 0.01 ? '' : rel > 0 ? 'up' : 'down';
-      const txt = n === t('st_mag') ? v : n === t('st_zoom') ? v.toFixed(1) + 'x' : (Math.abs(rel) < 0.01 ? '=' : (rel > 0 ? '+' : '') + Math.round(rel * 100) + '%');
+      const txt = n === t('st_range') ? v.toFixed(1) + ' m' : n === t('st_mag') ? v : n === t('st_zoom') ? v.toFixed(1) + 'x' : (Math.abs(rel) < 0.01 ? '=' : (rel > 0 ? '+' : '') + Math.round(rel * 100) + '%');
       return `<div class="stat"><span>${n}</span><span class="bar"><i style="width:${pct}%"></i></span><em class="${cls}">${txt}</em></div>`;
     }).join('');
   }
@@ -904,10 +947,19 @@ export function initMenus(o) {
     el.onclick = (e) => { if (e.target.closest('#prestGo')) return; audio.play('ui_click', { ui: true }); ui.go('profile'); };
     el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ui.go('profile'); } };
     el.innerHTML = `<b>${pi.level}</b>${stars}<span><span class="lv-top"><strong class="lv-name">${esc(myName())}</strong><small>${t('playerLevel')}</small></span><span class="xpbar"><i style="width:${pi.max ? 100 : Math.round(pi.into / pi.need * 100)}%"></i></span><small>${pi.max ? t('maxed') : pi.into + ' / ' + pi.need + ' XP'}</small></span>` +
-      (pi.canPrestige ? `<button class="prest-go" id="prestGo">${t('prestGo')}</button>` : '');
+      '';
+    // prestigio (04/11, pedido dele): banner grande no cartaz, no lugar do aviso da Elite (o botao antigo ficava embaixo do
+    // selo de nivel e o cartaz cortava). E um <button>: mouse, toque e controle (A) funcionam; 2o toque confirma
+    let pb = document.getElementById('prestGo');
+    if (pi.canPrestige && !pb) {
+      pb = document.createElement('button'); pb.id = 'prestGo'; pb.className = 'prest-banner';
+      const at = document.getElementById('elitePromo'); at ? at.before(pb) : document.querySelector('.poster-frame').appendChild(pb);
+    }
+    if (!pi.canPrestige && pb) { pb.remove(); pb = null; }
+    if (pb && pb.dataset.sure !== '1') pb.innerHTML = `<span class="pb-star" aria-hidden="true">?</span><span class="pb-txt"><b>${t('prestReady')}</b><small>${t('prestReadySub', { n: pi.prestige + 1 })}</small></span><span class="pb-go" aria-hidden="true">?</span>`;
     const go = document.getElementById('prestGo');
     if (go) go.onclick = () => {
-      if (go.dataset.sure !== '1') { go.dataset.sure = '1'; go.textContent = t('prestSure'); audio.play('ui_click', { ui: true }); return; }
+      if (go.dataset.sure !== '1') { go.dataset.sure = '1'; go.innerHTML = `<span class="pb-star" aria-hidden="true">?</span><span class="pb-txt"><b>${t('prestSure')}</b></span>`; audio.play('ui_click', { ui: true }); clearTimeout(go.sureT); go.sureT = setTimeout(() => { go.dataset.sure = ''; drawLevel(); }, 5000); return; }
       if (doPrestige()) {
         const n = progressInfo().prestige;
         audio.play('prestige', { ui: true, vol: 0.8 });
@@ -953,6 +1005,8 @@ export function initMenus(o) {
 // desenho pequeno de cada reticula pra lista do arsenal
 function retIcon(r) {
   const c = '#d8453a', k = 'stroke="currentColor" stroke-width="2" fill="none"';
+  const P = RET_PATH[r];
+  if (P) return `<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">${P.s ? `<path d="${P.s}" stroke="${c}" stroke-width="2" fill="none"/>` : ''}${P.f ? `<path d="${P.f}" fill="${c}" fill-rule="evenodd"/>` : ''}</svg>`;
   const body = {
     auto: `<circle cx="12" cy="12" r="8" ${k} stroke-dasharray="3 3"/>`,
     dot: `<circle cx="12" cy="12" r="2.6" fill="${c}"/>`,

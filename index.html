@@ -158,7 +158,7 @@ html.touch-boot .boot { display: grid; }
 <noscript>
   <h1>Rubber Riot</h1>
   <p>Free multiplayer FPS in 1930s rubber-hose cartoon style, played right in your browser. Call in anvil rain, a blimp or the atomic pie, fight your way back in the boxing ring, revive your duo with a bicycle pump and build your gun in the Arsenal.</p>
-  <p>FPS multiplayer gratis com visual de desenho dos anos 30, direto no navegador. Chuva de bigornas, ringue de boxe pra voltar pro jogo, dupla reerguida na bomba de bicicleta e battle royale.</p>
+  <p>FPS multiplayer grátis com visual de desenho dos anos 30, direto no navegador. Chuva de bigornas, ringue de boxe pra voltar pro jogo, dupla reerguida na bomba de bicicleta e battle royale.</p>
   <p>Turn on JavaScript to play. / Ative o JavaScript pra jogar.</p>
 </noscript>
 
@@ -178,10 +178,10 @@ html.touch-boot .boot { display: grid; }
 <section id="gate" hidden aria-labelledby="gateTitle">
   <div class="gate-card">
     <h1 class="title" id="gateTitle"><span>Rubber</span><span>Riot</span></h1>
-    <p class="gate-text" data-i18n="gateText">Entre com a sua conta Rovex pra jogar. Seu nivel, suas armas e seus desafios ficam salvos nela.</p>
+    <p class="gate-text" data-i18n="gateText">Entre com a sua conta Rovex pra jogar. Seu nível, suas armas e seus desafios ficam salvos nela.</p>
     <a class="big gate-go" id="gateGo" href="#" data-i18n="gateGo">Entrar com a Rovex</a>
     <button class="plain" id="gateInstall" data-i18n="installApp" hidden>Instalar app</button>
-    <p class="gate-new"><span data-i18n="gateNew">Ainda nao tem conta?</span> <a href="https://tryrovex.com/" data-i18n="gateCreate">Crie gratis na Rovex</a></p>
+    <p class="gate-new"><span data-i18n="gateNew">Ainda não tem conta?</span> <a href="https://tryrovex.com/" data-i18n="gateCreate">Crie grátis na Rovex</a></p>
   </div>
 </section>
 
@@ -193,7 +193,7 @@ html.touch-boot .boot { display: grid; }
       <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="pt">PT</button></div>
       <!-- instalar (sempre a vista; sem o atalho do Chrome abre o guia) e tela cheia. Icones: Material Icons (Apache 2.0) -->
       <div class="app-tools">
-        <div class="zbal" id="homeBal" role="group" hidden></div>
+        <button class="tool sup" id="supportBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span data-i18n="supBtn">Apoiar</span></button>
         <button class="tool" id="installApp" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><span data-i18n="installApp">Instalar app</span></button>
         <button class="tool icon" id="fsMenu" data-i18n-aria="fsOn" aria-label="Tela cheia" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
       </div>
@@ -207,7 +207,7 @@ html.touch-boot .boot { display: grid; }
       <button class="wknd ev-stamp" id="evStamp" type="button" aria-expanded="false" aria-controls="evNote" hidden><i id="evStampIco"></i><span data-i18n="cfg_mut">Evento</span><small id="evStampName"></small></button>
       </div>
       <div class="wknd-note ev-note" id="evNote" role="dialog" aria-labelledby="evNoteName" hidden><small data-i18n="evTitle">Evento do fim de semana</small><b id="evNoteName"></b><span id="evNoteDesc"></span><button class="big" id="evPlay" data-i18n="evPlay">Jogar o evento</button></div>
-      <p class="wknd-note" id="wkndNote" role="status" hidden><b data-i18n="wkndTitle">XP em dobro no fim de semana</b><span data-i18n="wkndBody">Sabado e domingo, todo XP vale o dobro: abates, partidas e desafios. Soma com o XP do Elite.</span></p>
+      <p class="wknd-note" id="wkndNote" role="status" hidden><b data-i18n="wkndTitle">XP em dobro no fim de semana</b><span data-i18n="wkndBody">Sábado e domingo, todo XP vale o dobro: abates, partidas e desafios. Soma com o XP do Elite.</span></p>
       <!-- guest (site proprio sem conta): banner fixo pra criar a conta Rovex e nao perder o progresso. Icone: Material Icons (Apache 2.0) -->
       <a class="elite-promo guest-promo" id="guestPromo" href="#" target="_top" rel="noopener" hidden>
         <svg class="ep-hex" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
@@ -223,18 +223,20 @@ html.touch-boot .boot { display: grid; }
         <em class="ep-chip" id="epChip" data-i18n="epChip">XP 2x</em>
         <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </a>
+      <!-- carteira (04/11): saldos de Zions num bilhete proprio na coluna do titulo (no topo ficavam espremidos e desalinhados) -->
+      <div class="zbal wallet" id="homeBal" role="group" hidden></div>
       <nav class="bill" aria-label="Menu principal">
         <!-- icones: Material Icons (Apache 2.0) -->
         <button id="goSolo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
-        <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span></button>
-        <button id="goTutorial" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg><span data-i18n="tutorial">Treino</span></button>
-        <button id="goSplit" class="bill-item split" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg><span data-i18n="splitGo">Tela dividida</span><em class="ch-new beta">beta</em></button>
-        <button data-go="ranked" class="bill-item ranked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.43V2H7v8.43c0 .35.18.68.49.86l4.18 2.51-.99 2.34-3.41.29 2.59 2.24L9.07 22 12 20.23 14.93 22l-.78-3.33 2.59-2.24-3.41-.29-.99-2.34 4.18-2.51c.3-.18.48-.5.48-.86zm-4 1.8-1 .6-1-.6V3h2v9.23z"/></svg><span data-i18n="ranked">Rankeada</span><i class="rk-mini" id="rkMini"></i></button>
-        <button data-go="arsenal" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><span data-i18n="arsenal">Arsenal</span></button>
+        <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span><i class="rk-mini" id="rkMini"></i></button>
+        <button data-go="pass" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10V6c0-1.11-.9-2-2-2H4c-1.1 0-1.99.89-1.99 2v4c1.1 0 1.99.9 1.99 2s-.89 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2s.9-2 2-2zm-9 7.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2z"/></svg><span data-i18n="passTitle">Rovex Pass</span></button>
+        <button data-go="shop" class="bill-item shop-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zm-2.99-3.9 1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-.94.47-.61 0-1.14-.49-1.21-1.14L16.98 5l1.93-.01zM13 5h1.96l.54 4.52c.05.39-.07.78-.33 1.07-.22.26-.54.41-.95.41-.67 0-1.22-.59-1.22-1.31V5zM8.49 9.52 9.04 5H11v4.69c0 .72-.55 1.31-1.29 1.31-.34 0-.65-.15-.89-.41-.25-.29-.37-.68-.33-1.070zm-4.45-.16L5.050 5h1.97l-.58 4.86c-.08.65-.6 1.14-1.21 1.14-.49 0-.8-.29-.93-.47-.27-.32-.36-.75-.26-1.17zM5 19v-6.03c.08.01.15.03.23.03.87 0 1.66-.36 2.24-.95.6.6 1.4.95 2.31.95.87 0 1.65-.36 2.23-.93.59.57 1.39.93 2.29.93.84 0 1.640-.35 2.24-.95.58.59 1.37.95 2.24.95.08 0 .15-.02.23-.03V19H5z"/></svg><span data-i18n="shop">Loja</span></button>
         <button data-go="look" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 18.2 13 11.75v-.91a3.496 3.496 0 0 0-.18-6.75A3.51 3.51 0 0 0 8.5 7.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5c0 .84-.69 1.52-1.53 1.5-.54-.01-.97.45-.97.99v1.76L2.4 18.2c-.77.58-.36 1.8.6 1.8h18c.96 0 1.37-1.22.6-1.8zM6 18l6-4.5 6 4.5H6z"/></svg><span data-i18n="look">Visual</span></button>
+        <button data-go="arsenal" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><span data-i18n="arsenal">Arsenal</span></button>
         <button data-go="skills" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 8.57a1.43 1.43 0 1 0 0 2.86 1.43 1.43 0 0 0 0-2.86z"/><path d="M13 3C9.25 3 6.2 5.94 6.02 9.64L4.1 12.2a.5.5 0 0 0 .4.8H6v3c0 1.1.9 2 2 2h1v3h7v-4.68A6.999 6.999 0 0 0 13 3zm3 7c0 .13-.01.26-.02.39l.83.66c.08.06.1.16.05.25l-.8 1.39c-.05.09-.16.12-.24.09l-.99-.4c-.21.16-.43.29-.67.39L14 13.83c-.01.1-.1.17-.2.17h-1.6c-.1 0-.18-.07-.2-.17l-.15-1.06c-.25-.1-.47-.23-.68-.39l-.99.4c-.09.03-.2 0-.25-.09l-.8-1.39a.19.19 0 0 1 .05-.25l.84-.66c-.01-.13-.02-.26-.02-.39s.02-.27.04-.39l-.85-.66c-.08-.06-.1-.16-.05-.26l.8-1.38c.05-.09.15-.12.24-.09l1 .4c.2-.15.43-.29.67-.39L12 6.17c.02-.1.1-.17.2-.17h1.6c.1 0 .18.07.2.17l.15 1.06c.24.1.46.23.67.39l1-.4c.09-.03.2 0 .24.09l.8 1.38a.2.2 0 0 1-.05.26l-.85.66c.03.12.04.25.04.39z"/></svg><span data-i18n="skTab">Skills</span></button>
         <button data-go="challenges" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg><span data-i18n="lbCh">Desafios</span></button>
-        <button data-go="shop" class="bill-item shop-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zm-2.99-3.9 1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-.94.47-.61 0-1.14-.49-1.21-1.14L16.98 5l1.93-.01zM13 5h1.96l.54 4.52c.05.39-.07.78-.33 1.07-.22.26-.54.41-.95.41-.67 0-1.22-.59-1.22-1.31V5zM8.49 9.52 9.04 5H11v4.69c0 .72-.55 1.31-1.29 1.31-.34 0-.65-.15-.89-.41-.25-.29-.37-.68-.33-1.070zm-4.45-.16L5.050 5h1.97l-.58 4.86c-.08.65-.6 1.14-1.21 1.14-.49 0-.8-.29-.93-.47-.27-.32-.36-.75-.26-1.17zM5 19v-6.03c.08.01.15.03.23.03.87 0 1.66-.36 2.24-.95.6.6 1.4.95 2.31.95.87 0 1.65-.36 2.23-.93.59.57 1.39.93 2.29.93.84 0 1.640-.35 2.24-.95.58.59 1.37.95 2.24.95.08 0 .15-.02.23-.03V19H5z"/></svg><span data-i18n="shop">Loja</span></button>
+        <button id="goTutorial" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg><span data-i18n="tutorial">Treino</span></button>
+        <button id="goSplit" class="bill-item split" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg><span data-i18n="splitGo">Tela dividida</span><em class="ch-new beta">beta</em></button>
         <button data-go="settings" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg><span data-i18n="settings">Ajustes</span></button>
         <!-- anuncios (03/11): no celular/tela estreita fica aqui, no lugar dos Controles (que foram pros Ajustes) -->
         <div class="ann ann-in" id="annIn" role="region" aria-roledescription="carrossel" data-i18n-aria="annTitle" aria-label="Novidades"></div>
@@ -246,7 +248,7 @@ html.touch-boot .boot { display: grid; }
   <aside class="invite-toast" id="inviteToast" role="alertdialog" aria-labelledby="ivTxt" hidden>
     <span class="iv-av" id="ivAv" aria-hidden="true"></span>
     <p id="ivTxt"></p>
-    <div class="iv-act"><button class="iv-go" id="ivGo" data-i18n="ivGo">Entrar</button><button class="iv-no" id="ivNo" data-i18n="ivNo">Agora nao</button></div>
+    <div class="iv-act"><button class="iv-go" id="ivGo" data-i18n="ivGo">Entrar</button><button class="iv-no" id="ivNo" data-i18n="ivNo">Agora não</button></div>
   </aside>
 
   <!-- salas de amigos abertas agora (so com conta Rovex; some sem nenhuma) -->
@@ -264,32 +266,32 @@ html.touch-boot .boot { display: grid; }
       <div class="look-team" role="radiogroup" aria-label="Time"><button data-team="red" role="radio" data-i18n="lookRed">Vermelho</button><button data-team="blue" role="radio" data-i18n="lookBlue">Azul</button></div></header>
     <div class="look-tabs" id="lookTabs" role="tablist"></div>
     <div class="look-grid" id="lookGrid"></div>
-    <p class="look-note" id="lookNote" data-i18n="lookTeamNote">O short e a fita do chapeu ficam sempre na cor do seu time.</p>
+    <p class="look-note" id="lookNote" data-i18n="lookTeamNote">O short e a fita do chapéu ficam sempre na cor do seu time.</p>
   </section>
 
   <section class="card" id="scr-mp" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="multiplayer">Multiplayer</h2></header>
     <p class="mp-who" id="mpWho"></p>
-    <label class="field" id="mpNameField" hidden><span data-i18n="yourName">Seu nome</span><input id="mpName" maxlength="14" placeholder="Borrao"></label>
-    <button class="mp-host mp-quick" id="playQuick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg><b data-i18n="quickPlay">Jogo rapido</b><small data-i18n="quickPlaySub">Cai numa partida rolando agora ou abre uma com bots</small></button>
+    <label class="field" id="mpNameField" hidden><span data-i18n="yourName">Seu nome</span><input id="mpName" maxlength="14" placeholder="Borrão"></label>
+    <button class="mp-host mp-quick" id="playQuick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg><b data-i18n="quickPlay">Jogo rápido</b><small data-i18n="quickPlaySub">Cai numa partida rolando agora ou abre uma com bots</small></button>
     <form class="ticket" id="mpJoin" autocomplete="off">
-      <label class="ticket-stub" for="mpRoom" data-i18n="haveCode">Tem um codigo?</label>
+      <label class="ticket-stub" for="mpRoom" data-i18n="haveCode">Tem um código?</label>
       <input class="ticket-code" id="mpRoom" maxlength="8" placeholder="ABC123" spellcheck="false" autocapitalize="characters" inputmode="text" aria-describedby="mpErr">
       <button class="ticket-go" id="joinCode" type="submit" data-i18n="joinCode">Entrar</button>
     </form>
     <div class="mp-or" aria-hidden="true"><span data-i18n="mpOr">ou</span></div>
-    <button class="mp-host" id="playMp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg><b data-i18n="createRoom">Criar sala</b><small data-i18n="createRoomSub">Voce vira o host e escolhe modo, mapa e bots no lobby</small></button>
+    <button class="mp-host" id="playMp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg><b data-i18n="createRoom">Criar sala</b><small data-i18n="createRoomSub">Você vira o host e escolhe modo, mapa e bots no lobby</small></button>
     <p class="err" id="mpErr" role="alert"></p>
+    <!-- rankeada (04/11): mora aqui, com a classificacao a vista -->
+    <section class="mp-rank" aria-labelledby="mpRankH">
+      <h3 id="mpRankH" data-i18n="ranked">Rankeada</h3>
+      <div class="rk-me" id="rkMe"></div>
+      <p class="rk-sub" data-i18n="rkSub">Captura a Bandeira, Dominação e Escolta.</p>
+      <ol class="rk-tiers" id="rkTiers"></ol>
+      <button class="big rk-find" id="rkFind" data-i18n="rkFind">Procurar partida</button>
+    </section>
   </section>
 
-  <!-- rankeada (31/10): badge atual, pontos, as 5 faixas com premio e o botao de procurar partida -->
-  <section class="card" id="scr-ranked" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="ranked">Rankeada</h2></header>
-    <div class="rk-me" id="rkMe"></div>
-    <p class="rk-sub" data-i18n="rkSub">Captura a Bandeira, Dominacao e Escolta.</p>
-    <ol class="rk-tiers" id="rkTiers"></ol>
-    <button class="big rk-find" id="rkFind" data-i18n="rkFind">Procurar partida</button>
-  </section>
   <section class="card" id="scr-challenges" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="challenges">Desafios</h2></header>
     <div class="elite-card" id="chElite"></div>
@@ -308,7 +310,7 @@ html.touch-boot .boot { display: grid; }
     <div class="smith" id="smith">
       <div class="slots" id="slotList"></div>
       <div class="gs-pick" id="pickWrap" hidden>
-        <div class="gs-pick-head"><button class="gs-back" id="pickBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg><span data-i18n="gsParts">Pecas</span></button><h3 id="pickTitle"></h3></div>
+        <div class="gs-pick-head"><button class="gs-back" id="pickBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg><span data-i18n="gsParts">Peças</span></button><h3 id="pickTitle"></h3></div>
         <div class="picker" id="picker"></div>
       </div>
       <div class="stats" id="statBars"></div>
@@ -319,6 +321,12 @@ html.touch-boot .boot { display: grid; }
   <section class="card wide" id="scr-profile" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="profile">Perfil</h2></header>
     <div class="pf" id="pfBody"></div>
+  </section>
+
+  <!-- Rovex Pass (04/11): so itens do jogo, em src/passview.js -->
+  <section class="card wide" id="scr-pass" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="passTitle">Rovex Pass</h2></header>
+    <div id="passBody"></div>
   </section>
 
   <!-- loja (03/11): vitrine estilo Fortnite, itens em previa (src/shop.js). Icone de fechar: Material Icons (Apache 2.0) -->
@@ -371,7 +379,7 @@ html.touch-boot .boot { display: grid; }
     <p class="lb-ver" id="lbVer"></p>
     <div class="lb-room" id="lbRoom" hidden>
       <span data-i18n="lbRoomLbl">Sala</span><b id="lbRoomCode"></b>
-      <button class="lb-copy" id="lbCopy" data-i18n-aria="copyCode" aria-label="Copiar codigo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+      <button class="lb-copy" id="lbCopy" data-i18n-aria="copyCode" aria-label="Copiar código"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
       <button class="lb-invite" id="lbInvite" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span data-i18n="lbInvite">Convidar amigos</span></button>
     </div>
   </header>
@@ -380,7 +388,7 @@ html.touch-boot .boot { display: grid; }
     <b id="lbCount">5</b>
   </div>
   <div class="lb-bill">
-    <h3 data-i18n="lbCast">Elenco da sessao</h3>
+    <h3 data-i18n="lbCast">Elenco da sessão</h3>
     <button class="lb-swap" id="lbSwap" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg><span data-i18n="sideSwap">Trocar lado</span></button>
     <ol id="lbPlayers"></ol>
     <p class="lb-status" id="lbStatus" aria-live="polite"></p>
@@ -465,7 +473,7 @@ html.touch-boot .boot { display: grid; }
     <div class="hp"><span class="hp-num" id="hpNum">100</span><span class="hp-bar"><i id="hpBar"></i></span></div>
     <!-- colete (battle royale): fica embaixo da vida -->
     <div class="armor" id="armorBox" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><span class="armor-bar"><i id="armorBar"></i></span></div>
-    <div class="tac" id="tacBar" aria-label="Folego da disparada"><i></i></div>
+    <div class="tac" id="tacBar" aria-label="Fôlego da disparada"><i></i></div>
   </div>
   <div class="hud-br">
     <div class="wname" id="wName">Matraca</div>
@@ -494,19 +502,19 @@ html.touch-boot .boot { display: grid; }
   <!-- kill cam em quadrinhos: tira de 3 quadros (quem foi, o tiro, voce) -->
   <div class="comic" id="comic" hidden></div>
   <button class="big dead-go" id="deadGo" hidden data-i18n="respawn">Renascer</button>
-  <div class="spec-bar" id="specBar" hidden><button id="specNext" data-i18n="specNext">Proximo</button><button id="specMap" data-i18n="specMapBtn">Mapa</button></div>
+  <div class="spec-bar" id="specBar" hidden><button id="specNext" data-i18n="specNext">Próximo</button><button id="specMap" data-i18n="specMapBtn">Mapa</button></div>
 </div>
 
 <!-- editor do HUD de toque: arrasta os botoes; tamanho e opacidade -->
 <div id="hudEdit" hidden>
   <div class="he-bar">
-    <b data-i18n="hudEdit">Ajustar HUD e botoes</b>
+    <b data-i18n="hudEdit">Ajustar HUD e botões</b>
     <label><span data-i18n="heSize">Tamanho</span><input type="range" id="heScale" min="0.7" max="1.4" step="0.05"></label>
     <label><span data-i18n="heAlpha">Opacidade</span><input type="range" id="heAlpha" min="0.3" max="1" step="0.05"></label>
     <button id="heReset" data-i18n="heReset">Restaurar</button>
     <button id="heSave" class="he-save" data-i18n="heSave">Salvar</button>
   </div>
-  <p class="he-hint" data-i18n="heHint">Arraste qualquer botao ou o analogico pra onde preferir.</p>
+  <p class="he-hint" data-i18n="heHint">Arraste qualquer botão ou o analógico pra onde preferir.</p>
 </div>
 
 <!-- guia de instalacao: aparece quando o navegador nao oferece o atalho de instalar -->
@@ -524,27 +532,27 @@ html.touch-boot .boot { display: grid; }
   <div class="card small dup-card">
     <svg class="dup-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/></svg>
     <h2 id="dupTitle" data-i18n="dupTitle">Conta em uso</h2>
-    <p id="dupBody" data-i18n="dupBody">Esta conta esta sendo jogada em outro dispositivo agora.</p>
+    <p id="dupBody" data-i18n="dupBody">Esta conta está sendo jogada em outro dispositivo agora.</p>
     <p class="dup-msg" id="dupMsg" role="status" hidden></p>
     <div class="dup-acts">
       <button class="big" id="dupTake" data-i18n="dupTake">Contestar e jogar aqui</button>
-      <button class="plain" id="dupReset" data-i18n="dupReset">Nao fui eu: recuperar senha Rovex</button>
+      <button class="plain" id="dupReset" data-i18n="dupReset">Não fui eu: recuperar senha Rovex</button>
     </div>
   </div>
 </div>
 
 <!-- celular sem memoria de video: o navegador desligou o 3D um instante (02/11) -->
-<div id="glLost" class="overlay gl-lost" hidden role="alert"><div class="card small"><h2 data-i18n="glLostT">Recarregando os graficos</h2><p data-i18n="glLostB">O aparelho ficou sem memoria de video. Baixamos a resolucao pra nao acontecer de novo.</p></div></div>
+<div id="glLost" class="overlay gl-lost" hidden role="alert"><div class="card small"><h2 data-i18n="glLostT">Recarregando os gráficos</h2><p data-i18n="glLostB">O aparelho ficou sem memória de vídeo. Baixamos a resolução pra não acontecer de novo.</p></div></div>
 
 <div id="pause" class="overlay" hidden>
   <div class="card small">
     <h2 data-i18n="intermission">Intervalo</h2>
-    <div class="pk" id="pausePick" role="radiogroup" aria-labelledby="pkLbl"><p class="pk-lbl" id="pkLbl" data-i18n="pickNext">Arma no proximo renascimento</p><div class="pk-list" id="pkList"></div></div>
-    <div class="pk rg" id="rangePick" hidden><p class="pk-lbl" data-i18n="rangeLbl">Testar arma (todas, ate as bloqueadas)</p><div class="rg-tabs" id="rgTabs" role="tablist"></div><div class="pk-list rg-list" id="rgList" role="radiogroup"></div></div>
+    <div class="pk" id="pausePick" role="radiogroup" aria-labelledby="pkLbl"><p class="pk-lbl" id="pkLbl" data-i18n="pickNext">Arma no próximo renascimento</p><div class="pk-list" id="pkList"></div></div>
+    <div class="pk rg" id="rangePick" hidden><p class="pk-lbl" data-i18n="rangeLbl">Testar arma (todas, até as bloqueadas)</p><div class="rg-tabs" id="rgTabs" role="tablist"></div><div class="pk-list rg-list" id="rgList" role="radiogroup"></div></div>
     <button class="big" id="resume" data-i18n="resume">Voltar pro tiroteio</button>
     <button class="plain" id="pauseSmith" data-i18n="lbSmith">Montar arma</button>
     <button class="plain" id="pauseTeam" data-i18n="teamSwapBtn" hidden>Trocar de time</button>
-    <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botoes</button>
+    <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botões</button>
     <button class="plain" id="pauseFs" data-i18n="fsOn" hidden>Tela cheia</button>
     <button class="plain" id="pauseSettings" data-i18n="settings">Ajustes</button>
     <button class="plain" id="quit" data-i18n="quit">Sair pro menu</button>
@@ -558,6 +566,8 @@ html.touch-boot .boot { display: grid; }
       <p class="end-the" data-i18n="theEnd">Fim</p>
       <p class="end-win" id="endWin"></p>
     </div>
+    <div class="end-tabs" id="endTabs" hidden></div>
+    <div class="end-track"><div class="end-rail" id="endRail">
     <div class="end-cols">
       <section class="end-panel">
         <h3 data-i18n="endCast">Placar final</h3>
@@ -569,12 +579,15 @@ html.touch-boot .boot { display: grid; }
         <!-- meta da comunidade: PLAFTs da semana de todo mundo; bateu = set Ouro da Borracha -->
         <div class="end-meta" id="endMeta" hidden><small data-i18n="metaTitle">Meta da comunidade</small><span class="em-bar"><i id="emBar"></i></span><b id="emNum"></b><em id="emYou"></em></div>
         <div class="end-rank" id="endRank" hidden><span class="er-badge" id="erBadge"></span><div><small data-i18n="ranked">Rankeada</small><b id="erPts">+0</b><em id="erWhy"></em></div><span class="er-total" id="erTotal"></span><p class="er-up" id="erUp" hidden></p></div>
+        <div class="end-zp" id="endZp" hidden></div>
+        <div class="end-pass" id="endPass" hidden></div>
         <div class="end-lvl"><b id="endLvl">1</b><span><small id="endLvlTxt"></small><span class="xpbar"><i id="endBar"></i></span></span><em id="endXpNum">+0 XP</em></div>
         <ul class="end-xplist" id="endXpList"></ul>
         <h4 id="endUnlTitle" data-i18n="endUnl">Liberado nesta partida</h4>
-        <ul class="end-unl" id="endUnl"></ul>
       </section>
     </div>
+    <section class="end-lib" id="endLib" hidden></section>
+    </div></div>
     <!-- compartilhar: cartaz de procurado do melhor da partida e clipe da jogada (Material Icons, Apache 2.0) -->
     <div class="end-share">
       <button class="end-sh" id="endPoster" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg><span data-i18n="endPoster">Cartaz de Procurado</span></button>

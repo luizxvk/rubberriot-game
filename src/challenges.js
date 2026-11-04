@@ -36,8 +36,10 @@ export const UNLOCKS = [
   { id: 'u_splitter', n: 15, xp: 1000, ok: K('melee'), reward: { slot: 'body', id: 'melee_4', wpn: 'melee' } },
   { id: 'u_sword', n: 40, xp: 1750, ok: K('melee'), reward: { slot: 'body', id: 'melee_12', wpn: 'melee' } },
   { id: 'u_fang', n: 10, xp: 1500, ok: (e) => e.type === 'streak', reward: { slot: 'body', id: 'melee_13', wpn: 'melee' } },
+  // espadas (04/11): Corsario e Lamina Real por desafio (a Katana abre no nivel 30 do jogador)
+  { id: 'u_corsair', n: 30, xp: 1750, ok: K('melee'), reward: { slot: 'body', id: 'melee_15', wpn: 'melee' } },
+  { id: 'u_royal', n: 75, xp: 2500, ok: K('melee'), reward: { slot: 'body', id: 'melee_16', wpn: 'melee' } },
   // pacote WW2: cada arma antiga sai de um desafio proprio
-  { id: 'u_ww_stg', n: 30, xp: 1750, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'rifle', reward: { slot: 'body', id: 'fusil_9', wpn: 'rifle' } },
   { id: 'u_ww_garand', n: 40, xp: 1750, ok: K('sniper'), reward: { slot: 'body', id: 'sniper_3', wpn: 'sniper' } },
   // visual do boneco: itens incomuns que so saem daqui (30/10)
   { id: 'u_lk_plunger', n: 25, xp: 1250, ok: K('melee'), reward: { slot: 'look', id: 'hat:plunger' } },
@@ -105,7 +107,7 @@ export function eliteToday() {
 
 // modelos que eram de desafio e agora abrem por nivel (31/10, pedido dele): quem ja tinha fechado o
 // desafio antigo continua com o modelo aberto
-const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_12: ['u_ww_ppsh', 100], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
+const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
 export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
 // item -> desafio que libera (o arsenal consulta isso)
 // a mesma peca em outra arma (akimbo da pistola x da submetralhadora) tem desafio proprio: chave 'arma:peca'

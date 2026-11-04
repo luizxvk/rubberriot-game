@@ -63,15 +63,32 @@ export const CAMOS = [
   { id: 'aurora', code: 41, anim: true, shop: true, fx: 'stars' },
   // meta da comunidade (31/10): Ouro da Borracha, so pra quem jogou na semana que bateu 1 milhao de PLAFTs
   { id: 'plaftgold', code: 44, anim: true, meta: true, fx: 'stars' },
+  // Rovex Pass (04/11): so saem do Pass (pass = nivel). Padrao que ja existe com efeito proprio em volta da arma
+  { id: 'ps_jornal', code: 16, pass: 1, fx: 'drip' }, { id: 'ps_zebra', code: 13, pass: 3, fx: 'stars' }, { id: 'ps_circo', code: 14, pass: 5, fx: 'flame' },
+  { id: 'ps_filme', code: 17, anim: true, pass: 7, fx: 'drip' }, { id: 'ps_choque', code: 19, anim: true, pass: 9, fx: 'storm' }, { id: 'ps_fogo', code: 18, anim: true, pass: 10, fx: 'flame' },
+  { id: 'ps_cromo', code: 22, anim: true, pass: 11, fx: 'stars' }, { id: 'ps_neon', code: 9, anim: true, pass: 12, fx: 'storm' },
+  // leva da Loja (04/11): animadas e reativas novas, so comprando
+  { id: 'oilslick', code: 45, anim: true, shop: true }, { id: 'tvstatic', code: 46, anim: true, shop: true }, { id: 'honey', code: 47, anim: true, shop: true },
+  { id: 'confetti', code: 48, anim: true, shop: true }, { id: 'vinyl', code: 49, anim: true, shop: true },
+  { id: 'frost', code: 50, anim: true, react: true, shop: true }, { id: 'ivy', code: 51, anim: true, react: true, shop: true }, { id: 'stormcell', code: 52, anim: true, react: true, shop: true },
 ];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
 // cor de amostra pra lista do arsenal (css)
 export const CAMO_SWATCH = {
+  ps_jornal: 'repeating-linear-gradient(0deg,#d8d2c2 0 3px,#8d8778 3px 4px),linear-gradient(#5d7f9c,#2f4b63)', ps_zebra: 'repeating-linear-gradient(60deg,#141210 0 7px,#f4efe2 7px 14px)', ps_circo: 'repeating-linear-gradient(90deg,#c63a2c 0 9px,#f4d9a0 9px 18px)',
+  ps_filme: 'repeating-linear-gradient(90deg,#1c1a18 0 6px,#8a6b3a 6px 8px,#1c1a18 8px 12px)', ps_choque: 'linear-gradient(135deg,#1b2a5a,#35d0ff 48%,#fff 50%,#35d0ff 52%,#1b2a5a)', ps_fogo: 'radial-gradient(circle at 50% 90%,#ffd64a 15%,#f0702a 45%,#6b1a10 80%)',
+  ps_cromo: 'linear-gradient(120deg,#6d7680,#f2f5f7 45%,#8d96a0 55%,#e4e8ec)', ps_neon: 'linear-gradient(135deg,#a8f3ff,#4cc6ff 50%,#b48cff)',
   rk_ouro: 'radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),linear-gradient(120deg,#8a6312,#f6d36b 45%,#fff4c4 50%,#c9952b 60%,#7a5410)',
   rk_diamante: 'radial-gradient(circle at 70% 30%,#fff 1.5px,transparent 2.5px),linear-gradient(135deg,#9fe3f0,#e6fbff 45%,#3a7d9c)',
   rk_mestre: 'radial-gradient(circle at 50% 80%,#ff8a3d 20%,transparent 45%),radial-gradient(circle at 50% 50%,#5b3fd6,#1b0f3d 55%,#05030d)',
   none: 'repeating-linear-gradient(45deg,#ece9e1 0 6px,#dcd7cb 6px 12px)',
+  oilslick: 'conic-gradient(from 40deg,#0b0b12,#3a1a78,#0f6a78,#7a7a1a,#7a1a58,#0b0b12)', tvstatic: 'repeating-conic-gradient(#e8e8e8 0 25%,#222 0 50%) 0 0/4px 4px', honey: 'linear-gradient(180deg,#ffc53a,#c9780f 60%,#7a4206)',
+  confetti: 'radial-gradient(circle at 25% 30%,#ff3b6b 10%,transparent 12%),radial-gradient(circle at 70% 25%,#ffd23a 10%,transparent 12%),radial-gradient(circle at 45% 70%,#36d6ff 10%,transparent 12%),radial-gradient(circle at 80% 72%,#3cff6b 9%,transparent 11%),#17171f',
+  vinyl: 'radial-gradient(circle,#c63a2c 0 16%,#0d0d0f 18%,#26262a 30%,#0d0d0f 42%,#26262a 56%,#0d0d0f 70%)',
+  frost: 'radial-gradient(circle at 30% 35%,#fff 8%,#a8e4ff 26%,transparent 44%),radial-gradient(circle at 72% 68%,#fff 6%,#7fd0ff 22%,transparent 40%),#3a4654',
+  ivy: 'radial-gradient(circle at 34% 38%,#ff7ab0 7%,#3c8a3a 9% 30%,transparent 32%),radial-gradient(circle at 70% 66%,#58a848 24%,transparent 26%),#4a3628',
+  stormcell: 'linear-gradient(115deg,transparent 46%,#dff3ff 48% 51%,transparent 53%),radial-gradient(circle at 40% 40%,#70788a,#1c2038 75%)',
   tiger: 'repeating-linear-gradient(115deg,#d9822b 0 7px,#1b1916 7px 11px)',
   digital: 'conic-gradient(#5d6b4e 25%,#8a937a 0 50%,#3f4a32 0 75%,#b5b89f 0)',
   forest: 'radial-gradient(circle at 30% 30%,#4f6b33 30%,transparent 31%),radial-gradient(circle at 70% 60%,#6b5235 28%,transparent 29%),#2f4226',
@@ -547,6 +564,86 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     glow = edge * line * (uReact > 1.5 ? 0.8 + wave * 1.2 : 0.9);
     if (uReact > 1.5) glow += vio * smoothstep(0.7, 1.0, wave) * (0.25 + cv * 0.3);
     if (uReact > 2.5) glow += vec3(1.0, 0.9, 0.6) * step(0.985, c_h(vec3(id, floor(t * 5.0))));
+    return c;
+  }
+  if (k == 45) { // mancha de oleo: preto com furta-cor correndo em faixas, gasolina na poca
+    float f = c_fbm(p * 1.8 + vec3(t * 0.12, 0.0, -t * 0.08));
+    vec3 film = 0.5 + 0.5 * cos(6.2832 * (f * 2.4 + vec3(0.0, 0.33, 0.67)) + t * 0.5);
+    glow = film * smoothstep(0.55, 0.8, f) * 0.35;
+    return mix(vec3(0.03, 0.03, 0.05), film, 0.35 + 0.55 * smoothstep(0.3, 0.7, f)) * sh;
+  }
+  if (k == 46) { // chuvisco de TV: ruido branco fervendo e a faixa de sinal subindo
+    float nz = c_h(vec3(floor(p.zy * 26.0), floor(t * 14.0)));
+    float band = 1.0 - smoothstep(0.0, 0.1, abs(fract(p.y * 0.7 - t * 0.4) - 0.5));
+    glow = vec3(0.7, 0.8, 0.9) * band * 0.3;
+    return vec3(mix(0.08, 0.92, nz)) * (0.75 + band * 0.4);
+  }
+  if (k == 47) { // mel escorrendo: ambar grosso descendo devagar, com bolhas presas e brilho mole
+    float col = floor(p.z * 4.0), sp = 0.12 + c_h(vec3(col, 3.0, 1.0)) * 0.16;
+    float run = fract(p.y * 0.9 + t * sp + c_h(vec3(col, 7.0, 2.0)));
+    float n = c_fbm(p * 2.2 + vec3(0.0, t * 0.15, 0.0));
+    vec3 c = mix(vec3(0.62, 0.3, 0.03), vec3(1.0, 0.72, 0.16), smoothstep(0.25, 0.75, n + run * 0.25));
+    float bub = 1.0 - smoothstep(0.06, 0.1, c_vor(p * 5.0 + vec3(0.0, t * 0.1, 0.0)).x);
+    glow = vec3(1.0, 0.7, 0.2) * smoothstep(0.7, 0.95, n) * 0.4;
+    return mix(c, vec3(1.0, 0.92, 0.6), bub * 0.6) * (0.7 + lum * 0.7);
+  }
+  if (k == 48) { // confete: fundo escuro com papeizinhos coloridos girando e caindo
+    vec3 q = vec3(p.x, p.y + t * 0.35, p.z) * 7.0, id = floor(q), f = fract(q) - 0.5;
+    float h = c_h(id), a = h * 6.2832 + t * 1.6;
+    vec2 r = vec2(f.z * cos(a) - f.y * sin(a), f.z * sin(a) + f.y * cos(a));
+    float bit = step(0.5, h) * step(abs(r.x), 0.34) * step(abs(r.y), 0.16);
+    vec3 c = c_hue(fract(h * 5.0));
+    glow = c * bit * 0.25;
+    return mix(vec3(0.1, 0.1, 0.14) * sh, c, bit);
+  }
+  if (k == 49) { // disco de vinil: sulcos finos em volta de cada selo e o reflexo girando
+    vec2 q = vec2(p.z, p.y) * 1.3, c0 = floor(q) + 0.5, d = q - c0;
+    float r = length(d), a = atan(d.y, d.x);
+    float groove = 0.5 + 0.5 * sin(r * 90.0);
+    float sheen = pow(0.5 + 0.5 * cos(a * 2.0 - t * 2.2), 8.0);
+    float label = 1.0 - smoothstep(0.14, 0.15, r), hole = 1.0 - smoothstep(0.025, 0.03, r);
+    vec3 c = vec3(0.05) + vec3(0.04) * groove + vec3(0.55, 0.58, 0.65) * sheen * (1.0 - smoothstep(0.2, 0.5, r));
+    c = mix(c, c_hue(c_h(vec3(c0, 5.0))) * 0.8 + 0.1, label);
+    glow = vec3(0.6) * sheen * 0.12 * (1.0 - label);
+    return mix(c, vec3(0.02), hole);
+  }
+  if (k == 50) { // reativa geada: aco frio -> geada avancando -> cristais -> gelo vivo
+    vec2 v = c_vor(p * 4.0);
+    float n = c_fbm(p * 2.2), th = 0.8 - uReact * 0.17;
+    float frost = smoothstep(th, th + 0.1, n + (0.6 - v.x) * 0.25);
+    vec3 steel = mix(vec3(0.22, 0.27, 0.33), vec3(0.42, 0.48, 0.55), n) * sh;
+    vec3 c = mix(steel, mix(vec3(0.6, 0.82, 0.95), vec3(0.95, 0.99, 1.0), smoothstep(0.1, 0.5, v.x)), frost);
+    if (uReact > 1.5) { float e = smoothstep(0.42, 0.55, v.x) * frost; c = mix(c, vec3(1.0), e * 0.7); glow = vec3(0.45, 0.8, 1.0) * e * 0.6; }
+    if (uReact > 2.5) { float w = 0.5 + 0.5 * sin((p.z + p.y) * 3.0 - t * 2.5); glow += vec3(0.3, 0.75, 1.0) * (0.25 + w * 0.6) * frost + vec3(1.0) * step(0.985, c_h(floor(p * 22.0) + floor(t * 5.0))) * 1.5; }
+    return c;
+  }
+  if (k == 51) { // reativa hera: ferro velho -> ramos -> folhas -> flores abertas
+    vec3 c = mix(vec3(0.24, 0.2, 0.17), vec3(0.42, 0.31, 0.22), c_fbm(p * 3.0)) * sh;
+    if (uReact < 0.5) return c;
+    float vine = 1.0 - smoothstep(0.02, 0.06, abs(fract(p.y * 1.5 + sin(p.z * 4.0) * 0.25 + c_fbm(p * 2.0) * 0.6) - 0.5));
+    c = mix(c, vec3(0.12, 0.32, 0.12), vine);
+    if (uReact > 1.5) {
+      vec2 v = c_vor(p * 6.0 + vec3(sin(t * 0.8) * 0.06, 0.0, 0.0));
+      float leaf = (1.0 - smoothstep(0.24, 0.32, v.x)) * step(0.3, v.y);
+      c = mix(c, mix(vec3(0.16, 0.48, 0.16), vec3(0.42, 0.72, 0.24), v.y), leaf);
+    }
+    if (uReact > 2.5) {
+      vec2 w = c_vor(p * 5.0 + 11.0);
+      float fl = (1.0 - smoothstep(0.13, 0.2, w.x)) * step(0.5, w.y), eye = 1.0 - smoothstep(0.03, 0.07, w.x);
+      vec3 pet = mix(vec3(1.0, 0.42, 0.68), vec3(1.0, 0.86, 0.95), w.y);
+      c = mix(c, pet, fl); c = mix(c, vec3(1.0, 0.82, 0.2), eye * fl);
+      glow = pet * fl * (0.25 + 0.2 * sin(t * 2.0 + w.y * 6.0));
+    }
+    return c;
+  }
+  if (k == 52) { // reativa trovoada: nuvem cinza -> faiscas -> raios -> tempestade azul acesa
+    float cl = c_fbm(p * 2.0 + vec3(t * 0.12 * (1.0 + uReact), 0.0, 0.0));
+    vec3 c = mix(vec3(0.16, 0.17, 0.22), vec3(0.46, 0.48, 0.54), smoothstep(0.3, 0.72, cl)) * sh;
+    if (uReact < 0.5) return c;
+    float bt = floor(t * (4.0 + uReact * 3.0));
+    glow = vec3(0.6, 0.85, 1.0) * step(0.992 - uReact * 0.006, c_h(floor(p * 18.0) + bt)) * 1.8;
+    if (uReact > 1.5) { float b = 1.0 - smoothstep(0.0, 0.03, abs(fract(p.z * 0.9 + c_fbm(vec3(p.y * 3.0, p.z * 2.0, bt)) * 0.9) - 0.5)); glow += vec3(0.7, 0.9, 1.0) * b * 1.6; c = mix(c, vec3(0.9, 0.97, 1.0), b); }
+    if (uReact > 2.5) { c = mix(c, vec3(0.1, 0.16, 0.4), 0.55); glow += vec3(0.25, 0.45, 1.0) * (0.25 + 0.4 * step(0.8, c_h(vec3(bt, 3.0, 9.0)))); }
     return c;
   }
   return vec3(1.0);

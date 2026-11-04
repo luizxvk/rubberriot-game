@@ -37,7 +37,8 @@ export function strikeUse(c, p, kind) {
   if (kind === 'plane') {
     const S = STREAKS.plane, L = enemyLine(c, p), d = L.dir, back = A + 30;
     if (Math.random() < 0.5) { d[0] = -d[0]; d[1] = -d[1]; }
-    c.crafts.push({ id, k: 'plane', owner: p.id, team: p.team, dir: d, pos: [L.cx - d[0] * back, S.h, L.cz - d[1] * back], t: (back * 2) / S.speed, fireT: 1.2, pass: 1, c: [L.cx, L.cz], back });
+    const h = planeClear(c.M, L.cx, L.cz, d, back, S.h);
+    c.crafts.push({ id, k: 'plane', owner: p.id, team: p.team, dir: d, h, pos: [L.cx - d[0] * back, h, L.cz - d[1] * back], t: (back * 2) / S.speed, fireT: 1.2, pass: 1, c: [L.cx, L.cz], back });
     return true;
   }
   if (kind === 'train') {
@@ -63,9 +64,21 @@ export function strikeUse(c, p, kind) {
   return false;
 }
 
+// altura da passada (04/11, pedido dele): o biplano passava dentro de casa/telhado. Varre a reta inteira numa faixa da
+// largura das asas (+ folga) e voa 2,5 m acima do ponto mais alto embaixo (telhado em ponta sobe ~2,5 m acima da caixa)
+function planeClear(M, cx, cz, d, back, h0) {
+  const half = 6, nx = -d[1], nz = d[0];
+  let top = 0;
+  for (let s = -back; s <= back; s += 1.5) for (const o of [-half, 0, half]) {
+    const x = cx + d[0] * s + nx * o, z = cz + d[1] * s + nz * o;
+    for (const b of M.boxes) if (x >= b.min[0] - 1 && x <= b.max[0] + 1 && z >= b.min[2] - 1 && z <= b.max[2] + 1) top = Math.max(top, b.max[1] + (b.roof ? 2.5 : 0));
+  }
+  return Math.max(h0, top + 2.5);
+}
+
 function tickPlane(c, f, owner, dt) {
   const S = STREAKS.plane;
-  f.pos = [f.pos[0] + f.dir[0] * S.speed * dt, S.h, f.pos[2] + f.dir[1] * S.speed * dt];
+  f.pos = [f.pos[0] + f.dir[0] * S.speed * dt, f.h ?? S.h, f.pos[2] + f.dir[1] * S.speed * dt];
   // fim da passada: faz a curva la fora e volta pela mesma reta (looping de desenho)
   if (f.t <= 0 && f.pass < S.passes) { f.pass++; f.dir = [-f.dir[0], -f.dir[1]]; f.t = (f.back * 2) / S.speed; f.fireT = 1.5; }
   if ((f.fireT -= dt) > 0 || !owner) return;

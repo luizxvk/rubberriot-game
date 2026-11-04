@@ -235,7 +235,7 @@ export function buildTouch(input, root) {
   btn(t('t_frag'), 'frag', at(148, 12, 50), () => { input.edges.add('FRAG'); input.touch.frag = true; }, () => { input.touch.frag = false; });
   btn(t('t_flash'), 'flash', at(206, 12, 50), () => { input.edges.add('FLASH'); input.touch.flash = true; }, () => { input.touch.flash = false; });
   btn(t('t_streak'), 'streak', at(156, 176, 48), () => input.edges.add('STREAK'));
-  // gadget de baixo do cano (03/11): so aparece com o gadget equipado (body.has-gadget); segurar = lanca-chamas
+  // gadget de baixo do cano (03/11): so aparece com o gadget equipado (body.has-gadget); toque liga/desliga, o tiro usa o gadget
   input.gadgetBtn = btn(t('t_gadget'), 'gadget', at(270, 72, 50), () => { input.touch.gadget = true; input.edges.add('GADGET'); }, () => { input.touch.gadget = false; });
   // atirar mirando (02/11, pedido dele): segurou = mira e atira junto; soltou = sai da mira (vaga da estrela antiga)
   let adsWas = false;

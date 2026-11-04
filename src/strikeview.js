@@ -1,12 +1,63 @@
 // Visual das sequencias grandes (03/11): Biplano, Trem Desgovernado, Balao Bombardeiro e Mao do Animador,
 // mais as pocas de fogo do balao e a sombra dele no chao. O nucleo esta em shared/strikes.js.
 import * as THREE from 'three';
-import { ink, geo, toon, PAL } from './toon.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { ink, geo, toon, PAL, outline } from './toon.js';
+
+// Biplano do Tripo (04/11, pedido dele: o feito de caixas estava feio). Veio SEM helice de proposito: a helice e nossa
+// e gira por codigo. Carrega uma vez; ate chegar (ou se falhar) vale o desenho antigo de caixas.
+// Arrumacao: nariz pra -Z, envergadura 8,5 m (a mesma do antigo, que as rotas e o tamanho no ceu usam).
+let PLANE = null;
+const TEAM_PLANE = new Map(); // material por time: o vermelho da fuselagem vira a cor do time no shader
+function planeMat(team) {
+  if (TEAM_PLANE.has(team)) return TEAM_PLANE.get(team);
+  const m = toon(0xffffff, { map: PLANE.map, unique: true }), c = new THREE.Color(TEAMC(team));
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTeam = { value: c };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTeam;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 k = diffuseColor.rgb; float red = smoothstep(0.22, 0.38, k.r - max(k.g, k.b)); /* so o vermelho forte; o creme das asas fica */
+          diffuseColor.rgb = mix(k, uTeam * (0.55 + dot(k, vec3(0.3, 0.59, 0.11)) * 1.2), red); }`);
+  };
+  m.customProgramCacheKey = () => 'planeTeam';
+  TEAM_PLANE.set(team, m);
+  return m;
+}
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/biplano.glb').then((gl) => {
+  let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  if (!mesh) return;
+  gl.scene.updateMatrixWorld(true);
+  const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox();
+  const b = g0.boundingBox, sx = b.max.x - b.min.x, sz = b.max.z - b.min.z;
+  // envergadura = eixo horizontal mais largo; o outro e a fuselagem. Gira pra fuselagem ficar no Z
+  if (sx < sz) g0.rotateY(Math.PI / 2);
+  g0.computeBoundingBox(); let c = g0.boundingBox.getCenter(new THREE.Vector3()); g0.translate(-c.x, -c.y, -c.z); g0.computeBoundingBox();
+  // cauda = a ponta com a deriva mais alta: ela vai pra +Z (nariz em -Z)
+  const P = g0.attributes.position, bb = g0.boundingBox, L = bb.max.z - bb.min.z; let hiA = -Infinity, hiB = -Infinity;
+  for (let i = 0; i < P.count; i++) { const z = P.getZ(i), y = P.getY(i); if (z < bb.min.z + L * 0.15) hiA = Math.max(hiA, y); if (z > bb.max.z - L * 0.15) hiB = Math.max(hiB, y); }
+  if (hiA > hiB) g0.rotateY(Math.PI);
+  g0.computeBoundingBox(); const span = g0.boundingBox.max.x - g0.boundingBox.min.x, k = 8.5 / span; g0.scale(k, k, k);
+  g0.computeBoundingBox(); g0.computeVertexNormals();
+  // nariz: centro das alturas da fatia da frente (onde a helice gira)
+  const P2 = g0.attributes.position, b2 = g0.boundingBox, L2 = b2.max.z - b2.min.z; let ys = 0, n = 0;
+  for (let i = 0; i < P2.count; i++) if (P2.getZ(i) < b2.min.z + L2 * 0.06) { ys += P2.getY(i); n++; }
+  PLANE = { geo: g0, map: mesh.material?.map || null, nose: [0, n ? ys / n : 0, b2.min.z - 0.08] };
+  if (PLANE.map) PLANE.map.colorSpace = THREE.SRGBColorSpace;
+}).catch(e => console.warn('biplano.glb nao carregou (fica o de caixas)', e));
 
 const TEAMC = (team) => (team === 'blue' ? PAL.blue : PAL.red);
 
 // ---------- modelos (estilo mangueira de borracha: formas gordas, contorno de tinta) ----------
 export function planeMesh(team) {
+  if (PLANE) {
+    const g = new THREE.Group(), body = new THREE.Mesh(PLANE.geo, planeMat(team)); outline(body, 0.06); g.add(body);
+    // helice nossa (o modelo veio sem): duas pas de madeira + cubo, girando no nariz
+    const prop = new THREE.Group(); prop.position.set(...PLANE.nose);
+    for (const a of [0, Math.PI / 2]) { const pa = ink(geo(THREE.BoxGeometry, 0.2, 2.6, 0.08), PAL.wood, 0.03); pa.rotation.z = a; prop.add(pa); }
+    const hub = ink(geo(THREE.SphereGeometry, 0.22, 10, 8), PAL.ink, 0.02); prop.add(hub);
+    g.add(prop); g.userData.prop = prop;
+    return g;
+  }
   const g = new THREE.Group(), c = TEAMC(team);
   const body = ink(geo(THREE.CylinderGeometry, 0.55, 0.35, 5, 12), c, 0.06); body.rotation.x = Math.PI / 2; g.add(body);
   const nose = ink(geo(THREE.CylinderGeometry, 0.6, 0.6, 0.5, 14), PAL.ink, 0.04); nose.rotation.x = Math.PI / 2; nose.position.z = -2.6; g.add(nose);
@@ -106,7 +157,132 @@ function finGeo() {
   return FIN_GEO;
 }
 
+
+// Dirigivel Bombardeiro do Tripo (04/11, pedido dele): zepelim vermelho com gondola de bombas, SEM helice (as helices sao
+// nossas, dos lados da gondola). Mesmo tamanho do antigo (13,8 de comprimento antes do x6 = ~83 m no ceu), nariz no -Z.
+// Time azul: o vermelho do envelope vira azul no shader
+let BAL = null;
+const TEAM_BAL = new Map();
+function balMat(team) {
+  if (TEAM_BAL.has(team)) return TEAM_BAL.get(team);
+  const m = toon(0xffffff, { map: BAL.map, unique: true }), c = new THREE.Color(TEAMC(team));
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTeam = { value: c };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTeam;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 k = diffuseColor.rgb; float red = smoothstep(0.12, 0.3, k.r - max(k.g, k.b)); /* envelope vermelho (gondola e bombas ficam) */
+          diffuseColor.rgb = mix(k, uTeam * (0.55 + dot(k, vec3(0.3, 0.59, 0.11)) * 1.3), red); }`);
+  };
+  m.customProgramCacheKey = () => 'balTeam';
+  TEAM_BAL.set(team, m);
+  return m;
+}
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/dirigivel.glb').then((gl) => {
+  let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  if (!mesh) return;
+  gl.scene.updateMatrixWorld(true);
+  const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox();
+  let b = g0.boundingBox; if (b.max.x - b.min.x > b.max.z - b.min.z) g0.rotateY(Math.PI / 2);
+  g0.computeBoundingBox(); b = g0.boundingBox;
+  const k = 13.8 / (b.max.z - b.min.z); g0.scale(k, k, k); g0.computeBoundingBox(); b = g0.boundingBox;
+  // centro do ENVELOPE na origem (o tiro usa o elipsoide dele): altura sem a gondola = parte de cima (75%)
+  const H = b.max.y - b.min.y, P = g0.attributes.position, yEnv = b.max.y - H * 0.75;
+  g0.translate(-(b.min.x + b.max.x) / 2, -(b.max.y + yEnv) / 2, -(b.min.z + b.max.z) / 2); g0.computeBoundingBox(); b = g0.boundingBox;
+  // rabo = ponta com as aletas (mais altas): vai pro +Z
+  const L = b.max.z - b.min.z; let hiA = -Infinity, hiB = -Infinity;
+  for (let i = 0; i < P.count; i++) { const z = P.getZ(i), y = P.getY(i); if (z < b.min.z + L * 0.12) hiA = Math.max(hiA, y); if (z > b.max.z - L * 0.12) hiB = Math.max(hiB, y); }
+  if (hiA > hiB) g0.rotateY(Math.PI);
+  g0.computeVertexNormals(); g0.computeBoundingBox(); b = g0.boundingBox;
+  const cb = new THREE.Box3(); // gondola: a fatia de baixo (as helices vao dos lados dela)
+  for (let i = 0; i < P.count; i++) if (P.getY(i) < b.min.y + (b.max.y - b.min.y) * 0.16) cb.expandByPoint(new THREE.Vector3(P.getX(i), P.getY(i), P.getZ(i)));
+  BAL = { geo: g0, map: mesh.material?.map || null, basket: cb, envR: [(b.max.x - b.min.x) / 2 * 0.9, (b.max.y - b.min.y) * 0.75 / 2, L / 2 * 0.95] };
+  if (BAL.map) BAL.map.colorSpace = THREE.SRGBColorSpace;
+}).catch(e => console.warn('dirigivel.glb nao carregou (fica o de caixas)', e));
+// Sentinela (04/11, pedido dele): torreta do Tripo (tripe + cabeca verde com cano). O verde vira a cor do time.
+// Origem do grupo = centro do corpo (1 m acima do chao): o tiro usa uma esfera ali (hitR). userData.head gira pra mira
+let SENT = null;
+const TEAM_SENT = new Map();
+function sentMat(team) {
+  if (TEAM_SENT.has(team)) return TEAM_SENT.get(team);
+  const m = toon(0xffffff, { map: SENT.map, unique: true }), c = new THREE.Color(TEAMC(team));
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTeam = { value: c };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTeam;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 k = diffuseColor.rgb; float gr = smoothstep(0.012, 0.045, k.g - max(k.r, k.b)); /* verde apagado da torreta (linear) */
+          diffuseColor.rgb = mix(k, uTeam * (0.7 + dot(k, vec3(0.3, 0.59, 0.11)) * 1.2), gr); }`);
+  };
+  m.customProgramCacheKey = () => 'sentTeam';
+  TEAM_SENT.set(team, m);
+  return m;
+}
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/sentinela.glb').then((gl) => {
+  let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  if (!mesh) return;
+  gl.scene.updateMatrixWorld(true);
+  const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox();
+  let b = g0.boundingBox; const k = 1.75 / (b.max.y - b.min.y); g0.scale(k, k, k); g0.computeBoundingBox(); b = g0.boundingBox;
+  // eixo do tripe no centro (fatia de baixo)
+  const P = g0.attributes.position, H = b.max.y - b.min.y; let sx = 0, sz = 0, n = 0;
+  for (let i = 0; i < P.count; i++) if (P.getY(i) < b.min.y + H * 0.1) { sx += P.getX(i); sz += P.getZ(i); n++; }
+  g0.translate(-(n ? sx / n : 0), -b.min.y, -(n ? sz / n : 0));
+  // cano = ponto mais longe do eixo na parte de cima: gira pra ele apontar pro -Z
+  // 04/11: o cano e o eixo horizontal MAIS COMPRIDO da cabeca (o ponto mais longe era o tambor e o cano saia de lado)
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < P.count; i++) if (P.getY(i) > H * 0.5) { const x = P.getX(i), z = P.getZ(i); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const alongX = x1 - x0 > z1 - z0, tip = alongX ? (Math.abs(x1) > Math.abs(x0) ? 1 : -1) : (Math.abs(z1) > Math.abs(z0) ? 1 : -1);
+  // gira pra ponta ir pro -Z (frente)
+  const ang = alongX ? (tip > 0 ? Math.PI / 2 : -Math.PI / 2) : (tip > 0 ? Math.PI : 0);
+  g0.rotateY(ang); g0.computeVertexNormals(); g0.computeBoundingBox();
+  SENT = { geo: g0, map: mesh.material?.map || null };
+  if (SENT.map) SENT.map.colorSpace = THREE.SRGBColorSpace;
+}).catch(e => console.warn('sentinela.glb nao carregou', e));
+
+export function sentryMesh(team) {
+  const g = new THREE.Group(), head = new THREE.Group(); head.position.y = -1; g.add(head);
+  if (SENT) { const body = new THREE.Mesh(SENT.geo, sentMat(team)); outline(body, 0.025); head.add(body); }
+  else { // ate o modelo chegar: tripe e caixa
+    for (let i = 0; i < 3; i++) { const l = ink(geo(THREE.CylinderGeometry, 0.04, 0.05, 1.1, 6), PAL.dark, 0.01); const a = i * 2.09; l.position.set(Math.sin(a) * 0.3, 0.5, Math.cos(a) * 0.3); l.rotation.set(Math.cos(a) * 0.35, 0, -Math.sin(a) * 0.35); head.add(l); }
+    const box = ink(geo(THREE.BoxGeometry, 0.6, 0.5, 0.7), TEAMC(team), 0.03); box.position.y = 1.25; head.add(box);
+    const bar = ink(geo(THREE.CylinderGeometry, 0.07, 0.07, 0.7, 8), PAL.ink, 0.02); bar.rotation.x = Math.PI / 2; bar.position.set(0, 1.3, -0.65); head.add(bar);
+  }
+  g.userData.head = head; g.userData.sentry = true; g.userData.hitR = [0.55, 0.95, 0.55];
+  return g;
+}
+
+// Sinalizador (04/11, pedido dele; Tripo): bolinha num tripe com bandeirinha. Origem 0,4 m acima do chao (centro do tiro)
+let BEACON = null;
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/sinalizador.glb').then((gl) => {
+  let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; }); if (!mesh) return;
+  gl.scene.updateMatrixWorld(true);
+  const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox(); let b = g0.boundingBox;
+  const k = 0.75 / (b.max.y - b.min.y); g0.scale(k, k, k); g0.computeBoundingBox(); b = g0.boundingBox;
+  g0.translate(-(b.min.x + b.max.x) / 2, -b.min.y - 0.4, -(b.min.z + b.max.z) / 2); g0.computeVertexNormals();
+  BEACON = { geo: g0, map: mesh.material?.map || null }; if (BEACON.map) BEACON.map.colorSpace = THREE.SRGBColorSpace;
+}).catch(e => console.warn('sinalizador.glb nao carregou', e));
+export function beaconMesh(team) {
+  const g = new THREE.Group();
+  if (BEACON) { const m = new THREE.Mesh(BEACON.geo, toon(0xffffff, { map: BEACON.map })); outline(m, 0.012); g.add(m); }
+  else { const b = ink(geo(THREE.SphereGeometry, 0.2, 10, 8), PAL.light, 0.02); g.add(b); }
+  const light = ink(geo(THREE.SphereGeometry, 0.06, 8, 6), TEAMC(team), 0); light.position.y = 0.42; g.add(light); // luz do time em cima
+  g.userData.sentry = true; g.userData.hitR = [0.35, 0.42, 0.35];
+  return g;
+}
+
 export function bomberMesh(team) {
+  if (BAL) {
+    const g = new THREE.Group(), body = new THREE.Mesh(BAL.geo, balMat(team)); outline(body, 0.03); g.add(body);
+    const cb = BAL.basket, cy = (cb.min.y + cb.max.y) / 2, hw = (cb.max.x - cb.min.x) / 2, props = [];
+    for (const sx of [-1, 1]) { // braco + motorzinho + helice de cada lado do cesto, empurrando pra frente (-Z)
+      const x = sx * (hw + 0.95);
+      const arm = ink(geo(THREE.BoxGeometry, 0.95, 0.1, 0.18), PAL.dark, 0.01); arm.position.set(sx * (hw + 0.45), cy, cb.max.z - 0.3); g.add(arm);
+      const pod = ink(geo(THREE.CapsuleGeometry, 0.2, 0.55, 4, 10), PAL.dark, 0.02); pod.rotation.x = Math.PI / 2; pod.position.set(x, cy, cb.max.z - 0.3); g.add(pod);
+      const p = new THREE.Group(); p.position.set(x, cy, (cb.max.z) + 0.1); for (const a of [0, Math.PI / 2]) { const bl = ink(geo(THREE.BoxGeometry, 0.14, 1.5, 0.06), PAL.wood, 0.015); bl.rotation.z = a; p.add(bl); } g.add(p); props.push(p);
+    }
+    g.userData.props = props; g.userData.hitR = BAL.envR; // tiro: esfera do envelope (nao o charuto do dirigivel)
+    g.scale.setScalar(6);
+    return g;
+  }
   // mesmo formato do dirigivel (o acerto a tiro usa o elipsoide dele), so que muito maior e cheio de detalhe
   const g = new THREE.Group(), c = TEAMC(team);
   const body = ink(geo(THREE.SphereGeometry, 3, 40, 24), 0xffffff, 0.04, { map: envelopeTex(team) }); body.scale.set(1, 0.8, 2.3); g.add(body);
@@ -200,7 +376,7 @@ export class StrikeView {
       if (v.to && v.k === 'hand') this.animHand(v, dt, t);
       else if (v.to) m.position.lerp(new THREE.Vector3().fromArray(v.to), Math.min(1, dt * 10));
       if (v.dir) m.rotation.y = Math.atan2(-v.dir[0], -v.dir[1]); // frente do modelo e -Z
-      if (v.k === 'plane') { m.userData.prop.rotation.z += dt * 40; m.rotation.z = Math.sin(t * 2) * 0.12; m.userData.scarf.rotation.y = 0.3 + Math.sin(t * 18) * 0.25; if (puff) fx.puff(m.position.clone().addScaledVector(new THREE.Vector3(Math.sin(m.rotation.y), 0, Math.cos(m.rotation.y)), 3).toArray(), 1, 0.25, PAL.light, 0.5); }
+      if (v.k === 'plane') { m.userData.prop.rotation.z += dt * 40; m.rotation.z = Math.sin(t * 2) * 0.12; if (m.userData.scarf) m.userData.scarf.rotation.y = 0.3 + Math.sin(t * 18) * 0.25; if (puff) fx.puff(m.position.clone().addScaledVector(new THREE.Vector3(Math.sin(m.rotation.y), 0, Math.cos(m.rotation.y)), 3).toArray(), 1, 0.25, PAL.light, 0.5); }
       if (v.k === 'train') {
         const go = !(v.warn > 0); m.visible = go;
         for (const e of v.extra) if (e.userData.own) e.material.opacity = go ? 0.5 : 0.4 + Math.abs(Math.sin(t * 10)) * 0.5;

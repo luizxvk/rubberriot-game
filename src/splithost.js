@@ -19,12 +19,12 @@ const T = EN ? {
   diffs: { 0.7: 'Easy', 1: 'Normal', 1.35: 'Hard' },
 } : {
   title: 'Tela dividida', seat: 'Aperte A pra entrar', seatSub: 'um controle por tela', leave: 'B sai', pad: 'Controle {n}', player: 'Jogador {n}',
-  mode: 'Modo', map: 'Mapa', bots: 'Bots', diff: 'Nivel', two: '2 telas', twos: { h: 'Em cima e embaixo', v: 'Lado a lado' }, go: 'Comecar', back: 'Voltar ao menu', need: 'Ligue um controle e aperte A',
-  soundOff: 'Clique ou aperte uma tecla pra ligar o som', hint: 'Qualquer controle escolhe: direcional anda, A troca, Start comeca',
-  qr: 'Leia com o celular pra jogar com a sua conta Rovex', qrOpt: 'opcional · codigo {n}', acct: 'Conta Rovex', out: 'Sair da conta', outPad: 'Y sai da conta', qrWait: 'Gerando o codigo...', qrOff: 'Sem conexao: joga como convidado',
-  modes: { tdm: 'Mata-Mata', ffa: 'Contra Todos', ctf: 'Captura a Bandeira', dom: 'Dominacao', gungame: 'Escada de Armas', escort: 'Escolta' },
-  maps: { auto: 'Automatico', vila: 'Vila', fabrica: 'Fabrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', ferradura: 'Banco Ferradura', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito' },
-  diffs: { 0.7: 'Faceis', 1: 'Normais', 1.35: 'Dificeis' },
+  mode: 'Modo', map: 'Mapa', bots: 'Bots', diff: 'Nível', two: '2 telas', twos: { h: 'Em cima e embaixo', v: 'Lado a lado' }, go: 'Começar', back: 'Voltar ao menu', need: 'Ligue um controle e aperte A',
+  soundOff: 'Clique ou aperte uma tecla pra ligar o som', hint: 'Qualquer controle escolhe: direcional anda, A troca, Start começa',
+  qr: 'Leia com o celular pra jogar com a sua conta Rovex', qrOpt: 'opcional · código {n}', acct: 'Conta Rovex', out: 'Sair da conta', outPad: 'Y sai da conta', qrWait: 'Gerando o código...', qrOff: 'Sem conexão: joga como convidado',
+  modes: { tdm: 'Mata-Mata', ffa: 'Contra Todos', ctf: 'Captura a Bandeira', dom: 'Dominação', gungame: 'Escada de Armas', escort: 'Escolta' },
+  maps: { auto: 'Automático', vila: 'Vila', fabrica: 'Fábrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', ferradura: 'Banco Ferradura', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito' },
+  diffs: { 0.7: 'Fáceis', 1: 'Normais', 1.35: 'Difíceis' },
 };
 const fmt = (s, n) => s.replace('{n}', n);
 const MODES = Object.keys(T.modes);

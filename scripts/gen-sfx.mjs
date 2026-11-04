@@ -100,6 +100,8 @@ const SFX = {
   flamer: ['short cartoon flamethrower burst, whooshy FWOOOSH of fire with a crackle and a comedic little puff at the end, mid pitch, 1930s rubber hose cartoon, no music, no voice', 0.6], // lanca-chamas (03/11)
   g_pistol_11: ['single cartoon sawed-off double barrel shotgun blast, big chunky KA-BLAM with a scattered buckshot rattle and a comedic springy boing at the end, punchy, mid pitch, not bassy, 1930s rubber hose cartoon, one shot only, short tail, no music, no voice', 0.8], // serrada (03/11)
   g_fusil_13: ['single AK-47 gunshot, the classic sharp loud AK crack-pop with a metallic punch and a short snappy echo, slightly exaggerated cartoon style with a tiny springy rubber twang at the very end, mid-high pitch, not bassy, one shot only, no music, no voice', 0.6], // pipocadeira: som de AK (03/11)
+  g_lmg_1: ['single M249 light machine gun shot, one round, heavy fast punchy rattling boom with a metallic clack, close mic, slightly exaggerated cartoon style, short tail, no music', 0.5],
+  g_lmg_2: ['single M60 heavy machine gun shot, one round, deep thumping powerful bang with a chunky metallic clack, close mic, slightly exaggerated cartoon style with a tiny rubbery bounce, short tail, no music', 0.55],
   g_fusil_11: ['cartoon rifle shot like a pile driver slam, metallic clang boom, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.7],
   g_fusil_12: ['single designated marksman rifle gunshot, 7.62 DMR, very loud thunderous booming crack with a deep heavy punch and a big rolling outdoor echo, powerful, slightly exaggerated cartoon style, one shot only, no music, no voice', 0.9], // 03/11: DMR estrondoso (antigo em opcoes/)
   g_shotgun_1: ['cartoon blunderbuss shotgun blast, big brassy BLAM with rattling bits, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 0.9],
@@ -109,6 +111,10 @@ const SFX = {
   g_sniper_2: ['cartoon heavy sniper shot like a sledgehammer slam BONG boom, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 1.2],
   g_sniper_3: ['old 1940s bolt action rifle cartoon shot with a ringing ping, single shot, comedic 1930s rubber hose cartoon, short tail, no music, no voice', 1.0],
   g_sniper_4: ['single huge booming cartoon sniper rifle shot, thunderous deep KA-BOOOM blast with a big rolling echo, ending in a loud ringing cast-iron frying pan CLANG tail, exaggerated old cartoon, one shot only, no music, no voice', 1.3], // 03/11: estrondoso como a Luneta, com cauda de panela (antigo no scratchpad)
+  // 04/11: Sabre de Neon
+  saber_on: ['energy sword igniting, a rising electric neon tube buzz that snaps on with a bright hum, slightly comedic 1930s cartoon flavor, close, short, no music, no voice', 1.0],
+  saber_swing: ['fast swing of a humming neon energy blade, doppler whoosh with electric buzz, short and clean, no music, no voice', 0.6],
+  saber_hit: ['energy blade striking, sharp electric crackle zap with a sizzling burn, punchy comedic cartoon hit, short, no music, no voice', 0.6],
   // 03/11: Roube o Cofre
   safetick: ['cartoon safe cracking, combination dial clicking tick tick tick then a heavy satisfying CLACK of the lock, close, dry, no music, no voice', 2.0],
   siren: ['1930s cartoon police siren wailing up and down with a comedic bell, short alarm, no music, no voice', 3.0],

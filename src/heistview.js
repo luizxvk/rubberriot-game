@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ink, geo, toon, outline, PAL, wordTexture } from './toon.js';
-import { HEIST } from '../shared/weapons.js';
+import { HEIST, SMUGGLE } from '../shared/weapons.js';
 import { heistFace } from '../shared/heist.js';
 import { t } from './i18n.js';
 
@@ -65,6 +65,14 @@ function vanMesh() {
   return g;
 }
 
+// caixote de contrabando (Contrabando, 04/11): madeira com tabuas cruzadas e carimbo vermelho
+function crateMesh() {
+  const g = new THREE.Group();
+  const box = ink(geo(THREE.BoxGeometry, 0.9, 0.7, 0.7), 0xa07a4a, 0.04); g.add(box);
+  for (const s0 of [-1, 1]) { const x = ink(geo(THREE.BoxGeometry, 0.95, 0.1, 0.06), 0x6e5032, 0); x.rotation.z = s0 * 0.62; x.position.z = 0.37; g.add(x); const x2 = x.clone(); x2.position.z = -0.37; g.add(x2); }
+  const st = ink(geo(THREE.BoxGeometry, 0.3, 0.2, 0.02), PAL.red, 0); st.position.set(0.2, 0.18, 0.38); g.add(st);
+  return g;
+}
 function bagMesh() {
   const g = new THREE.Group();
   const sack = ink(geo(THREE.SphereGeometry, 0.42, 12, 10), 0xb89a63, 0.04); sack.scale.set(1, 0.95, 0.85); g.add(sack);
@@ -74,9 +82,32 @@ function bagMesh() {
 }
 
 // selo flutuante que aparece atraves da parede (objetivo sempre visivel)
+// 04/11 (pedido dele: estava feio e escuro): bilhete de teatro de 1930. Papel claro de cantos recortados, borda dupla de tinta,
+// sombra chapada, faixa na cor do objetivo e uma setinha pra baixo. Claro de proposito: le em galpao escuro e no sol
+function ticket(text, color) {
+  const W = 512, H = 208, bh = 132, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), ink = '#141210', paper = '#f4efe2', x = 14, y = 12, w = W - 34, cut = 16;
+  const shape = (ox, oy) => {
+    g.beginPath(); g.moveTo(x + cut + ox, y + oy); g.lineTo(x + w - cut + ox, y + oy);
+    g.arc(x + w + ox, y + oy, cut, Math.PI, Math.PI / 2, true); g.lineTo(x + w + ox, y + bh - cut + oy);
+    g.arc(x + w + ox, y + bh + oy, cut, -Math.PI / 2, Math.PI, true);
+    g.lineTo(W / 2 + 24 + ox, y + bh + oy); g.lineTo(W / 2 + ox, y + bh + 34 + oy); g.lineTo(W / 2 - 24 + ox, y + bh + oy); // setinha
+    g.lineTo(x + cut + ox, y + bh + oy); g.arc(x + ox, y + bh + oy, cut, 0, -Math.PI / 2, true);
+    g.lineTo(x + ox, y + cut + oy); g.arc(x + ox, y + oy, cut, Math.PI / 2, 0, true); g.closePath();
+  };
+  shape(9, 9); g.fillStyle = ink; g.fill();
+  shape(0, 0); g.fillStyle = paper; g.fill(); g.lineWidth = 7; g.strokeStyle = ink; g.lineJoin = 'round'; g.stroke();
+  g.save(); shape(0, 0); g.clip(); g.fillStyle = color; g.fillRect(x, y, w, 24); g.fillStyle = ink; g.fillRect(x, y + 24, w, 4); g.restore();
+  g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(x + 22, y + 36, w - 44, bh - 46);
+  let px = 62; const word = String(text).toUpperCase();
+  do { g.font = `400 ${px}px "Bowlby One"`; px -= 2; } while (g.measureText(word).width > w - 76 && px > 24);
+  g.fillStyle = ink; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(word, x + w / 2, y + 36 + (bh - 46) / 2 + 2);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  return tex;
+}
 function label(text, color) {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(text, { burst: false, fill: color, size: 256 }), transparent: true, depthTest: false }));
-  s.renderOrder = 8; s.scale.set(3.2, 1.6, 1);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ticket(text, color), transparent: true, depthTest: false, fog: false, toneMapped: false }));
+  s.renderOrder = 8; s.scale.set(4.1, 4.1 * 208 / 512, 1);
   return s;
 }
 
@@ -88,6 +119,7 @@ export class HeistView {
 
   build(H) {
     this.built = true;
+    if (H.kind === 'smuggle') return this.buildSmuggle(H);
     const face = heistFace(H); // porta virada pro lado de quem ataca (mesmo giro da caixa solida)
     this.vault = vaultMesh(); this.vault.position.fromArray(H.vault); this.vault.rotation.y = face; this.root.add(this.vault);
     this.van = vanMesh(); this.van.position.fromArray(H.van); this.van.rotation.y = face + Math.PI; this.root.add(this.van);
@@ -108,6 +140,18 @@ export class HeistView {
     this.nLbl = label(t('hsVan'), '#2e7d32'); this.nLbl.position.set(H.van[0], H.van[1] + 4.2, H.van[2]); this.root.add(this.nLbl);
   }
 
+  // Contrabando: sem cofre nem van (pilha e barco sao do mapa); so o anel da entrega no conves e as placas
+  buildSmuggle(H) {
+    this.smuggle = true; this.segs = []; this.flights = [];
+    this.vanRingGeo = new THREE.RingGeometry(SMUGGLE.vanR - 0.3, SMUGGLE.vanR, 32);
+    this.vanRing = new THREE.Mesh(this.vanRingGeo, new THREE.MeshBasicMaterial({ color: 0x2e7d32, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }));
+    this.vanRing.rotation.x = -Math.PI / 2; this.vanRing.position.set(H.van[0], H.van[1] + 0.06, H.van[2]); this.root.add(this.vanRing);
+    this.vLbl = label(t('smPile'), '#a83a2c'); this.vLbl.position.set(H.vault[0], H.vault[1] + 5, H.vault[2]); this.root.add(this.vLbl);
+    this.nLbl = label(t('smBoat'), '#2e7d32'); this.nLbl.position.set(H.van[0], H.van[1] + 4.5, H.van[2]); this.root.add(this.nLbl);
+  }
+  // passe no ar: arco do ponto de quem jogou ate o colega (ou ate o chao)
+  pass(e) { this.flights ||= []; this.flights.push({ from: e.from, to: e.to, at: e.at, dur: e.dur || 0.55, t: 0 }); }
+
   // H = estado do servidor; posOf(id) = posicao atual de um jogador (eu ou remoto)
   sync(H, posOf, myId) {
     if (!H) return;
@@ -117,13 +161,14 @@ export class HeistView {
     this.segs.forEach((m, i) => { m.material = H.open || i < k ? this.segOn : this.segOff; });
     for (const [id, st, carrier, pos] of H.bags) {
       let b = this.bags.get(id);
-      if (!b) { b = bagMesh(); this.root.add(b); this.bags.set(id, b); }
+      if (!b) { b = this.smuggle ? crateMesh() : bagMesh(); this.root.add(b); this.bags.set(id, b); }
       b.userData.st = st; b.userData.carrier = carrier; b.userData.pos = pos; b.userData.slot = id;
     }
   }
 
   update(dt, time) {
     const H = this.H;
+    if (H && this.smuggle) return this.updateSmuggle(dt, time);
     if (!H || !this.vault) return;
     // porta abre de vez quando o cofre abre; o segredo gira enquanto arromba
     const u = this.vault.userData;
@@ -160,6 +205,35 @@ export class HeistView {
     }
   }
 
+  updateSmuggle(dt, time) {
+    const H = this.H;
+    this.vanRing.material.opacity = 0.45 + Math.sin(time * 4) * 0.2;
+    for (const f of this.flights) f.t += dt;
+    this.flights = this.flights.filter(f => f.t < f.dur + 0.1);
+    for (const b of this.bags.values()) {
+      const u = b.userData;
+      b.visible = u.st !== 3 && !(u.st === 1 && u.carrier === this.myId);
+      if (!b.visible) continue;
+      if (u.st === 0) { // empilhados na pilha do armazem (2 andares de 4)
+        const row = u.slot % 4, col = Math.floor(u.slot / 4);
+        b.position.set(H.vault[0] + (row - 1.5) * 1, H.vault[1] + 0.35 + col * 0.72, H.vault[2] - 2.2); b.rotation.set(0, 0, 0);
+      } else if (u.st === 1) { // erguido acima da cabeca (a bola de rugbi do desenho)
+        const p = this.posOf?.(u.carrier) || u.pos;
+        if (p) b.position.set(p[0], p[1] + 2.05 + Math.sin(time * 9) * 0.05, p[2]);
+        b.rotation.x = 0; b.rotation.y += dt * 0.5;
+      } else if (u.st === 4) { // no ar: arco do passe
+        const f = this.flights.find(x => x.to === u.carrier) || this.flights[this.flights.length - 1];
+        const to = (f && (this.posOf?.(f.to) || f.at)) || u.pos, from = f?.from || u.pos;
+        const k = f ? Math.min(1, f.t / f.dur) : 1;
+        if (from && to) b.position.set(from[0] + (to[0] - from[0]) * k, from[1] + (to[1] + 1.4 - from[1]) * k + Math.sin(k * Math.PI) * 2.2, from[2] + (to[2] - from[2]) * k);
+        b.rotation.x += dt * 9;
+      } else if (u.pos) { // no chao, pulando e piscando
+        b.position.set(u.pos[0], u.pos[1] + 0.4 + Math.abs(Math.sin(time * 3)) * 0.25, u.pos[2]); b.rotation.x = 0;
+        b.visible = Math.floor(time * 5) % 4 !== 0; b.rotation.y += dt * 2;
+      }
+    }
+  }
+
   // barra do topo: arrombando (gomos) ou dinheiro na van (meta); papel e rodada embaixo
   hud(H, myTeam, inGame) {
     let bar = document.getElementById('hsBar');
@@ -167,27 +241,30 @@ export class HeistView {
       bar = document.createElement('div'); bar.className = 'esc-bar hs-bar'; bar.id = 'hsBar'; bar.hidden = true;
       bar.innerHTML = '<div class="eb-track"><i class="eb-fill" id="hsFill"></i><span id="hsMarks"></span></div><p class="eb-st"><span class="eb-n red" id="hsRed">0</span><em id="hsState"></em><span class="eb-n blue" id="hsBlue">0</span></p><p class="eb-role" id="hsRole"></p>';
       document.getElementById('hud').appendChild(bar);
-      document.getElementById('hsMarks').innerHTML = Array.from({ length: HEIST.quota / HEIST.bagValue - 1 }, (_, i) => `<i style="left:${((i + 1) / (HEIST.quota / HEIST.bagValue) * 100).toFixed(1)}%">$</i>`).join('');
+      bar.dataset.marks = '';
     }
     bar.hidden = !H || !inGame;
     if (bar.hidden) return;
+    // marcas da meta: uma por bolsa ($) ou por caixote (Contrabando)
+    const nm = Math.round(H.quota / (this.smuggle ? 1 : HEIST.bagValue)), mk = (this.smuggle ? 's' : 'h') + nm, sym = this.smuggle ? '#' : '$';
+    if (bar.dataset.marks !== mk) { bar.dataset.marks = mk; document.getElementById('hsMarks').innerHTML = Array.from({ length: nm - 1 }, (_, i) => '<i style="left:' + ((i + 1) / nm * 100).toFixed(1) + '%">' + sym + '</i>').join(''); }
     const k = H.open ? H.money / H.quota : H.crack;
     document.getElementById('hsFill').style.width = (Math.min(1, k) * 100).toFixed(1) + '%';
     document.getElementById('hsFill').classList.toggle('money', H.open);
     document.getElementById('hsMarks').hidden = !H.open;
     document.getElementById('hsRed').textContent = H.wins.red; document.getElementById('hsBlue').textContent = H.wins.blue;
-    const st = H.open ? `$${H.money.toLocaleString('pt-BR')} / $${H.quota.toLocaleString('pt-BR')}` : H.state === 'contest' ? t('hsContest') : H.state === 'crack' ? t('hsCrack') + ' ' + Math.round(H.crack * 100) + '%' : t('hsVault');
+    const st = this.smuggle ? t('smCount', { n: H.money, q: H.quota }) : H.open ? `$${H.money.toLocaleString('pt-BR')} / $${H.quota.toLocaleString('pt-BR')}` : H.state === 'contest' ? t('hsContest') : H.state === 'crack' ? t('hsCrack') + ' ' + Math.round(H.crack * 100) + '%' : t('hsVault');
     const se = document.getElementById('hsState'); if (se.textContent !== st) se.textContent = st;
     bar.dataset.st = H.state;
     const mine = H.bags.some(b => b[1] === 1 && b[2] === this.myId);
-    const role = mine ? '$ ' + t('hsYouBag') : (myTeam === H.atk ? t('hsAtk') : myTeam ? t('hsDef') : '') + ' · ' + t('hsRound', { n: H.round });
+    const role = mine && this.smuggle ? t('smYou') : mine ? '$ ' + t('hsYouBag') : (myTeam === H.atk ? t('hsAtk') : myTeam ? t('hsDef') : '') + ' · ' + t('hsRound', { n: H.round });
     const re = document.getElementById('hsRole'); if (re.textContent !== role) { re.textContent = role; re.className = 'eb-role ' + (mine ? 'bag' : myTeam || ''); }
   }
 
   dispose() {
     this.root.parent?.remove(this.root);
     this.segGeo?.dispose(); this.segOff?.dispose(); this.segOn?.dispose(); this.vanRingGeo?.dispose(); this.vanRing?.material.dispose();
-    for (const l of [this.vLbl, this.nLbl]) l?.material.dispose(); // textura do wordTexture e de cache: fica
+    for (const l of [this.vLbl, this.nLbl]) { l?.material.map?.dispose(); l?.material.dispose(); }
     if (this.van?.userData.own) for (const o of this.van.userData.own) o.dispose();
     document.getElementById('hsBar')?.setAttribute('hidden', '');
   }

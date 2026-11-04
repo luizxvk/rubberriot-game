@@ -1,13 +1,14 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody } from './weapons.js';
-import { getMap, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BOMB_SITES, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena, headroom } from './map.js';
+import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS } from './weapons.js';
+import { getMap, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena, headroom } from './map.js';
 import { navPath, floorAt, standable, hop, lowAt, freeNear } from './nav.js';
+import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
 import { cleanLook } from './looks.js';
 import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
 import { escInit, escTick, escSpawn, escGoal, escSnap, escPos, escTimeout, trainBox } from './escort.js';
 import { EVENTS, EV } from './events.js';
-import { carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, HEIST_MAPS } from './heist.js';
+import { carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, heistPass, heistBotPass, heistCfg, HEIST_MAPS } from './heist.js';
 import { strikeReset, strikeUse, strikeTick, strikeSnap, tickBomber } from './strikes.js';
 import { borInit, borBoxes, borTick, borHit, borKilled, borDown, borRescue, borBotShop, borSnap, borHoldSpawn } from './borroes.js';
 import { MOBS } from './mobs.js';
@@ -28,21 +29,30 @@ const RESPAWN = 2.6;
 
 const dist2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
+// menor distancia entre o trecho de voo a->b e o corpo (eixo vertical do pe ate 1,7 m): projetil rapido nao atravessa
+function segToBody(a, b, feet) {
+  let best = Infinity;
+  for (let k = 0; k <= 8; k++) { const t = k / 8, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t, z = a[2] + (b[2] - a[2]) * t; const yc = Math.max(feet[1] + 0.3, Math.min(feet[1] + 1.7, y)); best = Math.min(best, Math.hypot(x - feet[0], y - yc, z - feet[2])); }
+  return best;
+}
+// mapa automatico (04/11): bandeira e dominacao sorteiam entre o mapa do modo, a Vila/Fronteira e o Canyon Poeira
+const AUTO_POOL = { ctf: ['fronteira', 'vila', 'deserto'], dom: ['vila', 'fronteira', 'deserto'] };
+const autoMap = (mode) => { const L = AUTO_POOL[mode]; return L ? L[Math.floor(Math.random() * L.length)] : MODE_MAP[mode]; };
 // opcoes do host no lobby: em que modos a meta e o tempo valem (o resto tem regra propria)
 const PATHS_PER_TICK = 3;
 const GUN_DROP_T = 10;    // s que a arma largada fica no chao
 const TEAM_SWAP_CD = 360; // 6 min entre trocas de time no meio da partida
 const DOM_RATE = 0.25;    // pontos por segundo de cada zona da dominacao
-const SPAWN_PROT = 3;     // s de escudo ao nascer
+const SPAWN_PROT = 1.8;   // s de escudo ao nascer (04/11, pedido dele: era 3)
 const AFK_PLAY = 120, AFK_LOBBY = 480; // s parado ate sair da sala
 const STREAK_GAP = 4; // s de folga entre uma sequencia acabar e a proxima poder entrar
 const BOT_YIELD = 8; // s que o bot espera com a sala livre quando um jogador tem sequencia guardada (vez dos jogadores, 03/11)
 export const LIMIT_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'bomb'];
 export const TIME_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'gungame', 'ctf', 'dom', 'infect'];
-export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha'];
+export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
 // kit de sequencias do bot (03/11): uma de cada faixa, sorteada; as grandes novas entram aqui
 const BOT_BIG = ['plane', 'train', 'bomber', 'hand'];
-const BOT_KIT = [['uav', 'milk', 'talc'], ['anvil', 'rpg', 'blimp', 'anvline'], ['plane', 'train', 'blimp'], ['bomber', 'hand', 'nuke']];
+const BOT_KIT = [['uav', 'milk', 'talc'], ['anvil', 'rpg', 'blimp', 'anvline', 'sentry', 'sentry'], ['plane', 'train', 'blimp'], ['bomber', 'hand', 'nuke']];
 function botStreakKit() { return pickStreaks([...new Set(BOT_KIT.map(l => l[Math.floor(Math.random() * l.length)]))]); }
 const MAP_OK = (m) => typeof m === 'string' && m !== 'ilha' && (MAP_IDS.includes(m) || ESCORT_MAPS.includes(m) || HEIST_ONLY.includes(m) || PVE_ONLY.includes(m)); // escolha valida da sala (a lista de cima nao tem os mapas de trilho: 02/11 a escolta nunca trocava)
 
@@ -88,13 +98,16 @@ export class Core {
     this.mode = this.duo || this.bounce ? 'br' : this.blitz ? BLITZ_BASE[this.blitz] : this.borArt ? 'borroes' : MODES[mode] ? mode : 'ffa';
     this.cfg = MODES[this.modeId()];
     if (this.blitz) bots = Math.max(bots | 0, BLITZ_MAX - 1); // sala rapida de blitz ja nasce cheia (12x12)
-    if (this.blitz && !BLITZ_MAPS.includes(map)) map = BLITZ_MAPS[Math.floor(Math.random() * BLITZ_MAPS.length)];
+    { const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(BLITZ_BASE[mode] || mode)); if (this.blitz && !bz.includes(map)) map = bz[Math.floor(Math.random() * bz.length)]; }
+    if (!this.blitz && BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
     // Noite dos Borroes so no Estudio Tinteiro (e o Tinteiro so nela)
     if (this.mode === 'borroes') map = 'tinteiro';
+    else if (this.mode === 'heist') map = HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)];
+    else if (this.mode === 'smuggle') map = 'docas'; // Contrabando: so no Cais
     else if (PVE_ONLY.includes(map)) map = 'auto';
     if (this.mode === 'borroes') bots = Math.min(3, bots | 0);
     // battle royale so na ilha (e a ilha so no battle royale)
-    this.M = getMap(this.mode === 'br' ? 'ilha' : map && map !== 'auto' && map !== 'ilha' ? map : MODE_MAP[this.mode]);
+    this.M = getMap(this.mode === 'br' ? 'ilha' : map && map !== 'auto' && map !== 'ilha' ? map : autoMap(this.mode));
     this.mapPick = this.mode === 'br' ? 'ilha' : MAP_OK(map) ? map : 'auto';
     this.mapRaw = this.mapPick;
     this.wantBots = Math.max(0, Math.min(this.cap() - 1, bots | 0));
@@ -122,6 +135,7 @@ export class Core {
     this.limit = this.limitPick && LIMIT_MODES.includes(this.mode) ? this.limitPick : R.limit;
     if (this.borArt) this.limit = Math.max(10, Math.min(50, this.limitPick || MODES.arte.limit)); // Arte-Final: onda da vitoria (10 a 50)
     this.time = this.timePick && TIME_MODES.includes(this.mode) ? this.timePick : R.time;
+    this.timeLimit = this.time; this.domBonusDone = false;
     this.over = false;
     for (const p of this.players.values()) p.spawnedIn = false; // 1o nascimento da partida: todo mundo na base do time
     this.firstN = {};
@@ -138,10 +152,13 @@ export class Core {
       blue: { state: 'home', pos: [...M.flagBase.blue], carrier: null, dropT: 0 },
     };
     this.zones = M.zones.map(z => ({ id: z.id, pos: z.pos, r: z.r, owner: null, prog: 0 }));
+    this.burns = []; this.smokes = [];
+    this.cars = carsInit(this); // carro da Captura de Bandeira (04/11)
+    this.domBonus = null; // bandeira extra D (04/11): aparece no meio da partida, vale 2,5x e some depois de um tempo
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
     if (this.mode === 'br') brInit(this);
     this.esc = null; if (this.mode === 'escort') escInit(this);
-    this.heist = null; if (this.mode === 'heist') heistInit(this);
+    this.heist = null; if (this.mode === 'heist' || this.mode === 'smuggle') heistInit(this); // Contrabando (04/11): mesmo motor do Cofre
     if (this.bor) for (const p of [...this.players.values()]) if (p.mob) this.players.delete(p.id); // viloes da noite passada saem
     this.bor = null; if (this.mode === 'borroes') borInit(this);
     this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.talcs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; this.botBig = {}; fieldReset(this); strikeReset(this); this.rockets = [];
@@ -356,14 +373,16 @@ export class Core {
     this.cfg = MODES[mode];
     let map = MAP_OK(m.map) ? m.map : 'auto';
     if (this.blitz && map !== 'auto' && !BLITZ_MAPS.includes(map)) map = 'auto';
+    if (BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(this.mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
     // escolta so roda na Ladeira do Bonde, e a Ladeira so serve pra escolta (o mapa precisa do trilho)
     // escolta: Ladeira ou Vale do Apito (auto sorteia); fora da escolta os mapas de trilho nao entram
-    const map2 = this.blitz ? (BLITZ_MAPS.includes(map) ? map : BLITZ_MAPS[Math.floor(Math.random() * BLITZ_MAPS.length)]) : this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : this.mode === 'heist' ? (HEIST_MAPS.includes(map) ? map : Math.random() < 0.5 ? 'ferradura' : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)]) : this.mode === 'borroes' ? 'tinteiro' : ESCORT_MAPS.includes(map) || HEIST_ONLY.includes(map) || PVE_ONLY.includes(map) ? 'auto' : map; // cofre no auto: metade das vezes no Banco Ferradura (o mapa dele)
+    const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(this.mode)); // blitz de mata-mata nao vai pro deserto
+    const map2 = this.blitz ? (bz.includes(map) ? map : bz[Math.floor(Math.random() * bz.length)]) : this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : this.mode === 'heist' ? (HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)]) : this.mode === 'smuggle' ? 'docas' : this.mode === 'borroes' ? 'tinteiro' : ESCORT_MAPS.includes(map) || HEIST_ONLY.includes(map) || PVE_ONLY.includes(map) ? 'auto' : map; // cofre no auto: metade das vezes no Banco Ferradura (o mapa dele)
     // mesmo modo e mesma escolha de mapa (so trocou evento, bots, tempo...): o mapa fica (01/11: trocar o evento
     // sorteava outro mapa da escolta no 'auto')
     if (!(mode === prevMode && map === prevRaw && this.M)) { // escolta: o lobby recebe a ESCOLHA (auto), nao o sorteado (02/11: a seta caia em auto = auto e nao trocava)
       this.mapPick = this.mode === 'br' ? 'ilha' : map2;
-      this.M = getMap(this.mode === 'br' ? 'ilha' : map2 !== 'auto' ? map2 : MODE_MAP[this.mode]);
+      this.M = getMap(this.mode === 'br' ? 'ilha' : map2 !== 'auto' ? map2 : autoMap(this.mode));
     }
     this.mapRaw = map;
     if (Number.isFinite(m.bots)) this.wantBots = m.bots | 0;
@@ -408,8 +427,8 @@ export class Core {
     const ilha = this.M.id === 'ilha';
     const modos = (this.ranked ? RANKED_MODES : QUICK_MODES).filter(m => m !== atual && !(ilha && (m === 'br' || m === 'bounce')));
     const mode = modos[Math.floor(Math.random() * modos.length)];
-    const mapas = MAP_IDS.filter(id => id !== 'ilha' && !ESCORT_MAPS.includes(id) && id !== this.M.id); // a Ladeira so serve a escolta (configure forca)
-    this.configure({ mode, map: mode === 'br' || mode === 'heist' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
+    const mapas = MAP_IDS.filter(id => id !== 'ilha' && !ESCORT_MAPS.includes(id) && id !== this.M.id && !PVE_ONLY.includes(id) && !HEIST_ONLY.includes(id) && (!BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(MODES[mode]?.base || mode.replace('blitz_', '')))); // a Ladeira so serve a escolta (configure forca)
+    this.configure({ mode, map: mode === 'br' || mode === 'heist' || mode === 'smuggle' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
   }
 
   // Jogo Rapido: da pra cair nesta sala agora? Partida rolando, sem fim a vista, com vaga, sem dupla;
@@ -604,12 +623,13 @@ export class Core {
     p.yaw = this.openYaw(x, y, z);
     if (this.esc) { const q = escPos(this); p.yaw = Math.atan2(-(q[0] - x), -(q[2] - z)); } // escolta: nasce olhando pro bonde
     // bate-volta: todo mundo entra caindo do ceu (paraquedas); `drop` abre a janela do dano de queda
+    { const bc = !this.bounce && this.mode !== 'br' && this.blimps.find(b => b.kind === 'beacon' && b.owner === p.id); if (bc) { p.pos = [bc.pos[0] + 0.6, bc.pos[1], bc.pos[2]]; this.event({ k: 'beaconSpawn', id: p.id, pos: bc.pos }); } } // sinalizador: renasce nele
     if (this.bounce) { p.pos[1] = y + BR.bounce.dropH; p.drop = 30; p.chute = false; p.air = true; p.dropAt = [x, z]; } // dropAt: o ponto espalhado sorteado (bot cai ali)
     p.hp = p.bot && !this.bor ? BOT_HP : 100; // noite: bot e parceiro, vida cheia
     p.alive = true; p.shieldT = 0; p.stimT = 0;
     p.flameFuel = GADGETS.gd_flame.fuel; p.ubShells = GADGETS.gd_shot.shells; p.ubT = 0; // gadget cheio ao nascer
     if (p.losBase) { p.los = p.losBase; p.losBase = null; this.event({ k: 'lo', id: p.id, los: p.los, tracer: p.tracer }); } // largou a arma pega do chao
-    p.protUntil = this.mode === 'br' || this.mode === 'bomb' ? 0 : (this.clock || 0) + SPAWN_PROT; // escudo de nascimento (02/11): 3 s sem levar dano; atirar desliga
+    p.protUntil = this.mode === 'br' || this.mode === 'bomb' ? 0 : (this.clock || 0) + SPAWN_PROT; // escudo de nascimento (02/11): SPAWN_PROT sem levar dano; atirar desliga
     if (this.mode !== 'br' && p.field === 'vest') p.armor = FIELD.vest.armor; else if (this.mode !== 'br') p.armor = 0; // colete de campo: nasce vestido
     // a barra do equipamento continua de onde estava (enche por pontos)
     const xn = hasSkill(p, 'bolso') ? SKILLS.bolso.nades : 0; // bolso fundo
@@ -628,7 +648,7 @@ export class Core {
     else if (p.bot) {
       // 03/11 (pedido dele): bots com mais variedade, sniper tambem; e o MODELO da arma muda (corpo sorteado), nao so a
       // categoria. A montagem vai pro cliente (evento lo) e vale pra arma largada no chao
-      const pool = [['smg', 3], ['rifle', 3], ['shotgun', 2], ['sniper', 1.6], ['pistol', 0.8]], tot = pool.reduce((s, [, n]) => s + n, 0);
+      const pool = [['smg', 3], ['rifle', 3], ['shotgun', 2], ['sniper', 1.6], ['lmg', 1.4], ['pistol', 0.8]], tot = pool.reduce((s, [, n]) => s + n, 0);
       let r = Math.random() * tot; p.wpn = pool.find(([, n]) => (r -= n) < 0)?.[0] || 'smg';
       const body = botBody(p.wpn);
       if (body) { p.los = { [p.wpn]: { body } }; this.event({ k: 'lo', id: p.id, los: p.los, tracer: p.tracer }); }
@@ -736,6 +756,7 @@ export class Core {
         // skills passivas: so ids conhecidos, sem repetir, ate SKILL_SLOTS e liberadas pro nivel informado
         p.skills = Array.isArray(m.skills) ? [...new Set(m.skills.filter(s => SKILLS[s] && (p.ulvl || p.lvl || 1) >= SKILLS[s].lvl))].slice(0, SKILL_SLOTS) : [];
         p.los = cleanLoadouts(m.los);
+        p.lethal = LETHALS.includes(m.lethal) ? m.lethal : 'frag'; p.tactical = TACTICALS.includes(m.tactical) ? m.tactical : 'flash'; // aba Granadas (04/11)
         p.field = FIELD[m.field] && (p.ulvl || p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null;
         p.streaks = pickStreaks(m.streaks); // sequencias que ele escolheu no Arsenal (02/11) // equipamento de campo
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
@@ -770,6 +791,12 @@ export class Core {
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
         if (Math.abs(m.yaw - p.yaw) > 0.02 || Math.abs(m.pos[0] - p.pos[0]) + Math.abs(m.pos[2] - p.pos[2]) > 0.05) p.actAt = this.clock || 0; // mexeu: presente
         p.pos = clampArena(this.M, m.pos); p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
+        p.ads = m.ad === 1 ? 1 : 0; // mirando (04/11): brilho da luneta pros outros
+        if (p.car && p.seat === 0 && m.car && Array.isArray(m.car.pos) && m.car.pos.every(Number.isFinite) && Number.isFinite(m.car.yaw)) { // quem dirige manda o carro (ate ~1 s de atraso de folga)
+          const car = this.cars.find(k => k.id === p.car);
+          if (car && Math.hypot(m.car.pos[0] - car.pos[0], m.car.pos[2] - car.pos[2]) < CAR.speed * 1.2 + 1) { car.pos = [...m.car.pos]; car.yaw = m.car.yaw; car.spd = Math.max(-CAR.rev, Math.min(CAR.speed, +m.car.spd || 0)); car.steer = Math.max(-1, Math.min(1, +m.car.st || 0)); }
+        }
+        if (p.car) { const car = this.cars.find(k => k.id === p.car); if (car) p.pos = seatPos(car, p.seat); } // sentado: fica no lugar
         p.lean = this.mode === 'bomb' && Number.isFinite(m.ln) ? Math.max(-1, Math.min(1, m.ln)) : 0; // inclinar (so plantar a bomba)
         if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn && (this.mode !== 'infect' || p.owned.has(m.wpn))) { p.lastWpn = p.wpn; p.wpn = m.wpn; }
         break;
@@ -802,20 +829,37 @@ export class Core {
         }
         break;
       }
+      case 'car': // entrar/sair do carro (04/11)
+        if (m.act === 'enter') carEnter(this, p); else if (m.act === 'exit') carExit(this, p);
+        break;
+      case 'hitCar': { // tiro no carro inimigo (04/11): mesmas travas do dirigivel
+        const car = this.cars.find(k => k.id === m.id), w = WEAPONS[m.wpn];
+        if (!car || car.deadT > 0 || car.team === p.team || !w || w.melee || !p.alive || p.car || !Number.isFinite(m.dmg) || m.dmg <= 0) return;
+        if (m.wpn !== p.wpn && m.wpn !== p.lastWpn) return;
+        const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]], at = [car.pos[0], car.pos[1] + 0.9, car.pos[2]];
+        if (Math.sqrt(dist2(eye, at)) > (w.range || 260) + 10 || !hasLOS(this.M, eye, at)) return;
+        const dmg = Math.min(m.dmg, w.dmg * (w.pellets || 1) * 1.5, Math.max(0, p.budget));
+        if (dmg <= 0) return;
+        p.budget -= dmg;
+        carDamage(this, car, dmg, p);
+        break;
+      }
       case 'hitBlimp': { // tiro no dirigivel inimigo: enche de furo ate estourar
         const b = this.blimps.find(x => x.id === m.id), w = WEAPONS[m.wpn], owner = b && this.players.get(b.owner);
         if (!b || !w || w.melee || !p.alive || p.down > 0 || !Number.isFinite(m.dmg) || m.dmg <= 0) return;
         if (owner && !this.enemies(p, owner)) return;
         if (m.wpn !== p.wpn && m.wpn !== p.lastWpn) return;
         const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
-        if (Math.sqrt(dist2(eye, b.pos)) > (w.range || 260) + 10 || !hasLOS(this.M, eye, b.pos)) return;
+        const bp = b.kind === 'sentry' ? [b.pos[0], b.pos[1] + 1, b.pos[2]] : b.kind === 'beacon' ? [b.pos[0], b.pos[1] + 0.4, b.pos[2]] : b.pos;
+        if (Math.sqrt(dist2(eye, bp)) > (w.range || 260) + 10 || !hasLOS(this.M, eye, bp)) return;
         const dmg = Math.min(m.dmg, w.dmg * (w.pellets || 1) * 1.5, Math.max(0, p.budget));
         if (dmg <= 0) return;
         p.budget -= dmg;
         b.hp -= dmg;
         if (b.hp <= 0) {
-          this.blimps = this.blimps.filter(x => x !== b); this.streakGap = 0; // some e libera a proxima sequencia na hora
-          this.event({ k: 'blimpDown', id: p.id, owner: b.owner, pos: [...b.pos] });
+          this.blimps = this.blimps.filter(x => x !== b); if (b.kind !== 'sentry') this.streakGap = 0; // some e libera a proxima sequencia na hora
+          this.event({ k: 'blimpDown', id: p.id, owner: b.owner, pos: bp, sentry: b.kind === 'sentry' || b.kind === 'beacon' ? 1 : undefined, beacon: b.kind === 'beacon' ? 1 : undefined });
+          if (b.kind === 'sentry' || b.kind === 'beacon') p.score += 50;
         }
         break;
       }
@@ -846,12 +890,17 @@ export class Core {
       }
       case 'nade':
         if (p.alive && !(p.down > 0) && NADES[m.kind] && p.nades[m.kind] > 0 && Array.isArray(m.d) && m.d.every(Number.isFinite)) {
-          p.nades[m.kind]--;
-          this.throwNade(p, m.kind, norm(m.d), Number(m.cook) || 0, m.hand === true);
+          p.nades[m.kind]--; // m.kind = o slot (frag = letal, flash = tatica); o que sai e o que ele escolheu
+          const real = m.kind === 'frag' ? (p.lethal || 'frag') : (p.tactical || 'flash');
+          this.throwNade(p, real, norm(m.d), real === 'frag' ? Number(m.cook) || 0 : 0, m.hand === true && real === 'frag');
         }
         break;
       case 'streak':
         if (p.alive) this.useStreak(p, m.kind);
+        break;
+      case 'pass': // Contrabando: passa o caixote (a mira vem junto; o yaw do servidor pode estar um tick atras)
+        if (Number.isFinite(m.yaw)) p.yaw = m.yaw;
+        heistPass(this, p);
         break;
       case 'pickGun':
         if (Number.isFinite(m.id)) this.pickGun(p, m.id);
@@ -873,8 +922,8 @@ export class Core {
         break;
       }
       case 'ubshot': // escopetinha: gasta o cartucho aqui; os acertos chegam como 'hit' com wpn 'ubshot'
-        if (p.alive && !(p.down > 0) && p.wpn === 'rifle' && gadgetOf(p.los?.rifle) === 'gd_shot' && (p.ubShells ?? 2) > 0 && Array.isArray(m.o)) {
-          p.ubShells = (p.ubShells ?? 2) - 1; p.ubAt = this.clock || 0; p.protUntil = 0;
+        if (p.alive && !(p.down > 0) && p.wpn === 'rifle' && gadgetOf(p.los?.rifle) === 'gd_shot' && (p.ubShells ?? GADGETS.gd_shot.shells) > 0 && Array.isArray(m.o)) {
+          p.ubShells = (p.ubShells ?? GADGETS.gd_shot.shells) - 1; p.ubAt = this.clock || 0; p.protUntil = 0;
           this.event({ k: 'shot', id, o: m.o, e: m.e, wpn: 'ubshot' });
         }
         break;
@@ -922,7 +971,7 @@ export class Core {
 
   event(ev) {
     // tiro de gente (nao do dirigivel) vira barulho: bot perto ouve e vai ver (some em 3 s)
-    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && this.players.get(ev.id).los?.[ev.wpn]?.muzzle !== 'silencer') (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
+    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && !String(this.players.get(ev.id).los?.[ev.wpn]?.muzzle || '').startsWith('silencer')) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
     this.send(null, { t: 'ev', ...ev });
   }
 
@@ -1136,9 +1185,22 @@ export class Core {
     for (let i = this.nades.length - 1; i >= 0; i--) {
       const n = this.nades[i];
       n.fuse -= dt;
-      if (nadeStep(this.M, n, dt) > 3) this.event({ k: 'bounce', pos: n.pos });
+      const prevP = [...n.pos], hitF = nadeStep(this.M, n, dt);
+      if (hitF > 3) this.event({ k: 'bounce', pos: n.pos });
+      if (n.kind === 'tomahawk') { // machadinha: voando, pega o primeiro inimigo no caminho; bateu no chao/parede = para de valer
+        if (hitF > 0) n.dead = true;
+        if (n.dead && Math.hypot(n.vel[0], n.vel[2]) < 0.5) { const o = this.players.get(n.owner); if (o?.alive && Math.hypot(o.pos[0] - n.pos[0], o.pos[2] - n.pos[2]) < 1.3 && Math.abs(o.pos[1] - n.pos[1]) < 2) { o.nades.frag = (o.nades.frag || 0) + 1; n.fuse = 0; n.picked = true; this.event({ k: 'tomaPick', id: o.id }); } } // dono passou em cima: pega de volta
+        if (!n.dead) { const owner = this.players.get(n.owner); for (const v of this.players.values()) { if (!v.alive || v.id === n.owner || (owner && !this.enemies(owner, v))) continue; if (segToBody(prevP, n.pos, v.pos) < NADES.tomahawk.hitR) { n.dead = true; this.event({ k: 'tomaHit', pos: n.pos }); this.damage(v, owner || v, 999, 'tomahawk', false); break; } } }
+      }
       if (n.fuse <= 0) { this.detonate(n); this.nades.splice(i, 1); }
     }
+    // fogo da termobarica: queima quem fica dentro (dono e aliados nao)
+    for (const z of this.burns || []) {
+      z.t -= dt; const owner = this.players.get(z.owner);
+      for (const v of this.players.values()) { if (!v.alive || (owner && v.id !== z.owner && !this.enemies(owner, v)) || v.id === z.owner) continue; if (Math.hypot(v.pos[0] - z.pos[0], v.pos[2] - z.pos[2]) < NADES.thermo.burnR && Math.abs(v.pos[1] - z.pos[1]) < 2) this.damage(v, owner || v, NADES.thermo.burnDps * dt, 'thermo', false, true); }
+    }
+    if (this.burns) this.burns = this.burns.filter(z => z.t > 0);
+    if (this.smokes) { for (const z of this.smokes) z.t -= dt; this.smokes = this.smokes.filter(z => z.t > 0); }
   }
 
   // evento de fim de semana: chuva de bigornas (perto de quem esta vivo, com aviso) e bomba-relogio (zerou = KABUM)
@@ -1166,6 +1228,7 @@ export class Core {
     if (n.kind === 'frag') {
       const R = NADES.frag.radius;
       this.event({ k: 'boom', pos: n.pos, owner: n.owner });
+      this.blastCars(n.pos, R + 1.5, 260, owner);
       for (const v of this.players.values()) {
         if (!v.alive) continue;
         const c = [v.pos[0], v.pos[1] + 0.9, v.pos[2]];
@@ -1176,6 +1239,30 @@ export class Core {
         else if (owner && !this.enemies(owner, v)) continue;
         this.damage(v, owner || v, dmg, 'frag', false);
       }
+    } else if (n.kind === 'thermo') {
+      const T = NADES.thermo;
+      this.event({ k: 'thermo', pos: n.pos, owner: n.owner, dur: T.burn });
+      this.blastCars(n.pos, T.radius + 1.5, 200, owner);
+      for (const v of this.players.values()) {
+        if (!v.alive) continue;
+        const c = [v.pos[0], v.pos[1] + 0.9, v.pos[2]], d = Math.sqrt(dist2(c, n.pos));
+        if (d > T.radius || !hasLOS(this.M, [n.pos[0], n.pos[1] + 0.3, n.pos[2]], c)) continue;
+        if (v.id !== n.owner && owner && !this.enemies(owner, v)) continue;
+        this.damage(v, owner || v, (T.dmg * (1 - d / T.radius) + 10) * (v.id === n.owner ? 0.5 : 1), 'thermo', false);
+      }
+      (this.burns ||= []).push({ pos: [n.pos[0], floorAt(this.M, n.pos[0], n.pos[2]), n.pos[2]], t: T.burn, owner: n.owner });
+    } else if (n.kind === 'smoke') {
+      (this.smokes ||= []).push({ pos: [...n.pos], t: NADES.smoke.time });
+      this.event({ k: 'smoke', pos: n.pos, dur: NADES.smoke.time });
+      for (const v of this.players.values()) if (v.bot && v.ai && Math.hypot(v.pos[0] - n.pos[0], v.pos[2] - n.pos[2]) < NADES.smoke.radius + 6) v.ai.target = null; // bot perto perde o alvo
+    } else if (n.kind === 'tomahawk') {
+      // so some (o acerto e no voo; pegar de volta e no tickNades)
+    } else if (n.kind === 'beacon') { // sinalizador: fica no chao (um por jogador); renasce ali ate destruirem
+      if (!owner) return;
+      this.blimps = this.blimps.filter(b => !(b.kind === 'beacon' && b.owner === owner.id));
+      const y = floorAt(this.M, n.pos[0], n.pos[2]);
+      this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, kind: 'beacon', owner: owner.id, team: owner.team, t: 1e9, hp: NADES.beacon.hp, maxHp: NADES.beacon.hp, pos: [n.pos[0], Number.isFinite(y) ? y : n.pos[1], n.pos[2]], botT: 0 });
+      this.event({ k: 'beacon', id: owner.id, pos: n.pos });
     } else {
       this.event({ k: 'flash', pos: n.pos, owner: n.owner });
       for (const v of this.players.values()) {
@@ -1234,15 +1321,24 @@ export class Core {
       if (victim || end < step || r.t <= 0) { this.rockets.splice(i, 1); this.rocketBoom(r, victim); }
     }
   }
+  // explosao perto do carro inimigo (04/11): dano pela distancia ate a lataria
+  blastCars(at, R, dmg, owner) {
+    for (const car of this.cars || []) {
+      if (car.deadT > 0 || (owner && owner.team === car.team)) continue;
+      const d = Math.max(0, Math.hypot(car.pos[0] - at[0], car.pos[1] + 0.9 - at[1], car.pos[2] - at[2]) - 1.2);
+      if (d < R) carDamage(this, car, dmg * (1 - d / R), owner);
+    }
+  }
   rocketBoom(r, victim) {
     const S = STREAKS.rpg, owner = this.players.get(r.owner);
     this.event({ k: 'rocketBoom', pos: r.pos, owner: r.owner, direct: victim?.id });
+    this.blastCars(r.pos, S.radius + 1.5, 520, owner); // bazuca no carro: quase explode de uma vez
     if (victim?.alive && !this.over) this.kill(victim, owner || victim, 'rpg', false); // acerto direto: derruba na hora
     for (const v of this.players.values()) {
       if (!v.alive || v === victim) continue;
       const c = [v.pos[0], v.pos[1] + 0.9, v.pos[2]], d = Math.sqrt(dist2(c, r.pos));
       if (d > S.radius || !hasLOS(this.M, [r.pos[0], r.pos[1] + 0.3, r.pos[2]], c)) continue;
-      let dmg = S.dmg * (1 - d / S.radius) + 20;
+      let dmg = S.dmg * (1 - (d / S.radius) ** 2) + 20; // queda quadratica (04/11): o miolo da explosao segura o dano
       if (v.id === r.owner) dmg *= 0.4; // a propria explosao doi menos
       else if (owner && !this.enemies(owner, v)) continue;
       this.damage(v, owner || v, dmg, 'rpg', false);
@@ -1255,7 +1351,8 @@ export class Core {
   streakLock() {
     // radar fica fora da fila (regra dele 30/10): nao trava nem e travado; chamar de novo so estende
     // bigorna e torta tambem sairam da fila (01/11): so o dirigivel no ar trava
-    if (this.blimps.length) return { kind: this.blimps[0].kind || 'blimp', t: Math.max(...this.blimps.map(b => b.t)) + STREAK_GAP };
+    const air = this.blimps.filter(b => b.kind !== 'sentry' && b.kind !== 'beacon'); // sentinela no chao nao trava a sala
+    if (air.length) return { kind: air[0].kind || 'blimp', t: Math.max(...air.map(b => b.t)) + STREAK_GAP };
     return this.streakGap > 0 ? { kind: 'gap', t: this.streakGap } : null;
   }
   // algum jogador (gente, vivo) com sequencia que trava a sala guardada
@@ -1306,6 +1403,13 @@ export class Core {
       this.event({ k: 'anvilWarn', list });
     }
     strikeUse(this, p, kind); // Biplano, Trem, Balao Bombardeiro, Mao do Animador
+    if (kind === 'sentry') { // 1,3 m na frente (se a parede deixar), no chao de quem chamou
+      const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), eye = [p.pos[0], p.pos[1] + 1, p.pos[2]], at = [p.pos[0] + fx * 1.3, p.pos[1], p.pos[2] + fz * 1.3];
+      const pos = hasLOS(this.M, eye, [at[0], at[1] + 1, at[2]]) ? at : [...p.pos];
+      this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, kind: 'sentry', owner: p.id, team: p.team, t: STREAKS.sentry.time, hp: STREAKS.sentry.hp, pos, yaw: p.yaw, fireT: 1, botT: 0 });
+      this.event({ k: 'streak', id: p.id, kind, team: p.team });
+      return;
+    }
     if (kind === 'blimp') this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, owner: p.id, team: p.team, t: STREAKS.blimp.time, hp: STREAKS.blimp.hp, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
     if (kind === 'nuke') this.nukes.push({ owner: p.id, t: STREAKS.nuke.delay });
     this.event({ k: 'streak', id: p.id, kind, team: p.team, delay: kind === 'nuke' ? STREAKS.nuke.delay : undefined });
@@ -1357,6 +1461,8 @@ export class Core {
     for (const b of this.blimps) {
       b.t -= dt;
       if (b.kind === 'bomber') { tickBomber(this, b, dt); continue; }
+      if (b.kind === 'sentry') { this.tickSentry(b, dt); continue; }
+      if (b.kind === 'beacon') { this.tickBeacon(b, dt); continue; }
       b.ang += dt * 0.18;
       b.pos = [Math.cos(b.ang) * A * 0.45, 28, Math.sin(b.ang) * A * 0.45];
       b.fireT -= dt;
@@ -1377,6 +1483,46 @@ export class Core {
       if (hitIt) this.damage(best, owner, STREAKS.blimp.dmg, 'blimp', false);
     }
     this.blimps = this.blimps.filter(b => b.t > 0 && this.players.has(b.owner));
+  }
+
+  // sinalizador: bot inimigo que ve atira nele (o dono sumiu = some junto)
+  tickBeacon(b, dt) {
+    const owner = this.players.get(b.owner); if (!owner) { b.t = 0; return; }
+    if ((b.botT -= dt) > 0) return; b.botT = 0.5;
+    const at = [b.pos[0], b.pos[1] + 0.4, b.pos[2]];
+    for (const v of this.players.values()) {
+      if (!v.bot || !v.alive || !this.enemies(owner, v) || dist2(v.pos, at) > 20 * 20 || !hasLOS(this.M, [v.pos[0], v.pos[1] + 1.5, v.pos[2]], at)) continue;
+      this.event({ k: 'shot', id: v.id, o: [v.pos[0], v.pos[1] + 1.4, v.pos[2]], e: at, wpn: v.wpn });
+      if ((b.hp -= 15) <= 0) { b.t = 0; this.event({ k: 'blimpDown', id: v.id, owner: b.owner, pos: at, sentry: 1, beacon: 1 }); }
+      return;
+    }
+  }
+
+  // sentinela: gira pro inimigo mais perto que ela enxerga e atira; bot inimigo que ve ela atira de volta
+  tickSentry(b, dt) {
+    const S = STREAKS.sentry, owner = this.players.get(b.owner); if (!owner) { b.t = 0; return; }
+    const head = [b.pos[0], b.pos[1] + 1.25, b.pos[2]];
+    let best = null, bd = S.range * S.range;
+    for (const v of this.players.values()) {
+      if (!v.alive || v.inRing || !this.enemies(owner, v)) continue;
+      const c = [v.pos[0], v.pos[1] + 1.1, v.pos[2]], d = dist2(c, head);
+      if (d < bd && hasLOS(this.M, head, c)) { bd = d; best = v; }
+      // bot inimigo perto que ve a torreta: atira nela (cerca de 22 de dano por segundo cada)
+      if (v.bot && d < 26 * 26 && (b.botT -= dt) <= 0 && hasLOS(this.M, [v.pos[0], v.pos[1] + 1.5, v.pos[2]], head)) {
+        b.botT = 0.35; const dmg = 8;
+        this.event({ k: 'shot', id: v.id, o: [v.pos[0], v.pos[1] + 1.4, v.pos[2]], e: head, wpn: v.wpn });
+        b.hp -= dmg;
+        if (b.hp <= 0) { b.t = 0; this.event({ k: 'blimpDown', id: v.id, owner: b.owner, pos: head, sentry: 1 }); return; }
+      }
+    }
+    if (best) b.yaw = Math.atan2(-(best.pos[0] - b.pos[0]), -(best.pos[2] - b.pos[2]));
+    b.fireT -= dt;
+    if (!best || b.fireT > 0) return;
+    b.fireT = S.rate;
+    const hitIt = Math.random() < S.hit;
+    const e = [best.pos[0] + (hitIt ? 0 : rnd(-1.5, 1.5)), best.pos[1] + 1, best.pos[2] + (hitIt ? 0 : rnd(-1.5, 1.5))];
+    this.event({ k: 'shot', id: 'sentry', o: head, e, wpn: 'smg' });
+    if (hitIt) this.damage(best, owner, S.dmg, 'sentry', false);
   }
 
   // ---------- bandeiras ----------
@@ -1425,7 +1571,28 @@ export class Core {
     }
   }
 
+  // bandeira extra (04/11, pedido dele): no meio da partida nasce a D num ponto aberto longe das 3; vale 2,5x mais e
+  // fica 75 s. Lugar = ponto de item no chao (sempre alcancavel) mais longe das zonas e perto do meio do mapa
+  domBonusTick(dt) {
+    const B = this.domBonus;
+    if (!B) {
+      const half = Math.max(this.teamScore.red, this.teamScore.blue) >= this.limit * 0.35 || (this.timeLimit > 0 && this.time <= this.timeLimit * 0.6);
+      if (!half || this.domBonusDone || this.over) return;
+      let best = null, bs = -1e9;
+      for (const pk of this.M.pickups) { const dz = Math.min(...this.zones.map(z => Math.hypot(pk.pos[0] - z.pos[0], pk.pos[2] - z.pos[2]))); const sc = dz - Math.hypot(pk.pos[0], pk.pos[2]) * 0.35 - (pk.pos[1] > 1 ? 60 : 0); /* chao primeiro (item em cima de telhado/torre virava zona inalcancavel) */ if (dz > 5 && sc + (dz > 9 ? 20 : 0) > bs) { bs = sc + (dz > 9 ? 20 : 0); best = pk.pos; } }
+      if (!best) { this.domBonusDone = true; return; }
+      this.domBonusDone = true;
+      const z = { id: 'D', pos: [best[0], best[1], best[2]], r: 4, owner: null, prog: 0, bonus: 1 };
+      this.zones.push(z); this.domBonus = { z, t: 75 };
+      this.event({ k: 'zoneBonus', on: 1, pos: z.pos });
+      return;
+    }
+    B.t -= dt;
+    if (B.t <= 0) { this.zones = this.zones.filter(z => z !== B.z); this.domBonus = null; this.event({ k: 'zoneBonus', on: 0 }); }
+  }
+
   tickDOM(dt) {
+    this.domBonusTick(dt);
     for (const z of this.zones) {
       let r = 0, b = 0;
       for (const p of this.players.values()) {
@@ -1443,7 +1610,7 @@ export class Core {
       else if (z.prog >= 1) z.owner = 'blue';
       else if (z.owner && ((z.owner === 'red' && z.prog > 0) || (z.owner === 'blue' && z.prog < 0))) z.owner = null;
       if (z.owner !== prev && z.owner) this.event({ k: 'zone', id: z.id, team: z.owner });
-      if (z.owner) this.teamScore[z.owner] += dt * DOM_RATE; // 02/11: 1 ponto/s por zona fechava em 50 s
+      if (z.owner) this.teamScore[z.owner] += dt * DOM_RATE * (z.bonus ? 2.5 : 1); // 02/11: 1 ponto/s por zona fechava em 50 s
     }
     for (const t of ['red', 'blue']) if (this.teamScore[t] >= this.limit) { this.teamScore[t] = this.limit; this.end(t); }
   }
@@ -1496,7 +1663,7 @@ export class Core {
       ai.cover = best && p.hp < (p.maxHp || BOT_HP) * 0.35 ? this.coverSpot(p, best) : null;
       ai.target = best;
       if (p.field && fieldReady(p) && !(this.freezeT > 0)) botField(this, p, best);
-      ai.goal = this.spreadGoal(p, this.botGoal(p));
+      ai.goal = this.spreadGoal(p, this.objRoute(p, this.botGoal(p)));
     }
     const w = WEAPONS[p.wpn];
     // papel fixo de cada bot (01/11, pedido dele: movimento mais tatico e previsivel): 0 = ponta (chega perto,
@@ -1520,7 +1687,7 @@ export class Core {
       const ideal = (WEAPONS[p.wpn]?.melee ? 0.8 : p.wpn === 'shotgun' ? 6 : p.wpn === 'sniper' ? 30 : 14) * (role === 0 ? 0.65 : role === 2 ? 1.35 : 1);
       let adv = d > ideal + 3 ? 1 : d < ideal - 3 ? -0.6 : 0;
       // ancora na distancia certa: para, agacha e atira (fica parado de proposito, da pra prever e flanquear)
-      ai.crouch = role === 2 && !adv && d > 12 && !WEAPONS[p.wpn]?.melee && ai.reloadT <= 0 && !ai.rescue && !['ctf', 'dom', 'escort', 'bomb', 'heist'].includes(this.mode); // modo de objetivo: anda sempre
+      ai.crouch = role === 2 && !adv && d > 12 && !WEAPONS[p.wpn]?.melee && ai.reloadT <= 0 && !ai.rescue && !['ctf', 'dom', 'escort', 'bomb', 'heist', 'smuggle'].includes(this.mode); // modo de objetivo: anda sempre
       // contra quem esta de lamina (infectado): recua atirando, nunca deixa encostar
       if (WEAPONS[t.wpn]?.melee && !WEAPONS[p.wpn]?.melee) adv = d < 9 ? -1 : d > 16 ? 0.4 : 0;
       const sw = role === 2 ? 0.25 : role === 1 ? 1 : 0.7; // quanto cada papel dança de lado
@@ -1555,14 +1722,20 @@ export class Core {
       if (ai.reloadT <= 0 && ai.mag <= 0) this.botReload(p);
       // granada de vez em quando, em arco ate o alvo
       ai.pauseT = (ai.pauseT || 0) - dt;
+      // tatica do bot (04/11): flash ou fumaca de vez em quando, perto do alvo
+      if ((ai.tacT = (ai.tacT ?? rnd(6, 14)) - dt) <= 0 && this.skill.nades && p.nades.flash > 0 && d > 7 && d < 22 && !this.over) {
+        ai.tacT = rnd(14, 26); p.nades.flash--; p.botTac ||= Math.random() < 0.5 ? 'flash' : 'smoke';
+        this.throwNade(p, p.botTac, norm([fx, 0.2 + d * 0.012, fz]));
+      }
       if (ai.nadeT <= 0 && this.skill.nades && p.nades.frag > 0 && d > 9 && d < 24 && !this.over) {
         ai.nadeT = rnd(8, 16); p.nades.frag--;
         const up = 0.25 + d * 0.012;
-        this.throwNade(p, 'frag', norm([fx, up, fz]));
+        p.botLethal ||= Math.random() < 0.6 ? 'frag' : 'thermo'; // bot sorteia a sua (nunca machadinha)
+        this.throwNade(p, p.botLethal, norm([fx, up, fz]));
         const n = this.nades[this.nades.length - 1];
         const sp = Math.min(19, 6 + d * 0.55);
         n.vel = [fx * sp, up * sp + 3, fz * sp];
-      } else if (ai.react <= 0 && facing && ai.fireT <= 0 && ai.pauseT <= 0 && !this.over && ai.reloadT <= 0 && ai.mag > 0) {
+      } else if (ai.react <= 0 && facing && ai.fireT <= 0 && ai.pauseT <= 0 && !this.over && ai.reloadT <= 0 && ai.mag > 0 && !(this.heist?.kind === 'smuggle' && carryingBag(this, p))) { // com o caixote nas maos nao atira
         ai.mag--;
         ai.fireT = w.rate * this.skill.rate + (p.wpn === 'sniper' ? 0.8 : 0);
         this.botShoot(p, t, d);
@@ -1599,6 +1772,7 @@ export class Core {
 
     let speed = sprint ? 9.3 : ai.blind > 0 ? 3 : 6.4; // acompanha o jogador mais lento (01/11)
     if (this.mode === 'infect' && p.team === 'red') speed *= INFECT.speed;
+    if (this.heist?.kind === 'smuggle' && carryingBag(this, p)) { speed = Math.min(speed, 6.4) * heistCfg(this.heist).carrySlow; heistBotPass(this, p); } // caixote pesado: lento (e passa quando der)
     const ground = p.onGround;
     const acc = ground ? 12 : 3;
     if (ai.crouch) speed = 0;
@@ -1705,6 +1879,17 @@ export class Core {
     return standable(this.M, x, z) ? [x, g[1], z] : g;
   }
 
+  // objetivo pelo flanco (04/11, pedido dele): o bot de papel "flanco" nao vai reto. Passa por um ponto de lado e so entao
+  // segue pro objetivo; quem carrega, resgata ou ja esta perto vai direto, entao o objetivo nunca e largado. Canyon fica como esta.
+  objRoute(p, g) {
+    const ai = p.ai, role = ai.role ?? (p.id.charCodeAt(p.id.length - 1) + p.id.length) % 3;
+    if (!g || role !== 1 || this.M.arena >= 100 || ai.rescue || !['ctf', 'dom', 'heist', 'smuggle'].includes(this.mode) || this.carrying?.(p) || (this.heist && carryingBag(this, p))) return g;
+    const key = Math.round(g[0] / 8) + ':' + Math.round(g[2] / 8);
+    if (ai.objKey !== key) { ai.objKey = key; const r = Math.hypot(g[0] - p.pos[0], g[2] - p.pos[2]) > 22 ? this.routeTo(p, g) : []; ai.objVia = r.length > 1 ? r[0] : null; }
+    if (ai.objVia && dist2(ai.objVia, p.pos) < 16) ai.objVia = null;
+    return ai.objVia || g;
+  }
+
   botGoal(p) {
     const FB = this.M.flagBase;
     if (this.mode === 'bomb' && this.bomb) {
@@ -1767,12 +1952,12 @@ export class Core {
       return this.flags[theirs].pos;
     }
     if (this.esc) return escGoal(this, p);
-    if (this.heist) return heistGoal(this, p);
+    if (this.heist) return heistGoal(this, p) || this.huntGoal(p); // defesa "caca": sem ninguem a vista patrulha (antes ficava parada onde nasceu)
     if (this.mode === 'dom') {
       let best = null, bd = 1e9;
       for (const z of this.zones) {
         if (z.owner === p.team && Math.random() < 0.8) continue;
-        const d = dist2(z.pos, p.pos) * (0.6 + Math.random());
+        const d = dist2(z.pos, p.pos) * (0.6 + Math.random()) * (z.bonus ? 0.4 : 1); // a extra chama mais gente
         if (d < bd) { bd = d; best = z.pos; }
       }
       return best || this.zones[1].pos;
@@ -1819,6 +2004,11 @@ export class Core {
     for (const k of this.pickups) add(k.pos[0], k.pos[2]);
     const A = M.arena, step = Math.max(7, A / 6);
     for (let x = -A + 4; x <= A - 4; x += step) for (let z = -A + 4; z <= A - 4; z += step) add(x + rnd(-2, 2), z + rnd(-2, 2));
+    // dentro das casas de entrar e 2o andar (04/11, pedido dele: usar o mapa todo; no Canyon nao). [3] = ponto coberto, a patrulha prefere
+    if (A < 100) for (const b of M.boxes) if (b.kind === 'hfloor' || b.kind === 'hroof') {
+      const x = (b.min[0] + b.max[0]) / 2, z = (b.min[2] + b.max[2]) / 2, y = b.kind === 'hfloor' ? b.max[1] : 0;
+      if ((b.max[0] - b.min[0]) * (b.max[2] - b.min[2]) > 6 && !out.some(q => Math.hypot(q[0] - x, q[2] - z) < 2.5 && Math.abs(q[1] - y) < 1)) out.push([x, y, z, 1]);
+    }
     return (this.pois = out);
   }
   nearPoi(pos, r) {
@@ -1835,7 +2025,7 @@ export class Core {
     for (const q of pts) {
       const d = Math.hypot(q[0] - p.pos[0], q[2] - p.pos[2]);
       if (d < 8) continue;
-      let sc = Math.min(d, 45) - Math.max(0, d - 45) * 0.5 + rnd(0, 25);
+      let sc = Math.min(d, 45) - Math.max(0, d - 45) * 0.5 + rnd(0, 25) + (q[3] ? 12 : 0);
       if ((ai.visited || []).some(v => Math.hypot(v[0] - q[0], v[2] - q[2]) < 6)) sc -= 30;
       for (const o of mates) { const g = o.ai.route[o.ai.route.length - 1]; if (Math.hypot(g[0] - q[0], g[2] - q[2]) < 14) sc -= 18 + near * 4; }
       if (sc > bs) { bs = sc; best = q; }
@@ -1874,6 +2064,7 @@ export class Core {
   }
 
   botShoot(p, t, d) {
+    if (p.car && p.seat === 0) return; // motorista nao atira
     const w = WEAPONS[p.wpn];
     // lamina: so acerta colado
     if (w.melee) {
@@ -1999,6 +2190,7 @@ export class Core {
       if (p.pos[1] < -20) this.kill(p, null, 'fall', false);
     }
 
+    carsTick(this, dt);
     this.tickNades(dt);
     this.tickRockets(dt);
     this.tickGadgets(dt);
@@ -2036,7 +2228,7 @@ export class Core {
     if (this.esc && !this.over && !(this.freezeT > 0)) escTick(this, dt);
     if (this.heist && !this.over && !(this.freezeT > 0)) heistTick(this, dt);
     if (this.bor && !this.over && !(this.freezeT > 0)) borTick(this, dt);
-    this.M.dyn = this.esc ? [trainBox(this.M, this.esc.d)] : this.heist ? heistBoxes(this.heist) : this.bor ? borBoxes(this) : null; // bonde (01/11), cofre e van (03/11) solidos pros bots e pras balas; portas fechadas da noite
+    this.M.dyn = [...(this.esc ? [trainBox(this.M, this.esc.d)] : this.heist ? heistBoxes(this.heist) : this.bor ? borBoxes(this) : []), ...propBoxes(this.blimps, this.cars)]; // bonde (01/11), cofre e van (03/11) solidos pros bots e pras balas; portas fechadas da noite; sentinela, sinalizador e carro parado
     this.snapshot(dt);
   }
 
@@ -2059,7 +2251,7 @@ export class Core {
     this.lobbyT = 0.25;
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, map: this.M.id, host: this.hostId(),
-      cfg: { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, mode: this.modeId(), map: (this.mode === 'escort' ? this.mapRaw : this.mapPick) || 'auto', bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
+      cfg: { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, mode: this.modeId(), map: (this.mode === 'escort' || this.blitz ? this.mapRaw : this.mapPick) || 'auto', /* blitz: o lobby ve a ESCOLHA (auto mostrava o sorteado e a seta pulava) */ bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
       players: [...this.players.values()].filter(p => !p.mob).map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), pr: p.prest || 0, elite: !!p.elite, rk: p.rk ?? -1 })), // vilao da noite nao e do elenco (03/11)
     });
   }
@@ -2079,7 +2271,7 @@ export class Core {
         id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
-        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined,
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
                 ...(this.bor ? { mob: p.mob || undefined, mh: p.mob ? p.maxHp : undefined, cs: p.mob ? undefined : Math.round(p.cash || 0), fr: p.frozenT > 0 ? 1 : 0, hk: p.headK > 1.6 ? 1 : undefined } : null), // noite: tipo do vilao, vida cheia (barra do chefao), pontos, congelado, lente/olho exposto
               });
     }
@@ -2089,10 +2281,10 @@ export class Core {
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,
       teamScore: { red: Math.floor(this.teamScore.red), blue: Math.floor(this.teamScore.blue) },
-      flags: this.flags, zones: this.zones.map(z => ({ id: z.id, owner: z.owner, prog: z.prog })),
+      flags: this.flags, zones: this.zones.map(z => ({ id: z.id, owner: z.owner, prog: z.prog, ...(z.bonus ? { pos: z.pos, bonus: 1, left: Math.ceil(this.domBonus?.t || 0) } : null) })),
       pickups: this.pickups.map(k => k.active),
       nades: [...this.nades.map(n => ({ id: n.id, kind: n.kind, pos: n.pos.map(r2) })), ...(this.rockets || []).map(r => ({ id: r.id, kind: 'rocket', pos: r.pos.map(r2), d: r.d.map(r2) }))],
-      blimps: this.blimps.map(b => ({ id: b.id, k: b.kind, pos: b.pos.map(r2), team: b.team, owner: b.owner, hp: Math.max(0, Math.round(b.hp / STREAKS[b.kind || 'blimp'].hp * 100)) })), ...strikeSnap(this),
+      cars: carsSnap(this), blimps: this.blimps.map(b => ({ id: b.id, k: b.kind, pos: b.pos.map(r2), team: b.team, owner: b.owner, yaw: b.kind === 'sentry' ? r3(b.yaw) : undefined, hp: Math.max(0, Math.round(b.hp / (b.maxHp || STREAKS[b.kind || 'blimp'].hp) * 100)) })), ...strikeSnap(this),
       uavs: this.uavs.map(u => ({ owner: u.owner, team: u.team })),
       talcs: this.talcs.map(u => ({ owner: u.owner, team: u.team })),
       sLock: (() => { const l = this.streakLock(); return l ? { kind: l.kind, t: Math.ceil(l.t) } : null; })(),
@@ -2114,7 +2306,7 @@ export class Core {
 function cleanLoadouts(los) {
   if (!los || typeof los !== 'object') return null;
   const out = {};
-  for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'melee']) {
+  for (const w of ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee']) {
     const l = los[w];
     if (!l || typeof l !== 'object') continue;
     const o = {};
@@ -2122,8 +2314,9 @@ function cleanLoadouts(los) {
       const v = l[k];
       o[k] = typeof v === 'string' && v.length <= 24 && /^[#\w-]+$/.test(v) ? v : null;
     }
-    o.muzzle = ['silencer', 'brake', 'comp', 'flash'].includes(l.muzzle) && w !== 'melee' ? l.muzzle : null; // bocal (01/11)
+    o.muzzle = ['silencer', 'silencer2', 'brake', 'comp', 'flash'].includes(l.muzzle) && w !== 'melee' ? l.muzzle : null; // bocal (01/11)
     o.cvName = typeof l.cvName === 'string' && l.cvName.trim() ? cleanChat(l.cvName).slice(0, 20) : null; // nome da variante do jogador (arma no chao mostra)
+    o.ws = typeof l.ws === 'string' && WSKINS[l.ws]?.of === o.body ? l.ws : null; // skin de modelo da Loja (04/11): so visual, stats do corpo
     if (o.bp && BLUEPRINTS[o.bp]?.wpn !== w) o.bp = null;
     if (o.ammo && (!AMMO[o.ammo] || w === 'melee')) o.ammo = null;
     out[w] = o;
@@ -2145,5 +2338,5 @@ function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l
 // Jogo Rapido: modo sorteado quando nao tem partida aberta (dupla fica de fora: precisa de parceiro)
 // rankeada: so os modos competitivos (pedido dele 31/10)
 export const RANKED_MODES = ['ctf', 'dom', 'escort', 'heist', 'blitz_ctf', 'blitz_dom'];
-export const QUICK_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'escort', 'heist', 'gungame', 'infect', 'bomb', 'br', 'bounce'];
+export const QUICK_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'escort', 'heist', 'smuggle', 'gungame', 'infect', 'bomb', 'br', 'bounce'];
 export const QUICK_BOTS = 11;

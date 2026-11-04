@@ -12,6 +12,7 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'ringbell', 'crowd', 'pump', 'balloon', // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
   'chute', 'wind', 'splat', 'revolver', 'aa12', 'laser',
   'nukealarm', 'chargeup', 'megashot',
+  'saber_on', 'saber_swing', 'saber_hit', // Sabre de Neon (04/11)
   'rocket', 'flamer']; // 03/11: Bazuca e lanca-chamas // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
@@ -62,6 +63,7 @@ class Audio {
 
   // som proprio do modelo (01/11): g_<corpo>.mp3 carrega na primeira vez que a arma aparece; ate la (ou sem arquivo) usa o da categoria
   gunSound(body, fallback) {
+    if (fallback === 'lmg') fallback = 'rifle'; // Metralhadora (04/11): sem som de categoria proprio; cada modelo tem o seu (g_lmg_N)
     if (!body) return fallback;
     const n = 'g_' + body;
     if (this.buf[n]) return n;

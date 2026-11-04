@@ -30,7 +30,7 @@ else (SS && !rovex.token() ? Promise.resolve() : Promise.race([pullSave(), limit
     const en = !/^pt/i.test(navigator.language || 'pt');
     const d = document.createElement('div');
     d.className = 'boot-fail'; d.setAttribute('role', 'alert');
-    d.innerHTML = `<b>${gl ? (en ? 'Your browser turned off 3D graphics' : 'O navegador desligou os graficos 3D') : (en ? 'The game did not load' : 'O jogo nao carregou')}</b><span>${gl ? (en ? 'Close other tabs and apps, then reload.' : 'Feche outras abas e apps e recarregue.') : (en ? 'Check your connection and reload.' : 'Confira a internet e recarregue.')}</span><button type="button">${en ? 'Reload' : 'Recarregar'}</button>`;
+    d.innerHTML = `<b>${gl ? (en ? 'Your browser turned off 3D graphics' : 'O navegador desligou os gráficos 3D') : (en ? 'The game did not load' : 'O jogo não carregou')}</b><span>${gl ? (en ? 'Close other tabs and apps, then reload.' : 'Feche outras abas e apps e recarregue.') : (en ? 'Check your connection and reload.' : 'Confira a internet e recarregue.')}</span><button type="button">${en ? 'Reload' : 'Recarregar'}</button>`;
     d.querySelector('button').onclick = () => { sessionStorage.removeItem('rr_reload'); location.reload(); };
     document.body.appendChild(d);
     return;

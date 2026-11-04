@@ -50,7 +50,7 @@ export class WsNet {
       let inRoom = false;
       const fail = (code, msg) => { clearTimeout(to); const e = new Error(msg); e.code = code; rej(e); };
       ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, quick: this.quick, ranked: this.ranked, token: token(), sid: sessionId() })); };
-      ws.onerror = () => { if (!opened) fail('down', 'Nao deu pra conectar em ' + this.url); };
+      ws.onerror = () => { if (!opened) fail('down', 'Não deu pra conectar em ' + this.url); };
       ws.onmessage = (e) => {
         this.lastMsg = performance.now();
         let m; try { m = JSON.parse(e.data); } catch { return; }
@@ -61,7 +61,7 @@ export class WsNet {
         }
         this.onmsg(m);
       };
-      ws.onclose = () => { if (inRoom) this.onclose(); else if (opened) fail('down', 'conexao caiu'); };
+      ws.onclose = () => { if (inRoom) this.onclose(); else if (opened) fail('down', 'conexão caiu'); };
     });
   }
   send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }

@@ -1,5 +1,6 @@
 // Vila Borracha: cena, cidade que danca, ceu, objetivos, pickups e efeitos.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildGun, rocketMesh } from './arsenal.js';
@@ -15,6 +16,12 @@ const THEME = {
   estaleiro: { sky: 0xcfd3d2, ground: ['#b9b6ae', '#6a675f'], hazard: true, hazardStrips: [[40, 1, 0, -15], [40, 1, 0, 15]], trees: [] },
   // Banco Ferradura: paralelepipedo de cidade, ruas dos lados e o beco atras do banco; arvores so na praca
   ferradura: { sky: 0xd8d5cc, ground: ['#c9c3b6', '#77716a'], roadList: [[10, 92, -24, 0], [10, 92, 24, 0], [92, 14, 0, -27], [30, 26, 0, 31]], trees: [[-10, 24], [10, 24], [-10, 38], [10, 38], [-18, 44], [18, 44]] },
+  // Casa da Moeda (04/11, refeita): calcamento mais frio, ruas onde as ruas dela estao, arvores so na praca
+  moeda: { sky: 0xd2d6d0, ground: ['#bcc0b4', '#646a60'], roadList: [[12, 124, -30, 0], [8, 124, 30, 0], [124, 10, 0, 42], [40, 26, 0, -38]], trees: [[-14, -17], [14, -17], [-40, -46], [40, -46]] },
+  // Cais do Sol Poente (04/11): docas no por do sol, mas na paleta do jogo (laranja e rosa desbotados, nada saturado)
+  docas: { sky: 0xf0b48c, ground: ['#b99c78', '#6d5a46'], fog: [50, 160], docks: true, trees: [] },
+  // Canyon Poeira (04/11): deserto grande, ceu de fim de tarde quente, areia dourada; nevoa longe (mapa aberto)
+  deserto: { sky: 0xeed7ae, ground: ['#e3c48f', '#b08a52'], fog: [90, 300], desert: true, trees: [] },
   // refinaria: areia do deserto, ceu quente
   refinaria: { sky: 0xe6d9bf, ground: ['#dccaa0', '#9c8662'], trees: [] },
   // Estudio Tinteiro (Noite dos Borroes, 03/11 pedido dele): estudio abandonado de NOITE, escuro e assustador.
@@ -33,6 +40,7 @@ const CONT_COLS = [0x9c4a36, 0x3f6a8a, 0x5f7f3e, 0xb08a3a, 0x7a4f7a, 0x4f7f7a, 0
 // Monta o cenario do mapa M num grupo (troca de mapa = remove o grupo e monta outro)
 export function buildWorld(scene, M) {
   const dancers = [];
+  const carGroups = [];
   const swayers = [];
   const root = new THREE.Group();
   scene.add(root);
@@ -42,17 +50,19 @@ export function buildWorld(scene, M) {
   scene.fog = new THREE.Fog(TH.sky, TH.fog ? TH.fog[0] : ARENA * 1.2, TH.fog ? TH.fog[1] : ARENA * 4);
 
   root.add(new THREE.HemisphereLight(TH.dark ? 0x5a6280 : 0xffffff, TH.dark ? 0x0a0908 : 0x6e6a63, TH.dark ? 0.32 : 1.4));
-  const sun = new THREE.DirectionalLight(TH.dark ? 0x8fa0c8 : 0xffffff, TH.dark ? 0.3 : 2.2); // escuro: luar fraco
+  const sun = new THREE.DirectionalLight(TH.dark ? 0x8fa0c8 : TH.docks ? 0xffc996 : 0xffffff, TH.dark ? 0.3 : 2.2); // escuro: luar fraco; cais: sol baixo e laranja
   sun.position.set(30, 60, 20);
+  if (TH.docks) sun.position.set(-10, 22, -60);
   root.add(sun);
 
   // chao: paralelepipedo rabiscado + estrada clara
   const groundTex = hatchTexture(TH.ground[0], TH.ground[1], { density: 40, cross: true });
   // Floresta (03/11): o chao escuro do estudio fica so dentro dele; fora, chao de mato num plano com furo (nada sobreposto = sem piscar)
-  const GS = M.forest ? (M.studio + 1) * 2 : ARENA * 2 + 60;
+  const GS = M.forest ? (M.studio + 1) * 2 : M.quayZ ? ARENA * 2 + 2 : ARENA * 2 + 60;
   groundTex.repeat.set(M.forest ? GS / 4 : ARENA / 2, M.forest ? GS / 4 : ARENA / 2);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(GS, GS), toon(0xffffff, { map: groundTex }));
   ground.rotation.x = -Math.PI / 2;
+  if (M.quayZ) { const qd = ARENA + 1 - M.quayZ; ground.geometry.dispose(); ground.geometry = new THREE.PlaneGeometry(GS, qd); ground.position.z = (M.quayZ + ARENA + 1) / 2; groundTex.repeat.set(GS / 4, qd / 4); } // Cais: chao so ate a borda; dali pra fora e mar
   root.add(ground);
   const roadTex = hatchTexture('#e8e4da', '#a8a196', { density: 10 });
   roadTex.repeat.set(2, 24);
@@ -79,6 +89,7 @@ export function buildWorld(scene, M) {
   const faces = [0, 1, 2, 3].map(i => facadeTexture(i));
   // Banco Ferradura: marmore em blocos (repete pelo tamanho da peca, senao o bloco fica do tamanho do predio)
   const marbleBase = M.theme === 'ferradura' ? hatchTexture('#ece7dc', '#b3ab9c', { bricks: true }) : null;
+  const graniteBase = hatchTexture('#a8aea4', '#5e665d', { bricks: true }); // Casa da Moeda (04/11)
   const marble = (w, h) => { const t = marbleBase.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(h / 1.6))); return t; };
 
   const hazardTex = hazardTexture();
@@ -87,6 +98,7 @@ export function buildWorld(scene, M) {
     const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], d = b.max[2] - b.min[2];
     const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
     if (b.kind === 'roof') continue; // corpo invisivel do telhado pontudo (o desenho vem com a casa)
+    if (b.kind === 'quayedge') continue; // borda do cais: muro invisivel (o desenho e o mar, docksDecor)
     if (b.kind === 'forestedge') continue; // borda da floresta: o desenho e a mata fechada (forestDecor)
     if (b.kind === 'tree') { forestTrees.push(b); continue; } // arvores da floresta: copias (InstancedMesh) no forestDecor
     if (b.kind === 'house') {
@@ -129,6 +141,8 @@ export function buildWorld(scene, M) {
       continue;
     }
     let mesh;
+    if (b.kind === 'wall' && TH.desert) { const g = DESERT.cliff(w, h, d); g.position.set(cx, b.min[1], cz); root.add(g); continue; } // deserto: borda e paredao de pedra
+    if (TH.desert && b.kind === 'bridge') { const g = DESERT.plank(w, h, d); g.position.set(cx, b.min[1], cz); root.add(g); continue; }
     if (b.kind === 'wall') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: brick });
     else if (b.kind === 'crate') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.045, { map: plank });
     else if (b.kind === 'container') {
@@ -152,6 +166,10 @@ export function buildWorld(scene, M) {
       root.add(g);
       continue;
     }
+    // casas/predios que da pra entrar (04/11): reboco na cor da casa, piso de tabua, laje escura com beiral
+    else if (b.kind === 'hwall') mesh = ink(new THREE.BoxGeometry(w, h, d), b.col ?? 0xe8dcc4, 0.04, { map: sideTex });
+    else if (b.kind === 'hfloor') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.03, { map: plank });
+    else if (b.kind === 'hroof') mesh = ink(new THREE.BoxGeometry(w, h, d), PAL.dark, 0.05);
     else if (b.kind === 'concrete') mesh = ink(new THREE.BoxGeometry(w, h, d), PAL.light, 0.06, { map: sideTex });
     else if (b.kind === 'silo') {
       // silo de oleo: cilindro com faixas, tampa e escadinha pintada
@@ -210,7 +228,7 @@ export function buildWorld(scene, M) {
       if (along === 'x') mesh.rotation.z = Math.PI / 2; else mesh.rotation.x = Math.PI / 2;
     }
     else if (b.kind === 'rock') {
-      mesh = ink(new THREE.IcosahedronGeometry(0.5, 0), 0x8a857c, 0.06);
+      mesh = ink(new THREE.IcosahedronGeometry(0.5, 0), TH.desert ? 0xa8714a : 0x8a857c, 0.06); // deserto: pedra cor de terra
       mesh.scale.set(w * 1.05, h * 1.15, d * 1.05);
       mesh.rotation.y = cx * 0.37;
     }
@@ -233,6 +251,13 @@ export function buildWorld(scene, M) {
         const shoe = horseshoe(0.9); shoe.position.set(cx, b.max[1] + 1.2, cz + d * 0.4 + 0.08); root.add(shoe);
       }
     }
+    else if (b.kind === 'granite' || b.kind === 'mintsign') { // Casa da Moeda: granito em blocos (repete pelo tamanho da peca)
+      const t = graniteBase.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(Math.max(1, Math.round(Math.max(w, d) / 2.4)), Math.max(1, Math.round(h / 1.2)));
+      mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: t, unique: true });
+      if (b.kind === 'mintsign') { const plate = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, h * 0.72), new THREE.MeshBasicMaterial({ map: mintSign() })); plate.position.set(cx, b.min[1] + h / 2, b.min[2] - 0.03); plate.rotation.y = Math.PI; root.add(plate); }
+    }
+    else if (b.kind === 'goldtrim') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xc9a34a, 0.02);
+    else if (b.kind === 'copperroof') mesh = ink(new THREE.BoxGeometry(w, h, d), 0x5e8f7c, 0.06);
     else if (b.kind === 'rail') { // balaustrada: corrimao escuro em cima de pilaretes claros
       const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
       const along = w > d, len = Math.max(w, d), n = Math.max(2, Math.round(len / 0.55));
@@ -286,26 +311,33 @@ export function buildWorld(scene, M) {
       const hat = ink(new THREE.ConeGeometry(0.38, 0.3, 6), PAL.ink, 0.02); hat.position.y = h + 0.6; g.add(hat);
       root.add(g); continue;
     }
-    else if (b.kind === 'car') { // carro parado dos anos 30: corpo, cabine e rodas
+    else if (b.kind === 'car') { // carro parado dos anos 30: modelo do Tripo (04/11) recolorido; ate carregar, o de caixas
       const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
-      const along = d > w, L = Math.max(w, d), W = Math.min(w, d), col = [PAL.red, PAL.blue, 0x5f7f3e][(b.seed || 0) % 3];
+      const along = d > w, L = Math.max(w, d), W = Math.min(w, d), col = CAR_COLORS[(b.seed || 0) % CAR_COLORS.length];
+      if (!along) g.rotation.y = Math.PI / 2;
+      root.add(g); dancers.push({ obj: g, h, phase: cx * 0.2, amp: 0.03 }); carGroups.push(g); // fora do mergeStatic: o modelo chega depois
+      const boxy = new THREE.Group(); g.add(boxy);
+      carModel().then(M => { if (!M) return; g.remove(boxy); freeGeos(boxy); const m = new THREE.Mesh(M.geo, carMat(col)); const k = L / M.len; m.scale.set(k, k, k); m.rotation.y = (b.seed || 0) % 2 ? Math.PI : 0; outline(m, 0.05); g.add(m); });
+      { const g = boxy;
       const body = ink(new THREE.BoxGeometry(W, h * 0.45, L), col, 0.05); body.position.y = h * 0.42; g.add(body);
       const cab = ink(new THREE.BoxGeometry(W * 0.9, h * 0.4, L * 0.45), PAL.dark, 0.05); cab.position.set(0, h * 0.82, -L * 0.08); g.add(cab);
       for (const [ex, ez] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const wh = ink(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12), PAL.ink, 0.02); wh.rotation.z = Math.PI / 2; wh.position.set(ex * W * 0.5, 0.42, ez * L * 0.32); g.add(wh); }
-      if (!along) g.rotation.y = Math.PI / 2;
-      root.add(g); dancers.push({ obj: g, h, phase: cx * 0.2, amp: 0.03 }); continue;
+      } continue;
     }
     else if (b.kind === 'dumpster') mesh = ink(new THREE.BoxGeometry(w, h, d), 0x4f6a52, 0.05, { map: sideTex });
+    else if (DOCKS[b.kind]) { const g = DOCKS[b.kind](w, h, d, b); g.position.set(cx, b.min[1], cz); root.add(g); continue; } // Cais do Sol Poente (04/11)
+    else if (DESERT[b.kind]) { const g = DESERT[b.kind](w, h, d, b); g.position.set(cx, b.min[1], cz); root.add(g); continue; } // Canyon Poeira (04/11)
     else if (STUDIO[b.kind]) { const g = STUDIO[b.kind](w, h, d, b); g.position.set(cx, b.min[1], cz); root.add(g); continue; } // moveis do Estudio Tinteiro
-    else mesh = ink(new THREE.BoxGeometry(w, h, d), b.kind === 'step' ? (marbleBase ? 0xe6e0d4 : PAL.light) : 0xffffff, 0.04, { map: b.kind === 'step' ? null : plank });
+    else mesh = ink(new THREE.BoxGeometry(w, h, d), b.kind === 'step' ? (marbleBase ? 0xe6e0d4 : TH.desert ? 0xb98a5e : PAL.light) : 0xffffff, 0.04, { map: b.kind === 'step' ? null : plank });
     mesh.position.set(cx, b.min[1] + h / 2, cz);
     root.add(mesh);
   }
 
-  if (M.theme === 'ferradura') bankDecor(root);
+  if (M.id === 'ferradura') bankDecor(root); // decoracao com posicoes do Banco Ferradura (a Casa da Moeda usa o mesmo tema, mas nao isso)
   const studio = TH.dark ? tinteiroDecor(root, M.studio || ARENA) : null;
   const preForest = new Set(root.children); // o que e do estudio/mapa (a mata vem depois e fica de fora do recorte)
   const forest = M.forest ? forestDecor(root, M, forestTrees) : null;
+  if (TH.docks) docksDecor(root, M); // mar, borda de pedra do cais e o sol baixo
   // Floresta (03/11, desempenho): o miolo do estudio vai num grupo proprio (juntado a parte). Da mata, atras da parede
   // de 12 m, ele nem aparece mas era desenhado (~550 chamadas olhando pro estudio); cull() some com ele la fora.
   // Fora do recorte: a mata (malhas instanciadas na origem) e lampada com luz de verdade (luz que some muda a
@@ -318,7 +350,7 @@ export function buildWorld(scene, M) {
   }
 
   // morros e arvores de borracha fora do muro (estudio fechado: nada disso, so o escuro)
-  for (let i = 0; i < (TH.dark ? 0 : 18); i++) {
+  for (let i = 0; i < (TH.dark || TH.docks ? 0 : 18); i++) { // cais: em volta e mar
     // morros longe o bastante pra nunca invadir a arena (diagonal dos cantos ~ ARENA * 1.42)
     const rad = 18 + (i % 4) * 5;
     const a = (i / 18) * Math.PI * 2, r = ARENA * 1.5 + rad + 6 + (i % 3) * 8;
@@ -327,7 +359,7 @@ export function buildWorld(scene, M) {
     hill.scale.y = 0.6;
     root.add(hill);
   }
-  for (let i = 0; i < (TH.dark ? 0 : 26); i++) {
+  for (let i = 0; i < (TH.dark || TH.docks || TH.desert ? 0 : 26); i++) { // arvore de borracha: nem no mar nem no deserto
     const a = (i / 26) * Math.PI * 2 + 0.1, r = ARENA * 1.42 + 8 + (i % 2) * 6;
     const t = makeTree();
     t.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
@@ -346,6 +378,11 @@ export function buildWorld(scene, M) {
   const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: TH.dark ? moonTexture() : sunTexture(), fog: false, transparent: true }));
   sunSpr.scale.set(36, 36, 1);
   sunSpr.position.set(-90, 75, -120);
+  if (TH.docks) { sunSpr.position.set(-20, 16, -175); sunSpr.scale.set(48, 48, 1); sunSpr.material.color.set(0xffb27a); } // por do sol: sol grande e baixo no mar
+  // o sol fica a 85 m da camera na mesma direcao e no mesmo tamanho aparente (04/11): a distancia de desenho curta (95 m)
+  // cortava o sol e a lua, que moravam a 150-180 m
+  const SUN_D = 85, sunOff = sunSpr.position.clone(), sunK = SUN_D / sunOff.length(); sunOff.multiplyScalar(sunK); sunSpr.scale.multiplyScalar(sunK);
+  let sunBob = 0;
   root.add(sunSpr);
   const clouds = [];
   for (let i = 0; i < (TH.dark ? 0 : 9); i++) {
@@ -361,7 +398,7 @@ export function buildWorld(scene, M) {
   mergeMoving(root, [...trees.map(s => ({ obj: s.obj, phase: s.phase, amp: s.amp })), ...clouds.map(c => ({ obj: c, phase: 0, amp: -1 }))], moveT);
   const chimneys = swayers.filter(s => !s.tree);
   // o resto que fica parado vira poucas malhas (so chamine e sol continuam soltos)
-  const keep = new Set([...chimneys.map(s => s.obj), sunSpr, ...(studio ? studio.moving : []), ...(forest ? forest.moving : [])]);
+  const keep = new Set([...carGroups, ...root.children.filter(o => o.userData.async), ...chimneys.map(s => s.obj), sunSpr, ...(studio ? studio.moving : []), ...(forest ? forest.moving : [])]);
   if (inner) { mergeStatic(inner, keep); keep.add(inner); }
   const merged = mergeStatic(root, keep);
   if (typeof location !== 'undefined' && /[?&]perf/.test(location.search)) console.log('[mapa] malhas juntadas', merged);
@@ -372,6 +409,7 @@ export function buildWorld(scene, M) {
     dispose() { scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
     // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
     cull(p) {
+      sunSpr.position.set(p.x + sunOff.x, p.y + sunOff.y + sunBob, p.z + sunOff.z); // sol/lua sempre dentro do desenho
       if (!inner) return;
       inner.visible = Math.max(Math.abs(p.x), Math.abs(p.z)) < M.studio + 0.6 || !fdoor || Math.hypot(p.x - fdoor.x, p.z - fdoor.z) < 18 || p.y > 13;
     },
@@ -381,7 +419,7 @@ export function buildWorld(scene, M) {
       moveT.value = t % 3600;
       for (const s of chimneys) s.obj.rotation.z = Math.sin(t * s.speed + s.phase) * s.amp;
       sunSpr.material.rotation = Math.sin(t * 1.4) * 0.12;
-      sunSpr.position.y = 75 + Math.sin(beat) * 1.2;
+      sunBob = Math.sin(beat) * 1.2 * sunK;
       studio?.update(t);
       forest?.update(t);
     },
@@ -390,6 +428,16 @@ export function buildWorld(scene, M) {
 
 // ---------- Banco Ferradura (03/11): placa, ferradura, piso do subsolo e parede de cofrinhos ----------
 let bankSignTex = null, hedgeTex = null;
+let mintSignTex = null;
+function mintSign() { // placa da Casa da Moeda: verde escuro, letras douradas e moedas nas pontas
+  if (mintSignTex) return mintSignTex;
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 160; const g = c.getContext('2d');
+  g.fillStyle = '#1f3a32'; g.fillRect(0, 0, 1024, 160);
+  g.strokeStyle = '#d6b45c'; g.lineWidth = 8; g.strokeRect(14, 14, 996, 132);
+  for (const x of [90, 934]) { g.beginPath(); g.arc(x, 80, 44, 0, Math.PI * 2); g.fillStyle = '#d6b45c'; g.fill(); g.lineWidth = 5; g.strokeStyle = '#7a5c1c'; g.stroke(); g.fillStyle = '#7a5c1c'; g.font = '56px "Bowlby One", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('$', x, 84); }
+  g.fillStyle = '#efd99a'; g.font = '78px "Bowlby One", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('CASA DA MOEDA', 512, 86);
+  mintSignTex = new THREE.CanvasTexture(c); mintSignTex.colorSpace = THREE.SRGBColorSpace; return mintSignTex;
+}
 function bankSign() {
   if (bankSignTex) return bankSignTex;
   const c = document.createElement('canvas'); c.width = 1024; c.height = 160;
@@ -559,7 +607,7 @@ export function buildObjectives(scene, M) {
     root.add(g);
     flags[team] = { g, cloth, pad: base, base0: clothGeo.attributes.position.array.slice() };
   }
-  const zoneObjs = zones.map(z => {
+  const mkZone = (z) => {
     const g = new THREE.Group();
     g.position.set(z.pos[0], z.pos[1] + 0.03, z.pos[2]);
     const ring = new THREE.Mesh(new THREE.RingGeometry(z.r - 0.35, z.r, 40), new THREE.MeshBasicMaterial({ color: PAL.ink, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
@@ -574,7 +622,9 @@ export function buildObjectives(scene, M) {
     g.visible = false;
     root.add(g);
     return { g, fill, ring, letter };
-  });
+  };
+  const zoneObjs = zones.map(mkZone);
+  let bonusObj = null; // bandeira extra D (04/11): nasce no meio da partida, anel dourado
   const pickups = pickupSpots.map(p => {
     const g = new THREE.Group();
     g.position.set(p.pos[0], p.pos[1] + 0.9, p.pos[2]);
@@ -608,6 +658,9 @@ export function buildObjectives(scene, M) {
         }
         a.needsUpdate = true;
       }
+      const bz = mode === 'dom' && snap?.zones.find(q => q.bonus);
+      if (bz && !bonusObj) { bonusObj = mkZone({ id: 'D', pos: bz.pos, r: 4 }); bonusObj.ring.material.color.setHex(0xd9a520); bonusObj.letter.scale.set(3, 3, 1); }
+      if (bonusObj) { bonusObj.g.visible = !!bz; if (bz) { bonusObj.g.position.set(bz.pos[0], bz.pos[1] + 0.03, bz.pos[2]); bonusObj.fill.material.color.setHex(bz.owner === 'red' ? PAL.red : bz.owner === 'blue' ? PAL.blue : 0xf2d27a); bonusObj.fill.material.opacity = 0.3 + Math.abs(bz.prog) * 0.35; bonusObj.ring.rotation.z = -t; bonusObj.letter.position.y = 4.6 + Math.sin(t * BEAT * Math.PI * 2) * 0.35; } }
       zoneObjs.forEach((z, i) => {
         z.g.visible = mode === 'dom';
         if (!snap || mode !== 'dom') return;
@@ -668,7 +721,7 @@ export const LASER_BODY = 'pistol_5';
 // bala visivel: risco curto que voa da boca ate o impacto. seg = comprimento do risco (m), speed = m/s na
 // tela (bem abaixo da real, pra dar pra ver; cada tiro da rajada vira uma bala, a cadencia vira um fio)
 const BULLET = {
-  pistol: { seg: 0.35, speed: 120 }, smg: { seg: 0.35, speed: 115 }, rifle: { seg: 0.5, speed: 150 },
+  pistol: { seg: 0.35, speed: 120 }, smg: { seg: 0.35, speed: 115 }, rifle: { seg: 0.5, speed: 150 }, lmg: { seg: 0.5, speed: 150 },
   shotgun: { seg: 0.25, speed: 100 }, sniper: { seg: 0.9, speed: 240 }, minigun: { seg: 0.4, speed: 130 },
 };
 const LASER_BOLT = { seg: 1.3, speed: 85 }; // raio comprido e mais lento que bala (de cinema)
@@ -955,6 +1008,22 @@ export class FX {
       const b = ink(geo(THREE.SphereGeometry, 0.11, 10, 8), 0x3f4a32, 0.012); b.scale.set(1, 1.25, 1); g.add(b);
       const l = ink(geo(THREE.BoxGeometry, 0.03, 0.12, 0.05), PAL.mid, 0.006); l.position.set(0.07, 0.08, 0); g.add(l);
       const c = ink(geo(THREE.CylinderGeometry, 0.035, 0.035, 0.05, 8), PAL.mid, 0.006); c.position.y = 0.15; g.add(c);
+    } else if (kind === 'tomahawk') { // machadinha: cabo de madeira e lamina de metal
+      const h = ink(geo(THREE.CylinderGeometry, 0.022, 0.026, 0.42, 8), 0x8a5a2b, 0.006); g.add(h);
+      const bl = ink(geo(THREE.BoxGeometry, 0.03, 0.12, 0.16), 0xcfd4d6, 0.008); bl.position.set(0, 0.15, 0.07); g.add(bl);
+      const back = ink(geo(THREE.BoxGeometry, 0.034, 0.05, 0.05), PAL.dark, 0.006); back.position.set(0, 0.17, -0.03); g.add(back);
+      g.userData.spin = true;
+    } else if (kind === 'thermo') { // termobarica: lata escura com faixa laranja e tampa dourada
+      const b = ink(geo(THREE.CylinderGeometry, 0.075, 0.075, 0.22, 12), 0x3a3632, 0.012); g.add(b);
+      const band = ink(geo(THREE.CylinderGeometry, 0.078, 0.078, 0.06, 12), 0xf08a2a, 0); g.add(band);
+      const c = ink(geo(THREE.CylinderGeometry, 0.04, 0.05, 0.05, 10), 0xc9a34a, 0.006); c.position.y = 0.13; g.add(c);
+    } else if (kind === 'smoke') { // fumaca: lata cinza com faixa verde e furos em cima
+      const b = ink(geo(THREE.CylinderGeometry, 0.065, 0.065, 0.24, 12), 0x8e958c, 0.012); g.add(b);
+      const band = ink(geo(THREE.CylinderGeometry, 0.067, 0.067, 0.05, 12), 0x5f8f5f, 0); band.position.y = 0.03; g.add(band);
+      const c = ink(geo(THREE.CylinderGeometry, 0.05, 0.05, 0.03, 10), PAL.dark, 0.006); c.position.y = 0.135; g.add(c);
+    } else if (kind === 'beacon') { // sinalizador voando: bolinha azul com antena
+      const b = ink(geo(THREE.SphereGeometry, 0.12, 10, 8), 0x9fb4c6, 0.01); g.add(b);
+      const a = ink(geo(THREE.CylinderGeometry, 0.01, 0.01, 0.2, 5), PAL.ink, 0); a.position.y = 0.16; g.add(a);
     } else {
       const b = ink(geo(THREE.CylinderGeometry, 0.06, 0.06, 0.22, 10), PAL.light, 0.01); g.add(b);
       const c = ink(geo(THREE.CylinderGeometry, 0.035, 0.035, 0.05, 8), PAL.dark, 0.006); c.position.y = 0.13; g.add(c);
@@ -984,6 +1053,103 @@ export class FX {
     }
   }
 }
+
+// ---------- Cais do Sol Poente (04/11): mar, borda do cais e pecas das docas ----------
+function docksDecor(root, M) {
+  const A = M.arena, QZ = M.quayZ;
+  // mar: um plano grande embaixo de tudo, com riscos de brilho do sol (faixas claras paradas: barato)
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(A * 2 + 400, A * 2 + 400), toon(0x6f8a92, { unique: true, emissive: 0x1c1410 }));
+  sea.rotation.x = -Math.PI / 2; sea.position.y = -0.9; root.add(sea);
+  const glint = toon(0xf3c48d, { unique: true, emissive: 0x5a3a20 });
+  for (let i = 0; i < 26; i++) { const g = new THREE.Mesh(geo(THREE.PlaneGeometry, 1, 1), glint); const z = -70 - i * 4.2, w = 6 + (i % 5) * 3 - i * 0.12; g.scale.set(Math.max(2, w), 0.5, 1); g.rotation.x = -Math.PI / 2; g.position.set(-20 + ((i * 37) % 17) - 8, -0.84, z); root.add(g); } // reflexo do sol no mar (6 cm acima da agua)
+  // borda de pedra do cais (do chao ate a agua), em volta da terra
+  const stone = toon(0x8b8478), cap = toon(0x6e6a63);
+  const lip = (x, z, w, d) => { const m = ink(new THREE.BoxGeometry(w, 1, d), 0x8b8478, 0.05); m.material = stone; m.position.set(x, -0.5, z); root.add(m); const c = ink(new THREE.BoxGeometry(w + 0.2, 0.2, d + 0.2), 0x6e6a63, 0.03); c.material = cap; c.position.set(x, 0.1, z); root.add(c); };
+  lip(0, A + 1.4, A * 2 + 3, 0.8); lip(-A - 1.4, (QZ + A + 1) / 2, 0.8, A + 1 - QZ); lip(A + 1.4, (QZ + A + 1) / 2, 0.8, A + 1 - QZ);
+  for (const sx of [-1, 1]) lip(sx * 35.5, QZ - 0.4, 47, 0.8); // frente do cais (dos lados do barco)
+}
+const DOCKS = {
+  // barco de carga: casco vermelho escuro afundado no mar, borda branca; o conves (topo) e chao
+  boat(w, h, d) {
+    const g = new THREE.Group(), hull = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x8a3a2c, 0.07); hull.scale.set(w, h + 1, d); hull.position.y = (h - 1) / 2; g.add(hull);
+    const bow = ink(geo(THREE.CylinderGeometry, 1, 1, 1, 3), 0x8a3a2c, 0.07); bow.scale.set(d * 0.58, h + 1, d * 0.5); bow.rotation.y = Math.PI / 2; bow.position.set(w / 2 + d * 0.22, (h - 1) / 2, 0); g.add(bow);
+    const rim = ink(geo(THREE.BoxGeometry, 1, 1, 1), PAL.paper, 0.03); rim.scale.set(w + 0.2, 0.25, d + 0.2); rim.position.y = h + 0.02; g.add(rim);
+    const deck = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x9d8263, 0); deck.scale.set(w - 0.6, 0.06, d - 0.6); deck.position.y = h + 0.18; g.add(deck); // tabuado 18 cm acima (sem piscar com a borda)
+    return g;
+  },
+  boatcabin(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), PAL.paper, 0.06); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); const roof = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x3f5a6a, 0.04); roof.scale.set(w + 0.4, 0.3, d + 0.4); roof.position.y = h + 0.15; g.add(roof); for (const sx of [-1, 1]) { const win = ink(geo(THREE.CircleGeometry, 0.35, 12), 0x2b3a44, 0); win.position.set(sx * w * 0.25, h * 0.62, d / 2 + 0.06); g.add(win); } return g; },
+  boatstack(w, h) { const g = new THREE.Group(), m = ink(geo(THREE.CylinderGeometry, w / 2, w / 2, h, 12), PAL.ink, 0.05); m.position.y = h / 2; g.add(m); const band = ink(geo(THREE.CylinderGeometry, w / 2 + 0.05, w / 2 + 0.05, 0.5, 12), PAL.red, 0); band.position.y = h - 0.6; g.add(band); return g; },
+  plank(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x8a6a48, 0.03); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); return g; }, // degrau da prancha
+  // armazem de madeira: tabuas verticais desbotadas, rodape escuro
+  shed(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xa28866, 0.06); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); if (h >= 6) { const base = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x5a4634, 0.02); base.scale.set(w + 0.08, 0.7, d + 0.08); base.position.y = 0.35; g.add(base); } return g; },
+  shedroof(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x5f4a3e, 0.06); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); return g; },
+  cratepile(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x6e5032, 0.05); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); return g; }, // estrado (os caixotes vem do HeistView)
+  forklift(w, h, d) { const g = new THREE.Group(), body = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xd1a02f, 0.05); body.scale.set(w, h * 0.55, d * 0.7); body.position.set(0, h * 0.4, d * 0.12); g.add(body); const mast = ink(geo(THREE.BoxGeometry, 1, 1, 1), PAL.ink, 0.03); mast.scale.set(w * 0.8, h * 1.3, 0.15); mast.position.set(0, h * 0.65, -d * 0.32); g.add(mast); for (const sx of [-1, 1]) { const fk = ink(geo(THREE.BoxGeometry, 0.15, 0.08, 1.1), PAL.mid, 0.02); fk.position.set(sx * w * 0.25, 0.15, -d * 0.55); g.add(fk); } return g; },
+  shack(w, h, d, b) { const g = new THREE.Group(), cols = [0x7a9aa0, 0xb07a5a, 0x9aa07a], m = ink(geo(THREE.BoxGeometry, 1, 1, 1), cols[Math.abs(b.seed | 0) % 3], 0.06); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); const roof = ink(geo(THREE.CylinderGeometry, 0.01, 1, 1, 4), 0x4e3b30, 0.05); roof.scale.set(Math.max(w, d) * 0.75, 1.4, Math.max(w, d) * 0.75); roof.rotation.y = Math.PI / 4; roof.position.y = h + 0.7; g.add(roof); return g; },
+  barrel(w, h) { const g = new THREE.Group(), m = ink(geo(THREE.CylinderGeometry, w / 2, w / 2, h, 12), 0x8c5a36, 0.04); m.position.y = h / 2; g.add(m); for (const y of [0.2, 0.8]) { const r0 = ink(geo(THREE.CylinderGeometry, w / 2 + 0.03, w / 2 + 0.03, 0.08, 12), PAL.ink, 0); r0.position.y = h * y; g.add(r0); } return g; },
+  bollard(w, h) { const g = new THREE.Group(), m = ink(geo(THREE.CylinderGeometry, w * 0.45, w * 0.5, h, 10), PAL.ink, 0.04); m.position.y = h / 2; g.add(m); const top = ink(geo(THREE.CylinderGeometry, w * 0.6, w * 0.6, 0.14, 10), PAL.ink, 0.02); top.position.y = h; g.add(top); return g; },
+  crane(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xc0862e, 0.06); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); for (let y = 2; y < h; y += 2.5) { const x = ink(geo(THREE.BoxGeometry, 1, 1, 1), PAL.ink, 0); x.scale.set(w + 0.06, 0.16, d + 0.06); x.position.y = y; g.add(x); } return g; },
+  cranebeam(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xc0862e, 0.06); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); const hook = ink(geo(THREE.CylinderGeometry, 0.04, 0.04, 5, 4), PAL.ink, 0); hook.position.set(1.5, -2.5, 0); g.add(hook); const box = ink(geo(THREE.BoxGeometry, 2.2, 1.4, 1.6), 0xa07a4a, 0.04); box.position.set(1.5, -5.6, 0); g.add(box); return g; },
+  railcar(w, h, d) { const g = new THREE.Group(), body = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x6a3d32, 0.06); body.scale.set(w, h * 0.8, d); body.position.y = h * 0.55; g.add(body); for (const z of [-d * 0.35, d * 0.35]) for (const sx of [-1, 1]) { const wh = ink(geo(THREE.CylinderGeometry, 0.4, 0.4, 0.2, 12), PAL.ink, 0.02); wh.rotation.z = Math.PI / 2; wh.position.set(sx * w * 0.42, 0.4, z); g.add(wh); } return g; },
+};
+
+// ---------- Canyon Poeira (04/11): pecas do deserto (formas gordas, cor de terra, contorno de tinta) ----------
+const DESERT = {
+  // paredao do canyon: pedra em camadas (faixas de cor) com o topo irregular
+  cliff(w, h, d) {
+    const g = new THREE.Group(), along = w > d, L = Math.max(w, d), T = Math.min(w, d);
+    const cols = [0xb4774a, 0xc98e5c, 0xa86a40];
+    for (let i = 0; i < 3; i++) { const lh = h / 3, m = ink(geo(THREE.BoxGeometry, 1, 1, 1), cols[i], 0.05); m.scale.set(along ? L : T * (1 - i * 0.08), lh, along ? T * (1 - i * 0.08) : L); m.position.y = lh * (i + 0.5); g.add(m); }
+    for (let k = 0; k < Math.floor(L / 6); k++) { const r0 = ink(geo(THREE.IcosahedronGeometry, 1, 0), 0xb4774a, 0.04), s0 = 1 + ((k * 37) % 5) * 0.25; r0.scale.set(s0 * 1.4, s0 * 0.7, s0 * 1.2); const o = -L / 2 + 3 + k * 6; r0.position.set(along ? o : 0, h + 0.1, along ? 0 : o); g.add(r0); }
+    return g;
+  },
+  // casa de adobe: cubo de barro com quinas arredondadas, viga de madeira saindo; ruina = sem um pedaco de parede
+  adobe(w, h, d, b) {
+    const g = new THREE.Group(), tint = b.team === 'red' ? 0xd9a48c : b.team === 'blue' ? 0xb9c4cc : 0xe0b98a;
+    const body = ink(geo(THREE.BoxGeometry, 1, 1, 1), tint, 0.06); body.scale.set(w, h, d); body.position.y = h / 2; g.add(body);
+    for (let i = 0; i < Math.max(2, Math.floor(w / 3)); i++) { const v = ink(geo(THREE.CylinderGeometry, 0.14, 0.14, 1.2, 6), 0x6b4a2c, 0.02); v.rotation.x = Math.PI / 2; v.position.set(-w / 2 + 1.2 + i * 3, h - 0.5, d / 2 + 0.45); g.add(v); }
+    if (!b.ruin) { const lip = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xc99f72, 0.04); lip.scale.set(w + 0.3, 0.35, d + 0.3); lip.position.y = h + 0.17; g.add(lip); }
+    else { const bite = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xc99f72, 0.04); bite.scale.set(w * 0.35, 0.5, 0.4); bite.position.set(w * 0.2, h + 0.25, -d / 2 + 0.2); g.add(bite); } // topo quebrado
+    if (b.sign === 'gas') { const s0 = ink(geo(THREE.BoxGeometry, 1, 1, 1), PAL.red, 0.04); s0.scale.set(5, 1.2, 0.3); s0.position.set(0, h + 1.2, d / 2 - 0.2); g.add(s0); }
+    return g;
+  },
+  // mureta de adobe
+  adobewall(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xd6ad7c, 0.05); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); return g; },
+  // mesa: morro de topo chato, lados em degrau de pedra
+  mesa(w, h, d) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 3; i++) { const k = 1 - i * 0.07, lh = h / 3, m = ink(geo(THREE.BoxGeometry, 1, 1, 1), [0xa9643c, 0xbd7c4c, 0xcf9562][i], 0.06); m.scale.set(w * k, lh, d * k); m.position.y = lh * (i + 0.5); g.add(m); }
+    return g;
+  },
+  // ponte de tabua: tabuleiro de madeira com tabuas e corrimao de corda
+  plank(w, h, d) {
+    const g = new THREE.Group(), along = d > w, L = Math.max(w, d), W = Math.min(w, d);
+    for (let i = 0; i < Math.floor(L / 0.9); i++) { const t = ink(geo(THREE.BoxGeometry, 1, 1, 1), i % 3 ? 0x8a5f3a : 0x75502f, 0.03); t.scale.set(along ? W : 0.8, h, along ? 0.8 : W); const o = -L / 2 + 0.45 + i * 0.9; t.position.set(along ? 0 : o, h / 2, along ? o : 0); g.add(t); }
+    for (const s0 of [-1, 1]) { const rail = ink(geo(THREE.CylinderGeometry, 0.05, 0.05, 1, 5), 0x5a3d24, 0.02); rail.scale.set(1, L, 1); rail.rotation.set(along ? Math.PI / 2 : 0, 0, along ? 0 : Math.PI / 2); rail.position.set(along ? s0 * W / 2 : 0, h + 0.9, along ? 0 : s0 * W / 2); g.add(rail); for (let k = 0; k <= Math.floor(L / 4); k++) { const post = ink(geo(THREE.BoxGeometry, 0.14, 1, 0.14), 0x5a3d24, 0.02); const o = -L / 2 + k * 4; post.position.set(along ? s0 * W / 2 : o, h + 0.45, along ? o : s0 * W / 2); g.add(post); } }
+    return g;
+  },
+  rockstep(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0xb27448, 0.04); m.scale.set(w, h, d); m.position.y = h / 2; g.add(m); return g; },
+  // duna: meia esfera achatada de areia (cobertura baixa)
+  dune(w, h, d) { const g = new THREE.Group(), m = ink(geo(THREE.SphereGeometry, 1, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2), 0xe0bf86, 0.06); m.scale.set(w * 0.62, h * 1.05, d * 0.62); g.add(m); return g; },
+  // cacto de desenho: tronco e dois bracos
+  cactus(w, h) {
+    const g = new THREE.Group(), col = 0x5d8a4a, t = ink(geo(THREE.CapsuleGeometry, 0.32, 1, 4, 8), col, 0.04); t.scale.set(1, h / 1.6, 1); t.position.y = h / 2; g.add(t);
+    for (const s0 of [-1, 1]) { const a = ink(geo(THREE.CapsuleGeometry, 0.2, 0.55, 4, 8), col, 0.03); a.position.set(s0 * 0.45, h * (s0 > 0 ? 0.55 : 0.68), 0); g.add(a); const e = ink(geo(THREE.CapsuleGeometry, 0.18, 0.2, 4, 8), col, 0.03); e.rotation.z = Math.PI / 2; e.position.set(s0 * 0.3, h * (s0 > 0 ? 0.42 : 0.55), 0); g.add(e); }
+    return g;
+  },
+  // caminhao enferrujado dos anos 30: cabine, cacamba e rodas
+  truck(w, h, d, b) {
+    const g = new THREE.Group(), along = d > w, L = Math.max(w, d), W = Math.min(w, d), rust = 0x9a5a36;
+    const cab = ink(geo(THREE.BoxGeometry, 1, 1, 1), rust, 0.05); cab.scale.set(W, h * 0.75, L * 0.32); cab.position.set(0, h * 0.5, -L * 0.3); g.add(cab);
+    const bed = ink(geo(THREE.BoxGeometry, 1, 1, 1), 0x7a5a3c, 0.05); bed.scale.set(W, h * 0.4, L * 0.6); bed.position.set(0, h * 0.35, L * 0.18); g.add(bed);
+    for (const [ex, ez] of [[-1, -0.32], [1, -0.32], [-1, 0.3], [1, 0.3]]) { const wh = ink(geo(THREE.CylinderGeometry, 0.5, 0.5, 0.35, 12), PAL.ink, 0.02); wh.rotation.z = Math.PI / 2; wh.position.set(ex * W * 0.5, 0.5, ez * L); g.add(wh); }
+    if (!along) g.rotation.y = Math.PI / 2;
+    // modelo do Tripo (04/11, pedido dele): troca as caixas quando chegar (tamanho pelo comprimento da caixa do mapa)
+    g.userData.async = true;
+    tripoModel('caminhao.glb').then(M => { if (!M) return; const boxy = [...g.children]; for (const o of boxy) g.remove(o); const m = new THREE.Mesh(M.geo, M.mat); const k = 4.9 / M.len; /* escala do carro (3,9 m) e um pouco maior: e caminhao (04/11) */ m.scale.set(k, k, k); m.rotation.y = (b.seed || 0) % 2 ? Math.PI : 0; outline(m, 0.05); g.add(m); });
+    return g;
+  },
+};
 
 // ---------- Estudio Tinteiro (Noite dos Borroes, 03/11): moveis e clima de estudio abandonado de noite ----------
 let studioTex = null;
@@ -1094,7 +1260,7 @@ function poster(seed) {
   g.fillStyle = '#efe8d8'; g.beginPath(); g.moveTo(80, 188); g.quadraticCurveTo(128, 236, 176, 188); g.quadraticCurveTo(128, 210, 80, 188); g.fill(); // sorriso de dentes
   g.strokeStyle = '#141210'; g.lineWidth = 2; for (let x = 92; x < 170; x += 12) { g.beginPath(); g.moveTo(x, 190); g.lineTo(x, 206); g.stroke(); }
   g.fillStyle = '#7a1f17'; g.font = '34px "Bowlby One", Impact, sans-serif'; g.textAlign = 'center';
-  g.fillText(['O BORRAO', 'TINTEIRO', 'NAO SAIA'][seed % 3], 128, 300);
+  g.fillText(['O BORRÃO', 'TINTEIRO', 'NÃO SAIA'][seed % 3], 128, 300);
   g.fillStyle = '#141210'; g.font = '18px "Bowlby One", Impact, sans-serif'; g.fillText(['ESTREIA HOJE', 'ESTUDIOS 1932', 'DA TELA'][seed % 3], 128, 330);
   // rasgo: canto arrancado
   g.globalCompositeOperation = 'destination-out'; g.beginPath();
@@ -1299,4 +1465,57 @@ function moonTexture() {
   g.beginPath(); g.moveTo(104, 152); g.quadraticCurveTo(130, 170, 156, 146); g.stroke();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   return (moonTex = t);
+}
+
+// carros parados (04/11, pedido dele): um modelo do Tripo (sedan dos anos 30, azul de fabrica) e a cor de cada um
+// trocada no shader (o azul da lataria vira a cor sorteada; vidro, cromo, farol e pneu ficam)
+const CAR_COLORS = [0xa83a2c, 0x2f5b8a, 0x5f7f3e, 0xd9b44a, 0x7a4e8c, 0x2f8a83, 0xe6dcc4, 0xc46a2b];
+let CAR_P = null;
+function carModel() {
+  return CAR_P ||= new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/carro_banco.glb').then(gl => {
+    gl.scene.updateMatrixWorld(true); let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+    if (!mesh) return null;
+    const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox();
+    let bb = g0.boundingBox; if (bb.max.x - bb.min.x > bb.max.z - bb.min.z) g0.rotateY(Math.PI / 2);
+    g0.computeBoundingBox(); bb = g0.boundingBox; g0.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    g0.computeBoundingBox(); g0.computeVertexNormals();
+    const map = mesh.material?.map || null; if (map) map.colorSpace = THREE.SRGBColorSpace;
+    return { geo: g0, map, len: g0.boundingBox.max.z - g0.boundingBox.min.z };
+  }).catch(e => { console.warn('carro_banco.glb nao carregou', e); return null; });
+}
+const CAR_MAT = new Map();
+function carMat(col) {
+  if (CAR_MAT.has(col)) return CAR_MAT.get(col);
+  const m = toon(0xffffff, { map: null, unique: true }), c = new THREE.Color(col);
+  carModel().then(M => { if (M?.map) { m.map = M.map; m.needsUpdate = true; } });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uCar = { value: c };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uCar;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 k = diffuseColor.rgb; float lum = dot(k, vec3(0.3, 0.59, 0.11));
+          float blue = smoothstep(0.06, 0.16, k.b - max(k.r, k.g * 0.92)); /* lataria azul de fabrica */
+          diffuseColor.rgb = mix(k, uCar * (0.45 + lum * 0.95), blue); }`);
+  };
+  m.customProgramCacheKey = () => 'carPaint';
+  CAR_MAT.set(col, m);
+  return m;
+}
+
+// modelo do Tripo pra cenario (04/11): uma malha, comprimento no Z, base no chao, centrado; material de desenho com a
+// textura dele. Carrega uma vez por arquivo
+const TRIPO = new Map();
+function tripoModel(file) {
+  if (TRIPO.has(file)) return TRIPO.get(file);
+  const p = new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/' + file).then(gl => {
+    gl.scene.updateMatrixWorld(true); let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+    if (!mesh) return null;
+    const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox();
+    let bb = g0.boundingBox; if (bb.max.x - bb.min.x > bb.max.z - bb.min.z) g0.rotateY(Math.PI / 2);
+    g0.computeBoundingBox(); bb = g0.boundingBox; g0.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    g0.computeBoundingBox(); g0.computeVertexNormals();
+    const map = mesh.material?.map || null; if (map) map.colorSpace = THREE.SRGBColorSpace;
+    return { geo: g0, mat: toon(0xffffff, { map, unique: true }), len: g0.boundingBox.max.z - g0.boundingBox.min.z };
+  }).catch(e => { console.warn(file + ' nao carregou', e); return null; });
+  TRIPO.set(file, p);
+  return p;
 }

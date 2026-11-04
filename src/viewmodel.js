@@ -9,9 +9,26 @@ import { buildGun } from './arsenal.js';
 import { ovenTex } from './looks3d.js';
 
 const VM_SCALE = 0.8;
+// luva em volta do cabo: X da luva = lamina, Z = pro ombro (o braco sai reto do pulso), Y fecha a base
+const SHOULDER_R = new THREE.Vector3(0.38, -0.55, 0.15), SHOULDER_L = new THREE.Vector3(-0.38, -0.6, 0.05);
+const ID_Q = new THREE.Quaternion(), hX = new THREE.Vector3(), hY = new THREE.Vector3(), hZ = new THREE.Vector3(), hQ = new THREE.Quaternion(), hM = new THREE.Matrix4();
+function holdHilt(glove, gun, shoulder) {
+  gun.getWorldQuaternion(hQ); hX.set(0, 0, -1).applyQuaternion(hQ);
+  hZ.copy(shoulder).sub(glove.position); hZ.addScaledVector(hX, -hZ.dot(hX)).normalize();
+  hY.crossVectors(hZ, hX);
+  glove.quaternion.setFromRotationMatrix(hM.makeBasis(hX, hY, hZ));
+}
 // Inspecionar, um por categoria. Chave: [t 0..1, x, y, z, rx, ry, rz, maoEsqX, maoEsqY, maoEsqZ]
 // (somado a pose de quadril; mao esquerda em relacao ao punho dela). Curva Catmull-Rom = fluido.
 const O = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+// espada: ergue, vira a lamina de chapa pra camera, inclina pra olhar o fio e volta (04/11)
+const SWORD_INSPECT = { dur: 3, keys: [
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0.18, -0.08, 0.1, 0.05, 0.6, 0.2, -0.3, 0, 0, 0],
+  [0.4, -0.1, 0.12, 0.05, 0.6, 1.4, -0.3, 0, 0, 0],
+  [0.62, -0.06, 0.08, 0.02, 0.2, 1.5, 0.6, 0, 0, 0],
+  [0.82, 0.02, 0, 0, 0.1, 0.3, 0.1, 0, 0, 0],
+  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] };
 const INSPECTS = {
   pistol: { dur: 2.8, keys: [
     [0, ...O],
@@ -169,6 +186,12 @@ const SLASH = [
   [0.66, -0.3, -0.07, -0.08, -0.15, 0.95, 0.6],
   [1, 0, 0, 0, 0, 0, 0],
 ];
+// espada (04/11, pedido dele, estilo BO3): arco largo na frente, alternando o lado a cada golpe (combo).
+// Mesmo formato do SLASH: [t, x, y, z, rx, ry, rz] somados ao braco.
+const SWORD_SLASH = [
+  [[0, 0, 0, 0, 0, 0, 0], [0.18, 0.18, 0.1, 0.05, 0.25, -0.75, -0.7], [0.5, -0.32, -0.06, -0.12, -0.05, 0.95, 0.65], [0.7, -0.36, -0.1, -0.05, -0.1, 1.05, 0.7], [1, 0, 0, 0, 0, 0, 0]],
+  [[0, 0, 0, 0, 0, 0, 0], [0.18, -0.2, 0.12, 0.05, 0.25, 0.8, 0.7], [0.5, 0.3, -0.08, -0.12, -0.05, -0.9, -0.6], [0.7, 0.34, -0.1, -0.05, -0.1, -1.0, -0.65], [1, 0, 0, 0, 0, 0, 0]],
+];
 // faca rapida com arma na mao: a lamina entra pela direita, corta na frente e sai baixa a esquerda.
 // Chave: [t, x, y, z, rx, ry, rz] da faca em relacao a camera.
 const QUICK = [
@@ -264,8 +287,20 @@ export class ViewModel {
       cuff.position.set(0, -0.008, 0.058); cuff.rotation.x = Math.PI / 2; g.add(cuff);
       const rim = ink(new THREE.TorusGeometry(0.054, 0.008, 6, 16), PAL.white, 0.006);
       rim.position.set(0, -0.008, 0.08); cuff.userData.rim = rim; g.add(rim);
+      // segurando cabo de espada (04/11, pedido dele): os dedos dao a volta no cabo. O cabo passa pela origem da luva, no
+      // eixo X (polegar pro lado da lamina); o pulso fica no +Z, entao a palma encosta no cabo por tras
+      const grip = new THREE.Group();
+      const back = ink(new THREE.SphereGeometry(0.05, 12, 10), PAL.white, 0.008); back.scale.set(1.12, 0.86, 0.72); back.position.z = 0.05; grip.add(back);
+      for (let i = 0; i < 3; i++) {
+        const ge = new THREE.TorusGeometry(0.034, 0.0165, 8, 20, Math.PI * 1.6); ge.rotateZ(-Math.PI * 0.8);
+        const f = ink(ge, PAL.white, 0.006); f.rotation.y = Math.PI / 2; f.position.x = -0.036 + i * 0.036; f.userData.finger = true; grip.add(f);
+      }
+      const gth = ink(new THREE.CapsuleGeometry(0.017, 0.04, 3, 8), PAL.white, 0.006); gth.rotation.z = Math.PI / 2; gth.position.set(0.058, 0.03, 0.006); gth.userData.finger = true; grip.add(gth);
+      const mitt = ink(new THREE.CylinderGeometry(0.05, 0.05, 0.105, 14), PAL.white, 0.007); mitt.rotation.z = Math.PI / 2; mitt.userData.mitt = true; mitt.visible = false; grip.add(mitt); // luva sem dedos: um bloco so em volta do cabo
+      stitch(grip, [-0.018, 0, 0.018], 0.036, 0.05, 0.04);
+      grip.visible = false;
       fist.visible = false;
-      g.add(open, fist); g.userData = { open, fist, cuff };
+      g.add(open, fist, grip); g.userData = { open, fist, cuff, grip };
       return g;
     };
     this.gloveR = glove(); this.gloveL = glove();
@@ -291,8 +326,10 @@ export class ViewModel {
     this.gun = buildGun(id, loadout);
     this.gun.scale.setScalar(VM_SCALE);
     // faca em pegada invertida (COD): lamina sai por baixo do punho, deitada apontando pro centro
-    if (id === 'melee') this.gun.rotation.set(-0.75, 0, -1.35, 'ZXY');
+    // espada (04/11): pegada normal, lamina pra cima e pra frente (estilo BO3)
+    if (id === 'melee') { if (this.gun.userData.flipVm) this.gun.userData.inner.rotation.z = Math.PI; /* katana: fio pra frente na 1a pessoa (04/11) */ if (this.gun.userData.sword) this.gun.rotation.set(1.05, 0.1, -0.22); else this.gun.rotation.set(-0.75, 0, -1.35, 'ZXY'); }
     this.holder.add(this.gun);
+    if (!instant) this.gun.userData.saber?.ignite(); // sabre: a lamina sobe do cabo ao equipar
     // akimbo: segunda pistola na mao esquerda, espelhando a pose da direita
     if (this.akimbo) { this.scene.remove(this.akimbo); this.akimbo = null; this.gun2 = null; }
     if (loadout?.handle === 'akimbo' && id !== 'melee') { // pistola, Cuspideira e Espirro
@@ -329,6 +366,7 @@ export class ViewModel {
     this.swingDur = Math.max(0.32, Math.min(0.5, dur * 0.6)); this.swingT = this.swingDur; this.inspectT = 0;
     this.swingQuick = this.wpn !== 'melee' && this.wpn !== 'fists';
     if (this.wpn === 'fists') this.punchLeft = !this.punchLeft; // jab alternado
+    if (this.gun?.userData.sword) this.swordSide = (this.swordSide || 0) ^ 1; // espada: combo, um golpe pra cada lado
     if (!this.swingQuick) return;
     const key = JSON.stringify(lo || {});
     if (this.knifeKey !== key) {
@@ -337,6 +375,7 @@ export class ViewModel {
       this.knife.scale.setScalar(VM_SCALE); this.knife.visible = false;
       this.scene.add(this.knife); this.knifeKey = key;
     }
+    this.knife.userData.saber?.ignite(0.14); // golpe rapido: acende na hora
   }
   // ferrolho: depois do tiro a mao puxa e empurra o ferrolho
   // escopeta de bomba (01/11): depois do tiro a mao esquerda puxa a bomba pra tras e empurra de volta
@@ -355,7 +394,7 @@ export class ViewModel {
     this.streakT = STREAK_DUR; this.inspectT = 0;
   }
 
-  inspectDef() { const sw = this.gun?.userData.sawed; return this.akimbo ? (sw ? SAWED_AKIMBO_INSPECT : this.wpn === 'pistol' ? AKIMBO_INSPECT : AKIMBO_LONG_INSPECT) : sw ? SAWED_INSPECT : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
+  inspectDef() { const sw = this.gun?.userData.sawed; return this.gun?.userData.sword ? SWORD_INSPECT : this.akimbo ? (sw ? SAWED_AKIMBO_INSPECT : this.wpn === 'pistol' ? AKIMBO_INSPECT : AKIMBO_LONG_INSPECT) : sw ? SAWED_INSPECT : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
   inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = this.inspectDef().dur; }
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
   // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
@@ -368,7 +407,7 @@ export class ViewModel {
       if (g.userData.extra) { for (const m of g.userData.extra.userData.parts || []) m.removeFromParent(); g.remove(g.userData.extra); }
       const ex = g.userData.extra = new THREE.Group();
       g.add(ex);
-      g.traverse(o => { if (o.isMesh && o.material?.isMeshToonMaterial) o.material = mat; if (o.userData.finger) o.visible = !['mitten', 'oven', 'boxing'].includes(style); });
+      g.traverse(o => { if (o.isMesh && o.material?.isMeshToonMaterial) o.material = mat; if (o.userData.finger) o.visible = !['mitten', 'oven', 'boxing'].includes(style); if (o.userData.mitt) o.visible = ['mitten', 'oven', 'boxing'].includes(style); });
       const add = (m, c = mat) => { if (c) m.material = c; ex.add(m); return m; };
       // luva sem dedos (la, forno, boxe): uma aba so na frente da mao aberta
       if (['mitten', 'oven', 'boxing'].includes(style)) {
@@ -405,6 +444,7 @@ export class ViewModel {
     if (this.akimbo && !pistol) { tx = 0.25; ty = -0.2; tz = -0.5; }
     // faca na mao (pegada invertida): punho mais alto a direita pra lamina aparecer deitada
     if (this.wpn === 'melee') { tx = 0.19; ty = -0.17; tz = -0.44; trx = 0.18; tryy = 0.32; trz = 0.22; }
+    if (this.wpn === 'melee' && this.gun?.userData.sword) { tx = 0.12; ty = -0.24; tz = -0.52; trx = 0; tryy = 0.08; trz = 0; } // espada na guarda, as duas maos no cabo a vista
     // variante de elite: a corrida normal usa a pose de arma levantada (MW 2019); as outras armas correm normal
     const bpRun = st.sprint && this.isBp && this.wpn !== 'melee' && this.wpn !== 'fists' && st.ads < 0.05;
     if (st.tac || bpRun) {
@@ -419,6 +459,7 @@ export class ViewModel {
       tx = 0.13; ty = -0.17; tz = -0.4; trx = 1.05; tryy = -0.12; trz = -0.28;
     } else if (st.sprint && this.wpn === 'melee') {
       tx = 0.2; ty = -0.27; tz = -0.42; trx = 0.6; tryy = 0.2; trz = 0.3;
+      if (this.gun?.userData.sword) { tx = 0.24; ty = -0.34; tz = -0.45; trx = -0.5; tryy = 0.35; trz = 0.4; } // espada correndo: lamina pra tras
     } else if (st.sprint) {
       // corrida estilo COD: arma baixa no canto, cano caido pra esquerda (a do BO2 foi revertida 01/11, pedido dele)
       tx = 0.15; ty = -0.23; tz = -0.4; trx = -0.42; tryy = 0.72; trz = 0.36;
@@ -429,7 +470,7 @@ export class ViewModel {
       // luneta: a lente ocupa ~55% da altura da tela; red dot: olho um pouco atras da janela
       // distancia do olho estilo COD: a lente ocupa uma fatia fixa da altura da tela
       // (luneta ~62%, red dot ~14%), calculada pelo raio real de cada lente
-      const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / (g.scope?.big ? 1 : this.fovK || 1); // escala de FOV afasta a mira tambem; luneta segue enchendo a tela
       let relief = g.scope ? g.scope.lensR * VM_SCALE / (half * (g.scope.big ? 0.62 : 0.14)) : 0.42;
       if (pistol && !g.scope?.big) relief = Math.max(0.6, relief * 1.9);
       // eixo optico inclinado no modelo: gira a arma pra ele ficar reto no olho
@@ -540,7 +581,7 @@ export class ViewModel {
     // faca rapida: a arma sai rapido (15% do tempo), fica fora e so volta nos 20% finais
     const out = this.swingT > 0 ? Math.min(1, sp / 0.15, (1 - sp) / 0.2) : 0;
     const dipQ = this.swingQuick ? out : 0;
-    const cut = this.swingT > 0 && !this.swingQuick && this.wpn !== 'fists' ? inspectPose(SLASH, sp) : null;
+    const cut = this.swingT > 0 && !this.swingQuick && this.wpn !== 'fists' ? inspectPose(this.gun?.userData.sword ? SWORD_SLASH[this.swordSide || 0] : SLASH, sp) : null;
     let sk = 0, skp = 0;
     if (this.streakT > 0) { this.streakT -= dt; skp = 1 - Math.max(0, this.streakT) / STREAK_DUR; sk = Math.min(1, skp / 0.18, (1 - skp) / 0.18); }
     const kickAds = st.ads > 0.5 ? 0.45 : 1;
@@ -602,7 +643,9 @@ export class ViewModel {
     if (rl > 0) pL.lerp(new THREE.Vector3(pR.x - 0.02, pR.y - 0.12, pR.z + 0.02), rl);
     if (th > 0) pL.lerp(new THREE.Vector3(-0.12, -0.05 + th * 0.1, -0.5), th);
     // faca na mao: a esquerda fica fora da tela (baixa, de lado)
-    if (this.wpn === 'melee') pL.set(-0.34, -0.62, -0.25);
+    const two = this.wpn === 'melee' && !!g.sword; // espada: as duas maos no cabo, em toda pose (golpe, inspect, corrida)
+    if (two) { g.gripL.getWorldPosition(pL); if (th > 0) pL.lerp(new THREE.Vector3(-0.12, -0.05 + th * 0.1, -0.5), th); }
+    else if (this.wpn === 'melee') pL.set(-0.34, -0.62, -0.25);
     if (this.akimbo && this.gun2?.userData.gripR) { this.akimbo.updateMatrixWorld(true); this.gun2.userData.gripR.getWorldPosition(pL); } // akimbo: a esquerda segura a 2a pistola
     // punhos: guarda de boxe balancando no ritmo; cada soco e um jab da mao da vez (alterna)
     const fists = this.wpn === 'fists';
@@ -673,7 +716,7 @@ export class ViewModel {
     }
     // deslize: a direita continua no cabo e a esquerda solta da arma e vai pro chao, embaixo a esquerda
     const fs = this.fSlide || 0;
-    if (fs > 0.001 && !fists) {
+    if (fs > 0.001 && !fists && !two) {
       const drag = Math.sin((this.slideTT = (this.slideTT || 0) + dt) * 38) * 0.006;
       pL.lerp(new THREE.Vector3(-0.15 + drag, -0.21, -0.44 + drag * 2), fs); // canto de baixo a esquerda, dentro do quadro
     } else this.slideTT = 0;
@@ -683,9 +726,10 @@ export class ViewModel {
     this.gloveL.quaternion.copy(this.rig.quaternion);
     if (mlD > 0 && !this.akimbo) this.gloveL.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.35, 0.2, 0.1, 'YXZ')), mlD); // palma deitada na borda
     // punho fechado: no soco e segurando a faca (na mao ou no golpe rapido); aberta segurando arma
-    const fistR = fists || this.wpn === 'melee' || (this.knife?.visible ?? false), fistL = fists;
-    this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR;
-    this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL;
+    const quickSw = !!(this.knife?.visible && this.knife.userData.sword), holdR = two || quickSw, holdL = two && th < 0.3;
+    const fistR = (fists || this.wpn === 'melee' || (this.knife?.visible ?? false)) && !holdR, fistL = fists;
+    this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR && !holdR; this.gloveR.userData.grip.visible = holdR;
+    this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL && !holdL; this.gloveL.userData.grip.visible = holdL;
     if (fists) { // impacto: luva estica pra frente e gira um pouco (rola no direto)
       const k = this.punchK || 0, g2 = this.punchLeft ? this.gloveL : this.gloveR;
       for (const gg of [this.gloveL, this.gloveR]) gg.userData.fist.scale.set(1, 1, 1);
@@ -694,10 +738,12 @@ export class ViewModel {
     if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); if (this.punchK && !this.punchLeft) this.gloveR.rotateZ(-0.5 * this.punchK); } // punho gira com a passada; o direto rola no impacto
     else if (this.akimbo) this.gloveL.quaternion.copy(this.akimbo.quaternion); // akimbo: a esquerda segue a 2a pistola
     else this.gloveL.rotateZ(-0.9);
-    if (fs > 0.001 && !fists) { // palma da esquerda virada pro chao, dedos pra frente
+    if (fs > 0.001 && !fists && !two) { // palma da esquerda virada pro chao, dedos pra frente
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.25, -0.25, 0.3, 'YXZ'));
       this.gloveL.quaternion.slerp(q, fs);
     }
+    if (holdR) holdHilt(this.gloveR, quickSw ? this.knife : this.gun, SHOULDER_R);
+    if (holdL) holdHilt(this.gloveL, this.gun, SHOULDER_L);
     // guarda-chuva aberto: a mao esquerda segura o cabo, cupula na frente-esquerda tampando o tronco
     if (this.umbOn) {
       if (!this.umb) { this.umb = umbrellaMesh(); this.umb.scale.setScalar(0.3); this.scene.add(this.umb); }
@@ -756,6 +802,11 @@ export class ViewModel {
       const over = g.scope.big && st.ads > 0.8;
       if (g.scope.lens.material.depthTest === over) { g.scope.lens.material.depthTest = !over; g.scope.lens.renderOrder = over ? 9 : 3; }
     }
+    // 04/11 (pedido dele): a luva acompanha o braco em toda pose: a boca dela (+z) gira pro ombro e o dedo fica onde a pose mandou
+    if (!fists) for (const [gl, sh] of [[this.gloveR, SHOULDER_R], [this.gloveL, SHOULDER_L]]) {
+      hZ.set(0, 0, 1).applyQuaternion(gl.quaternion); hX.copy(sh).sub(gl.position).normalize();
+      gl.quaternion.premultiply(hQ.setFromUnitVectors(hZ, hX).slerp(ID_Q, 0.15));
+    }
     // o antebraco sai do punho da luva na direcao dela: inclina junto com a arma (disparada, inspect, akimbo, soco)
     const arm = (glove, p, sh, mid0) => {
       const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(glove.quaternion);
@@ -769,7 +820,7 @@ export class ViewModel {
     for (const o of [this.gloveR, this.gloveL, this.armR.mesh, this.armL.mesh]) o.visible = !hideHands;
 
     // laser: feixe longo na primeira pessoa (o ponto no mundo e' do main); correndo desliga
-    if (g.laser) {
+    if (g.laser && !g.laser.light) {
       const u = g.laser.beam.material.uniforms.uOn, b = g.laser.beam;
       // mirando some (o ponto no mundo continua); no quadril o feixe converge pro centro da mira
       u.value = damp(u.value, st.sprint || st.tac || this.inspectT > 0 || st.ads > 0.3 ? 0 : 1, 14, dt);

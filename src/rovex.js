@@ -114,6 +114,18 @@ export async function buyItem(sku) {
     return { ok: true };
   } catch { return { code: 'erro' }; }
 }
+// fim de partida: conta o que aconteceu; quem decide o valor e deposita e o servidor (zpCredit em shared/shop.js)
+export async function claimZions(won, ch) {
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/zions/partida', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ won, ch }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { code: 'erro' };
+    me.zionsPoints = j.zionsPoints; me.zions = j.zions;
+    dispatchEvent(new Event('rovex-me'));
+    return j;
+  } catch { return { code: 'erro' }; }
+}
 // convites que chegaram pra mim (o sininho da Rovex nao aparece com o jogo aberto)
 export async function invites() {
   if (!token()) return [];
@@ -121,6 +133,12 @@ export async function invites() {
   return Array.isArray(j?.convites) ? j.convites : [];
 }
 export const inviteSeen = (id) => call('/games/rubber-riot/convites/' + encodeURIComponent(id) + '/lido', { method: 'POST' }).catch(() => {});
+
+// apoio do jogo (04/11): a mesma sessao de pagamento do apoio do feed da Rovex; devolve a URL da Stripe
+export async function supportCheckout(amount) {
+  const j = await call('/payment/stripe/support/create-session', { method: 'POST', body: { amount }, timeout: 12000 });
+  return j?.url || null;
+}
 
 // ---------- save na conta ----------
 // a conta manda: logou, o save dela entra no lugar do local. Conta sem save herda o
@@ -132,6 +150,17 @@ const ls = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } },
   del: (k) => { try { localStorage.removeItem(k); } catch { /* */ } },
 };
+
+// desafio ganho nao volta atras (04/11, Nyx viu o banner do akimbo e nao levou): a gravacao sai no maximo a cada 30 s, entao quem
+// fecha o jogo logo depois do desbloqueio fica com a nuvem atrasada, e o login seguinte apagava o que estava neste aparelho. Mesma
+// conta: vale o maior progresso de cada desafio e toda variante ganha. Devolve o JSON novo, ou null se a nuvem ja esta em dia.
+export function keepEarned(localRaw, cloudRaw) {
+  const J = (x) => { try { return JSON.parse(x) || {}; } catch { return {}; } };
+  const a = J(localRaw), b = J(cloudRaw); let changed = false;
+  for (const [k, v] of Object.entries(a.career || {})) if (v > ((b.career ||= {})[k] || 0)) { b.career[k] = v; changed = true; }
+  for (const [k, v] of Object.entries(a.bps || {})) if (v && !(b.bps ||= {})[k]) { b.bps[k] = v; changed = true; }
+  return changed ? JSON.stringify(b) : null;
+}
 
 export async function pullSave() {
   if (!(await loadMe())) {
@@ -151,8 +180,10 @@ export async function pullSave() {
         // variantes (02/11): conta que ainda nao tem as variantes na nuvem (gravadas antes da chave existir) nao apaga as
         // deste aparelho; elas sobem na proxima gravacao
         const keepVar = typeof r.data.rr_variants_v1 !== 'string' && owner === me.id && ls.get('rr_variants_v1');
+        const earned = owner === me.id && typeof r.data.rr_challenges_v1 === 'string' ? keepEarned(ls.get('rr_challenges_v1'), r.data.rr_challenges_v1) : null;
         for (const k of KEYS) if (typeof r.data[k] === 'string') ls.set(k, r.data[k]); else if (!(k === 'rr_variants_v1' && keepVar)) ls.del(k);
-        if (keepVar) pushSoon();
+        if (earned) ls.set('rr_challenges_v1', earned);
+        if (keepVar || earned) pushSoon();
       }
     } else {
       if (owner && owner !== me.id && !wasGuest) for (const k of KEYS) ls.del(k);

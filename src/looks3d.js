@@ -7,7 +7,7 @@ import { camoGlsl, camoTime } from './camos.js';
 // skin animada do corpo (Loja, 03/11): shader PROPRIO de cada skin (nao e o das camos), no corpo preto todo.
 // Um material por skin pra todos os bonecos (o tempo e o mesmo uniform das camos). camoGlsl(0) = so as funcoes de
 // apoio das camos (ruido, voronoi); skinColor desenha a skin e usa a borda (fr) pra um brilho de contorno.
-export const SKIN_CODE = { lapis: 1, giz: 2, holograma: 3, discoteca: 4, massinha: 5, planta: 6, dragao: 7, tempestade: 8 };
+export const SKIN_CODE = { lapis: 1, giz: 2, holograma: 3, discoteca: 4, massinha: 5, planta: 6, dragao: 7, tempestade: 8, papelao: 9, trico: 10, aquarela: 11, pixel: 12 };
 // 03/11 (pedido dele): temas que NAO existem em nenhuma camo nem efeito do jogo (as 8 primeiras repetiam lava, galaxia...)
 const SKIN_GLSL = /* glsl */`
 vec3 skinColor(int k, vec3 p, vec3 n, float fr, float t, out vec3 glow) {
@@ -76,6 +76,33 @@ vec3 skinColor(int k, vec3 p, vec3 n, float fr, float t, out vec3 glow) {
     float rain = step(0.97, c_h(vec3(floor(p.x * 30.0), floor(p.y * 6.0 + t * 20.0), 0.0)));
     glow = vec3(0.7, 0.85, 1.0) * (bolt * 2.0 + fl * 0.4) + vec3(0.4, 0.5, 0.8) * fr * 0.4;
     return col + vec3(0.7, 0.8, 1.0) * (fl * 0.35 + bolt + rain * 0.2);
+  }
+  if (k == 9) { // papelao: ondulado marrom com a fita adesiva passando devagar
+    float wave = 0.5 + 0.5 * sin(p.y * 46.0), fib = c_n(p * 14.0);
+    vec3 c = mix(vec3(0.58, 0.42, 0.25), vec3(0.72, 0.55, 0.35), wave * 0.5 + fib * 0.5);
+    float tape = step(abs(fract(p.x * 0.5 + p.y * 0.25 - t * 0.05) - 0.5), 0.07);
+    return mix(c, vec3(0.86, 0.76, 0.52), tape * 0.7);
+  }
+  if (k == 10) { // trico: pontos em V de la, com as listras subindo devagar
+    vec2 q = vec2(p.x * 9.0, p.y * 11.0);
+    float row = fract(q.y + abs(fract(q.x) - 0.5) * 1.2);
+    float st = smoothstep(0.0, 0.2, row) * (1.0 - smoothstep(0.75, 1.0, row));
+    vec3 c = mod(floor(p.y * 1.4 - t * 0.12 + 40.0), 2.0) < 1.0 ? vec3(0.78, 0.2, 0.22) : vec3(0.95, 0.9, 0.8);
+    return c * (0.55 + 0.5 * st);
+  }
+  if (k == 11) { // aquarela: tinta molhada se espalhando, com a borda mais escura de cada mancha
+    float f = c_fbm(p * 1.4 + vec3(t * 0.06, -t * 0.04, 0.0));
+    vec3 c = c_hue(fract(f * 1.6 + t * 0.02)) * 0.55 + 0.42;
+    float rim = 1.0 - smoothstep(0.0, 0.035, abs(fract(f * 5.0) - 0.5));
+    return mix(c, c * 0.62, rim) + c_n(p * 30.0) * 0.06;
+  }
+  if (k == 12) { // 8 bits: blocos de video game antigo trocando de cor no ritmo
+    vec3 id = floor(p * 5.0), f = abs(fract(p * 5.0) - 0.5);
+    float h = c_h(id + floor(t * 3.0 + c_h(id) * 4.0));
+    vec3 c = h < 0.25 ? vec3(0.1, 0.12, 0.3) : h < 0.5 ? vec3(0.95, 0.25, 0.4) : h < 0.75 ? vec3(0.2, 0.85, 0.6) : vec3(1.0, 0.85, 0.25);
+    float gap = smoothstep(0.44, 0.48, max(f.x, f.y));
+    glow = c * 0.2 * (1.0 - gap);
+    return mix(c, vec3(0.04), gap);
   }
   return vec3(1.0);
 }
@@ -401,6 +428,27 @@ export function buildHat(id, teamCol) {
       m.rotation.y = Math.PI / 2; m.position.set(-0.06, 0, 0.02);
       g.add(band(0.12, 0.01, 0.04));
       g.position.set(0, 0.3, 0.04); break;
+    }
+    case 'sorvete': { // duas bolas de sorvete com a cereja balancando
+      add(ink(new THREE.CylinderGeometry(0.24, 0.27, 0.12, 14), 0xd9a55b, 0.02));
+      add(ink(new THREE.SphereGeometry(0.22, 14, 10), 0xffb7cf, 0.018), 0, 0.2);
+      add(ink(new THREE.SphereGeometry(0.17, 14, 10), 0xfff1c9, 0.016), 0.02, 0.44);
+      g.userData.bob = add(ink(new THREE.SphereGeometry(0.05, 8, 6), 0xc8102e, 0.008), 0.02, 0.63);
+      g.position.set(0, 0.34, 0); break;
+    }
+    case 'alavanca': { // alavanca de fliperama: base, dois botoes e a bola vermelha balancando
+      add(ink(new THREE.BoxGeometry(0.5, 0.1, 0.4), 0x2a2d3a, 0.02));
+      add(ink(new THREE.CylinderGeometry(0.018, 0.022, 0.26, 8), 0xbfc4cc, 0.006), 0, 0.17);
+      for (const [x, c] of [[0.16, 0xffd23a], [-0.16, 0x39d7ff]]) add(ink(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 12), c, 0.006), x, 0.065, 0.08);
+      g.userData.bob = add(ink(new THREE.SphereGeometry(0.08, 12, 8), 0xe0483a, 0.01), 0, 0.33);
+      g.position.set(0, 0.32, 0); break;
+    }
+    case 'cogumelo': { // chapeu de cogumelo vermelho de bolinhas
+      const cap = new THREE.Group(); g.add(cap);
+      const top = ink(new THREE.SphereGeometry(0.38, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0xc8322a, 0.02); top.scale.y = 0.85; cap.add(top);
+      for (const [x, y, z, r] of [[0, 0.32, 0, 0.07], [0.22, 0.19, 0.08, 0.055], [-0.2, 0.2, 0.12, 0.05], [0.04, 0.2, -0.24, 0.06], [-0.1, 0.22, 0.22, 0.045], [0.14, 0.16, 0.26, 0.04]]) { const d = ink(new THREE.SphereGeometry(r, 8, 6), 0xf6f0df, 0.006); d.position.set(x, y, z); cap.add(d); }
+      add(ink(new THREE.CylinderGeometry(0.3, 0.32, 0.05, 16), 0xf0e4c8, 0.012), 0, -0.015);
+      g.userData.bob = cap; g.position.set(0, 0.28, 0); break;
     }
     default: return buildHat('bowler', teamCol);
   }

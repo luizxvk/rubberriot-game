@@ -1,7 +1,7 @@
 // Confere que toda sequencia, gadget e equipamento tem nome/descricao em PT e EN e icone (03/11, pedido dele:
 // nunca mais aparecer "s_plane" cru na tela). Roda no `npm run check` e antes de dizer pronto.
 import fs from 'node:fs';
-import { STREAKS, FIELD, GADGETS, MODES } from '../shared/weapons.js';
+import { STREAKS, FIELD, GADGETS, MODES, WSKINS } from '../shared/weapons.js';
 globalThis.localStorage ??= { getItem: () => null, setItem() {} }; globalThis.navigator ??= { language: 'pt-BR' }; globalThis.document ??= { documentElement: {}, querySelectorAll: () => [] };
 const { setLang, modeName, modeDesc } = await import('../src/i18n.js');
 const i18n = fs.readFileSync('src/i18n.js', 'utf8'), hud = fs.readFileSync('src/hud.js', 'utf8');
@@ -16,6 +16,14 @@ for (const k of Object.keys(FIELD)) for (const p of ['fd_', 'fdd_']) if (!both(p
 for (const k of Object.keys(GADGETS)) if (!both(k)) falta.push(k);
 // modo novo: nome e descricao nos dois idiomas (03/11)
 for (const lang of ['pt', 'en']) { setLang(lang); for (const k of Object.keys(MODES)) { if (modeName(k) === k) falta.push(`nome do modo ${k} (${lang})`); if (!modeDesc(k)) falta.push(`descricao do modo ${k} (${lang})`); } }
+// laminas (04/11): todo corpo melee tem nome nos dois idiomas
+const { BODY_TRAITS } = await import('../shared/weapons.js');
+for (const k of Object.keys(BODY_TRAITS)) if (k.startsWith('melee_') && !both('ml_' + k.slice(6))) falta.push('ml_' + k.slice(6));
+// Rovex Pass (04/11): toda recompensa com nome nos dois idiomas
+const { PASS } = await import('../src/pass.js');
+for (const p of PASS) if (!both(p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id)) falta.push('pass ' + p.id);
+// miras (04/11): nome proprio nos dois idiomas
+for (const m of fs.readFileSync('src/arsenal.js', 'utf8').match(/SCOPE_NAMED = \[[^\]]+/)[0].matchAll(/'(\w+)'/g)) if (!both('scn_' + m[1])) falta.push('scn_' + m[1]);
 // mapa e vilao da noite (03/11): nome nos dois idiomas; sala que abre por porta tambem
 const { MAP_IDS } = await import('../shared/map.js'), { MOBS } = await import('../shared/mobs.js'), { getMap } = await import('../shared/map.js');
 for (const k of MAP_IDS) if (!both('map_' + k)) falta.push('map_' + k);
@@ -34,10 +42,24 @@ for (const [k, it] of Object.entries(SHOP_ITEMS)) {
     const [slot, id] = g.split(':');
     if (slot === 'camo') { if (!CAMOS.find(c => c.id === id)?.shop) falta.push(`camo ${id} sem shop: true (${k})`); if (!both('camo_' + id)) falta.push('camo_' + id); }
     else if (LOOKS[slot]) { if (!LOOKS[slot].find(s => s.id === id)?.shop) falta.push(`${slot} ${id} sem shop: true (${k})`); if (!both('lk_' + slot + '_' + id)) falta.push('lk_' + slot + '_' + id); }
+    else if (slot === 'ret') { if (!both('ret_' + id)) falta.push('ret_' + id); } // reticula da Loja (04/11)
+    else if (slot === 'wskin') { if (!WSKINS[id]) falta.push(`skin de modelo ${id} nao existe (${k})`); if (!both('ws_' + id)) falta.push('ws_' + id); } // skin de modelo (04/11)
     else falta.push(`item ${k}: give desconhecido ${g}`);
   }
 }
 for (const c of CAMOS.filter(c => c.shop)) if (!sold.has('camo:' + c.id)) falta.push(`camo da Loja sem item a venda: ${c.id}`);
+// 04/11 (regra dele): PT-BR sempre com acento. Palavra comum sem acento em texto novo trava aqui
+{ const ptSrc = i18n.split(/\ben:\s*\{/).map((b, i) => (i ? b.slice(b.indexOf('Object.assign(D.pt')) : b)).join('').split('\n').filter(l => !/Object\.assign\(D\.en/.test(l) && !l.trimStart().startsWith('//')).join('\n');
+  for (const m of ptSrc.matchAll(/'[^'\n]*(?<![\p{L}_])(nao|voce|tambem|proxima|proximo|municao|nivel|chao|ja|sao)(?![\p{L}_])[^'\n]*'/giu)) falta.push('sem acento: ' + m[0].slice(0, 60)); }
+// 04/11: Zions Points ganhos (cada linha paga tem nome; mensagens do deposito)
+for (const k of ['zp_title', 'zp_win', 'zp_lose', 'zp_daily', 'zp_elite', 'zp_unlock', 'zp_sending', 'zp_done', 'zp_capped', 'zp_none', 'zp_login', 'zp_err', 'endTabScore', 'endTabNew', 'elNew']) if (!both(k)) falta.push(k);
+// 04/11: secoes do Arsenal, prateleiras da Loja, reativa marcada no item e vitrine sem item repetido
+const { SHELVES, shopRotation } = await import('../shared/shop.js');
+for (const g of ['static', 'anim', 'react', 'rank', 'special', 'legend', 'pass', 'shop', 'shopreact']) if (!both('cg_' + g)) falta.push('cg_' + g);
+for (const [k] of SHELVES) if (!both('shopShelf_' + k)) falta.push('shopShelf_' + k);
+for (const k of ['shk_react', 'shd_react', 'shopStage', 'shopWeekly']) if (!both(k)) falta.push(k);
+for (const [k, it] of Object.entries(SHOP_ITEMS)) if (it.kind === 'camo' && !!it.react !== !!CAMOS.find(c => c.id === it.give[0].split(':')[1])?.react) falta.push(`item ${k}: react diferente da camo`);
+for (let d = 0; d < 60; d++) { const r = shopRotation(Date.UTC(2026, 10, 4) + d * 86400000), all = [...r.featured, ...r.daily, ...r.shelves.flatMap(s => s.items)]; if (new Set(all).size !== all.length) falta.push(`vitrine repete item no dia +${d}`); }
 for (const [sl, list] of Object.entries(LOOKS)) for (const s of list.filter(s => s.shop)) if (!sold.has(sl + ':' + s.id)) falta.push(`visual da Loja sem item a venda: ${sl}:${s.id}`);
 for (const k of ['shd_camo', 'shd_skin', 'shd_hat', 'shk_hat', 'shd_react', 'lkt_skin', 'lk_skin_none', 'shopOnly', 'cg_shop', 'shopOwned', 'lookPeekShop']) if (!both(k)) falta.push(k);
 for (const r of Object.keys(RARITY)) if (!both('rar_' + r)) falta.push('rar_' + r);

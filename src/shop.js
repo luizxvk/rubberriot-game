@@ -9,10 +9,12 @@ import { t } from './i18n.js';
 import { me, buyItem } from './rovex.js';
 import { audio } from './audio.js';
 import { SHOP_ITEMS, shopPrice as price, shopRotation as rotation } from '../shared/shop.js';
-import { buildGun, getLoadouts } from './arsenal.js';
+import { buildGun, buildSight, getLoadouts, RET_PATH } from './arsenal.js';
+import { WSKINS } from '../shared/weapons.js';
 import { Character } from './character.js';
 import { DEFAULT_LOOK } from '../shared/looks.js';
 import { shopOwned } from './shopstore.js';
+import { camoById } from './camos.js';
 import { renderBal } from './zbal.js';
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +22,7 @@ const COIN_SRC = import.meta.env.BASE_URL + 'brand/zion-points.png';
 const coin = `<img class="zc" src="${COIN_SRC}" alt="" aria-hidden="true">`;
 // icone enquanto a previa 3D nao fica pronta (Material Icons, Apache 2.0)
 const ICON = {
+  ret: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   camo: 'M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
   hat: 'M7 3h10v10H7zM3 14h18v3.5H3z',
   skin: 'M12 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z',
@@ -33,9 +36,10 @@ export function itemName(id) {
   const it = SHOP_ITEMS[id];
   if (it.kind === 'bundle') return t('si_' + id);
   const [slot, v] = gives(id)[0];
-  return slot === 'camo' ? t('camo_' + v) : t('lk_' + slot + '_' + v);
+  return slot === 'camo' ? t('camo_' + v) : slot === 'wskin' ? t('ws_' + v) : slot === 'ret' ? t('ret_' + v) : t('lk_' + slot + '_' + v);
 }
-const itemDesc = (id) => { const it = SHOP_ITEMS[id]; return it.kind === 'bundle' ? t('sid_' + id) : t(it.give[0] === 'camo:ember' ? 'shd_react' : 'shd_' + it.kind); }; // shd_camo / shd_skin / shd_hat
+const itemDesc = (id) => { const it = SHOP_ITEMS[id]; return it.kind === 'bundle' ? t('sid_' + id) : t(it.react ? 'shd_react' : 'shd_' + it.kind); }; // shd_camo / shd_skin / shd_hat
+const kindName = (id) => t(SHOP_ITEMS[id].react ? 'shk_react' : 'shk_' + SHOP_ITEMS[id].kind);
 const owned = (id) => SHOP_ITEMS[id].give.every(shopOwned);
 
 const left = (ms) => {
@@ -58,18 +62,39 @@ function stage() {
 const WPN = 'rifle';
 // monta o que o item mostra (03/11): so camo = a arma sozinha; skin = o boneco PADRAO so com a skin (nada do que o
 // jogador veste), sem arma, na pose de vitrine; pacote = o boneco com a skin e a arma com a camo flutuando do lado
-function gunModel(camo) {
-  const lo = { ...(getLoadouts()[WPN] || {}), scope: null, laser: null }; // so na Loja: arma limpa, sem mira red dot nem laser (pedido dele)
+function gunModel(camo, ws = null) {
+  const W = ws && WSKINS[ws], wpn = W ? W.wpn : WPN;
+  const lo = W ? { body: W.of, ws, scope: null, laser: null } : { ...(getLoadouts()[WPN] || {}), scope: null, laser: null }; // so na Loja: arma limpa, sem mira red dot nem laser (pedido dele)
   if (camo) lo.camo = camo;
-  const gun = buildGun(WPN, lo);
+  const gun = buildGun(wpn, lo);
   const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();
   const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
   gun.position.sub(c);
   const holder = new THREE.Group(); holder.add(gun);
   return { holder, r: Math.max(size.x, size.y, size.z) * 0.5 };
 }
+// reticula na vitrine (04/11): a mira de verdade com a reticula no vidro, vista de tras. Sem as pecas carregadas, so o vidro
+function retModel(id) {
+  const sight = buildSight(id);
+  if (sight) {
+    sight.rotation.y = Math.PI / 2; // o olho (+z) vira pra camera (+x)
+    const box = new THREE.Box3().setFromObject(sight), size = box.getSize(new THREE.Vector3()), holder = new THREE.Group();
+    sight.position.sub(box.getCenter(new THREE.Vector3())); holder.add(sight);
+    return { obj: holder, gun: true, sway: true, r: Math.max(size.y, size.z) * 0.55, depth: size.x * 0.5 }; // depth: a mira e comprida na direcao da camera
+  }
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), P = RET_PATH[id], red = '#e0483a';
+  g.fillStyle = '#ece9e1'; g.strokeStyle = '#141210'; g.lineWidth = 12; g.beginPath(); g.arc(128, 128, 118, 0, 6.3); g.fill(); g.stroke();
+  g.translate(128, 128); g.scale(6, 6); g.translate(-12, -12); g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = red; g.fillStyle = red;
+  if (P?.s) g.stroke(new Path2D(P.s)); if (P?.f) g.fill(new Path2D(P.f), 'evenodd');
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide })); m.rotation.y = Math.PI / 2;
+  const holder = new THREE.Group(); holder.add(m);
+  return { obj: holder, gun: true, sway: true, r: 0.5 };
+}
 function pieceModel(slot, v) { // uma peca so: camo = a arma; skin/chapeu = o boneco padrao com aquela peca
+  if (slot === 'ret') return retModel(v);
   if (slot === 'camo') { const g = gunModel(v); return { obj: g.holder, gun: true, r: g.r }; }
+  if (slot === 'wskin') { const g = gunModel(null, v); return { obj: g.holder, gun: true, r: g.r }; } // skin de modelo (04/11): a arma ja com o modelo novo
   const ch = new Character('red', '', { ...DEFAULT_LOOK, [slot]: v });
   ch.tag.visible = false; if (ch.shadow) ch.shadow.visible = false;
   ch.update(0.016, { anim: 'pose', alive: true, speed: 0, t: 0, pitch: 0 });
@@ -77,33 +102,50 @@ function pieceModel(slot, v) { // uma peca so: camo = a arma; skin/chapeu = o bo
   return { obj: root, ch, gun: false };
 }
 // item avulso = 1 modelo; pacote = 1 modelo por peca (a previa desliza de uma pra outra em loop)
-const buildModels = (id) => gives(id).map(([s, v]) => pieceModel(s, v));
+// um conjunto por item na sessao: cada popup novo montava tudo de novo e a geometria acumulava (bateria de 04/11: +186 em 30 aberturas)
+const MODELS = new Map();
+const buildModels = (id) => { if (!MODELS.has(id)) MODELS.set(id, gives(id).map(([s, v]) => pieceModel(s, v))); return MODELS.get(id); };
 function frame(m, w, h, yaw) {
   cam.aspect = w / h; cam.updateProjectionMatrix();
-  if (m.gun) { const d = m.r / Math.tan(THREE.MathUtils.degToRad(15)) * 1.15; cam.position.set(d, m.r * 0.35, 0); cam.lookAt(0, 0, 0); m.obj.rotation.y = yaw; }
+  if (m.gun) { const d = m.r / Math.tan(THREE.MathUtils.degToRad(15)) * 1.15 + (m.depth || 0); cam.position.set(d, m.sway ? 0 : m.r * 0.35, 0); cam.lookAt(0, 0, 0); m.obj.rotation.y = m.sway ? Math.sin(yaw) * 0.42 - 0.3 : yaw; } // mira balanca: de costas o vidro some
   else { cam.position.set(m.side ? 0.3 : 0, 1.3, m.side ? 7.4 : 6.2); cam.lookAt(m.side ? 0.3 : 0, 1.1, 0); m.obj.rotation.y = Math.PI + yaw * (m.side ? 0.35 : 1); if (m.side) m.side.rotation.y = yaw * 2.2; }
 }
-function snapshot(id) { // uma foto por peca (pacote = varias, o cartao desliza entre elas)
+// estagio da camo reativa (0 a 3). Na partida sobe com os abates; aqui a foto mostra o ultimo e o popup passa por todos
+const setStage = (obj, n) => obj.traverse(o => { const u = o.material?.userData?.u?.uReact; if (u) u.value = n; });
+async function snapshot(id) { // uma foto por peca (pacote = varias, o cartao desliza entre elas)
   if (SHOT.has(id)) return SHOT.get(id);
   stage();
   const W = 256, H = 256, urls = [];
-  R.setSize(W, H, false);
   for (const m of buildModels(id)) {
-    frame(m, W, H, m.gun ? 0 : -0.5);
+    // compila em paralelo ANTES de desenhar: compilar no render travava a tela ate 2 s por camo nova (Direct3D)
+    scene.add(m.obj); if (R.compileAsync) await R.compileAsync(scene, cam); scene.remove(m.obj);
+    if (live) continue; // popup aberto usa o mesmo renderizador: nao mexe no tamanho dele agora
+    R.setSize(W, H, false);
+    frame(m, W, H, m.gun ? 0 : -0.5); setStage(m.obj, 3);
     scene.add(m.obj); R.render(scene, cam); scene.remove(m.obj);
     urls.push(R.domElement.toDataURL('image/png'));
   }
-  SHOT.set(id, urls);
+  if (urls.length === buildModels(id).length) SHOT.set(id, urls);
   return urls;
 }
-// fotos dos cartoes uma por quadro (compilar a camo de 8 armas de uma vez travava a tela)
-let shotQ = [];
-function pumpShots() {
+// fotos dos cartoes uma por quadro (compilar a camo de 8 armas de uma vez travava a tela), e so quando o cartao chega perto da vista
+let shotQ = [], pumping = false, shotIO = null;
+function watchShots(pane) {
+  shotIO?.disconnect(); shotQ = [];
+  shotIO = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) { shotIO.unobserve(e.target); shotQ.push(e.target); }
+    if (shotQ.length && !pumping) { pumping = true; requestAnimationFrame(pumpShots); }
+  }, { root: pane, rootMargin: '400px 0px' });
+  pane.querySelectorAll('.shop-tile').forEach(b => shotIO.observe(b));
+}
+async function pumpShots() {
+  if (live) { setTimeout(pumpShots, 300); return; } // popup aberto: a fila espera
   const el = shotQ.shift();
-  if (!el) return;
+  if (!el) { pumping = false; return; }
   if (el.isConnected) {
     try {
-      const urls = snapshot(el.dataset.item), a = el.querySelector('.st-art');
+      const urls = await snapshot(el.dataset.item), a = el.querySelector('.st-art');
+      if (!urls.length) { shotQ.unshift(el); requestAnimationFrame(pumpShots); return; } // abriu o popup no meio: tenta depois
       a.classList.add('img');
       a.innerHTML = urls.length > 1 ? `<span class="st-slides" style="--n:${urls.length}">${urls.map(u => `<img src="${u}" alt="">`).join('')}</span>` : `<img src="${urls[0]}" alt="">`;
     } catch (e) { console.warn('previa da loja', e); }
@@ -126,7 +168,7 @@ function startLive(id, host) {
   R.setSize(w, h, false);
   R.domElement.className = 'sp-live';
   host.appendChild(R.domElement);
-  live = { ms, t: 0, w, h };
+  live = { ms, t: 0, w, h, stage: -1, pips: host.querySelector('.sp-stages') };
   let last = performance.now();
   const draw = (m, ox) => { // desenha uma peca deslocada ox pixels na horizontal
     R.setViewport(ox, 0, live.w, live.h); R.setScissor(ox, 0, live.w, live.h);
@@ -138,6 +180,11 @@ function startLive(id, host) {
     const n = live.ms.length, per = HOLD + SLIDE, cyc = live.t % (per * n), i = Math.min(n - 1, Math.floor(cyc / per)), k = Math.min(per, cyc - i * per); // min: arredondamento no fim do ciclo passava do ultimo
     const s = n > 1 && k > HOLD ? (k - HOLD) / SLIDE : 0, e = s * s * (3 - 2 * s); // ease
     for (const m of live.ms) if (m.ch) m.ch.update(dt, { anim: 'pose', alive: true, speed: 0, t: live.t, pitch: 0 });
+    const st = Math.floor(live.t / 1.6) % 4; // reativa: mesmo ritmo da vitrine do Arsenal
+    if (st !== live.stage) {
+      live.stage = st; for (const m of live.ms) setStage(m.obj, st);
+      if (live.pips) { live.pips.querySelector('small').textContent = t('shopStage', { n: st + 1 }); live.pips.querySelectorAll('i').forEach((p, j) => p.classList.toggle('on', j <= st)); }
+    }
     R.setScissorTest(false); R.autoClear = false; R.clear(); R.setScissorTest(true); // limpa a tela INTEIRA (com o recorte ligado so limpava o pedaco da ultima peca e sobrava rastro)
     const cur = live.ms[i]; frame(cur, live.w, live.h, live.t * 0.6); draw(cur, Math.round(-e * live.w));
     if (e > 0) { const nx = live.ms[(i + 1) % n]; frame(nx, live.w, live.h, live.t * 0.6); draw(nx, Math.round((1 - e) * live.w)); }
@@ -157,7 +204,7 @@ function tile(id, size, newTag) {
   return `<button class="shop-tile r-${it.r} ${size} ${mine ? 'owned' : ''}" data-item="${id}" aria-label="${name}, ${t('rar_' + it.r)}, ${mine ? t('shopOwned') : fmt(price(id)) + ' Zions Points'}">
     <span class="st-bg"></span><span class="st-art">${svg(it.kind)}</span>
     ${mine ? `<span class="st-tag own">${t('shopOwned')}</span>` : newTag ? `<span class="st-tag">${t('shopNew')}</span>` : ''}
-    <span class="st-foot"><b>${name}</b><small>${t('shk_' + it.kind)}</small><em class="st-price">${mine ? '' : coin + fmt(price(id))}</em></span>
+    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price">${mine ? '' : coin + fmt(price(id))}</em></span>
   </button>`;
 }
 
@@ -174,7 +221,7 @@ function tick() {
 
 export function renderShop() {
   const pane = $('shopPane'); if (!pane) return;
-  const RT = rotation();
+  const RT = rotation(), keepY = pane.scrollTop;
   renderBal($('shopBal')); // Zions Points e Zions Cash no canto (zbal.js)
   pane.innerHTML = `
     <section class="shop-sec" aria-labelledby="shopFeatH">
@@ -185,31 +232,35 @@ export function renderShop() {
       <header><h3 id="shopDayH">${t('shopDaily')}</h3><span class="shop-left">${t('shopChanges')} <b id="shopDayLeft"></b></span></header>
       <div class="shop-grid daily">${RT.daily.map(id => tile(id, '', false)).join('')}</div>
     </section>
+    ${RT.shelves.map(s => `<section class="shop-sec" aria-labelledby="shopSh_${s.k}">
+      <header><h3 id="shopSh_${s.k}">${t('shopShelf_' + s.k)}</h3><span class="shop-left">${t('shopWeekly')}</span></header>
+      <div class="shop-grid">${s.items.map(id => tile(id, '', false)).join('')}</div>
+    </section>`).join('')}
     <p class="shop-note">${t('shopNote')}</p>`;
   pane.querySelectorAll('.shop-tile').forEach(b => {
     b.onclick = () => { audio.play('ui_click', { ui: true }); openItem(b.dataset.item, b); };
     b.addEventListener('pointerenter', () => audio.play('ui_hover', { ui: true, vol: 0.35, key: 'hover', max: 1 }));
   });
-  const was = shotQ.length; shotQ = [...pane.querySelectorAll('.shop-tile')];
-  if (!was) requestAnimationFrame(pumpShots);
+  pane.scrollTop = keepY; // comprar redesenha a vitrine: nao volta pro topo
+  watchShots(pane);
   tick();
   clearInterval(timer); timer = setInterval(tick, 1000);
 }
-export function stopShop() { clearInterval(timer); timer = 0; shotQ = []; closeItem(false); }
+export function stopShop() { clearInterval(timer); timer = 0; shotIO?.disconnect(); shotQ = []; closeItem(false); }
 
 function openItem(id, from) {
   const it = SHOP_ITEMS[id], pop = $('shopPop'), mine = owned(id);
   opener = from; curItem = id; confirming = false; $('shopBuy').classList.remove('confirm');
   const art = pop.querySelector('.sp-art');
   art.className = `sp-art r-${it.r}`;
-  art.innerHTML = '<span class="st-bg"></span>';
-  $('shopPopRar').textContent = it.kind === 'bundle' ? t('rar_' + it.r) : t('rar_' + it.r) + ' \u00b7 ' + t('shk_' + it.kind);
+  art.innerHTML = '<span class="st-bg"></span>' + (it.react ? '<span class="sp-stages" aria-hidden="true"><small></small><span><i></i><i></i><i></i><i></i></span></span>' : '');
+  $('shopPopRar').textContent = it.kind === 'bundle' ? t('rar_' + it.r) : t('rar_' + it.r) + ' \u00b7 ' + kindName(id);
   $('shopPopRar').className = `sp-rar r-${it.r}`;
   $('shopPopName').textContent = itemName(id);
   $('shopPopDesc').textContent = itemDesc(id);
   // pills do que vem na compra (item unico = 1; pacote = cada peca), cada uma com o tipo
   $('shopPopGives').setAttribute('aria-label', t('shopIncl'));
-  $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill ${s}">${svg(s)}<b>${s === 'camo' ? t('camo_' + v) : t('lk_' + s + '_' + v)}</b><small>${t('shk_' + s)}</small></li>`).join('');
+  $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill ${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
   $('shopPopPrice').innerHTML = mine ? t('shopOwned') : coin + fmt(price(id));
   $('shopBuy').textContent = t(mine ? 'shopOwned' : 'shopBuy');
   $('shopBuy').disabled = mine;

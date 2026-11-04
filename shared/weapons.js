@@ -2,17 +2,19 @@
 export const WEAPONS = {
   pistol:  { name: 'Estalo',     slot: 1, dmg: 34, rate: 0.15, mag: 12, reserve: Infinity, reload: 1.0, spread: 0.012, auto: false, zoom: 1.25, kick: 0.035, range: 140, recoil: [[1, 0], [1, 0.2], [1, -0.2]] },
   smg:     { name: 'Matraca',    slot: 2, dmg: 21, rate: 0.068, mag: 32, reserve: 192, reload: 1.4, spread: 0.032, auto: true, zoom: 1.3, kick: 0.018, range: 140, recoil: [[1, 0.3], [0.9, -0.4], [1, 0.5], [0.8, -0.5], [1, 0.2], [0.9, -0.3]] },
-  rifle:   { name: 'Trovao',     slot: 3, dmg: 34, rate: 0.1, mag: 30, reserve: 150, reload: 1.7, spread: 0.018, auto: true, zoom: 1.6, kick: 0.026, range: 260, recoil: [[1.2, 0], [1.1, 0.15], [1, 0.3], [0.9, 0.35], [0.8, 0.1], [0.8, -0.25], [0.8, -0.4], [0.7, -0.2]] },
+  rifle:   { name: 'Trovão',     slot: 3, dmg: 34, rate: 0.1, mag: 30, reserve: 150, reload: 1.7, spread: 0.014, /* 04/11: mais preciso que a pistola de longe */ auto: true, zoom: 1.6, kick: 0.026, range: 300, recoil: [[1.2, 0], [1.1, 0.15], [1, 0.3], [0.9, 0.35], [0.8, 0.1], [0.8, -0.25], [0.8, -0.4], [0.7, -0.2]] },
+  // Metralhadora (04/11, pedido dele: categoria nova): pente enorme, recarga longa, anda e mira mais devagar
+  lmg:     { name: 'Metralhadora', slot: 8, dmg: 31, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.024, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
   shotgun: { name: 'Bacamarte',  slot: 4, dmg: 17, pellets: 10, rate: 0.7, mag: 6, reserve: 36, reload: 1.9, spread: 0.085, auto: false, zoom: 1.2, kick: 0.11, range: 45, recoil: [[1, 0.1]] },
   minigun: { name: 'Moedor',     slot: 5, dmg: 16, rate: 0.045, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.012, spin: 0.35, noAds: true, range: 200, recoil: [[0.6, 0.6], [0.6, -0.6], [0.7, 0.4], [0.6, -0.5]] },
-  melee:   { name: 'Lamina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
+  melee:   { name: 'Lâmina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
   sniper:  { name: 'Luneta',     slot: 6, dmg: 150, rate: 1.05, mag: 5, reserve: 25, reload: 2.1, spread: 0.04, adsSpread: 0, auto: false, zoom: 4, kick: 0.16, range: 400, recoil: [[1, 0.15]] },
   // punhos (battle royale): 3 socos derrubam quem esta sem colete (34 x 3 = 102)
   // Bazuca (03/11, sequencia de 6 abates): 2 foguetes; acerto direto derruba, a explosao pega quem estiver perto
   rpg:     { name: 'Bazuca', slot: 9, dmg: 0, rate: 0.9, mag: 1, reserve: 1, reload: 1.8, spread: 0, auto: false, zoom: 1, kick: 0.16, range: 300, rocket: true, noAds: true, recoil: [[2.4, 0]] }, // sem mirar (pedido dele 03/11)
   // gadgets de baixo do cano (03/11): nomes pro placar de abates; o tiro deles nao e arma de mao
-  flame:   { name: 'Lanca-Chamas', slot: 0, dmg: 3, rate: 0.1, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: true, zoom: 1, kick: 0, range: 8, gadget: true, recoil: [[0, 0]] },
-  ubshot:  { name: 'Escopetinha', slot: 0, dmg: 13, pellets: 8, rate: 0.5, mag: 2, reserve: 0, reload: 0, spread: 0.075, auto: false, zoom: 1, kick: 0.09, range: 30, gadget: true, recoil: [[1, 0]] },
+  flame:   { name: 'Lança-Chamas', slot: 0, dmg: 3, rate: 0.1, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: true, zoom: 1, kick: 0, range: 8, gadget: true, recoil: [[0, 0]] },
+  ubshot:  { name: 'Escopetinha', slot: 0, dmg: 13, pellets: 8, rate: 0.5, mag: 2, reserve: 0, reload: 0, spread: 0.075, auto: false, zoom: 1, kick: 0.2, range: 30, gadget: true, recoil: [[1, 0]] },
   fists:   { name: 'Punhos', slot: 8, dmg: 34, rate: 0.42, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.015, range: 2.3, melee: true, noAds: true, recoil: [[0, 0]] },
 };
 
@@ -30,22 +32,22 @@ export const GUN_LADDER = [
 // mais escadas (pedido dele 30/10): a partida sorteia uma; todas com 18 degraus e lamina no fim.
 // 'sorteio' monta uma escada nova a cada partida (classe por degrau fixa, modelo sorteado)
 const L = (...ids) => ids.map(body => ({ wpn: wpnOfBody(body), body }));
-export function wpnOfBody(b) { return b.startsWith('melee') ? 'melee' : b.startsWith('subfusil') ? 'smg' : b.startsWith('fusil') ? 'rifle' : b.startsWith('pistol') ? 'pistol' : b.startsWith('shotgun') ? 'shotgun' : 'sniper'; }
+export function wpnOfBody(b) { if (b.startsWith('wsk_')) return Object.values(WSKINS).find(w => w.body === b)?.wpn || 'rifle'; return b.startsWith('lmg') ? 'lmg' : b.startsWith('melee') ? 'melee' : b.startsWith('subfusil') ? 'smg' : b.startsWith('fusil') ? 'rifle' : b.startsWith('pistol') ? 'pistol' : b.startsWith('shotgun') ? 'shotgun' : 'sniper'; }
 export const GG_LADDERS = {
   classic: GUN_LADDER,
-  ww2: L('pistol_9', 'pistol_8', 'pistol_7', 'subfusil_6', 'subfusil_12', 'subfusil_1', 'fusil_9', 'fusil_5', 'fusil_6', 'shotgun_1', 'sniper_3', 'sniper_0', 'subfusil_8', 'fusil_3', 'pistol_5', 'pistol_6', 'melee_11', 'melee_1'),
+  ww2: L('pistol_9', 'pistol_8', 'pistol_7', 'subfusil_6', 'subfusil_2', 'subfusil_1', 'fusil_5', 'fusil_6', 'shotgun_1', 'sniper_3', 'sniper_0', 'subfusil_8', 'fusil_3', 'pistol_5', 'pistol_6', 'melee_11', 'melee_1'),
   rajada: L('pistol_3', 'pistol_5', 'subfusil_8', 'subfusil_3', 'subfusil_10', 'fusil_2', 'fusil_6', 'fusil_3', 'fusil_7', 'shotgun_2', 'sniper_2', 'sniper_3', 'sniper_1', 'subfusil_9', 'pistol_6', 'pistol_2', 'melee_12', 'melee_5'),
-  avesso: L('sniper_0', 'sniper_2', 'sniper_1', 'shotgun_1', 'shotgun_2', 'fusil_4', 'fusil_1', 'fusil_7', 'fusil_9', 'subfusil_4', 'subfusil_7', 'subfusil_9', 'subfusil_1', 'pistol_1', 'pistol_4', 'pistol_7', 'melee_7', 'melee_9'),
+  avesso: L('sniper_0', 'sniper_2', 'sniper_1', 'shotgun_1', 'shotgun_2', 'fusil_4', 'fusil_1', 'fusil_7', 'subfusil_4', 'subfusil_7', 'subfusil_9', 'subfusil_1', 'pistol_1', 'pistol_4', 'pistol_7', 'melee_7', 'melee_9'),
   // 30/10 (noite): escadas novas com as armas novas
-  novas: L('pistol_10', 'pistol_9', 'subfusil_13', 'subfusil_12', 'subfusil_5', 'fusil_13', 'fusil_11', 'fusil_12', 'shotgun_3', 'subfusil_9', 'fusil_9', 'shotgun_2', 'sniper_4', 'sniper_2', 'pistol_3', 'pistol_8', 'melee_7', 'melee_1'),
-  pesada: L('pistol_3', 'pistol_7', 'subfusil_10', 'subfusil_12', 'fusil_13', 'fusil_4', 'fusil_12', 'fusil_3', 'shotgun_3', 'shotgun_1', 'fusil_9', 'shotgun_2', 'sniper_2', 'sniper_0', 'pistol_6', 'pistol_10', 'melee_12', 'melee_3'),
+  novas: L('pistol_10', 'pistol_9', 'subfusil_13', 'subfusil_1', 'subfusil_5', 'fusil_13', 'fusil_11', 'fusil_12', 'shotgun_3', 'subfusil_9', 'shotgun_2', 'sniper_4', 'sniper_2', 'pistol_3', 'pistol_8', 'melee_7', 'melee_1'),
+  pesada: L('pistol_3', 'pistol_7', 'subfusil_10', 'subfusil_1', 'fusil_13', 'fusil_4', 'fusil_12', 'fusil_3', 'shotgun_3', 'shotgun_1', 'shotgun_2', 'sniper_2', 'sniper_0', 'pistol_6', 'pistol_10', 'melee_12', 'melee_3'),
   curta: L('pistol_2', 'pistol_1', 'subfusil_13', 'subfusil_2', 'subfusil_6', 'subfusil_4', 'shotgun_3', 'shotgun_2', 'fusil_11', 'subfusil_7', 'shotgun_1', 'fusil_6', 'sniper_1', 'sniper_4', 'pistol_4', 'pistol_9', 'melee_14', 'melee_9'),
 };
 const GG_POOL = {
   pistol: ['pistol_1', 'pistol_2', 'pistol_3', 'pistol_4', 'pistol_5', 'pistol_6', 'pistol_7', 'pistol_8', 'pistol_9'],
-  smg: ['subfusil_1', 'subfusil_2', 'subfusil_3', 'subfusil_4', 'subfusil_5', 'subfusil_6', 'subfusil_7', 'subfusil_8', 'subfusil_9', 'subfusil_10', 'subfusil_12', 'subfusil_13'],
-  rifle: ['fusil_1', 'fusil_2', 'fusil_3', 'fusil_4', 'fusil_5', 'fusil_6', 'fusil_7', 'fusil_9', 'fusil_11', 'fusil_12', 'fusil_13'],
-  shotgun: ['shotgun_1', 'shotgun_2', 'shotgun_3'], sniper: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'],
+  smg: ['subfusil_1', 'subfusil_2', 'subfusil_3', 'subfusil_4', 'subfusil_5', 'subfusil_6', 'subfusil_7', 'subfusil_8', 'subfusil_9', 'subfusil_10', 'subfusil_13'], // Tamborzao (subfusil_12) saiu do jogo (04/11)
+  rifle: ['fusil_1', 'fusil_2', 'fusil_3', 'fusil_4', 'fusil_5', 'fusil_6', 'fusil_7', 'fusil_11', 'fusil_12', 'fusil_13'],
+  shotgun: ['shotgun_1', 'shotgun_2', 'shotgun_3'], sniper: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], lmg: ['lmg_1', 'lmg_2'],
   melee: ['melee_0', 'melee_1', 'melee_3', 'melee_4', 'melee_7', 'melee_9', 'melee_11', 'melee_12', 'melee_14'],
 };
 const GG_SHAPE = ['pistol', 'pistol', 'smg', 'smg', 'smg', 'rifle', 'rifle', 'rifle', 'shotgun', 'smg', 'rifle', 'shotgun', 'sniper', 'sniper', 'pistol', 'pistol', 'melee', 'melee'];
@@ -59,14 +61,14 @@ export function ggPickLadder() {
   return { id, list };
 }
 export const SPAWN_KIT = ['pistol', 'smg'];
-export const PRIMARIES = ['smg', 'rifle', 'shotgun', 'sniper'];
+export const PRIMARIES = ['smg', 'rifle', 'shotgun', 'sniper', 'lmg'];
 export const BOT_HP = 80;
 // sala: no maximo 16 (gente + bots). Bots abrem vaga pra quem chega; sala com 16 pessoas recusa.
 export const MAX_PLAYERS = 16;
 // plantar a bomba: cada lado aceita no maximo metade da sala em gente (bots completam o que faltar)
 export const TEAM_MAX = MAX_PLAYERS / 2;
 // Blitz (02/11, pedido dele): Mata-Mata 12 contra 12, so nos mapas grandes
-export const BLITZ_MAX = 24, TEAM_MAX_BLITZ = 12, BLITZ_MAPS = ['fronteira', 'vila'];
+export const BLITZ_MAX = 24, TEAM_MAX_BLITZ = 12, BLITZ_MAPS = ['fronteira', 'vila', 'deserto']; // Canyon Poeira (04/11) entra no blitz de bandeira/dominacao
 // Blitz (02/11): 12x12 nos mapas grandes em tres regras; o id do modo diz a regra de base. Vale XP em dobro (evento fixo)
 export const BLITZ_BASE = { blitz: 'tdm', blitz_ctf: 'ctf', blitz_dom: 'dom' };
 export const BLITZ_XP = 2;
@@ -75,8 +77,16 @@ export const BLITZ_XP = 2;
 export const NADES = {
   // arremesso mais longe (pedido dele 01/11): ~35% a mais de distancia
   frag: { speed: 29, fuse: 2.0, radius: 6.5, dmg: 140 },
-  flash: { speed: 30, fuse: 1.4, radius: 15 },
+  flash: { speed: 30, fuse: 2.2, radius: 15 }, // 04/11: demora mais pra estourar (era 1,4)
+  // 04/11 (pedido dele): escolhidas na aba Granadas do Arsenal. Letal (G): granada, machadinha (acerto direto derruba;
+  // some no chao) e termobarica (explosao menor e fogo no chao por burn s). Tatica (F): flash, fumaca (nuvem que tapa a
+  // visao por time s) e sinalizador (cai no chao e voce renasce ali; o inimigo destroi a tiro, hp)
+  tomahawk: { speed: 44, lift: 6.5, fuse: 30, hitR: 0.9 }, // 04/11: mais longe, em parabola; no chao fica ate 30 s e o dono pega de volta passando em cima
+  thermo: { speed: 27, fuse: 1.8, radius: 5.5, dmg: 95, burn: 5, burnR: 4, burnDps: 18 },
+  smoke: { speed: 28, fuse: 1.4, radius: 6.5, time: 12 },
+  beacon: { speed: 16, fuse: 0.7, hp: 120 },
 };
+export const LETHALS = ['frag', 'tomahawk', 'thermo'], TACTICALS = ['flash', 'smoke', 'beacon'];
 
 // sequencias de abates (cartoon): radar espiao, chuva de bigornas, dirigivel atirador e,
 // com 15 sem cair, a Torta Atomica: avisa o outro time e depois de `delay` s derruba todo inimigo vivo
@@ -153,7 +163,7 @@ export const BLAST = ['frag', 'anvil', 'blimp', 'bomb', 'rpg'];
 export const hasSkill = (p, id) => !!p?.skills?.includes(id);
 
 // fora da fila (01/11, pedido dele): radar, bigorna e torta chamam na hora; so o dirigivel espera a vez
-export const STREAK_FREE = ['milk', 'uav', 'talc', 'anvil', 'anvline', 'nuke', 'rpg', 'plane', 'train', 'hand'];
+export const STREAK_FREE = ['milk', 'uav', 'talc', 'anvil', 'anvline', 'nuke', 'rpg', 'plane', 'train', 'hand', 'sentry'];
 // 02/11 (pedido dele): mais sequencias no clima do jogo; cada um leva STREAK_PICK (escolhe na aba do Arsenal).
 // Leite Turbinado = vida cheia + colete; Nuvem de Talco = apaga o minimapa do inimigo; Linha de Bigornas =
 // fileira de bigornas cruzando onde o inimigo esta. Ordem aqui = ordem na tela (por abates)
@@ -164,7 +174,10 @@ export const STREAKS = {
   anvil: { kills: 5 },
   blimp: { kills: 7, time: 22, dmg: 14, hp: 1200 }, // da pra derrubar a tiro (hp)
   anvline: { kills: 9, n: 12, gap: 3.2 },
-  rpg: { kills: 6, shots: 1, speed: 46, radius: 5.5, dmg: 150, life: 3.5 }, // Bazuca: um foguete so e volta pra arma de antes (03/11)
+  // Sentinela (04/11, pedido dele): torreta no chao que mira e atira sozinha; menos dano que o dirigivel (que da 14 a
+  // cada 0,55 s acertando 60%), da pra destruir a tiro (hp), dura time s. Fica marcada no HUD e no minimapa
+  sentry: { kills: 8, time: 50, dmg: 7, rate: 0.5, hit: 0.5, range: 30, hp: 850 }, // 04/11: mais vida (era 380)
+  rpg: { kills: 6, shots: 1, speed: 46, radius: 7.5, dmg: 220, life: 3.5 }, // 04/11 (pedido dele): area maior e mais forte (era raio 5,5 dano 150) // Bazuca: um foguete so e volta pra arma de antes (03/11)
   // 03/11 (pedido dele): as grandes
   plane: { kills: 11, speed: 30, h: 11, lead: 9, rate: 0.08, dmg: 30, hitR: 1.9, lane: 8, passes: 2 }, // Biplano: ida e volta metralhando a reta dos inimigos (mira em quem esta no corredor)
   train: { kills: 14, warn: 2.4, speed: 34, cars: 3, car: 6, halfW: 1.9 }, // Trem Desgovernado: sai de um buraco e entra noutro
@@ -177,7 +190,7 @@ export const STREAKS = {
 // (dps ~30 + a queimadura), tanque de 4 s que enche sozinho. Escopetinha: 2 cartuchos, cada um volta em 7 s.
 export const GADGETS = {
   gd_flame: { body: 'fusil_6', wpn: 'flame', fuel: 4, regen: 0.5, tick: 0.1, dmg: 3, range: 7.5, cone: 0.9 },
-  gd_shot: { body: 'fusil_7', wpn: 'ubshot', shells: 2, refill: 7 },
+  gd_shot: { body: 'fusil_7', wpn: 'ubshot', shells: 8, refill: 7 },
 };
 export const gadgetOf = (lo) => (lo?.handle && GADGETS[lo.handle] && lo.body === GADGETS[lo.handle].body ? lo.handle : null);
 export const STREAK_PICK = 4;
@@ -188,29 +201,30 @@ export const pickStreaks = (list) => { const ok = Array.isArray(list) ? [...new 
 export const MODES = {
   ffa:      { name: 'Contra Todos',      teams: false, limit: 20,  desc: 'Cada um por si. Quem chegar a 20 nocautes leva.' },
   tdm:      { name: 'Mata-Mata',         teams: true,  limit: 40,  desc: 'Vermelhos contra azuis. 40 nocautes do time vencem.' },
-  gungame:  { name: 'Escada de Armas',   teams: false, limit: GUN_LADDER.length, desc: 'Cada nocaute troca sua arma, da pistola ao canhao de mao.' },
+  gungame:  { name: 'Escada de Armas',   teams: false, limit: GUN_LADDER.length, desc: 'Cada nocaute troca sua arma, da pistola ao canhão de mão.' },
   ctf:      { name: 'Captura a Bandeira', teams: true, limit: 3,   desc: 'Roube a bandeira deles e traga pra sua base. 3 capturas.' },
   // vermelho empurra o bonde (fica no circulo em volta dele), azul segura; limit = % do caminho (placar)
-  escort:   { name: 'Escolta',           teams: true,  limit: 100, time: 210, desc: 'Ataque empurra o Bonde da Tinta ate a garagem ficando perto dele; defesa segura ate o tempo acabar.' },
+  escort:   { name: 'Escolta',           teams: true,  limit: 100, time: 210, desc: 'Ataque empurra o Bonde da Tinta até a garagem ficando perto dele; defesa segura até o tempo acabar.' },
   blitz:    { name: 'Blitz',             teams: true,  limit: 75,  desc: '12 contra 12 nos mapas grandes. 75 nocautes do time vencem.' },
   blitz_ctf: { name: 'Blitz: Bandeira',  teams: true,  limit: 3,   desc: '12 contra 12 nos mapas grandes. Captura a bandeira, 3 capturas.' },
-  blitz_dom: { name: 'Blitz: Dominacao', teams: true,  limit: 200, desc: '12 contra 12 nos mapas grandes. Segure A, B e C.' },
-  dom:      { name: 'Dominacao',         teams: true,  limit: 150, desc: 'Segure os pontos A, B e C. Cada ponto rende pontos por segundo.' },
+  blitz_dom: { name: 'Blitz: Dominação', teams: true,  limit: 200, desc: '12 contra 12 nos mapas grandes. Segure A, B e C.' },
+  dom:      { name: 'Dominação',         teams: true,  limit: 150, desc: 'Segure os pontos A, B e C. Cada ponto rende pontos por segundo.' },
   // vermelho ataca (planta), azul defende (desarma); sem renascer na rodada; limit = rodadas pra vencer
-  heist:    { name: 'Roube o Cofre',     teams: true,  limit: 3,   time: 180, desc: 'Ataque arromba o cofre e leva as bolsas ate a van; defesa segura. Melhor de 4.' },
+  smuggle:  { name: 'Contrabando',       teams: true,  limit: 3,   time: 180, desc: 'Ataque leva os caixotes do armazém até o barco; defesa segura. Melhor de 4.' },
+  heist:    { name: 'Roube o Cofre',     teams: true,  limit: 3,   time: 180, desc: 'Ataque arromba o cofre e leva as bolsas até a van; defesa segura. Melhor de 4.' },
   bomb:     { name: 'Plantar a Bomba',   teams: true,  limit: 4,   desc: 'Ataque planta a bomba no ponto A ou B, defesa desarma. Sem renascer na rodada.' },
   // azul = sobreviventes, vermelho = infectados (quem cai vira infectado)
-  infect:   { name: 'Infectado',         teams: true,  limit: 0,   time: 300, desc: 'Um vira infectado. Quem ele pegar vira tambem. Sobreviva ate o fim do tempo.' },
+  infect:   { name: 'Infectado',         teams: true,  limit: 0,   time: 300, desc: 'Um vira infectado. Quem ele pegar vira também. Sobreviva até o fim do tempo.' },
   // battle royale: todo mundo nasce no soco, pega arma/colete no chao e a iris fecha o mapa. Ultimo de pe vence.
-  br:       { name: 'Ultimo de Pe',      teams: false, limit: 0,   time: 900, desc: 'Nasce no soco, pega arma e colete no chao e foge da iris que fecha. Ultimo de pe vence.' },
+  br:       { name: 'Último de Pé',      teams: false, limit: 0,   time: 900, desc: 'Nasce no soco, pega arma e colete no chão e foge da íris que fecha. Último de pé vence.' },
   // mesmo battle royale em duplas: zerou a vida com o parceiro de pe = fica caido ate ele reerguer
   // battle royale com renascimento: todo mundo cai de paraquedas; ate a fase 2 da iris quem cai volta do ceu
-  bounce:   { name: 'Bate-Volta', teams: false, limit: 0, time: 900, desc: 'Battle royale caindo de paraquedas. Ate a iris fechar duas vezes, quem cai volta do ceu. Depois e ringue, e depois e pra valer.' },
-  duo:      { name: 'Ultimo de Pe: Dupla', teams: true,  limit: 0,   time: 900, desc: 'Battle royale em dupla. Caiu, o parceiro te reergue com a bomba de bicicleta. Ultima dupla de pe vence.' },
+  bounce:   { name: 'Bate-Volta', teams: false, limit: 0, time: 900, desc: 'Battle royale caindo de paraquedas. Até a íris fechar duas vezes, quem cai volta do céu. Depois e ringue, e depois e pra valer.' },
+  duo:      { name: 'Último de Pé: Dupla', teams: true,  limit: 0,   time: 900, desc: 'Battle royale em dupla. Caiu, o parceiro te reergue com a bomba de bicicleta. Ultima dupla de pé vence.' },
   // cooperativo contra ondas de viloes (shared/borroes.js); vermelho = a gente, azul = os borroes; sem tempo
-  borroes:  { name: 'Noite dos Borroes: Rascunho', teams: true,  limit: 0,   time: 0,   desc: 'Cooperativo: todo mundo comeca com a Estalo; pontos compram armas da parede, portas, leite e a Caixa de Surpresas.' },
+  borroes:  { name: 'Noite dos Borrões: Rascunho', teams: true,  limit: 0,   time: 0,   desc: 'Cooperativo: todo mundo começa com a Estalo; pontos compram armas da parede, portas, leite e a Caixa de Surpresas.' },
   // mesma noite (core roda como 'borroes' com borArt): cada um com as armas do Arsenal, ate a onda que o host escolher
-  arte:     { name: 'Noite dos Borroes: Arte-Final', teams: true,  limit: 20,  time: 0,   desc: 'Cooperativo com as suas armas: sobreviva ate a onda escolhida (10 a 50) pra vencer.' },
+  arte:     { name: 'Noite dos Borrões: Arte-Final', teams: true,  limit: 20,  time: 0,   desc: 'Cooperativo com as suas armas: sobreviva até a onda escolhida (10 a 50) pra vencer.' },
 };
 
 // Infectado: sobrevivente sai com escopeta + pistola; infectado so com a lamina, mais rapido.
@@ -219,7 +233,11 @@ export const INFECT = { firstIn: 10, survivorKit: ['shotgun', 'pistol'], survivo
 
 // Plantar a Bomba: tempos em segundos, raios em metros
 // Roube o Cofre (03/11): ver shared/heist.js
-export const HEIST = { rounds: 4, time: 180, crack: 15, crackR: 5.5, bags: 8, bagValue: 12500, quota: 62500, /* 03/11: cofre de 100 mil (era 8 mil); a meta segue 5 bolsas */ bankBonus: 30, dropBack: 20, returnT: 1.5, takeR: 3, touchR: 1.8, vanR: 3.5, atkRespawn: 6, defRespawn: 6, defSpawnMin: 18, carrySlow: 0.8 };
+export const HEIST = { rounds: 4, time: 180, crack: 15, crackR: 5.5, bags: 8, bagValue: 12500, quota: 100000, /* 04/11 (pedido dele): a meta e o cofre inteiro, 100 mil (8 bolsas de 12.500) */ bankBonus: 30, dropBack: 20, returnT: 1.5, takeR: 3, touchR: 1.8, vanR: 3.5, atkRespawn: 6, defRespawn: 6, defSpawnMin: 18, carrySlow: 0.8 };
+// Contrabando no Cais (04/11, pedido dele): variante do Cofre (mesmo motor heist.js). Sem arrombar: a pilha do armazem ja
+// esta aberta; o caixote e pesado (lento, sem correr, sem pular, sem atirar) e da pra PASSAR pra um colega (bola de rugbi).
+// quota = caixotes no barco pra levar a rodada; bagValue 1 = conta caixote
+export const SMUGGLE = { crack: 0.01, bags: 8, bagValue: 1, quota: 5, bankBonus: 25, carrySlow: 0.6, vanR: 3.2, passR: 16, passCone: 0.5, passT: 0.55 };
 export const BOMB = { round: 100, fuse: 35, plant: 3.2, defuse: 6, siteR: 3.4, defuseR: 1.9, blast: 9, roundEnd: 4.5, swapAfter: 3 };
 
 // Pontaria dos bots por nivel (0.7 molenga, 1 esperto, 1.35 afiado).
@@ -268,7 +286,6 @@ export const BODY_TRAITS = {
   shotgun_3: { mode: 'auto', rate: 0.22, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~6,5/s; era 4,8, pedido dele 01/11), dano baixo por tiro, 32 no pente (6 x 5,34)
   // pacote WW2
   fusil_9: { mode: 'auto', rate: 1.12, dmg: 1.1, kick: 1.15, hip: 1.05 },             // trovao de lata
-  subfusil_12: { mode: 'auto', rate: 0.7, dmg: 0.82, kick: 1.25, spread: 1.1, mag: 1.875, reload: 1.25 }, // tamborzao: cospe bala; tambor de 60 (32 x 1,875), troca devagar
   pistol_7: { mode: 'semi', rate: 1.25, dmg: 1.3, kick: 1.3 },                        // quarenta e cinco
   pistol_8: { mode: 'semi', rate: 1.1, dmg: 1.15, spread: 0.8, hip: 1.15 },           // cabo de vassoura
   pistol_9: { mode: 'semi', rate: 0.95, dmg: 1.05 },                                  // estrelinha
@@ -277,12 +294,27 @@ export const BODY_TRAITS = {
   sniper_1: { mode: 'semi', rate: 0.5, dmg: 0.62, kick: 0.7 },                    // semiauto, nao mata de 1
   sniper_2: { mode: 'semi', rate: 0.75, dmg: 1.1, kick: 1.45 },                  // marretao (Barrett): semi pesada, coice grande (era ferrolho; pedido dele 30/10)
   sniper_3: { mode: 'bolt', rate: 0.88, dmg: 0.95, kick: 1.1 },                  // ping velho (WW2): ferrolho mais agil que o padrao
-  sniper_4: { mode: 'bolt', rate: 1, dmg: 1.05, kick: 1.05 },                     // ferrolho classico (modelo novo 30/10)
+  sniper_4: { mode: 'bolt', rate: 1, dmg: 1.05, kick: 1.05 },
+  // metralhadoras (04/11): Britadeira (M249) mais leve e rapida; Rolo Compressor (M60) bate mais forte e pesa mais
+  lmg_1: { rate: 0.92, dmg: 0.92, kick: 0.95, adsTime: 1.35, move: 0.92 },
+  lmg_2: { rate: 1.12, dmg: 1.15, kick: 1.12, adsTime: 1.5, move: 0.88, mag: 0.8 },                     // ferrolho classico (modelo novo 30/10)
 };
 // laminas: faca rapida e curta, machado/espada lento e com mais alcance (1 golpe sempre derruba)
-const ML = [[0.6, 2.4], [1.0, 3.0], [0.55, 2.3], [1.15, 3.3], [1.05, 3.0], [0.62, 2.5], [0.95, 2.9], [0.85, 3.0], [0.55, 2.3], [1.0, 2.9], [0.5, 2.2], [1.0, 3.0], [0.9, 3.2], [0.95, 2.9], [1.0, 3.0]];
+// 15-17 = espadas (04/11): alcance de espada (3,4-3,9 m), mais lentas que faca; Corsario rapido, Lamina Real lenta e longa,
+// Katana no meio (a melhor no conjunto, por isso abre por nivel)
+const ML = [[0.6, 2.4], [1.0, 3.0], [0.55, 2.3], [1.15, 3.3], [1.05, 3.0], [0.62, 2.5], [0.95, 2.9], [0.85, 3.0], [0.55, 2.3], [1.0, 2.9], [0.5, 2.2], [1.0, 3.0], [0.9, 3.2], [0.95, 2.9], [1.0, 3.0], [0.8, 3.4], [1.2, 3.9], [0.9, 3.7], [0.85, 3.7]]; // 18 = Sabre de Neon: igual a Katana, um tico mais rapido
 ML.forEach(([rate, range], i) => { BODY_TRAITS['melee_' + i] = { mode: 'semi', rate: rate / 0.7, range }; });
-export const bodyTrait = (body) => BODY_TRAITS[body] || {};
+// Skins de MODELO da Loja (04/11, pedido dele: Futuristic Weapon Pack). Trocam o desenho de um corpo e mais nada: o
+// corpo da skin (body) usa os stats do original (of), entao nao da vantagem. Posse: 'wskin:<id>' (shopstore). No Arsenal
+// a skin vira uma variante com o nome dela, no modelo original. Pra skin nova: uma linha aqui + o desenho (arsenal.js
+// WSKIN_MODELS) + o item da Loja (shop.js) + o nome (i18n ws_<id>).
+export const WSKINS = {
+  pulse: { of: 'fusil_3', body: 'wsk_pulse', wpn: 'rifle' },   // Pulse Gun: skin da Agulha
+  fiction: { of: 'fusil_7', body: 'wsk_fiction', wpn: 'rifle' }, // Fictional Gun: skin da Relampago
+};
+export const WSKIN_OF = Object.fromEntries(Object.values(WSKINS).map(w => [w.body, w.of])); // corpo da skin -> corpo original
+export const baseBody = (body) => WSKIN_OF[body] || body;
+export const bodyTrait = (body) => BODY_TRAITS[baseBody(body)] || {};
 
 // Variantes de elite: arma ja montada (modelo + pecas + camuflagem lendaria) que sai de desafio de elite.
 // lo vem COMPLETA: pecas, tracado, cor/destaque e cor da mira combinando com a camo. mag: 'big' | 'small' = o

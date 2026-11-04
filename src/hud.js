@@ -24,6 +24,7 @@ const TEAM = { red: 'h_red', blue: 'h_blue' };
 // pavio curto: as sequencias a partir da bigorna custam 1 abate a menos (igual ao servidor)
 // selos das sequencias: desenho proprio (tinta + papel), viewBox 48. ink = traco, cor = currentColor do selo
 export const STREAK_SVG = {
+  sentry: `<path d="M24 30l-9 13M24 30l9 13M24 30v13" stroke="#141210" stroke-width="3" stroke-linecap="round"/><rect x="13" y="14" width="20" height="16" rx="3" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M33 19h11v6H33z" fill="#3a3632" stroke="#141210" stroke-width="2.5"/><circle cx="20" cy="22" r="3" fill="#ece9e1" stroke="#141210" stroke-width="2"/>`,
   plane: `<path d="M6 18h36v5H6z" fill="#ece9e1" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M8 29h32v4H8z" fill="#ece9e1" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><path d="M14 23v6M34 23v6" stroke="#141210" stroke-width="2"/><ellipse cx="24" cy="26" rx="6" ry="5" fill="currentColor" stroke="#141210" stroke-width="2.5"/><path d="M24 12v28" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="26" r="1.8" fill="#141210"/>`,
   train: `<rect x="23" y="13" width="17" height="19" rx="2" fill="currentColor" stroke="#141210" stroke-width="2.5"/><rect x="6" y="19" width="19" height="13" rx="6" fill="#3a3632" stroke="#141210" stroke-width="2.5"/><path d="M10 19v-6h6v6" fill="#3a3632" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><circle cx="12" cy="37" r="4" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/><circle cx="24" cy="37" r="4" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/><circle cx="35" cy="37" r="4" fill="#ece9e1" stroke="#141210" stroke-width="2.5"/><circle cx="12" cy="24" r="2" fill="#ece9e1"/><path d="M4 8c3-2 6 2 9 0" stroke="#141210" stroke-width="2" fill="none" stroke-linecap="round"/>`,
   bomber: `<ellipse cx="22" cy="18" rx="18" ry="11" fill="currentColor" stroke="#141210" stroke-width="3"/><path d="M8 15c7-3 21-3 28 0M8 21c7 3 21 3 28 0" stroke="#ece9e1" stroke-width="2" fill="none"/><path d="M40 13l5-4v18l-5-4" fill="#3a3632" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><rect x="15" y="29" width="14" height="5" rx="1.5" fill="#3a3632" stroke="#141210" stroke-width="2.5"/><path d="M19 37c0 3 2 5 2 7M25 37c0 3-2 5-2 7" stroke="#ff8a1f" stroke-width="3" fill="none" stroke-linecap="round"/>`,
@@ -40,8 +41,10 @@ export const STREAK_SVG = {
 // tela de morte (03/11, hotfix): o que derruba e nao e arma de mao (granada, equipamento, C4, queda, iris) tambem tem
 // icone no quadrinho do meio; as sequencias vem do STREAK_SVG. Mesmo viewBox 48 e traco de tinta
 const INK_S = 'stroke="#141210" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"';
+export const NADE_SVG = {"frag":"<ellipse cx=\"24\" cy=\"28\" rx=\"11\" ry=\"13\" fill=\"#5b6b43\" stroke=\"#141210\" stroke-width=\"3\"/><path d=\"M18 14h12v-4H18z\" fill=\"#3a3632\" stroke=\"#141210\" stroke-width=\"2.5\"/><path d=\"M30 12c6 0 8 4 7 9\" fill=\"none\" stroke=\"#141210\" stroke-width=\"3\"/>","tomahawk":"<path d=\"M14 40 32 10\" stroke=\"#8a5a2b\" stroke-width=\"5\" stroke-linecap=\"round\"/><path d=\"M14 40 32 10\" stroke=\"#141210\" stroke-width=\"7\" stroke-linecap=\"round\" opacity=\".25\"/><path d=\"M27 8c8 1 13 6 13 13l-9-3-4 3z\" fill=\"#cfd4d6\" stroke=\"#141210\" stroke-width=\"3\" stroke-linejoin=\"round\"/>","thermo":"<rect x=\"15\" y=\"12\" width=\"18\" height=\"28\" rx=\"4\" fill=\"#3a3632\" stroke=\"#141210\" stroke-width=\"3\"/><rect x=\"15\" y=\"22\" width=\"18\" height=\"7\" fill=\"#f08a2a\" stroke=\"#141210\" stroke-width=\"2\"/><path d=\"M20 8h8v4h-8z\" fill=\"#c9a34a\" stroke=\"#141210\" stroke-width=\"2.5\"/><path d=\"M36 14c4 3 4 8 0 11\" fill=\"none\" stroke=\"#f08a2a\" stroke-width=\"3\"/>","flash":"<rect x=\"17\" y=\"12\" width=\"14\" height=\"28\" rx=\"3\" fill=\"#ece9e1\" stroke=\"#141210\" stroke-width=\"3\"/><path d=\"M19 20h10M19 28h10\" stroke=\"#141210\" stroke-width=\"2\"/><path d=\"M38 8l-4 7h5l-5 8\" fill=\"none\" stroke=\"#e3b23c\" stroke-width=\"3\" stroke-linejoin=\"round\"/>","smoke":"<rect x=\"16\" y=\"20\" width=\"14\" height=\"22\" rx=\"3\" fill=\"#8e958c\" stroke=\"#141210\" stroke-width=\"3\"/><rect x=\"16\" y=\"26\" width=\"14\" height=\"5\" fill=\"#5f8f5f\"/><path d=\"M14 18c-4-1-5-6-1-8 1-5 7-6 10-3 3-3 9-1 9 4 4 1 5 6 1 8\" fill=\"#d9d6cf\" stroke=\"#141210\" stroke-width=\"2.5\"/>","beacon":"<circle cx=\"22\" cy=\"24\" r=\"10\" fill=\"#9fb4c6\" stroke=\"#141210\" stroke-width=\"3\"/><path d=\"M16 33l-4 9M28 33l4 9M22 34v8\" stroke=\"#141210\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M29 16V6l9 3-9 3\" fill=\"#ece9e1\" stroke=\"#141210\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><circle cx=\"22\" cy=\"13\" r=\"3\" fill=\"#7fe6ff\" stroke=\"#141210\" stroke-width=\"2\"/>"};
 export const DEATH_SVG = {
-  ...STREAK_SVG,
+  ...STREAK_SVG, tomahawk: NADE_SVG.tomahawk, thermo: NADE_SVG.thermo, beacon: NADE_SVG.beacon,
+  car: `<path d="M6 30l3-9c1-3 3-4 6-4h14c3 0 5 1 7 4l5 9v6H6z" fill="currentColor" ${INK_S}/><circle cx="15" cy="36" r="5" fill="#ece9e1" ${INK_S}/><circle cx="33" cy="36" r="5" fill="#ece9e1" ${INK_S}/>`,
   frag: `<circle cx="22" cy="29" r="13" fill="currentColor" ${INK_S}/><path d="M17 16h10v-5H17z" fill="#ece9e1" ${INK_S}/><path d="M27 13c6-1 9 2 9 7" fill="none" ${INK_S}/><circle cx="36" cy="22" r="3" fill="#ece9e1" ${INK_S}/><path d="M16 27h12M22 21v16" stroke="#141210" stroke-width="2" opacity=".5"/>`,
   flame: `<path d="M24 5c3 7 11 11 11 21a11 11 0 0 1-22 0c0-6 3-9 5-11 0 5 2 7 4 7-1-7 0-12 2-17z" fill="#f08a2a" ${INK_S}/><path d="M24 26c2 3 5 4 5 8a5 5 0 0 1-10 0c0-3 3-5 5-8z" fill="#ffe066" ${INK_S}/>`,
   ubshot: `<rect x="5" y="20" width="30" height="9" rx="2" fill="currentColor" ${INK_S}/><rect x="9" y="29" width="18" height="6" rx="2" fill="#ece9e1" ${INK_S}/><circle cx="39" cy="22" r="2.5" fill="#141210"/><circle cx="43" cy="18" r="2" fill="#141210"/><circle cx="43" cy="26" r="2" fill="#141210"/>`,
@@ -69,8 +72,10 @@ export class Hud {
     this.el.wname.textContent = bp ? t(bp) : lo?.body ? partName('body', lo.body) : wName(p.wpn);
     const a = p.ammo[p.wpn];
     const mag = a ? a.mag : 0;
-    this.el.mag.textContent = mag === Infinity ? '∞' : mag;
-    this.el.res.textContent = '/ ' + (a && a.reserve !== Infinity ? a.reserve : '∞');
+    const hands = lo?.handle === 'akimbo' && mag !== Infinity ? p.akAmmo?.(a) : null; // akimbo: 12/12 296, um pente por mao
+    this.el.mag.textContent = mag === Infinity ? '∞' : hands ? hands[0] + '/' + hands[1] : mag;
+    this.el.res.textContent = (hands ? '' : '/ ') + (a && a.reserve !== Infinity ? a.reserve : '∞');
+    this.el.ammo.classList.toggle('duo', !!hands);
     this.el.ammo.classList.toggle('empty', mag === 0);
     this.el.slots.innerHTML = p.owned.map((w, i) => `<span class="${w === p.wpn ? 'on' : ''}">${i + 1}</span>`).join('');
   }
@@ -161,7 +166,7 @@ export class Hud {
       html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else if (cfg.teams) {
       let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
-      if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''}">${z.id}</span>`).join('')}</div>`;
+      if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''} ${z.bonus ? 'bonus' : ''}">${z.id}</span>`).join('')}</div>`;
       if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       html = `<div class="red"><span class="lbl">${t('h_red')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('h_blue')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else {
@@ -455,19 +460,19 @@ export class Hud {
   // gadget equipado (03/11): plaquinha embaixo da municao com o tanque (barra) ou os cartuchos e a tecla
   gadget(id, v, S) {
     let el = this.gadgetEl;
-    if (!el) { el = this.gadgetEl = document.createElement('div'); el.className = 'gadget-plate'; el.setAttribute('aria-live', 'off'); document.getElementById('hud').appendChild(el); }
+    if (!el) { el = this.gadgetEl = document.createElement('div'); el.className = 'gadget-plate'; el.setAttribute('aria-live', 'off'); const wn = document.getElementById('wName'); wn.parentElement.insertBefore(el, wn); /* em cima do nome da arma: nunca cobre a municao (04/11) */ }
     if (!id) { if (!el.hidden) el.hidden = true; return; }
-    const key = id === 'gd_flame' ? Math.round(v * 20) : v, sig = id + ':' + key;
+    const key = id === 'gd_flame' ? Math.round(v * 20) : v, sig = id + ':' + key + ':' + !!S?.on;
     if (sig === this.gadgetSig) return;
     this.gadgetSig = sig; el.hidden = false;
     const tag = isTouch ? '' : `<kbd>${esc(bindLabel(S, 'gadget', S?.padActive ? 1 : 0))}</kbd>`;
     el.innerHTML = id === 'gd_flame'
       ? `${tag}<span>${esc(t('gd_flame'))}</span><i class="gp-bar"><b style="width:${Math.round(v * 100)}%"></b></i>`
       : `${tag}<span>${esc(t('gd_shot'))}</span><em>${'●'.repeat(Math.max(0, v))}${'○'.repeat(Math.max(0, GADGETS.gd_shot.shells - v))}</em>`;
-    el.classList.toggle('empty', id === 'gd_flame' ? v <= 0.02 : v <= 0);
+    el.classList.toggle('empty', id === 'gd_flame' ? v <= 0.02 : v <= 0); el.classList.toggle('on', !!S?.on);
     // toque: o tanque/cartuchos vao dentro do proprio botao (a plaquinha no rodape ficava embaixo dos botoes, 03/11)
     const btn = document.querySelector('#touch .tbtn.gadget');
-    if (btn) { btn.style.setProperty('--gfill', (id === 'gd_flame' ? Math.round(v * 100) : 0) + '%'); if (id === 'gd_flame') delete btn.dataset.n; else btn.dataset.n = v; btn.classList.toggle('empty', id === 'gd_flame' ? v <= 0.02 : v <= 0); }
+    if (btn) { btn.style.setProperty('--gfill', (id === 'gd_flame' ? Math.round(v * 100) : 0) + '%'); if (id === 'gd_flame') delete btn.dataset.n; else btn.dataset.n = v; btn.classList.toggle('empty', id === 'gd_flame' ? v <= 0.02 : v <= 0); btn.classList.toggle('on', !!S?.on); btn.setAttribute('aria-pressed', !!S?.on); }
   }
   message(text, t = 2.4) { this.push(esc(text), 'ev-msg', t * 1000); }
 
@@ -527,8 +532,12 @@ export class Hud {
       if (uav || (G.seen.get(o.id) || 0) > G.t) dot(o.pos[0], o.pos[2], '#e0301e', 5.5);
       else if ((G.marked?.get(o.id) || 0) > G.t) { dot(o.pos[0], o.pos[2], '#ffb21a', 5.5); } // bala tracante
     }
-    if (snap.mode === 'dom') for (const z of M.zones) { const s = snap.zones.find(q => q.id === z.id); dot(z.pos[0], z.pos[2], s?.owner === 'red' ? '#a83a2c' : s?.owner === 'blue' ? '#2f5b8a' : '#ece9e1', 6); }
+    if (snap.mode === 'dom') { for (const z of M.zones) { const s = snap.zones.find(q => q.id === z.id); dot(z.pos[0], z.pos[2], s?.owner === 'red' ? '#a83a2c' : s?.owner === 'blue' ? '#2f5b8a' : '#ece9e1', 6); } const bz = snap.zones.find(q => q.bonus); if (bz) dot(bz.pos[0], bz.pos[2], bz.owner === 'red' ? '#a83a2c' : bz.owner === 'blue' ? '#2f5b8a' : '#e3b23c', 8); }
     if (snap.mode === 'ctf') for (const tm of ['red', 'blue']) dot(snap.flags[tm].pos[0], snap.flags[tm].pos[2], tm === 'red' ? '#a83a2c' : '#2f5b8a', 6);
+    for (const b of snap.blimps || []) if (b.k === 'sentry') { // sentinela no minimapa: quadradinho com cano (cor do time)
+      const x = (b.pos[0] - p.pos[0]) * k, y = (b.pos[2] - p.pos[2]) * k; g.save(); g.translate(x, y); g.rotate(-(b.yaw || 0));
+      g.fillStyle = b.team === 'blue' ? '#2f5b8a' : '#a83a2c'; g.strokeStyle = '#141210'; g.lineWidth = 2; g.fillRect(-5, -5, 10, 10); g.strokeRect(-5, -5, 10, 10); g.fillStyle = '#141210'; g.fillRect(-1.5, -12, 3, 7); g.restore();
+    }
     g.restore();
     // voce no centro, olhando pra cima
     g.fillStyle = '#faf8f2'; g.strokeStyle = '#141210'; g.lineWidth = 2.5;
@@ -557,7 +566,7 @@ export class Hud {
       if (!el) { el = document.createElement('div'); el.id = 'kit'; el.className = 'kit'; document.getElementById('hud').appendChild(el); }
       el.hidden = p.g?.mode === 'br' && !p.nades.frag && !p.nades.flash && !fld; // battle royale: so aparece quando tiver granada ou equipamento
       el.innerHTML = (me?.fz ? `<span class="fuse${me.fz <= 10 ? ' hot' : ''}">${t('ev_fuse', { n: me.fz })}</span>` : '') + // bomba-relogio: pavio no peito
-        `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_frag')}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_flash')}</span>` +
+        `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_' + (this.g?.lethal || 'frag'))}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_' + (this.g?.tactical || 'flash'))}</span>` +
         (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fpc + '%' : ''}</span>` : '') +
         // sequencia pronta mas outra no ar: fica apagada com a contagem ate liberar
         (p.g?.mode !== 'br' && p.g?.mode !== 'gungame' ? '' : callLocked(ready, snap.sLock) ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + callNext(ready, snap.sLock))}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio'), p.g?.streaks) })}</span>`);
@@ -682,6 +691,11 @@ export class Hud {
       if (pg.t <= (this.g?.t || 0)) continue;
       pts.push({ p: [pg.pos[0], pg.pos[1] + (pg.kind === 'enemy' ? 2.4 : 1.6), pg.pos[2]], cls: 'ping' + (id === this.g?.myId ? '' : ' mate') + (pg.kind === 'enemy' ? ' enemy' : ''), txt: pg.kind === 'enemy' ? '!' : pg.kind === 'item' ? '◆' : '▼', sub: pg.label || '' });
     }
+    // sentinelas (04/11): icone em cima de cada uma (a do inimigo em vermelho de alerta), com a vida
+    for (const b of snap.blimps || []) if (b.k === 'sentry') {
+      const mine = b.owner === this.g?.myId || (this.g?.myTeam && b.team === this.g.myTeam);
+      pts.push({ p: [b.pos[0], b.pos[1] + 2.3, b.pos[2]], cls: 'sentry ' + (mine ? 'mate' : 'enemy'), txt: `<svg viewBox="0 0 48 48" width="18" height="18" style="color:${b.team === 'blue' ? '#2f5b8a' : '#a83a2c'}">${STREAK_SVG.sentry}</svg>`, sub: b.hp + '%' });
+    }
     if (mode === 'ctf') {
       for (const team of ['red', 'blue']) {
         const f = snap.flags[team];
@@ -698,8 +712,8 @@ export class Hud {
       if (B?.state === 'dropped') pts.push({ p: [B.pos[0], B.pos[1] + 1.6, B.pos[2]], cls: 'red', txt: '●', sub: t('bombDropped') });
     } else if (mode === 'dom') {
       for (const z of snap.zones) {
-        const def = (this.M?.zones.find(q => q.id === z.id) || { pos: [0, 0, 0] }).pos;
-        pts.push({ p: [def[0], def[1] + 3, def[2]], cls: z.owner || '', txt: z.id });
+        const def = z.pos || (this.M?.zones.find(q => q.id === z.id) || { pos: [0, 0, 0] }).pos;
+        pts.push({ p: [def[0], def[1] + 3, def[2]], cls: (z.owner || '') + (z.bonus ? ' bonus' : ''), txt: z.id, sub: z.bonus ? z.left + ' s' : '' });
       }
     }
     const v = new THREE.Vector3();

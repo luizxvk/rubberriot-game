@@ -5,7 +5,8 @@ import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { TEAM_MAX, TEAM_MAX_BLITZ, MODES, BR } from '../shared/weapons.js';
 import { LIMIT_MODES, TIME_MODES, MAP_IDS, RANKED_MODES } from '../shared/core.js';
-import { HEIST_ONLY } from '../shared/map.js';
+import { HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES } from '../shared/map.js';
+import { HEIST_MAPS } from '../shared/heist.js';
 import { BLITZ_BASE, BLITZ_MAPS } from '../shared/weapons.js';
 import { currentEvent } from '../shared/events.js';
 
@@ -16,7 +17,7 @@ const TIPS = 12;
 const MODE_CATS = [
   ['especial', ['blitz', 'blitz_ctf', 'blitz_dom']], // primeiro (pedido dele 03/11)
   ['casual', ['tdm', 'ffa', 'gungame', 'infect']],
-  ['competitivo', ['escort', 'heist', 'ctf', 'dom', 'bomb']],
+  ['competitivo', ['escort', 'heist', 'smuggle', 'ctf', 'dom', 'bomb']],
   ['br', ['br', 'bounce', 'duo']],
   ['pve', ['borroes', 'arte']],
 ];
@@ -184,7 +185,7 @@ export class Lobby {
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     const rows = [
       ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : raw === 'heist' ? ['auto', ...HEIST_ONLY, ...MAP_IDS.filter(x => x !== 'ilha')] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito')], br ? 'ilha' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
       br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)], // blitz: ate 24
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),

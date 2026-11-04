@@ -1,6 +1,6 @@
 // Visual do proprio boneco: localStorage (espelhado na conta Rovex pelo save) + desbloqueio.
 import { LOOKS, DEFAULT_LOOK, cleanLook } from '../shared/looks.js';
-import { unlockLevel, progressInfo, rankData, metaOwned } from './progress.js';
+import { unlockLevel, progressInfo, rankData, metaOwned, passHasLook } from './progress.js';
 import { unlockDone } from './challenges.js';
 import { me as rovexMe } from './rovex.js';
 import { shopOwned } from './shopstore.js';
@@ -22,7 +22,7 @@ export function lookOpen(slot, id) {
   if (it.meta) return metaOwned(); // set da meta da comunidade
   if (it.rank != null) return rankData().peak >= it.rank; // premio da rankeada
   if (it.ch) return unlockDone(it.ch) || !!progressInfo().unlockAll;
-  return unlockLevel() >= (it.lvl || 1);
+  return unlockLevel() >= (it.lvl || 1) || passHasLook(slot, id); // nivel do jogador ou premio do Rovex Pass
 }
 
 // na partida so vale o que esta liberado (o salvo fica intacto: o Elite pode voltar)

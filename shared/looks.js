@@ -35,6 +35,9 @@ export const LOOKS = {
     { id: 'nuvem', lvl: 1, r: 2, shop: true },    // nuvem de chuva flutuando
     { id: 'bolo', lvl: 1, r: 1, shop: true },     // bolo de aniversario com vela
     { id: 'tubarao', lvl: 1, r: 1, shop: true },  // barbatana de tubarao
+    { id: 'sorvete', lvl: 1, r: 1, shop: true },  // duas bolas de sorvete com cereja
+    { id: 'alavanca', lvl: 1, r: 2, shop: true }, // alavanca de fliperama
+    { id: 'cogumelo', lvl: 1, r: 1, shop: true }, // chapeu de cogumelo
   ],
   eyes: [
     { id: 'classic', lvl: 1, r: 0 },     // olho de torta
@@ -102,6 +105,10 @@ LOOKS.skin = [
   { id: 'lapis', lvl: 1, r: 1, shop: true },       // rabisco a lapis
   { id: 'giz', lvl: 1, r: 1, shop: true },         // giz de cera
   { id: 'planta', lvl: 1, r: 1, shop: true },      // planta azul (papel de projeto)
+  { id: 'papelao', lvl: 1, r: 1, shop: true },     // caixa de papelao com fita
+  { id: 'trico', lvl: 1, r: 1, shop: true },       // trico de la listrado
+  { id: 'aquarela', lvl: 1, r: 2, shop: true },    // aquarela molhada
+  { id: 'pixel', lvl: 1, r: 2, shop: true },       // blocos de 8 bits
 ];
 export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none', skin: 'none' };
 

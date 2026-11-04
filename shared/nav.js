@@ -19,10 +19,15 @@ function grid(M) {
   const low = new Uint8Array(N * N); // so passa agachado (teto entre DUCK e BODY): duto do Banco Ferradura (03/11)
   // empilhamento: caixa mais baixa primeiro, cada uma so vira chao se apoiar no chao atual
   const boxes = [...M.boxes].sort((a, b) => a.min[1] - b.min[1]);
+  // indice por regiao de 8 m (04/11): mapa grande (deserto) testava toda caixa em cada celula = 2,5 s. Mesma ordem (de baixo pra cima)
+  const BK = 8, NB = Math.ceil((A * 2) / BK), bins = Array.from({ length: NB * NB }, () => []);
+  const binOf = (v) => Math.max(0, Math.min(NB - 1, Math.floor((v + A) / BK)));
+  for (const b of boxes) for (let bz = binOf(b.min[2] - RAD); bz <= binOf(b.max[2] + RAD); bz++) for (let bx = binOf(b.min[0] - RAD); bx <= binOf(b.max[0] + RAD); bx++) bins[bz * NB + bx].push(b);
+  const near = (x, z) => bins[binOf(z) * NB + binOf(x)];
   for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
     const x = cx * CELL - A + CELL / 2, z = cz * CELL - A + CELL / 2;
     let f = 0;
-    for (const b of boxes) {
+    for (const b of near(x, z)) {
       if (x < b.min[0] || x > b.max[0] || z < b.min[2] || z > b.max[2]) continue;
       if ((b.min[1] <= f + 0.05 || b.deck) && b.max[1] > f) f = b.max[1]; // deck: tabuleiro de viaduto que o trilho cruza (sobe pela rampa)
     }
@@ -32,7 +37,7 @@ function grid(M) {
   for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
     const i = cz * N + cx, f = floor[i];
     const x = cx * CELL - A + CELL / 2, z = cz * CELL - A + CELL / 2;
-    for (const b of M.boxes) {
+    for (const b of near(x, z)) {
       if (x < b.min[0] - RAD || x > b.max[0] + RAD || z < b.min[2] - RAD || z > b.max[2] + RAD) continue;
       if (b.max[1] <= f + STEP || b.min[1] >= f + BODY) continue; // da pra subir, ou passa por cima da cabeca
       if (b.min[1] >= f + DUCK) { low[i] = 1; continue; } // teto baixo: agachado passa

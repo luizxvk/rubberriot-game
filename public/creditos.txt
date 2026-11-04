@@ -10,4 +10,18 @@ Rubber Riot - creditos de modelos 3D de terceiros (licenca CC-BY 4.0, uso com at
 
 Licenca: http://creativecommons.org/licenses/by/4.0/
 
-Modelos do Roube o Cofre (cofre e van): gerados por IA no Tripo (tripo3d.ai) com a conta da Fokus Studios.
+Modelos do Roube o Cofre (cofre e van), biplano, Dirigivel Bombardeiro, Sentinela, Sinalizador, carros e caminhao: gerados por IA no Tripo (tripo3d.ai) com a conta da Fokus Studios.
+- "Low Poly Sword Set" por denizdemirieu (https://sketchfab.com/denizdemirieu), CC-BY 4.0: espadas Cutelo do Corsario, Lamina Real e Katana
+  https://sketchfab.com/3d-models/low-poly-sword-set-1fd00ad038e64df68e1155f9273d8801
+- "Low-Poly Weapon Asset Pack" por r2detta (https://sketchfab.com/r2detta), CC-BY 4.0: Minigun, metralhadoras M249 e M60 e o Canhao de Mao
+  https://sketchfab.com/3d-models/low-poly-weapon-asset-pack-762c43cc1532421eb0452b64e2bdd483
+- "Low poly - Pulse Gun [FREE] Download" por TRUTH_319 (https://sketchfab.com/truth_319), CC-BY 4.0: skin Pulse Futurista (Futuristic Weapon Pack)
+  https://sketchfab.com/3d-models/low-poly-pulse-gun-free-download-91056e0f4cd549288e9b19206d166c0a
+- "Fictional Gun - Optimized For Roblox Studio" por Matrix1635 (https://sketchfab.com/Matrix1635), CC-BY 4.0: skin Fictional Futurista (Futuristic Weapon Pack; recolorida, sem a luneta, com neon)
+  https://sketchfab.com/3d-models/fictional-gun-optimized-for-roblox-studio-e1b9ba9a4fc84b56a93fdc0342424075
+- "Low Poly M107" por LowPolyCount (https://sketchfab.com/EndangeredOXX), CC-BY 4.0: Marretao (sniper)
+  https://sketchfab.com/3d-models/low-poly-m107-5673babdab2a4c808bd4b09626a04782
+- "Light Saber" por Jotapc (https://sketchfab.com/Jotapc), CC-BY 4.0: cabo do Sabre de Neon (lamina desenhada no jogo)
+  https://sketchfab.com/3d-models/light-saber-8fddc6575b4f48ddac6ebfe2606c1e3f
+- "Low Poly Attachments-Pistol" por CastleBravo (https://sketchfab.com/BravoCastle), CC-BY 4.0: silenciadores, laser e lanterna
+  https://sketchfab.com/3d-models/low-poly-attachments-pistol-8520bf89168641caa089019054b5b710

@@ -2,7 +2,7 @@
 // recalculado por frame), luvas brancas, olhos de fatia de torta.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { ink, toon, PAL, wordTexture } from './toon.js';
+import { ink, toon, PAL, wordTexture, smoothGeo } from './toon.js';
 import { buildGun, disposeGun } from './arsenal.js';
 import { cleanLook } from '../shared/looks.js';
 import { eyeTex, buildEyewear, buildHat, styleGlove, patternTex, buildFx, skinMat, antiFlicker } from './looks3d.js';
@@ -108,6 +108,20 @@ function gloveGeo(fingers) {
     return g;
   });
 }
+// luva segurando cabo de espada (04/11): os 3 dedos dao a volta num cabo que passa pela origem no eixo X; pulso no +Y
+function gripGeo() {
+  return shared('gloveGrip', () => {
+    const parts = [new THREE.SphereGeometry(0.1, 12, 10).scale(1.1, 0.8, 1).translate(0, 0.09, 0)], o = new THREE.Object3D();
+    const add = (geo, p, r = [0, 0, 0]) => { o.position.set(...p); o.rotation.set(...r); o.updateMatrix(); parts.push(geo.applyMatrix4(o.matrix)); };
+    add(new THREE.CylinderGeometry(0.1, 0.13, 0.08, 10), [0, 0.2, 0]);
+    add(new THREE.TorusGeometry(0.13, 0.022, 6, 14), [0, 0.24, 0], [Math.PI / 2, 0, 0]);
+    for (let i = 0; i < 3; i++) add(new THREE.TorusGeometry(0.075, 0.038, 8, 16), [-0.08 + i * 0.08, 0, 0], [0, Math.PI / 2, 0]);
+    add(new THREE.CapsuleGeometry(0.036, 0.07, 3, 8), [0.135, 0.05, 0.04], [0, 0, Math.PI / 2]);
+    const g = mergeGeometries(parts); parts.forEach(p => p.dispose());
+    return g;
+  });
+}
+const gX = new THREE.Vector3(), gY = new THREE.Vector3(), gZ = new THREE.Vector3(), gM = new THREE.Matrix4();
 function stripeTex() {
   if (STRIPE) return STRIPE;
   const c = document.createElement('canvas'); c.width = 256; c.height = 16;
@@ -119,6 +133,10 @@ function stripeTex() {
 
 // a partir daqui (m) o boneco perde os detalhes pequenos
 const LOD_FAR = 18;
+
+// pose de sentado no carro (04/11): coordenadas do corpo do boneco (quadril em y 0.72, frente = -z).
+// sink = quanto o corpo desce (o quadril encosta no banco); pe e joelho vao pra frente; wheel = centro do volante
+export const SEAT_POSE = { sink: 0.42, footX: 0.2, footY: 0.32, footZ: -0.62, kneeX: 0.22, kneeY: 0.86, kneeZ: -0.42, wheel: [0, 1.12, -0.5], wheelR: 0.17 };
 
 export class Character {
   constructor(team, name, look = null) {
@@ -242,7 +260,7 @@ export class Character {
     this.eyewear = buildEyewear(L.eyes); if (this.eyewear) { antiFlicker(this.eyewear); this.head.add(this.eyewear); }
     if (this.hat) this.head.remove(this.hat);
     this.hat = buildHat(L.hat, tc); if (this.hat) { antiFlicker(this.hat); this.head.add(this.hat); }
-    if (this.curl) this.curl.visible = !['bolo', 'tubarao'].includes(L.hat); // chapeu que cobre o topo: o topete atravessava
+    if (this.curl) this.curl.visible = !['bolo', 'tubarao', 'sorvete', 'cogumelo', 'alavanca'].includes(L.hat); // chapeu que cobre o topo: o topete atravessava
     styleGlove(this.handR, L.glove, L.gloveCol); styleGlove(this.handL, L.glove, L.gloveCol);
     for (const h of [this.handR, this.handL]) for (const c of h.children) if (c.userData.gloveExtra) antiFlicker(c, 2); // peca extra da luva (polegar, anel...) por cima da luva
     if (this.fx) this.root.remove(this.fx.group);
@@ -251,12 +269,25 @@ export class Character {
     if (this.far) for (const o of this.details) o.visible = false;
   }
 
+  // espada: as duas luvas trocam pela que fecha os dedos no cabo (sem dedos no visual = fica a luva dele)
+  twoHand(on) {
+    if (on === !!this.gripOn) return;
+    this.gripOn = on;
+    for (const h of [this.handR, this.handL]) {
+      if (on && h.geometry !== h.userData.fingerGeo?.[0]) continue;
+      const geo = on ? gripGeo() : h.userData.fingerGeo[0], ol = h.children.find(c => c.isMesh && c.material?.isShaderMaterial);
+      h.geometry = geo; if (ol) ol.geometry = smoothGeo(geo);
+      if (!on) h.quaternion.identity();
+    }
+  }
+
   setWeapon(id, lo = null) {
     this.wpn = id;
     disposeGun(this.gun); // a arma velha era so deste boneco: libera a pintura (vazava a cada troca)
     this.gunHolder.clear();
     this.gun = buildGun(id, lo);
-    if (id === 'melee') this.gun.scale.setScalar(1.6); // faca na mao (01/11): maior pra ler de longe
+    if (id === 'melee') this.gun.scale.setScalar(this.gun.userData.sword ? 1.05 : 1.6); /* espada ja e comprida (04/11) */ // faca na mao (01/11): maior pra ler de longe
+    this.twoHand(id === 'melee' && !!this.gun?.userData.sword);
     this.gunHolder.add(this.gun);
     this.meleeLo = lo?.melee || this.meleeLo || null;
     // akimbo: a segunda pistola vai na mao esquerda (espelho da direita)
@@ -334,6 +365,11 @@ export class Character {
     const moving = speed > 0.8 && anim !== 'jump' && anim !== 'slide';
     this.walkK = ease(this.walkK || 0, moving ? 1 : 0, 12); // passada some aos poucos (deslize, parar)
     const crouch = this.crouchK;
+    // sentado no carro (04/11): 'seat' = passageiro (arma na mao), 'drive' = motorista (maos no volante). SEAT_POSE
+    // tem tudo que muda (quanto afunda, onde ficam pe, joelho e maos): mexer na pose = mexer so ali
+    this.seatK = ease(this.seatK || 0, anim === 'seat' || anim === 'drive' ? 1 : 0, 12);
+    this.driveK = ease(this.driveK || 0, anim === 'drive' ? 1 : 0, 12);
+    const seat = this.seatK;
     // escalada (01/11): corpo pra frente, um joelho sobe na borda, mao esquerda agarrada la em cima, arma abaixada
     this.climbK = ease(this.climbK || 0, anim === 'climb' ? 1 : 0, anim === 'climb' ? 18 : 10);
     const climb = this.climbK;
@@ -359,7 +395,8 @@ export class Character {
     const bounce = moving ? Math.abs(Math.sin(ph)) : (Math.sin(t * 4.4 + this.phase) * 0.5 + 0.5) * 0.3;
     const sq = anim === 'jump' ? 1.12 : 1 + (bounce - 0.5) * 0.08;
     this.body.scale.set(1 / Math.sqrt(sq), sq * (1 - crouch * 0.35), 1 / Math.sqrt(sq));
-    this.body.position.y = moving ? bounce * 0.12 : 0;
+    this.body.position.y = moving && seat < 0.5 ? bounce * 0.12 : 0;
+    if (seat > 0.01) { this.body.position.y -= SEAT_POSE.sink * seat; this.body.scale.set(1, 1, 1); this.body.rotation.x = 0; } // sentado: parado (sem quique nem respiracao)
     this.body.rotation.x = this.leanK + fl * 0.35 - climb * 0.45;
     if (fl) this.body.scale.multiplyScalar(1 - fl * 0.06);
     // dupla: caido de barriga no chao, se arrastando (balanca de leve pra ler de longe)
@@ -379,6 +416,7 @@ export class Character {
       if (climb) b.lerp(side > 0 ? new THREE.Vector3(0.2, 0.62, -0.42) : new THREE.Vector3(-0.22, 0.12, 0.28), climb); // direita sobe, esquerda empurra
       // joelho de mangueira dobra pra frente
       const c = new THREE.Vector3(side * 0.24, (a.y + b.y) / 2, (a.z + b.z) / 2 - 0.18 - lift * 0.4);
+      if (seat > 0.01) { b.lerp(new THREE.Vector3(side * SEAT_POSE.footX, SEAT_POSE.footY, SEAT_POSE.footZ), seat); c.lerp(new THREE.Vector3(side * SEAT_POSE.kneeX, SEAT_POSE.kneeY, SEAT_POSE.kneeZ), seat); }
       leg.set(a, c, b);
       shoe.position.set(b.x, b.y - 0.02, b.z - 0.1);
       shoe.rotation.x = sw * 0.3;
@@ -394,9 +432,14 @@ export class Character {
       gp.position.set(0.2, 1.22 + crouch * -0.1, -0.42);
       gp.rotation.set(pitch * 0.8, 0, 0);
     }
+    if (seat > 0.5 && s.aimOff) { // sentado: o corpo fica de frente pro carro; braco e arma giram pra mira (cabeca acompanha)
+      const o = Math.max(-2.2, Math.min(2.2, s.aimOff)), c = Math.cos(o), sn = Math.sin(o), x = gp.position.x, z = gp.position.z;
+      gp.position.x = x * c + z * sn; gp.position.z = -x * sn + z * c; gp.rotation.y += o; this.head.rotation.y = o * 0.7;
+    } else this.head.rotation.y = 0;
     if (climb) { gp.position.lerp(new THREE.Vector3(0.32, 0.98, -0.18), climb); gp.rotation.set(gp.rotation.x * (1 - climb) - climb * 1.0, climb * 0.35, climb * 0.4); }
     const knife = this.wpn === 'melee';
-    if (knife && !sprinting) { gp.position.set(0.3, 1.28 + crouch * -0.1, -0.32); gp.rotation.set(0.75 + pitch * 0.5, -0.25, -0.2); } // guarda: lamina erguida, de lado (ve de longe)
+    const sw2h = knife && this.gripOn;
+    if (knife && !sprinting) { if (sw2h) { gp.position.set(0.12, 1.2 + crouch * -0.1, -0.44); gp.rotation.set(0.85 + pitch * 0.5, -0.12, -0.12); } /* espada: as duas maos, na frente do peito */ else { gp.position.set(0.3, 1.28 + crouch * -0.1, -0.32); gp.rotation.set(0.75 + pitch * 0.5, -0.25, -0.2); } } // guarda: lamina erguida, de lado (ve de longe)
     let sw = 0, se = 0;
     if (this.swingT > 0) { this.swingT -= dt; const p = 1 - Math.max(0, this.swingT) / this.swingDur; sw = Math.sin(p * Math.PI); se = p * p * (3 - 2 * p); }
     if (sw > 0 && knife) { // corte cruzado: sai alto a direita, atravessa na frente e termina baixo a esquerda
@@ -408,6 +451,7 @@ export class Character {
     if (this.gun) {
       gripR.copy(this.gun.userData.gripR.position).applyMatrix4(gp.matrix);
       gripL.copy(this.gun.userData.gripL.position).applyMatrix4(gp.matrix);
+      if (sw2h) { const s = this.gun.scale.x; gripR.copy(this.gun.userData.gripR.position).multiplyScalar(s).applyMatrix4(gp.matrix); gripL.copy(this.gun.userData.gripL.position).multiplyScalar(s).applyMatrix4(gp.matrix); }
     }
     if (this.gun2h) { // espelho do suporte da direita; a mao esquerda vai no cabo dela
       this.gun2h.position.set(-gp.position.x, gp.position.y, gp.position.z);
@@ -415,7 +459,7 @@ export class Character {
       this.gun2h.updateMatrix();
       gripL.copy(this.gun2h.children[0].userData.gripR.position).applyMatrix4(this.gun2h.matrix);
     }
-    const pump = sprinting ? Math.sin(ph) * 0.15 : 0;
+    const pump = sprinting && !sw2h ? Math.sin(ph) * 0.15 : 0;
     this.handR.position.copy(gripR); this.handR.position.z += pump * 0.3;
     this.handL.position.copy(gripL); this.handL.position.z -= pump * 0.5;
     if (this.wpn === 'fists' && sw > 0) { const h = this.punchL ? this.handL : this.handR; h.position.z -= 0.5 * sw; h.position.y += 0.12 * sw; h.position.x += (this.punchL ? 0.12 : -0.12) * sw; } // soco visto de fora, alternando as maos
@@ -460,8 +504,23 @@ export class Character {
       this.head.rotation.x = -hips * 0.08;
       return;
     }
-    this.armR.set(shR, new THREE.Vector3(0.48, 1.0, -0.1), this.handR.position);
-    this.armL.set(shL, new THREE.Vector3(-0.35, 1.0, -0.35), this.handL.position);
+    if (sw2h) for (const [h, sh] of [[this.handR, new THREE.Vector3(0.42, 1.0, -0.1)], [this.handL, new THREE.Vector3(-0.35, 1.0, -0.35)]]) { // dedos em volta do cabo, pulso pro cotovelo
+      gX.set(0, 0, -1).applyQuaternion(gp.quaternion);
+      gY.copy(sh).sub(h.position); gY.addScaledVector(gX, -gY.dot(gX)).normalize();
+      gZ.crossVectors(gX, gY);
+      h.quaternion.setFromRotationMatrix(gM.makeBasis(gX, gY, gZ));
+    }
+    const drive = this.driveK;
+    const noGun = drive > 0.3 || s.anim === 'drive'; // motorista guarda a arma (04/11: so passageiro atira)
+    gp.visible = !noGun; if (this.gun2h) this.gun2h.visible = !noGun; if (this.quickKnife && noGun) this.quickKnife.visible = false;
+    if (drive > 0.01) { // maos no volante, girando com a curva (s.steer -1..1)
+      const st = (s.steer || 0) * 0.5;
+      for (const [h, sx] of [[this.handR, 1], [this.handL, -1]]) h.position.lerp(new THREE.Vector3(SEAT_POSE.wheel[0] + sx * SEAT_POSE.wheelR * Math.cos(st), SEAT_POSE.wheel[1] + sx * SEAT_POSE.wheelR * Math.sin(st), SEAT_POSE.wheel[2]), drive); // aro do volante girado pela curva
+    }
+    const cR = new THREE.Vector3(0.48, 1.0, -0.1).lerp(new THREE.Vector3(0.42, 1.0, -0.25), drive), cL = new THREE.Vector3(-0.35, 1.0, -0.35).lerp(new THREE.Vector3(-0.42, 1.0, -0.25), drive);
+    this.armR.set(shR, cR, this.handR.position);
+    this.armL.set(shL, cL, this.handL.position);
+    if (!sw2h) { this.wristAlign(this.handR, cR, 0); this.wristAlign(this.handL, cL, 0); } // 04/11: a boca da luva sai sempre na direcao do braco
     if (this.gun && this.gun.userData.spin) this.gun.userData.spin.rotation.z += dt * (s.firing ? 30 : 2);
 
     this.shadow.scale.setScalar(1 - Math.min(0.6, (s.airH || 0) * 0.15));

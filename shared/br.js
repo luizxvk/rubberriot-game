@@ -12,7 +12,7 @@ import { floorAt, standable } from './nav.js';
 const rnd = (a, b) => a + Math.random() * (b - a);
 const RANK = ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'minigun'];
 // limite: 2 principais + pistola + punhos. Cheio, trocar e decisao (segurar E em cima da arma).
-const PRIM = ['smg', 'rifle', 'shotgun', 'sniper', 'minigun'];
+const PRIM = ['smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'minigun'];
 export const BR_PRIM_MAX = 2;
 const bestGun = (owned) => [...owned].filter(w => w !== 'fists' && w !== 'melee').sort((a, b) => RANK.indexOf(b) - RANK.indexOf(a))[0] || null;
 

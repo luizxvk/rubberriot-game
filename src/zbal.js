@@ -10,6 +10,12 @@ export function renderBal(el) {
   const p = me?.zionsPoints, c = me?.zions, ok = Number.isFinite(p) || Number.isFinite(c);
   el.hidden = !ok;
   if (!ok) { el.innerHTML = ''; return; }
+  if (el.classList.contains('wallet')) { // carteira do menu: duas linhas alinhadas (moeda | valor | nome)
+    el.innerHTML = `<span class="wl-row pts"><img src="${IMG}zion-points.png" alt=""><b>${fmt(p)}</b><small>Zions Points</small></span>`
+      + `<span class="wl-row cash"><img src="${IMG}zion-cash.png" alt=""><b>${fmt(c)}</b><small>Zions Cash</small></span>`;
+    el.setAttribute('aria-label', `Zions Points ${fmt(p)}, Zions Cash ${fmt(c)}`);
+    return;
+  }
   el.innerHTML = `<span class="zb pts" title="Zions Points"><img src="${IMG}zion-points.png" alt=""><b>${fmt(p)}</b><small>Points</small></span>`
     + `<span class="zb cash" title="Zions Cash"><img src="${IMG}zion-cash.png" alt=""><b>${fmt(c)}</b><small>Cash</small></span>`;
   el.setAttribute('aria-label', `Zions Points ${fmt(p)}, Zions Cash ${fmt(c)}`);
