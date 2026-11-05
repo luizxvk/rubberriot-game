@@ -12,18 +12,19 @@ const ICO = {
   streaks: 'M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z',
   desert: 'M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22L14 6z',
   newcat: 'M7 4v2h3v2H6a2 2 0 0 0-2 2v8h4v-4h4l3 3h5v-5h-2V8h-4V6h3V4H7z',
+  ranked: 'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z',
+  canted: 'M15.55 5.55L11 1v3.07C7.06 4.56 4 7.92 4 12s3.05 7.44 7 7.93v-2.02c-2.84-.48-5-2.94-5-5.91s2.16-5.43 5-5.91V10l4.55-4.45zM13 17.9v2.02c1.39-.17 2.74-.71 3.9-1.61l-1.44-1.44c-.75.54-1.59.89-2.46 1.03zm3.89-2.42 1.42 1.41c.9-1.16 1.45-2.5 1.62-3.89h-2.02c-.14.87-.48 1.72-1.02 2.48z',
   shop: 'M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM5 19v-6.03c.08.01.15.03.23.03.87 0 1.66-.36 2.24-.95.6.6 1.4.95 2.31.95.87 0 1.65-.36 2.23-.93.59.57 1.39.93 2.29.93.84 0 1.64-.35 2.24-.95.58.59 1.37.95 2.24.95.08 0 .15-.02.23-.03V19H5z',
 };
 // go: tela que abre ('play' = escolher o modo, igual ao Jogar)
 const SLIDES = [
   { id: 'shop', c: '#c9356a', go: 'shop' },
+  { id: 'ranked', c: '#a8741a', go: 'mp' },
+  { id: 'canted', c: '#a83a2c', go: 'arsenal' },
+  { id: 'desert', c: '#c98a3a', go: 'play' },
+  { id: 'newcat', c: '#3f7a6a', go: 'arsenal' },
   { id: 'heist', c: '#d99a1e', go: 'play' },
   { id: 'borroes', c: '#7b33cc', go: 'play' },
-  { id: 'guns', c: '#a83a2c', go: 'arsenal' },
-  { id: 'streaks', c: '#2f5b8a', go: 'play' },
-  // em breve (03/11, pedido dele): sem tela pra abrir ainda (go: null = so mostra)
-  { id: 'desert', c: '#c98a3a', go: null, soon: true },
-  { id: 'newcat', c: '#3f7a6a', go: null, soon: true },
 ];
 const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICO[k]}"/></svg>`;
 
@@ -78,3 +79,21 @@ export function initAnn(go) {
   }
 }
 export const relangAnn = () => { draw(); show(idx); };
+
+// banners Elite e Instagram (05/11, pedido dele: o cartaz estava sobrecarregado). PC largo: coluna da direita, embaixo das Novidades,
+// em cor sobre o cenario P&B. Tela estreita e toque: voltam pro cartaz, numa faixa fina com os dois lado a lado.
+export function placePromos() {
+  const stack = document.querySelector('.promo-stack'), side = document.getElementById('homeSide'), frame = document.querySelector('.poster-frame'), wallet = document.getElementById('homeBal');
+  if (!stack || !side || !frame) return;
+  const wide = matchMedia('(min-width: 1200px) and (min-height: 600px)');
+  const place = () => {
+    const out = wide.matches && !document.body.classList.contains('touchmode');
+    if (out && stack.parentElement !== side) side.appendChild(stack);
+    else if (!out && stack.parentElement !== frame) frame.insertBefore(stack, wallet);
+    document.documentElement.style.setProperty('--home-side-h', out ? side.offsetHeight + 'px' : '0px');
+  };
+  wide.addEventListener('change', place);
+  new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  new ResizeObserver(place).observe(side);
+  place();
+}

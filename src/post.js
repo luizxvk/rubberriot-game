@@ -61,7 +61,9 @@ const FilmShader = {
 };
 
 export function makePipeline(renderer, scene, camera, vm) {
-  const composer = new EffectComposer(renderer);
+  // 05/11 (pedido dele): o pos-processo desenhava sem antisserrilhado e toda borda de malha tremia andando. No toque fica sem (celular)
+  const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(sz.x || 1, sz.y || 1, { type: THREE.HalfFloatType, samples: matchMedia('(pointer: coarse)').matches ? 0 : 4 }));
   composer.addPass(new RenderPass(scene, camera));
   const vmPass = new RenderPass(vm.scene, vm.camera);
   vmPass.clear = false;

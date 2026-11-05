@@ -42,9 +42,9 @@ export class Replay {
     if (G.snap?.over) { this.overAt ??= now; if (now - this.overAt > CLIP_AFTER) return; }
     this.lastRec = now;
     const p = new Map();
-    for (const r of G.remotes.values()) p.set(r.id, { pos: [...r.pos], yaw: r.char.root.rotation.y, pitch: r.pitch || 0, anim: r.anim, alive: r.alive, speed: r.speed || 0, wpn: r.wpn, ad: r.ad || 0, eye: EYE(r.anim) });
+    for (const r of G.remotes.values()) p.set(r.id, { pos: [...r.pos], yaw: r.char.root.rotation.y, pitch: r.pitch || 0, anim: r.anim, alive: r.alive, speed: r.speed || 0, wpn: r.wpn, ad: r.ad || 0, ca: r.ca || 0, eye: EYE(r.anim) });
     const P = G.player;
-    if (P) p.set(G.myId, { pos: [...P.pos], yaw: P.yaw, pitch: P.pitch, anim: G.me?.anim || 'idle', alive: P.alive, speed: Math.hypot(P.vel[0], P.vel[2]), wpn: P.wpn, ad: P.adsK || 0, eye: P.eye || 1.55 });
+    if (P) p.set(G.myId, { pos: [...P.pos], yaw: P.yaw, pitch: P.pitch, anim: G.me?.anim || 'idle', alive: P.alive, speed: Math.hypot(P.vel[0], P.vel[2]), wpn: P.wpn, ad: P.adsK || 0, ca: G.vm?.canted ? 1 : 0, eye: P.eye || 1.55 });
     this.hist.push({ t: now, p });
     while (this.hist.length && now - this.hist[0].t > KEEP) this.hist.shift();
     while (this.shots.length && now - this.shots[0].t > KEEP) this.shots.shift();
@@ -52,7 +52,7 @@ export class Replay {
   }
   shot(now, s) { if (!this.on) this.shots.push({ t: now, ...s }); }
   swing(now, id) { if (!this.on) this.swings.push({ t: now, id }); } // golpes de arma branca: o replay repete (04/11, pedido dele)
-  setKill(now, e, pos, myId) { if (this.on) return; this.kill = { t: now, a: e.a || null, v: e.v, wpn: e.wpn, head: !!e.head, pos: pos ? [...pos] : null }; if (myId && e.a === myId) this.mine = this.kill; } // mine = ultimo abate meu (clipe)
+  setKill(now, e, pos, myId) { if (this.on) return; this.kill = { t: now, a: e.a || null, v: e.v, wpn: e.wpn, head: !!e.head, pos: pos ? [...pos] : null, bn: e.bn || null }; if (myId && e.a === myId) this.mine = this.kill; } // mine = ultimo abate meu (clipe)
   // clipe: tem abate meu (ou o final) ainda dentro da gravacao?
   clipKill() { const last = this.hist[this.hist.length - 1]?.t ?? -1, ok = (K) => K && last - K.t <= KEEP - CLIP_BEFORE && this.hist.length >= 10; return ok(this.mine) ? this.mine : ok(this.kill) ? this.kill : null; }
 
@@ -64,7 +64,7 @@ export class Replay {
     if (!a) return b || null;
     if (!b || !a.alive || !b.alive) return a;
     const k = Math.min(1, Math.max(0, (t - H[i].t) / (nb.t - H[i].t)));
-    return { pos: [a.pos[0] + (b.pos[0] - a.pos[0]) * k, a.pos[1] + (b.pos[1] - a.pos[1]) * k, a.pos[2] + (b.pos[2] - a.pos[2]) * k], yaw: lerpA(a.yaw, b.yaw, k), pitch: a.pitch + (b.pitch - a.pitch) * k, anim: a.anim, alive: a.alive, speed: a.speed, wpn: a.wpn, ad: a.ad + (b.ad - a.ad) * k, eye: a.eye + (b.eye - a.eye) * k };
+    return { ca: k < 0.5 ? a.ca : b.ca, pos: [a.pos[0] + (b.pos[0] - a.pos[0]) * k, a.pos[1] + (b.pos[1] - a.pos[1]) * k, a.pos[2] + (b.pos[2] - a.pos[2]) * k], yaw: lerpA(a.yaw, b.yaw, k), pitch: a.pitch + (b.pitch - a.pitch) * k, anim: a.anim, alive: a.alive, speed: a.speed, wpn: a.wpn, ad: a.ad + (b.ad - a.ad) * k, eye: a.eye + (b.eye - a.eye) * k };
   }
 
   // olho de quem matou: curva suave que passa exatamente por cada foto (linear a 20/s dava quina na primeira pessoa)
@@ -83,7 +83,7 @@ export class Replay {
     if (!this.on || !this.fpVm) return null;
     const s = this.sample(this.rt, this.kill.a); if (!s) return null;
     const sp = s.speed || 0, run = s.anim === 'sprint' || s.anim === 'tac';
-    return { dt: this.dt, moving: sp > 1.5 && s.anim !== 'jump', speed: sp, sprint: run, tac: s.anim === 'tac', ads: this.bigScope ? 0 : s.ad || 0, crouch: s.anim === 'crouch', air: s.anim === 'jump', pistolSprint: run && s.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false };
+    return { dt: this.dt, moving: sp > 1.5 && s.anim !== 'jump', speed: sp, sprint: run, tac: s.anim === 'tac', ads: this.bigScope && !s.ca ? 0 : s.ad || 0, crouch: s.anim === 'crouch', air: s.anim === 'jump', pistolSprint: run && s.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false };
   }
 
   // comeca o replay; devolve false se nao tem o que repassar (abate velho demais, sem gravacao)
@@ -242,7 +242,8 @@ export class Replay {
         if (w > 0.55 && a.wpn) {
           const key = K.a + '|' + a.wpn;
           if (this.fpKey !== key) { this.fpKey = key; G.specVm = 'replay'; vm?.setWeapon(a.wpn, K.a === G.myId ? G.player?.lo?.(a.wpn) : G.remoteLo?.get(K.a)?.[a.wpn] || null); vm?.setGloves(G.lookOfId?.(K.a)); }
-          this.fpVm = !this.bigScope;
+          this.fpVm = !this.bigScope || !!a.ca; // mira 45 graus: a luneta sai e a troca aparece na tela de morte (05/11)
+          if (vm) vm.canted = !!a.ca && !!vm.gun?.userData.canted;
         }
       }
     }

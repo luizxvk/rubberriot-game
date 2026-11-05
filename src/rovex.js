@@ -72,7 +72,7 @@ export async function loadMe() {
   try {
     const u = await call('/users/me', { timeout: 5000 });
     // elite = assinatura Elite da Rovex ativa (o servidor ja confere a validade)
-    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14), elite: !!u.isElite, email: typeof u.email === 'string' ? u.email : '', zions: Number.isFinite(u.zions) ? u.zions : null, zionsPoints: Number.isFinite(u.zionsPoints) ? u.zionsPoints : null } : null; // saldo de Zions Points mostrado na loja
+    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14), elite: !!u.isElite, email: typeof u.email === 'string' ? u.email : '', zions: Number.isFinite(u.zions) ? u.zions : null, zionsPoints: Number.isFinite(u.zionsPoints) ? u.zionsPoints : null, vaultPoints: Number.isFinite(u.vaultPoints) ? u.vaultPoints : 0 } : null; // saldo de Zions Points mostrado na loja
   } catch { me = null; }
   try { dispatchEvent(new Event('rovex-me')); } catch { /* fora do navegador */ } // saldos de Zions na tela atualizam (zbal.js)
   if (me) loadShop(); // o que comprou na Loja + saldos (sem esperar: nao atrasa a entrada)
@@ -114,6 +114,27 @@ export async function buyItem(sku) {
     return { ok: true };
   } catch { return { code: 'erro' }; }
 }
+// ranking da rankeada (05/11): mundial (qualquer um ve) e de amigos (precisa de conta)
+export async function rankingBoard(tipo) {
+  if (tipo === 'amigos' && (!token() || !me)) return { code: 'login' };
+  try {
+    const j = await call('/games/rubber-riot/ranking?tipo=' + encodeURIComponent(tipo), { timeout: 8000 });
+    if (!j || !Array.isArray(j.lista)) return { code: 'erro' };
+    return { lista: j.lista, eu: j.eu || null, meuId: me?.id || null };
+  } catch { return { code: 'erro' }; }
+}
+// resgate do Elite (05/11): sem Zions, entra na conta; quem confere a assinatura e o servidor
+export async function redeemItem(sku) {
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/loja/resgatar', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ sku }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { code: j.code || 'erro' };
+    me.rrOwned = j.itens || me.rrOwned;
+    dispatchEvent(new Event('rovex-me'));
+    return { ok: true };
+  } catch { return { code: 'erro' }; }
+}
 // fim de partida: conta o que aconteceu; quem decide o valor e deposita e o servidor (zpCredit em shared/shop.js)
 export async function claimZions(won, ch) {
   if (!token() || !me) return { code: 'login' };
@@ -144,6 +165,12 @@ export async function supportCheckout(amount) {
 export async function zionsCheckout(zions) {
   const j = await call('/payment/stripe/zions/create-session', { method: 'POST', body: { zions, type: 'points', from: STANDALONE ? 'rr' : undefined }, timeout: 12000 });
   return j?.url || null;
+}
+
+// pacote do Rovex Vault (05/11, pedido dele): o marco de 100 Vault Points (4.000 ZP; 8.000 com Elite). Quem confere o marco, o Elite e o preco e o servidor
+export async function vaultCheckout(tierId) {
+  const j = await call('/vault/purchase', { method: 'POST', body: { tierId }, timeout: 12000 });
+  return j?.paymentUrl || null;
 }
 
 // ---------- save na conta ----------

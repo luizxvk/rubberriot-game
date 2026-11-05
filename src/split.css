@@ -49,7 +49,7 @@
 .ss-rows { display: grid; gap: 4px; width: 100%; max-width: 330px; }
 .ss-row { display: grid; grid-template-columns: 4em 26px minmax(0, 1fr) 26px; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 10px; border: 2px solid transparent; }
 .ss-row span { font-size: 14px; font-weight: 600; color: var(--graphite); }
-.ss-row b { font-family: var(--display); font-weight: 400; font-size: 15px; text-align: center; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-row b { font-family: var(--display); font-weight: 400; font-size: 15px; text-align: center; line-height: 1.1; white-space: nowrap; overflow: hidden; }
 .ss-row.on { border-color: var(--ink); background: var(--paper-2); }
 .ss-arr { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; }
 .ss-arr svg { width: 20px; height: 20px; fill: var(--ink); }

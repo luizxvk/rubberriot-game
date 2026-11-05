@@ -1,6 +1,7 @@
 // Visual do proprio boneco: localStorage (espelhado na conta Rovex pelo save) + desbloqueio.
-import { LOOKS, DEFAULT_LOOK, cleanLook } from '../shared/looks.js';
-import { unlockLevel, progressInfo, rankData, metaOwned, passHasLook } from './progress.js';
+import { LOOKS, DEFAULT_LOOK, cleanLook, DANCE_INFO, DANCE_DEFAULT } from '../shared/looks.js';
+import { unlockLevel, progressInfo, rankData, metaOwned, passHasLook, passHasDance, passHasBanner } from './progress.js';
+import { BANNERS } from '../shared/banners.js';
 import { unlockDone } from './challenges.js';
 import { me as rovexMe } from './rovex.js';
 import { shopOwned } from './shopstore.js';
@@ -17,6 +18,7 @@ export function lookOpen(slot, id) {
   const it = LOOKS[slot]?.find(i => i.id === id);
   if (!it) return false;
   if (it.shop) return !!progressInfo().unlockAll || shopOwned(slot + ':' + id); // so da Loja
+  if (it.pass) return passHasLook(slot, id); // so do Rovex Pass
   if (it.elite) return !!rovexMe?.elite;
   if (it.acct) return !!rovexMe; // premio de quem tem conta Rovex (guest ve trancado)
   if (it.meta) return metaOwned(); // set da meta da comunidade
@@ -24,6 +26,11 @@ export function lookOpen(slot, id) {
   if (it.ch) return unlockDone(it.ch) || !!progressInfo().unlockAll;
   return unlockLevel() >= (it.lvl || 1) || passHasLook(slot, id); // nivel do jogador ou premio do Rovex Pass
 }
+
+// danças (05/11): as 3 do podio ficam nos ajustes (vao com a conta). So valem as liberadas; espaco vazio volta pro padrao
+export function danceOpen(id) { const it = DANCE_INFO[id]; if (!it) return false; if (it.rank != null) return !!progressInfo().unlockAll || rankData().peak >= it.rank; if (it.shop) return !!progressInfo().unlockAll || shopOwned('dance:' + id); if (it.pass) return !!progressInfo().unlockAll || passHasDance(id); return !!progressInfo().unlockAll || unlockLevel() >= (it.lvl || 1); }
+export function bannerOpen(id) { const b = BANNERS.find(x => x.id === id); if (!b) return false; if (b.shop) return !!progressInfo().unlockAll || shopOwned('banner:' + id); if (b.pass) return passHasBanner(id); return !!progressInfo().unlockAll || unlockLevel() >= b.lvl; }
+export const wornDances = (S) => [0, 1, 2].map(i => { const d = S?.dances?.[i]; return d && danceOpen(d) ? d : DANCE_DEFAULT[i]; });
 
 // na partida so vale o que esta liberado (o salvo fica intacto: o Elite pode voltar)
 export function wornLook() {

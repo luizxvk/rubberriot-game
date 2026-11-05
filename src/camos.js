@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 // Camuflagens procedurais (estaticas e animadas). Nomes originais, nada de marca de outro jogo.
 // O desenho roda no shader da arma, em espaco do objeto (fica preso na arma, nao na tela).
 export const camoTime = { value: 0 };
@@ -63,6 +64,10 @@ export const CAMOS = [
   { id: 'aurora', code: 41, anim: true, shop: true, fx: 'stars' },
   // meta da comunidade (31/10): Ouro da Borracha, so pra quem jogou na semana que bateu 1 milhao de PLAFTs
   { id: 'plaftgold', code: 44, anim: true, meta: true, fx: 'stars' },
+  // conta Rovex (05/11, pedido dele): so pra quem tem conta. Logo classic text de verdade (textura), correndo sobre plasma violeta
+  { id: 'rovex', code: 60, anim: true, acct: true, fx: 'stars' },
+  // rankeada, faixa Mestre (05/11): shader so dela, nao reaproveita outra camo
+  { id: 'cinturao', code: 61, anim: true, rank: 4, fx: 'stars' },
   // Rovex Pass (04/11): so saem do Pass (pass = nivel). Padrao que ja existe com efeito proprio em volta da arma
   { id: 'ps_jornal', code: 16, pass: 1, fx: 'drip' }, { id: 'ps_zebra', code: 13, pass: 3, fx: 'stars' }, { id: 'ps_circo', code: 14, pass: 5, fx: 'flame' },
   { id: 'ps_filme', code: 17, anim: true, pass: 7, fx: 'drip' }, { id: 'ps_choque', code: 19, anim: true, pass: 9, fx: 'storm' }, { id: 'ps_fogo', code: 18, anim: true, pass: 10, fx: 'flame' },
@@ -76,6 +81,8 @@ export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 
 // cor de amostra pra lista do arsenal (css)
 export const CAMO_SWATCH = {
+  cinturao: 'radial-gradient(circle at 50% 50%,#f6d15a 0 26%,transparent 28%),repeating-linear-gradient(90deg,#7a1712 0 6px,#5a0f0c 6px 8px)',
+  rovex: 'radial-gradient(circle at 70% 30%,#b06bff,transparent 55%),linear-gradient(135deg,#1a0b3a,#4b1fa3)',
   ps_jornal: 'repeating-linear-gradient(0deg,#d8d2c2 0 3px,#8d8778 3px 4px),linear-gradient(#5d7f9c,#2f4b63)', ps_zebra: 'repeating-linear-gradient(60deg,#141210 0 7px,#f4efe2 7px 14px)', ps_circo: 'repeating-linear-gradient(90deg,#c63a2c 0 9px,#f4d9a0 9px 18px)',
   ps_filme: 'repeating-linear-gradient(90deg,#1c1a18 0 6px,#8a6b3a 6px 8px,#1c1a18 8px 12px)', ps_choque: 'linear-gradient(135deg,#1b2a5a,#35d0ff 48%,#fff 50%,#35d0ff 52%,#1b2a5a)', ps_fogo: 'radial-gradient(circle at 50% 90%,#ffd64a 15%,#f0702a 45%,#6b1a10 80%)',
   ps_cromo: 'linear-gradient(120deg,#6d7680,#f2f5f7 45%,#8d96a0 55%,#e4e8ec)', ps_neon: 'linear-gradient(135deg,#a8f3ff,#4cc6ff 50%,#b48cff)',
@@ -531,6 +538,34 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     glow = gold * sweep * 0.8 + burst * star * 0.15 * (0.5 + 0.5 * sin(t * 4.0 + rnd * 6.0));
     return col * (0.6 + lum * 0.55) + sweep * 0.35;
   }
+  if (k == 61) { // Cinturao de campeao: couro vermelho costurado, placas de ouro com rebite e estrela, e o brilho do flash dos fotografos passando
+    float along = p.z * 2.1, cell = fract(along) - 0.5, band = abs(fract(p.y * 1.5) - 0.5);
+    float plate = (1.0 - smoothstep(0.3, 0.33, abs(cell))) * (1.0 - smoothstep(0.34, 0.38, band));
+    float stitch = step(0.42, band) * step(0.5, fract(along * 8.0));
+    float a = atan(band * 2.0, cell) , r = length(vec2(cell, band));
+    float star = 1.0 - smoothstep(0.1 + 0.04 * cos(a * 5.0), 0.13 + 0.04 * cos(a * 5.0), r);
+    float rivet = 1.0 - smoothstep(0.022, 0.03, length(vec2(abs(cell) - 0.24, band - 0.26)));
+    float flash = smoothstep(0.93, 1.0, sin(p.z * 2.4 + p.y * 1.3 - t * 2.2));
+    vec3 leather = mix(vec3(0.34, 0.05, 0.04), vec3(0.5, 0.09, 0.06), c_n(vec3(p.z * 7.0, p.y * 7.0, 1.0)));
+    vec3 gold = mix(vec3(0.72, 0.5, 0.13), vec3(1.0, 0.84, 0.32), 0.5 + 0.5 * sin(p.z * 9.0 + p.y * 5.0));
+    vec3 col = mix(leather, vec3(0.92, 0.84, 0.6), stitch * (1.0 - plate));
+    col = mix(col, gold, plate); col = mix(col, vec3(0.45, 0.27, 0.05), rivet * plate); col = mix(col, vec3(1.0, 0.96, 0.72), star * plate);
+    glow = gold * plate * (flash * 0.9 + star * (0.3 + 0.2 * sin(t * 3.0))) * 0.8;
+    return col * (0.65 + lum * 0.5) + flash * plate * 0.25;
+  }
+  if (k == 60) { // Rovex: a logo em fileiras alternadas, cada fileira correndo pra um lado; o texto le certo dos dois lados da arma
+    float side = p.x >= 0.0 ? -1.0 : 1.0, ry = floor(p.y * 2.6), alt = mod(ry, 2.0);
+    vec2 q = vec2(p.z * side * 1.0 + alt * 0.5 + t * 0.07 * (alt * 2.0 - 1.0), p.y * 2.6);
+    vec2 f = fract(q), uv = (f - vec2(0.08, 0.1)) / vec2(0.84, 0.8);
+    float inb = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    float logo = texture2D(uRovexLogo, clamp(uv, 0.0, 1.0)).a * inb;
+    float flow = c_n(vec3(p.z * 1.3 - t * 0.28, p.y * 2.2, t * 0.16));
+    float sweep = smoothstep(0.86, 1.0, sin(p.z * 2.6 - p.y * 1.5 - t * 1.9));
+    vec3 bg = mix(vec3(0.05, 0.025, 0.13), vec3(0.34, 0.13, 0.72), smoothstep(0.25, 0.8, flow));
+    bg = mix(bg, vec3(0.78, 0.45, 1.0), sweep * 0.45);
+    glow = vec3(0.34, 0.13, 0.72) * flow * 0.28 + vec3(0.9, 0.82, 1.0) * logo * (0.3 + sweep * 0.8);
+    return mix(bg * (0.7 + lum * 0.5), vec3(0.98, 0.96, 1.0), logo);
+  }
   if (k == 31) { // prestigio (refeita 01/11, pedido dele "igual a plasma, com mais efeito"): plasma real violeta e
     // carmim se dobrando, veios de ouro correndo pelas ondas, estrelas douradas piscando e um brilho varrendo a arma
     vec3 q = p * 1.6;
@@ -654,6 +689,12 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
 // Direct3D e travava o jogo ao abrir o Arsenal; cada camo sozinha compila rapido e so uma vez.
 // Recorta do camoColor so o bloco `if (k == code)` (code 0 = nenhuma, so as funcoes de apoio).
 const camoCache = new Map();
+// a logo classic text que o jogo ja usa (public/brand); carrega so quando a camo aparece
+let rovexLogo = null;
+export function rovexLogoU() {
+  if (!rovexLogo) { const tx = new THREE.TextureLoader().load(import.meta.env.BASE_URL + 'brand/rovex-classic-white.png'); tx.colorSpace = THREE.NoColorSpace; tx.anisotropy = 8; rovexLogo = { value: tx }; }
+  return rovexLogo;
+}
 export function camoGlsl(code) {
   if (camoCache.has(code)) return camoCache.get(code);
   const lines = CAMO_GLSL.split('\n'), out = [];
@@ -668,7 +709,7 @@ export function camoGlsl(code) {
     }
     if (keep) out.push(ln);
   }
-  const g = out.join('\n');
+  const g = (code === 60 ? 'uniform sampler2D uRovexLogo;\n' : '') + out.join('\n'); // so a camo Rovex paga a textura
   camoCache.set(code, g);
   return g;
 }

@@ -104,6 +104,7 @@ export class Player {
       this.give('pistol', false); this.give(primary, false); this.give('melee', false);
       this.equip(primary, true);
     }
+    this.heat = 0; this.hot = false; this.heatT = 0;
     this.crouch = false; this.tacFuel = 3.5; this.slideT = 0; this.slideDir = null; this.slideCd = 0; this.cook = null;
   }
 
@@ -147,6 +148,21 @@ export class Player {
     if (!a || !Number.isFinite(a.reserve)) return;
     a.reserve += this.stats(this.wpn).mag * SKILLS.catador.mags;
     audio.play('pickup', { vol: 0.35, rate: 1.4 });
+  }
+  // caixa de municao (05/11): perto de uma caixa e com a reserva faltando, pede; quem confirma e o servidor
+  abxCap(id) { const { W } = this.stats(id); return Number.isFinite(W.reserve) ? Math.round(W.reserve * this.sk('bolso', 'reserve')) : Infinity; }
+  abxScan(dt) {
+    if ((this.abxCd = (this.abxCd || 0) - dt) > 0) return;
+    const L = this.g.snap?.abx; if (!L?.length) return;
+    const R = NADES.ammobox.radius, id = this.g.myId, team = this.g.me?.team;
+    const b = L.find(x => (x.owner === id || (x.team != null && x.team === team)) && Math.hypot(this.pos[0] - x.pos[0], this.pos[2] - x.pos[2]) < R && Math.abs(this.pos[1] - x.pos[1]) < 2.2);
+    if (!b || !this.owned.some(w => { const a = this.ammo[w]; return a && Number.isFinite(a.reserve) && a.reserve < this.abxCap(w); })) return;
+    this.g.net.send({ t: 'abx', id: b.id }); this.abxCd = 1;
+  }
+  abxGot() { // +1 pente na reserva de cada arma, sem passar do que ela carrega
+    this.abxCd = NADES.ammobox.cd;
+    for (const w of this.owned) { const a = this.ammo[w]; if (a && Number.isFinite(a.reserve)) a.reserve = Math.max(a.reserve, Math.min(this.abxCap(w), a.reserve + this.stats(w).mag)); }
+    audio.play('pickup', { vol: 0.6 });
   }
   // sangue frio: so vale com pouca vida
   cold(key) { return this.hp < SKILLS.sangue.below ? this.sk('sangue', key) : 1; }
@@ -233,10 +249,15 @@ export class Player {
   }
 
   step(dt, inp, S) {
+    this.abxScan(dt);
     // olhar
-    const sensK = S.sens * 0.0022 * (this.adsK > 0.5 ? S.adsSens * (1 / (this.zoomNow || 1)) ** 0.5 : 1);
-    this.yaw -= inp.lookX * sensK;
-    this.pitch -= inp.lookY * sensK * (S.invertY ? -1 : 1);
+    // cada aparelho com a sua sensibilidade e a sua sensibilidade mirando (05/11). A do controle ja vem no giro (gamepad.js)
+    const aim = this.adsK > 0.5, zoomK = aim ? (1 / (this.zoomNow || 1)) ** 0.5 : 1, kOf = (sens, ads) => sens * 0.0022 * (aim ? ads * zoomK : 1);
+    const kM = kOf(S.sens, S.adsSens), kT = kOf(S.touchSens ?? 1, S.touchAdsSens ?? 0.8), kP = kOf(1, S.padAdsSens ?? 0.8);
+    const lookYaw = (inp.lookX - (inp.padLookX || 0) - (inp.touchLookX || 0)) * kM + (inp.touchLookX || 0) * kT + (inp.padLookX || 0) * kP;
+    const lookPitch = (inp.lookY - (inp.padLookY || 0) - (inp.touchLookY || 0)) * kM + (inp.touchLookY || 0) * kT + (inp.padLookY || 0) * kP;
+    this.yaw -= lookYaw;
+    this.pitch -= lookPitch * (S.invertY ? -1 : 1);
     this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch));
     // recuo volta sozinho
     const rp = this.recoilP * Math.min(1, dt * 10); this.recoilP -= rp; this.pitch += rp;
@@ -490,7 +511,9 @@ export class Player {
     // minigun gira antes
     if (W.spin) this.spinK = fire && (!this.sprint || this.g.skills?.includes('fervor')) ? Math.min(1, this.spinK + dt / W.spin) : Math.max(0, this.spinK - dt);
     const runFire = this.g.skills?.includes('fervor') && !W.melee; // Fervoroso: correndo o gatilho vale
-    const running = (this.sprint || this.tac) && !runFire;
+    // superaquecida (05/11): esfria sozinha, com ou sem ela na mao; enquanto quente nao atira
+    { const H = WEAPONS.lmg.heat; if ((this.heatT = (this.heatT || 0) - dt) <= 0 && this.heat > 0) { this.heat = Math.max(0, this.heat - H.cool * dt); if (this.heat === 0) this.hot = false; } }
+    const running = ((this.sprint || this.tac) && !runFire) || !!(W.heat && this.hot);
     this.firing = fire && !running && this.switchT <= 0;
     // modo do modelo: automatica segura, semi uma por puxada, rajada solta N tiros seguidos
     const mode = st.mode || (W.auto ? 'auto' : 'semi');
@@ -557,7 +580,8 @@ export class Player {
     const leanT = !canLean ? 0 : S.leanMode === 'toggle' ? this.leanSet || 0 : (inp.leanL ? -1 : 0) + (inp.leanR && !this.g.bombCan ? 1 : 0);
     this.lean = damp(this.lean || 0, leanT, 6.5, dt);
     // camera
-    this.zoomNow = st.zoom || W.zoom;
+    { const vm = this.g.vm; if (vm?.gun?.userData.canted && inp.cantedPressed && this.adsK > 0.3) { vm.canted = !vm.canted; audio.play('ui_click', { vol: 0.5 }); } }
+    this.zoomNow = this.g.vm?.canted ? this.g.vm.sight().zoom : st.zoom || W.zoom;
     if (this.g.vmScopeKind?.() === 'vari') this.zoomNow *= this.zoomStep ? 1.5 : 0.75; // variavel: ~3x e ~6x
     // camera reta: andar de lado nao inclina a cabeca (era o que deixava o movimento "mole")
     this.roll = damp(this.roll, this.slideT > 0 ? SLIDE.roll : 0, 10, dt); // deslizando: inclina de leve
@@ -566,7 +590,7 @@ export class Player {
     if (this.sendT <= 0) {
       this.sendT = 1 / 20;
       const anim = this.g.mySeat ? (this.g.mySeat.seat === 0 ? 'drive' : 'seat') : this.mantle ? 'climb' : this.g.down ? 'down' : this.air && this.g.bounce ? (this.chute ? 'chute' : 'fall') : !this.onGround ? 'jump' : this.slideT > 0 ? 'slide' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
-      this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn, ...(this.lean ? { ln: Math.round(this.lean * 10) / 10 } : {}), ...(this.adsK > 0.6 ? { ad: 1 } : {}), ...(this.g.myCar && this.g.mySeat?.seat === 0 ? { car: { pos: this.g.myCar.pos.map(v => Math.round(v * 100) / 100), yaw: Math.round(this.g.myCar.yaw * 1000) / 1000, spd: Math.round(this.g.myCar.spd * 10) / 10, st: Math.round((this.g.myCar.steer || 0) * 10) / 10 } } : {}) });
+      this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn, ...(this.lean ? { ln: Math.round(this.lean * 10) / 10 } : {}), ...(this.g.vm?.canted ? { ca: 1 } : {}), ...(this.adsK > 0.6 ? { ad: 1 } : {}), ...(this.g.myCar && this.g.mySeat?.seat === 0 ? { car: { pos: this.g.myCar.pos.map(v => Math.round(v * 100) / 100), yaw: Math.round(this.g.myCar.yaw * 1000) / 1000, spd: Math.round(this.g.myCar.spd * 10) / 10, st: Math.round((this.g.myCar.steer || 0) * 10) / 10 } } : {}) });
     }
   }
 
@@ -700,7 +724,8 @@ export class Player {
     if (this.crouch) spread *= 0.75;
     if (this.sprint || this.tac) spread *= SKILLS.fervor.hip; // Fervoroso: correndo o tiro abre mais
     if (this.slideT > 0) spread *= SLIDE.spread; // atirando escorregando: espalha (o agachado nao vale aqui)
-    const kick = (W.kick ?? 0.05) * (st.kick ?? 1) * this.sk('lince', 'kick');
+    if (W.heat) { this.heat = Math.min(1, (this.heat || 0) + (st.heatK ?? 1) / W.heat.shots); this.heatT = W.heat.wait; if (this.heat >= 1 && !this.hot) { this.hot = true; audio.play('empty', { vol: 0.8 }); g.hud.message(t('lmgHot'), 1.6); } }
+    const kick = (W.kick ?? 0.05) * (st.kick ?? 1) * this.sk('lince', 'kick') * (W.heat ? 1 + this.heat * W.heat.kick : 1);
     // recuo com padrao fixo por arma (aprende e compensa), volta ao inicio se soltar o gatilho
     if (performance.now() - this.patT > 320) this.patIdx = 0;
     this.patT = performance.now();
@@ -720,7 +745,8 @@ export class Player {
     }
     const bodyNow = this.lo(this.wpn)?.body; // som proprio de modelo: revolver, AA-12 e o laser do Bico Longo
     const laser = this.wpn === 'pistol' && bodyNow === LASER_BODY;
-    audio.play(laser ? 'laser' : bodyNow === 'pistol_10' ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: String(this.lo(this.wpn)?.muzzle || '').startsWith('silencer') });
+    const silOn = String(this.lo(this.wpn)?.muzzle || '').startsWith('silencer'), sil = silOn && !laser ? audio.silSound(this.wpn) : null; // silenciador: som proprio da categoria (sem eco)
+    audio.play(sil || (laser ? 'laser' : bodyNow === 'pistol_10' ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn)), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: silOn && !sil, dry: !!sil });
     audio.duck(0.6, 0.25);
 
     // boca do cano no mundo (pra o tracer sair da arma)
@@ -768,6 +794,16 @@ export class Player {
         g.net.send({ t: 'hitBlimp', id: bh.m.userData.id, dmg: Math.round(W.dmg * pellets * dmgK), wpn: this.wpn });
         g.fx.impact(bh.point, null); g.onHitConfirm?.(bh.point, false, Math.round(W.dmg * pellets * dmgK), null);
         firstEnd = bh.point;
+      }
+    }
+    // caixa de municao inimiga no caminho da bala do meio: o servidor conta a vida dela e explode
+    if (!victim && g.snap?.abx?.length) {
+      const bx = this.traceAbx(o, fwd.toArray(), 250);
+      if (bx) {
+        const dmg = Math.round(W.dmg * pellets * dmgK);
+        g.net.send({ t: 'hitAbx', id: bx.id, dmg, wpn: this.wpn });
+        g.fx.impact(bx.point, null); g.onHitConfirm?.(bx.point, false, dmg, null);
+        firstEnd = bx.point;
       }
     }
     if (victim && this.megaShot) { total = 999; g.fx.word('KA-BLAMMO!', hitPoint, 2.2, 1.2); g.shake?.(0.9); } // tiro carregado cheio: abate na hora
@@ -840,6 +876,20 @@ export class Player {
 
   // tipo de bala da arma na mao (gun game e lamina nao tem)
   ammoNow() { const a = this.g.mode === 'gungame' || this.wpn === 'melee' ? null : this.lo(this.wpn)?.ammo; return AMMO[a] ? a : null; }
+
+  // raio contra a caixa de municao inimiga (esfera em volta do modelo, que tem 0,8 m); a parede na frente barra
+  traceAbx(o, d, max) {
+    const wall = raycast(this.g.M, o, d, max).dist, R = 0.6;
+    let best = null;
+    for (const b of this.g.snap.abx) {
+      const own = this.g.remotes.get(b.owner);
+      if (b.owner === this.g.myId || (own && !this.g.isEnemy(own)) || (!own && this.g.myTeam && b.team === this.g.myTeam)) continue;
+      const cx = b.pos[0] - o[0], cy = b.pos[1] + 0.35 - o[1], cz = b.pos[2] - o[2], t = cx * d[0] + cy * d[1] + cz * d[2];
+      if (t < 0 || cx * cx + cy * cy + cz * cz - t * t > R * R || t >= wall || t >= max || (best && t >= best.dist)) continue;
+      best = { id: b.id, dist: t, point: [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t] };
+    }
+    return best;
+  }
 
   // raio contra o balao do dirigivel inimigo (elipsoide 3 x 2,4 x 6,9 no espaco do modelo); a parede na frente barra
   traceBlimp(o, d, max) {

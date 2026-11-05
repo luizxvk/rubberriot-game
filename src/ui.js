@@ -1,5 +1,5 @@
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
-import { LETHALS, TACTICALS } from '../shared/weapons.js';
+import { LETHALS, TACTICALS, NADES } from '../shared/weapons.js';
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
 import { STREAK_SVG, NADE_SVG } from './hud.js';
 import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
@@ -12,7 +12,7 @@ import { UNLOCKS, dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unl
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
 import { renderShop, stopShop, initShop } from './shop.js';
-import { initAnn, startAnn, stopAnn, relangAnn } from './ann.js';
+import { initAnn, startAnn, stopAnn, relangAnn, placePromos } from './ann.js';
 import { initElitePop } from './elitepop.js';
 import { renderPass } from './passview.js';
 import { RET_PASS } from './pass.js';
@@ -22,16 +22,22 @@ import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
 import { stats as pStats } from './progress.js';
-import { MUZZLE_LVL, BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
+import { BANNERS } from '../shared/banners.js';
+import { DANCE_IDS, DANCE_INFO } from '../shared/looks.js';
+import { DANCES } from './dances.js';
+import { danceOpen, wornDances, bannerOpen } from './lookstore.js';
+import { bannerHtml } from './banners.js';
+import { CANTED_LVL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { kbBinds, padBinds, setKb, setPad, resetBinds, keyName, padName, ACTIONS, PAD_BTN, FIXED_KEYS } from './binds.js';
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
 import { LOOKS } from '../shared/looks.js';
 import { getLook, saveLook, lookOpen } from './lookstore.js';
 import { syncOpen, isNew, anyNew, markSeen, newPill } from './newstuff.js';
-import { TIERS, badgeSvg, myTier, peakTier } from './rank.js';
+import { TIERS, badgeSvg, myTier, peakTier, tierOf as tierFor } from './rank.js';
+import { prizePreview } from './shop.js';
 import { rankData } from './progress.js';
-import { isSaber, RET_PATH, retOwned, retColorOwned, handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits, wsOwned, wsFor } from './arsenal.js';
+import { sightIsBig, RET_ROW_SHORT, RET_ROW_LONG, cantedFits, isSaber, RET_PATH, retOwned, retColorOwned, handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits, wsOwned, wsFor } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 // mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
@@ -57,7 +63,7 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'pass'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'pass', 'friends'];
   initShop();
   initElitePop(); // banner do Elite abre o popup com os beneficios (03/11)
   initSupport(); // botao de apoiar no cartaz (04/11)
@@ -67,7 +73,7 @@ export function initMenus(o) {
     if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     el.scrollLeft += e.deltaY; e.preventDefault();
   }, { passive: false });
-  initAnn((g) => g === 'play' ? $('goSolo')?.click() : ui.go(g)); // anuncios do cartaz: 'play' abre a escolha do modo
+  placePromos(); initAnn((g) => g === 'play' ? $('goSolo')?.click() : ui.go(g)); // anuncios do cartaz: 'play' abre a escolha do modo
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
@@ -96,6 +102,7 @@ export function initMenus(o) {
     if (name === 'profile') renderProfile();
     if (name === 'shop') renderShop(); else stopShop();
     if (name === 'pass') renderPass(ui.go);
+    if (name === 'friends') renderFriends();
     if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); startAnn(); renderAllBal(); } else stopAnn();
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
@@ -184,6 +191,28 @@ export function initMenus(o) {
     const c = lastCfg();
     goMp({ room: newCode(), mode: c.mode || 'tdm', map: c.map || 'auto', bots: Number.isFinite(c.bots) ? Math.min(11, c.bots) : 5 });
   };
+  // ---------- amigos (05/11, pedido dele): amigos da Rovex, quem esta online, entrar na sala deles ou chamar pra sua ----------
+  async function renderFriends() {
+    const ul = $('frPeople'); $('frErr').textContent = '';
+    if (!rovex.me) { ul.innerHTML = `<li class="lf-msg">${t('frGuest')}</li>`; return; }
+    ul.innerHTML = `<li class="lf-msg">${t('inviteLoading')}</li>`;
+    let list, rooms;
+    try { [list, rooms] = await Promise.all([rovex.friends(), rovex.friendRooms().catch(() => [])]); } catch { ul.innerHTML = `<li class="lf-msg">${t('inviteErr')}</li>`; return; }
+    if (!list.length) { ul.innerHTML = `<li class="lf-msg">${t('inviteNone')}</li>`; return; }
+    const roomOf = new Map(rooms.map(s => [s.amigoId, s]));
+    list.sort((a, b) => (!!roomOf.get(b.id) - !!roomOf.get(a.id)) || (b.online - a.online) || a.name.localeCompare(b.name));
+    const on = list.filter(f => f.online).length; $('frOnline').textContent = t('frOn', { n: on });
+    ul.innerHTML = list.map(f => { const r = roomOf.get(f.id); return `<li class="${f.online ? 'on' : ''}"><span class="lf-av">${f.avatar ? `<img alt="" src="${esc(f.avatar)}">` : esc(f.name.slice(0, 1))}</span><span class="lf-nm">${esc(f.name)}<small>${r ? t('frInRoom') : f.online ? t('online') : t('frOff')}</small></span>${r ? `<button class="fr-act go" data-room="${esc(r.code)}">${t('ivGo')}</button>` : `<button class="fr-act" data-f="${esc(f.id)}">${t('frInvite')}</button>`}</li>`; }).join('');
+    ul.querySelectorAll('[data-room]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true }); goMp({ room: b.dataset.room, join: true }); });
+    ul.querySelectorAll('[data-f]').forEach(b => b.onclick = async () => {
+      // sem sala ainda: abre uma e chama; o amigo recebe o convite com o link
+      b.disabled = true; audio.play('ui_click', { ui: true });
+      const c = lastCfg(), room = newCode();
+      await goMp({ room, mode: c.mode || 'tdm', map: c.map || 'auto', bots: Number.isFinite(c.bots) ? Math.min(11, c.bots) : 5 });
+      if ($('mpErr').textContent) { b.disabled = false; $('frErr').textContent = $('mpErr').textContent; return; }
+      rovex.invite(b.dataset.f, room).catch(() => {});
+    });
+  }
   // convite da Rovex (?sala=): ja abre a aba e entra na sala
   if (rovex.inviteRoom) setTimeout(() => { ui.go('mp'); $('mpRoom').value = rovex.inviteRoom; $('mpJoin').requestSubmit(); }, 300);
 
@@ -191,8 +220,6 @@ export function initMenus(o) {
   const S = o.settings;
   const defs = [
     ['range', 'fov', 's_fov', 60, 115, 1, v => v + '°'],
-    ['range', 'sens', 's_sens', 0.1, 4, 0.05, v => v.toFixed(2)],
-    ['range', 'adsSens', 's_adsSens', 0.3, 1.5, 0.05, v => v.toFixed(2)],
     ['range', 'vmFov', 's_vmFov', 45, 75, 1, v => v + '°'],
     ['range', 'fovScale', 's_fovScale', 1, 1.5, 0.05, v => v.toFixed(2) + 'x'],
     ['range', 'master', 's_master', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
@@ -202,6 +229,7 @@ export function initMenus(o) {
     ['range', 'res', 's_res', 0.4, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['seg', 'lang', 's_lang', [['en', 'English'], ['pt', 'Portugues']]],
     ['seg', 'film', 's_film', [['full', 'film_full'], ['color', 'film_color'], ['bw', 'film_bw']]],
+    ['seg', 'scopeQ', 's_scopeQ', [['fast', 'sq_fast'], ['full', 'sq_full']]], // luneta (05/11, pedido dele): otimizada ou qualidade cheia
     // distancia de desenho saiu dos Ajustes (03/11): curta pra todos, longe so pela luneta
     ['toggle', 'invertY', 's_invert'],
     ['toggle', 'holdCrouch', 's_hold'],
@@ -215,7 +243,9 @@ export function initMenus(o) {
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
   // mouse (so no PC, igual as opcoes do COD): suavizacao, aceleracao, entrada crua e a arma acompanhando o giro
-  if (!isTouch) defs.splice(defs.findIndex(d => d[1] === 'adsSens') + 1, 0,
+  // sensibilidade por aparelho (05/11, pedido dele): no celular so a do toque; no PC so a do mouse. A do controle fica na aba dele
+  if (isTouch) defs.unshift(['range', 'touchSens', 's_touchSens', 0.1, 4, 0.05, v => v.toFixed(2)], ['range', 'touchAdsSens', 's_touchAds', 0.3, 1.5, 0.05, v => v.toFixed(2)]);
+  if (!isTouch) defs.unshift(['range', 'sens', 's_sens', 0.1, 4, 0.05, v => v.toFixed(2)], ['range', 'adsSens', 's_adsSens', 0.3, 1.5, 0.05, v => v.toFixed(2)],
     ['seg', 'mouseSmooth', 's_mSmooth', [['off', 'ms_off'], ['low', 'ms_low'], ['high', 'ms_high']]],
     ['range', 'mouseAccel', 's_mAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['toggle', 'rawMouse', 's_rawMouse'],
@@ -224,17 +254,19 @@ export function initMenus(o) {
   if (isTouch) defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssist'], ['toggle', 'autoFire', 's_autoFire']);
   else defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssistPad']);
   // controle (03/11, pedido dele): as mesmas do mouse (sensibilidade, suavizacao, aceleracao)
-  defs.push(['range', 'padSens', 's_padSens', 0.3, 2.5, 0.05, v => v.toFixed(2)],
+  defs.push(['range', 'padSens', 's_padSens', 0.3, 2.5, 0.05, v => v.toFixed(2)], ['range', 'padAdsSens', 's_padAds', 0.3, 1.5, 0.05, v => v.toFixed(2)],
     ['seg', 'padSmooth', 's_padSmooth', [['off', 'ms_off'], ['low', 'ms_low'], ['high', 'ms_high']]],
     ['range', 'padAccel', 's_padAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%']);
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
-  const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: isTouch ? 'touch' : 'ctrl', holdCrouch: 'ctrl', leanMode: 'ctrl', autoSprint: 'ctrl', padSens: 'ctrl', padSmooth: 'ctrl', padAccel: 'ctrl',
+  const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: isTouch ? 'touch' : 'pad', touchSens: 'touch', touchAdsSens: 'touch', holdCrouch: 'ctrl', leanMode: 'ctrl', autoSprint: 'ctrl', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
     autoFire: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'game',
-    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', draw: 'video', showFps: 'video',
+    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', draw: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
-  const grp = (d) => GROUP[d[0] === 'xhair' ? 'xhair' : d[1]] || 'game';
-  const TABS = ['ctrl', ...(isTouch ? ['touch'] : []), 'video', 'audio', 'game'];
-  let setTab = 'ctrl';
+  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
+  // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
+  const padOn = () => [...(navigator.getGamepads?.() || [])].some(Boolean);
+  const TABS = isTouch ? ['touch', ...(padOn() ? ['pad'] : []), 'video', 'audio', 'game'] : ['ctrl', 'pad', 'video', 'audio', 'game'];
+  let setTab = TABS[0];
   const sl = $('settingsList');
   S.lang = getLang();
   S.unlockAll = progressInfo().unlockAll;
@@ -279,8 +311,8 @@ export function initMenus(o) {
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee'];
-  const SLOTS = ['bp', 'body', 'scope', 'ret', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
-  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
+  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint'];
+  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', visual: 'slot_visual', canted: 'slot_canted', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   let chPickOpen = false;
@@ -320,6 +352,50 @@ export function initMenus(o) {
     markNewChallenges();
   }
   // ---------- rankeada ----------
+  // Ranking (05/11, pedido dele): mundial e de amigos, com a sua posicao sempre a vista
+  let boardBack = null, boardTab = 'mundial', boardAsk = 0;
+  const boardRow = (r, mine) => { const k = tierFor(r.rp); return `<li class="${r.pos === 1 ? 'top1' : ''} ${r.pos <= 3 ? 'podio' : ''} ${mine ? 'eu' : ''}"><em class="rkb-pos">${r.pos}</em><span class="rkb-av">${r.avatar ? `<img src="${esc(r.avatar)}" alt="" loading="lazy">` : esc((r.name || '?').slice(0, 1))}</span><span class="rkb-nm"><b>${esc(r.name || '?')}</b><small>${t('rk_' + TIERS[k].id)}${r.games ? ' · ' + t('rkbGames', { n: r.games }) : ''}</small></span>${badgeSvg(k, 30)}<strong>${r.rp}</strong></li>`; };
+  async function drawBoard() {
+    const pop = $('rkBoardPop'), list = $('rkbList'), ask = ++boardAsk;
+    pop.querySelectorAll('[data-board]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.board === boardTab)));
+    list.innerHTML = `<li class="rkb-msg">${t('rkbLoading')}</li>`; $('rkbMe').innerHTML = '';
+    const r = await rovex.rankingBoard(boardTab);
+    if (ask !== boardAsk) return;
+    if (r.code === 'login') { list.innerHTML = `<li class="rkb-msg">${t('rkbLogin')}</li>`; return; }
+    if (r.code) { list.innerHTML = `<li class="rkb-msg">${t('rkbErr')}</li>`; return; }
+    if (!r.lista.length) { list.innerHTML = `<li class="rkb-msg">${t(boardTab === 'amigos' ? 'rkbNoFriends' : 'rkbEmpty')}</li>`; return; }
+    list.innerHTML = r.lista.map(x => boardRow(x, x.id === r.meuId)).join('');
+    list.scrollTop = 0;
+    if (r.eu && !r.lista.some(x => x.id === r.eu.id)) $('rkbMe').innerHTML = boardRow(r.eu, true);
+  }
+  function openBoard(from) { boardBack = from; $('rkBoardPop').hidden = false; drawBoard(); $('rkBoardPop').querySelector('.lb-x').focus({ preventScroll: true }); }
+  function closeBoard() { const pop = $('rkBoardPop'); if (pop.hidden) return; boardAsk++; pop.hidden = true; if (boardBack?.isConnected) boardBack.focus({ preventScroll: true }); boardBack = null; }
+  $('rkBoardPop').querySelector('.lb-x').onclick = () => { audio.play('ui_back', { ui: true }); closeBoard(); };
+  $('rkBoardPop').addEventListener('click', (e) => { if (e.target === $('rkBoardPop')) closeBoard(); });
+  $('rkBoardPop').querySelectorAll('[data-board]').forEach(b => b.onclick = () => { boardTab = b.dataset.board; audio.play('ui_click', { ui: true, vol: 0.6 }); drawBoard(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('rkBoardPop').hidden) { e.preventDefault(); e.stopPropagation(); closeBoard(); } }, true);
+  // Ver premios (05/11, pedido dele): uma faixa por vez, com a previa na arma ou no boneco
+  let prizeBack = null;
+  function drawPrize(i) {
+    const T = TIERS[i], peak = peakTier(), pop = $('rkPrizePop');
+    pop.querySelectorAll('[data-tier]').forEach((b, n) => b.setAttribute('aria-selected', String(n === i)));
+    $('rkpName').textContent = t('rk_' + T.id); $('rkpPts').textContent = t('rkpNeed', { n: T.rp });
+    $('rkpList').innerHTML = T.list.map(([k, v]) => `<li><small>${t(k)}</small><b>${t(v)}</b></li>`).join('');
+    const art = $('rkpArt'); art.style.setProperty('--rc1', T.c1); art.style.setProperty('--rc2', T.c2); art.style.setProperty('--rc3', T.c3); art.innerHTML = '<span class="st-bg"></span>';
+    $('rkpState').textContent = t(peak >= i ? 'rkGot' : 'rkpLocked'); $('rkpState').classList.toggle('got', peak >= i);
+    prizePreview(i, T.show, $('rkpArt'));
+  }
+  function openPrizes(from, tier) {
+    const pop = $('rkPrizePop'); prizeBack = from;
+    pop.querySelector('.rkp-tabs').innerHTML = TIERS.map((T, i) => `<button role="tab" data-tier="${i}" aria-selected="false">${badgeSvg(i, 30)}<span>${t('rk_' + T.id)}</span></button>`).join('');
+    pop.querySelectorAll('[data-tier]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); drawPrize(+b.dataset.tier); });
+    pop.hidden = false; drawPrize(tier);
+    pop.querySelector('.lb-x').focus({ preventScroll: true });
+  }
+  function closePrizes() { const pop = $('rkPrizePop'); if (pop.hidden) return; prizePreview(-1); pop.hidden = true; if (prizeBack?.isConnected) prizeBack.focus({ preventScroll: true }); prizeBack = null; }
+  $('rkPrizePop').querySelector('.lb-x').onclick = () => { audio.play('ui_back', { ui: true }); closePrizes(); };
+  $('rkPrizePop').addEventListener('click', (e) => { if (e.target === $('rkPrizePop')) closePrizes(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('rkPrizePop').hidden) { e.preventDefault(); e.stopPropagation(); closePrizes(); } }, true);
   const rkReward = (R) => R.slot === 'camo' ? t('camo_' + R.id) : R.tab === 'hat' ? t('lk_hat_' + R.id) + ' + ' + t('camo_' + R.camo) : t('lkt_' + R.tab) + ' ' + t('rk_' + TIERS.find(x => x.reward === R).id);
   function rankMini() { const k = myTier(); $('rkMini').innerHTML = k >= 0 ? badgeSvg(k, 20) : ''; }
   ui.rankMini = rankMini;
@@ -328,8 +404,10 @@ export function initMenus(o) {
     $('rkMe').innerHTML = k < 0 ? `<span class="rk-big none">${badgeSvg(0, 72)}</span><div><b>${t('rkUnranked')}</b></div>`
       : `<span class="rk-big">${badgeSvg(k, 72)}</span><div><b>${t('rk_' + TIERS[k].id)}</b><small>${t('rkPts', { n: r.rp })}</small>`
         + (nx ? `<span class="xpbar"><i style="width:${Math.round((r.rp - TIERS[k].rp) / (nx.rp - TIERS[k].rp) * 100)}%"></i></span><small>${t('rkNext', { n: nx.rp - r.rp, t: t('rk_' + nx.id) })}</small>` : `<small>${t('rkTop')}</small>`) + '</div>';
-    $('rkTiers').innerHTML = TIERS.map((T, i) => `<li class="${i === k ? 'cur' : ''} ${peak >= i ? 'got' : ''}">${badgeSvg(i, 34)}<span><b>${t('rk_' + T.id)}</b><small>${T.rp}+</small></span><em><small>${t(peak >= i ? 'rkGot' : 'rkReward')}</small>${rkReward(T.reward)}</em></li>`).join('');
+    $('rkTiers').innerHTML = TIERS.map((T, i) => `<li class="${i === k ? 'cur' : ''} ${peak >= i ? 'got' : ''}">${badgeSvg(i, 34)}<span><b>${t('rk_' + T.id)}</b><small>${T.rp}+</small></span><em><small>${t(peak >= i ? 'rkGot' : 'rkReward')}</small>${t(T.prize)} + ${rkReward(T.reward)}</em></li>`).join('');
     $('rkFind').onclick = () => { audio.play('ui_click', { ui: true }); goMp({ ranked: true }); };
+    $('rkBoardGo').onclick = () => { audio.play('ui_click', { ui: true }); openBoard($('rkBoardGo')); };
+    $('rkPrizes').onclick = () => { audio.play('ui_click', { ui: true }); openPrizes($('rkPrizes'), Math.max(0, k)); };
   }
   rankMini();
 
@@ -437,18 +515,51 @@ export function initMenus(o) {
   document.querySelectorAll('[data-kt]').forEach(b => b.onclick = () => { stopBinding(); keyTab = b.dataset.kt; audio.play('ui_click', { ui: true, vol: 0.6 }); renderKeys(); });
 
   // ---------- visual do boneco: abas, itens com raridade e cadeado; o 3D gira ao lado (main.js) ----------
-  const LOOK_TABS = ['hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx', 'skin'];
-  let lookTab = 'hat', lookTeam = 'red', lookPeek = null;
+  const LOOK_TABS = ['banner', 'dance', 'face', 'death', 'hat', 'eyes', 'glove', 'gloveCol', 'shirt', 'pattern', 'fx', 'skin'];
+  let lookTab = 'banner', lookTeam = 'red', lookPeek = null;
+  // Ver progresso (05/11, pedido dele): debaixo da barra de nivel, o que esta arma abre e em que nivel. So peca que abre por nivel da
+  // arma; o que vem de desafio ou de nivel de jogador fica de fora. Mesmas contas do picker, entao os dois nunca discordam.
+  let ulkOpen = false, visTab = 'charm';
+  function unlockItems(lo, C) {
+    const out = [], add = (slot, id, i, lv, key = id, name = partName(slot, id)) => { if (!id || LOCKED_BY[key] || LOCKED_BY[cat + ':' + key] || BODY_MIN_LVL[id]) return; out.push({ slot, name, lv, open: partUnlocked(cat, i, key) }); };
+    C.bodies.forEach((id, i) => { if (i > 0) add('body', id, i, partReq(i, id)); });
+    if (cat === 'melee') return out;
+    C.scopes.forEach((id, n) => { if (scopeFits(lo.body, cat, id) && id !== freeScope(cat, lo.body)) add('scope', id, n + 1, partReq(n + 1, id)); });
+    C.handles.forEach((id, n) => { if (handleFits(lo.body, cat, id)) add('handle', id, n + 1, partReq(n + 1, id)); });
+    chargerOptions(lo.body, cat).forEach((id, i) => { if (i > 0) add('charger', id, i, partReq(i, id)); });
+    if (cantedFits(cat)) add('scope', 'canted', 1, CANTED_LVL, 'canted', t('cantedOn'));
+    LASERS.forEach((id, n) => add('laser', id, n + 1, partReq(n + 1, id)));
+    muzzleOptions(lo.body).forEach(id => add('muzzle', id, 1, MUZZLE_LVL[id] || 1, 'mz:' + id));
+    for (const id of AMMO_IDS) if (!AMMO[id].only || AMMO[id].only === cat) add('ammo', id, 1, AMMO_LVL[id] || 1, 'am:' + id, t('am_' + id));
+    return out;
+  }
+  function renderUnlocks(lo, C) {
+    const items = unlockItems(lo, C).sort((a, b) => a.lv - b.lv), got = items.filter(x => x.open).length, next = items.find(x => !x.open);
+    if (!items.length) return;
+    const cols = [...new Set(items.map(x => x.lv))].map(n => { const here = items.filter(x => x.lv === n), done = here.every(x => x.open), isNext = next?.lv === n;
+      return `<li class="ulk-lv ${done ? 'done' : ''} ${isNext ? 'next' : ''}"><b>${t('lvlShort', { n })}</b><div class="ulk-row">${here.map(x => `<span class="ulk-it ${x.open ? 'open' : ''}"><small>${t(SLOT_LABEL[x.slot])}</small>${x.name}</span>`).join('')}</div></li>`; }).join('');
+    $('equipBar').insertAdjacentHTML('beforeend', `<section class="ulk" id="ulkPane"><header><span class="xpbar"><i style="width:${Math.round(got / items.length * 100)}%"></i></span><b>${t('ulkCount', { a: got, b: items.length })}</b><small>${next ? t('ulkNext', { x: next.name, n: next.lv }) : t('ulkDone')}</small></header><ol class="ulk-track">${cols}</ol></section>`);
+    const tr = $('equipBar').querySelector('.ulk-track'), nx = tr.querySelector('.next');
+    if (nx) tr.scrollLeft = Math.max(0, nx.offsetLeft - tr.offsetLeft - 8); // ja abre no proximo desbloqueio
+    tr.onwheel = (e) => { if (tr.scrollWidth <= tr.clientWidth) return; e.preventDefault(); tr.scrollLeft += e.deltaY || e.deltaX; };
+    let drag = null; // sem barra de rolagem: arrasta com o mouse (no toque o navegador ja faz)
+    tr.onpointerdown = (e) => { if (e.pointerType === 'mouse') { drag = { x: e.clientX, s: tr.scrollLeft }; tr.setPointerCapture(e.pointerId); } };
+    tr.onpointermove = (e) => { if (drag) tr.scrollLeft = drag.s - (e.clientX - drag.x); };
+    tr.onpointerup = tr.onpointercancel = () => { drag = null; };
+  }
   function renderLook() {
     const cur = getLook();
     syncOpen(openKeys());
     $('lookTabs').innerHTML = LOOK_TABS.map(k => `<button role="tab" aria-selected="${k === lookTab}" data-lt="${k}">${t('lkt_' + k)}${k !== lookTab && anyNew('look|' + k + '|') ? newPill(t('chNew')) : ''}</button>`).join('');
     document.querySelectorAll('#scr-look [data-team]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.team === lookTeam)));
+    o.previewDance?.(lookTab === 'dance' ? danceShow : null); o.previewDeath?.(lookTab === 'death');
+    if (lookTab === 'banner') { renderBanners(); return; }
+    if (lookTab === 'dance') { renderDances(); return; }
     const swatch = lookTab === 'gloveCol' || lookTab === 'shirt';
     $('lookGrid').classList.toggle('swatches', swatch);
     $('lookGrid').innerHTML = LOOKS[lookTab].map(it => {
       const open = lookOpen(lookTab, it.id), on = cur[lookTab] === it.id, peek = lookPeek === it.id;
-      const lock = open ? '' : `<small class="lk-lock">${it.shop ? t('shopOnly') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
+      const lock = open ? '' : `<small class="lk-lock">${it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
       const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>` + (isNew('look|' + lookTab + '|' + it.id) ? newPill(t('chNew')) : '');
       if (swatch) return `<button class="lk-it sw ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}" style="--c:${it.id}" aria-label="${it.id}">${it.elite ? '<i class="lk-r r2">Elite</i>' : it.acct ? '<i class="lk-r r2">Rovex</i>' : ''}${lock}</button>`;
       return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}"><b>${t('lk_' + lookTab + '_' + it.id)}</b>${rar}${lock}</button>`;
@@ -456,7 +567,7 @@ export function initMenus(o) {
     markSeen('look|' + lookTab + '|');
     const show = lookPeek ? { ...cur, [lookTab]: lookPeek } : cur;
     const pk = lookPeek && LOOKS[lookTab].find(i => i.id === lookPeek);
-    $('lookNote').textContent = !pk ? t('lookTeamNote') : pk.shop ? t('lookPeekShop') : pk.elite ? t('lookPeekElite') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
+    $('lookNote').textContent = !pk ? t(lookTab === 'charm' ? 'lookCharmNote' : lookTab === 'death' ? 'lookDeathNote' : 'lookTeamNote') : pk.shop ? t('lookPeekShop') : pk.pass ? t('lookPeekPass') : pk.elite ? t('lookPeekElite') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
     o.onLook?.(show, lookTeam);
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; renderLook(); });
     $('lookGrid').querySelectorAll('.lk-it').forEach(b => b.onclick = () => {
@@ -464,6 +575,36 @@ export function initMenus(o) {
       if (b.classList.contains('locked')) { lookPeek = lookPeek === id ? null : id; audio.play('ui_hover', { ui: true }); renderLook(); return; }
       lookPeek = null; saveLook({ ...getLook(), [lookTab]: id }); audio.play('swap', { ui: true, vol: 0.6 }); renderLook();
     });
+  }
+  // danças (05/11, pedido dele): pode ter todas, mas leva 3 pro podio. Toca em qualquer uma = o boneco dança ao lado, mesmo trancada (vitrine)
+  let danceSlot = 0, danceShow = null;
+  function renderDances() {
+    const g = $('lookGrid'); g.classList.remove('swatches', 'banners');
+    const worn = wornDances(S);
+    g.innerHTML = `<div class="dn-slots">${worn.map((d, i) => `<button class="dn-slot ${i === danceSlot ? 'on' : ''}" data-s="${i}"><small>${t('dnSlot', { n: i + 1 })}</small>${t('dn_' + d)}</button>`).join('')}</div>` + DANCE_IDS.map(id => {
+      const it = DANCE_INFO[id], open = danceOpen(id), on = worn.includes(id), fx = !!DANCES[id].fx;
+      const lock = open ? '' : `<small class="lk-lock">${it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : t('lookLvl', { n: it.lvl })}</small>`;
+      return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'}" data-d="${id}"><b>${t('dn_' + id)}</b><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${fx ? `<em class="dn-fx">${t('dnFx')}</em>` : ''}${lock}</button>`;
+    }).join('');
+    $('lookNote').textContent = t('dnNote');
+    o.onLook?.(getLook(), lookTeam);
+    $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; danceShow = null; renderLook(); });
+    g.querySelectorAll('.dn-slot').forEach(b => b.onclick = () => { danceSlot = +b.dataset.s; audio.play('ui_click', { ui: true, vol: 0.6 }); renderDances(); });
+    g.querySelectorAll('.lk-it').forEach(b => b.onclick = () => {
+      const id = b.dataset.d; danceShow = id; o.previewDance?.(id);
+      if (!b.classList.contains('locked')) { const cur = wornDances(S), was = cur.indexOf(id); if (was >= 0 && was !== danceSlot) cur[was] = cur[danceSlot]; cur[danceSlot] = id; S.dances = cur; o.saveSettings(); danceSlot = (danceSlot + 1) % 3; audio.play('swap', { ui: true, vol: 0.6 }); } else audio.play('ui_hover', { ui: true });
+      renderDances();
+    });
+  }
+  // banners (05/11): o que aparece pros outros quando voce derruba ou chama sequencia
+  function renderBanners() {
+    const lv = progressInfo().unlockLevel, cur = S.banner, who = rovex.me?.name || S.name || t('youCap');
+    const g = $('lookGrid'); g.classList.remove('swatches'); g.classList.add('banners');
+    g.innerHTML = BANNERS.map(b => { const open = bannerOpen(b.id); return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
+    $('lookNote').textContent = t('bnNote');
+    $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; g.classList.remove('banners'); renderLook(); });
+    g.querySelectorAll('.bn-it').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } S.banner = b.dataset.b; o.saveSettings(); o.bannerChanged?.(); audio.play('swap', { ui: true, vol: 0.6 }); renderBanners(); });
+    o.onLook?.(getLook(), lookTeam);
   }
   document.querySelectorAll('#scr-look [data-team]').forEach(b => b.onclick = () => { lookTeam = b.dataset.team; audio.play('ui_click', { ui: true, vol: 0.6 }); renderLook(); });
 
@@ -544,7 +685,21 @@ export function initMenus(o) {
   let preview = null;
   const peek = (k, v) => { preview = preview && preview.k === k && preview.v === v ? null : { k, v }; audio.play('ui_click', { ui: true, vol: 0.5 }); renderSmith(); };
 
+  // previa da mira embaixo dos status (05/11, pedido dele): so na aba Reticula. Vista pelo vidro, com a reticula e a cor atuais
+  function drawRetPrev(lo, who, ret, col) {
+    const box = $('retPrev'); if (!box) return;
+    const big = who === 'main' && sightIsBig(lo.scope), r = ret && ret !== 'auto' ? ret : big ? 'duplex' : 'dot', c = RET_COLORS[col || 'red'];
+    box.className = 'ret-prev ' + (big ? 'big' : 'near') + (who === 'canted' ? ' cant' : '');
+    box.innerHTML = `<div class="rp-glass"><svg class="rp-view" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#d9d4c7"/><path d="M0 72q20-16 44-6t40-4 36 6v52H0z" fill="#a8a296"/><path d="M0 84h120v36H0z" fill="#c9c2b2"/><path d="M50 56h20v30H50z" fill="#8c8578"/><circle cx="60" cy="48" r="9" fill="#141210"/><path d="M47 62q13-8 26 0v24H47z" fill="#141210"/></svg><span class="rp-ret">${retIcon(r, c)}</span></div><div class="rp-txt"><small>${t('retPrevTitle')}</small><b>${t(who === 'canted' ? 'retWho45' : 'retWhoMain')}</b><span>${t('ret_' + r)}</span></div>`;
+    box.hidden = false;
+    requestAnimationFrame(() => {
+      if (box.hidden) return;
+      const top = $('statBars').getBoundingClientRect().bottom + 10, b0 = ($('pickWrap').hidden ? $('slotList') : $('pickWrap')).getBoundingClientRect().top - 10;
+      box.style.top = top + 'px'; box.style.maxHeight = Math.max(0, b0 - top) + 'px'; box.classList.toggle('tight', b0 - top < 96);
+    });
+  }
   function renderSmith() {
+    if ($('retPrev')) $('retPrev').hidden = true;
     loadouts = getLoadouts();
     if (!arsenalReady()) {
       $('slotList').innerHTML = `<p class="hint">${t('loadingGuns')}</p>`;
@@ -558,7 +713,7 @@ export function initMenus(o) {
     $('catTabs').querySelectorAll('button').forEach(b => b.onclick = () => { cat = b.dataset.c; slot = 'body'; picking = false; preview = null; audio.play('ui_click', { ui: true }); renderSmith(); });
     // aba Sequencias (02/11, pedido dele): troca o gunsmith pela escolha das sequencias de abate
     const stk = cat === 'streaks' || cat === 'nades';
-    $('equipBar').hidden = stk; $('smith').hidden = stk; $('stkPane').hidden = !stk;
+    $('equipBar').hidden = stk; $('smith').hidden = stk; $('stkPane').hidden = !stk; if (stk) $('smithHint').hidden = true;
     if (cat === 'nades') { renderNadePick(); return; }
     if (stk) { renderStreakPick(); return; }
     // equipar: principal escolhida aqui, pistola sempre como secundaria
@@ -578,33 +733,37 @@ export function initMenus(o) {
     if (lo.tracer && !TRACER_STYLES.includes(lo.tracer)) lo.tracer = null; // tracado que nao existe (salvo errado)
     const C = CATEGORY[cat];
     const wi = wpnInfo(cat, lo.body); // nivel e do corpo (modelo) equipado: cada um tem o seu
-    $('equipBar').insertAdjacentHTML('beforeend', `<div class="wlevel"><b>${t('bodyLevel', { m: partName('body', lo.body), n: wi.level })}</b><span class="xpbar"><i style="width:${wi.max ? 100 : Math.round(wi.into / wi.need * 100)}%"></i></span><small>${wi.max ? t('maxed') : wi.into + ' / ' + wi.need + ' XP'}</small></div>`);
+    $('equipBar').insertAdjacentHTML('beforeend', `<div class="wlevel"><b>${t('bodyLevel', { m: partName('body', lo.body), n: wi.level })}</b><span class="xpbar"><i style="width:${wi.max ? 100 : Math.round(wi.into / wi.need * 100)}%"></i></span><small>${wi.max ? t('maxed') : wi.into + ' / ' + wi.need + ' XP'}</small><button class="wl-more" id="wlMore" aria-expanded="${ulkOpen}" aria-controls="ulkPane">${t(ulkOpen ? 'ulkHide' : 'ulkShow')}</button></div>`);
+    if (ulkOpen) renderUnlocks(lo, C);
+    $('wlMore').onclick = () => { ulkOpen = !ulkOpen; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); };
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
-    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
+    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'canted' || cantedFits(cat)) && (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
-      const disabled = (s === 'handle' && !C.handles.length) || (s === 'ret' && (!lo.scope || IRONS[lo.scope]));
+      const disabled = s === 'handle' && !C.handles.length;
       let val;
       if (s === 'bp') val = lo.ws && !lo.bp && !(cvOf(cat, lo) && lo.cvName) ? `<i class="cmini ws-dot"></i> ${t('ws_' + lo.ws)}` : cvOf(cat, lo) && lo.cvName ? `${esc(lo.cvName)} <em class="cv-pill">${t('cvPill')}</em>` : lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
       else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')) || CAMOS[0]; val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
       else if (s === 'ammo') val = `<svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[AMMO[lo.ammo]?.icon || 'radio_button_unchecked']}</svg> ${t('am_' + (lo.ammo || 'none'))}`;
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
+      else if (s === 'visual') val = t('lk_charm_' + (getLook().charm || 'none'));
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
       else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s]}` : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
-      return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew('arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
+      return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew(s === 'visual' ? 'look|charm|' : 'arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
     }).join('');
     $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
     // blocos de pecas OU a lista de opcoes do slot escolhido (o painel troca, nao empilha)
     $('slotList').hidden = picking; $('pickWrap').hidden = !picking;
+    { let seen = false; try { seen = !!localStorage.getItem('rr_smith_hint'); } catch { /* */ } $('smithHint').hidden = picking || seen; }
     $('smith').classList.toggle('picking', picking);
     $('pickTitle').textContent = t(SLOT_LABEL[slot]);
     $('pickBack').onclick = () => { picking = false; preview = null; audio.play('ui_back', { ui: true, vol: 0.6 }); renderSmith(); };
     const view = !preview ? lo : preview.k === 'bp' ? { ...lo, ...bpLoadout(preview.v) }
       : { ...lo, [preview.k]: preview.v, ...(preview.k === 'body' ? { charger: null } : {}) };
-    if (preview) $('equipBar').insertAdjacentHTML('beforeend', `<p class="peek-note">${t('peekNote')}</p>`);
+    if (preview) $('equipBar').insertAdjacentHTML('beforeend', preview.k === 'camo' && CAMOS.find(c => c.id === preview.v)?.acct ? `<p class="peek-note">${t('acctCamo')} <a href="${rovex.AUTH_URL}" target="_top" rel="noopener">${t('gpChip')}</a></p>` : `<p class="peek-note">${t('peekNote')}</p>`);
     renderPicker(lo, C);
     if (picking) {
       // NOVO nos itens da lista aberta; depois de vistos, saem
@@ -616,7 +775,7 @@ export function initMenus(o) {
       markSeen(pre);
     }
     renderStats(view);
-    o.onSmith(buildGun(cat, view));
+    o.onSmith(buildGun(cat, view), cat, preview?.k === 'charm' ? preview.v : getLook().charm);
   }
 
   // ---------- skills passivas: 2 medalhoes + cartas ----------
@@ -663,7 +822,7 @@ export function initMenus(o) {
 
   // cada modelo guarda a propria montagem (pecas, camo, cores, bala, tracado, reticula): trocar de corpo salva a
   // do modelo atual e traz a do novo; modelo nunca montado comeca limpo (antes herdava tudo, ate a camo da variante)
-  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp', 'cv', 'cvName', 'ws']; // cv: a variante do jogador volta junto quando ele volta pro modelo
+  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'cv', 'cvName', 'ws']; // cv: a variante do jogador volta junto quando ele volta pro modelo
   function stashBody(lo) {
     if (!lo.body) return;
     lo.saved ||= {};
@@ -675,11 +834,13 @@ export function initMenus(o) {
     lo.body = v;
     Object.assign(lo, lo.saved?.[v] || {});
   }
+  let retWho = 'main'; // chave da reticula: mexe na mira principal ou na de 45 graus
   function setPart(k, v) {
     preview = null;
     const lo = loadouts[cat];
     if (k === 'body' && v !== lo.body) swapBody(lo, v);
     lo[k] = v;
+    if (k === 'paint') lo.accent = v; // 05/11, pedido dele: uma cor so pinta tudo (modelo novo pode nao ter parte verde)
     // mexeu numa peca na mao: deixa de ser a variante (camo, cor e tracado podem trocar sem perder)
     if (['body', 'scope', 'charger', 'handle', 'laser', 'conv', 'muzzle'].includes(k)) delete lo.bp;
     // variante do jogador equipada: mexeu, a variante se atualiza sozinha e sobe pra conta (02/11, pedido dele)
@@ -698,7 +859,7 @@ export function initMenus(o) {
 
   // ---------- variantes do jogador (02/11) ----------
   // campos da montagem que entram na variante (tudo que muda a arma; o 'saved' por modelo nao)
-  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'bp', 'ws'];
+  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'ws'];
   const cvPick = (lo) => Object.fromEntries(CV_KEYS.filter(k => lo[k] != null).map(k => [k, lo[k]]));
   // skins de MODELO da Loja (04/11): aparecem como variante com o nome delas, so no modelo que elas trocam
   function wsHtml(lo) {
@@ -787,14 +948,14 @@ export function initMenus(o) {
     if (slot === 'camo') {
       // uma secao por origem, cada uma com o titulo uma vez so (04/11: ordenar antes; a lista de CAMOS mistura as origens)
       const CG = ['static', 'anim', 'react', 'rank', 'special', 'legend', 'pass', 'shop', 'shopreact'];
-      const grp = (c) => c.pass ? 'pass' : c.shop ? (c.react ? 'shopreact' : 'shop') : c.rank != null ? 'rank' : c.legend ? 'legend' : c.prestige || c.meta ? 'special' : c.react ? 'react' : c.anim ? 'anim' : 'static';
+      const grp = (c) => c.pass ? 'pass' : c.shop ? (c.react ? 'shopreact' : 'shop') : c.rank != null ? 'rank' : c.legend ? 'legend' : c.prestige || c.meta || c.acct ? 'special' : c.react ? 'react' : c.anim ? 'anim' : 'static';
       p.innerHTML = CG.map(g => { const L = CAMOS.filter(c => grp(c) === g); return L.length ? `<p class="pk-h">${t('cg_' + g)}</p>` + L.map(camoOpt).join('') : ''; }).join('');
       function camoOpt(c) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
         // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
-        const req = c.pass && !open ? t('passOnly', { n: c.pass }) : c.shop && !open ? t('shopOnly') : c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
-        const bar = open || c.shop || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
+        const req = c.acct && !open ? t('acctCamo') : c.pass && !open ? t('passOnly', { n: c.pass }) : c.shop && !open ? t('shopOnly') : c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
+        const bar = open || c.acct || c.shop || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
         return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {
@@ -811,7 +972,7 @@ export function initMenus(o) {
       p.innerHTML = [null, ...AMMO_IDS.filter(id => !AMMO[id].only || AMMO[id].only === cat)].map(id => { // balote so aparece na escopeta
         const A = id ? AMMO[id] : null, lk = id && LOCKED_BY['am:' + id], open = !id || partUnlocked(cat, 1, 'am:' + id), cur = (lo.ammo || null) === id;
         const mods = !A ? '' : `<b class="up">+ ${t(UP[id])}</b>` + Object.entries(A).filter(([k]) => MOD_TXT[k]).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
-        const lock = open || !lk ? '' : `<small class="req-ch">${unlockActive(lk.id) ? t('reqCh') + ': ' + chName(lk) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lk.id) * 100)}%"></i></span>`;
+        const lock = open ? '' : !lk ? `<small>${t('reqWpn', { n: AMMO_LVL[id] || 1 })}</small>` : `<small class="req-ch">${unlockActive(lk.id) ? t('reqCh') + ': ' + chName(lk) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lk.id) * 100)}%"></i></span>`;
         return `<button class="opt am ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'ammo' && preview.v === id ? 'peek' : ''}" data-am="${id || ''}" ${open ? '' : 'aria-disabled="true"'}><svg class="am-ico" viewBox="0 0 24 24" aria-hidden="true">${SKILL_ICONS[A?.icon || 'radio_button_unchecked']}</svg><span class="bp-name">${t('am_' + (id || 'none'))}</span><small>${t('amd_' + (id || 'none'))}</small><span class="fx">${mods}</span>${lock}</button>`;
       }).join('');
       p.querySelectorAll('[data-am]').forEach(b => b.onclick = () => { const v = b.dataset.am || null; if (b.classList.contains('locked')) { peek('ammo', v); return; } setPart('ammo', v); });
@@ -825,6 +986,32 @@ export function initMenus(o) {
       }).join('');
       p.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek('tracer', b.dataset.tr === 'chalk' ? null : b.dataset.tr); return; } setPart('tracer', b.dataset.tr === 'chalk' ? null : b.dataset.tr); });
       return;
+    }
+    if (slot === 'visual') {
+      // secao Visual (05/11, pedido dele): reticula e chaveiro juntos; adesivos e contador de mortes ainda vem
+      const hasMain = !!lo.scope && !IRONS[lo.scope], hasRet = hasMain || !!lo.canted; if (visTab === 'ret' && !hasRet) visTab = 'charm';
+      if (!lo.canted) retWho = 'main'; else if (!hasMain) retWho = 'canted';
+      const kRet = retWho === 'canted' ? 'ret45' : 'ret', kCol = retWho === 'canted' ? 'retColor45' : 'retColor';
+      const whoSw = lo.canted && hasMain ? `<div class="ret-who"><small>${t('retWho')}</small><span class="seg" role="group" aria-label="${t('retWho')}"><button data-who="main" aria-pressed="${retWho === 'main'}">${t('retWhoMain')}</button><button data-who="canted" aria-pressed="${retWho === 'canted'}">${t('retWho45')}</button></span></div>` : '';
+      const tabs = `<div class="vis-tabs" role="tablist"><button role="tab" data-v="ret" aria-selected="${visTab === 'ret'}" ${hasRet ? '' : 'disabled'}>${t('slot_ret')}</button><button role="tab" data-v="charm" aria-selected="${visTab === 'charm'}">${t('visCharms')}</button><span class="vis-soon">${t('visStickers')}<small>${t('visSoon')}</small></span><span class="vis-soon">${t('visKills')}<small>${t('visSoon')}</small></span></div>`;
+      const bind = () => p.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { visTab = b.dataset.v; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
+      if (visTab === 'charm') {
+        const cur = getLook().charm || 'none';
+        const lockOf = (it) => it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : t('lookLvl', { n: it.lvl });
+        p.innerHTML = tabs + LOOKS.charm.map(it => { const open = lookOpen('charm', it.id); return `<button class="opt ${cur === it.id ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'charm' && preview.v === it.id ? 'peek' : ''}" data-ch="${it.id}" ${open ? '' : 'aria-disabled="true"'}>${t('lk_charm_' + it.id)}${isNew('look|charm|' + it.id) ? newPill(t('chNew')) : ''}<br><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${open ? '' : `<br><small>${lockOf(it)}</small>`}</button>`; }).join('') + `<p class="vis-note">${t('lookCharmNote')}</p>`;
+        p.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const id = b.dataset.ch; if (b.classList.contains('locked')) { peek('charm', id); return; } preview = null; saveLook({ ...getLook(), charm: id }); audio.play('swap', { ui: true, vol: 0.6 }); renderSmith(); });
+        markSeen('look|charm|'); bind(); return;
+      }
+      const longFirst = retWho === 'main' && sightIsBig(lo.scope);
+      const retBtn = (r) => { const open = retOwned(r); return `<button class="opt ${(lo[kRet] || 'auto') === r ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === kRet && preview.v === r ? 'peek' : ''}" data-r="${r}" ${open ? '' : 'aria-disabled="true"'}>${retIcon(r)}<br>${t('ret_' + r)}${open ? '' : `<br><small>${t('retShop')}</small>`}</button>`; };
+      const rows = [[t('retRowShort'), ['auto', ...RET_ROW_SHORT]], [t('retRowLong'), RET_ROW_LONG]]; if (longFirst) { rows.reverse(); rows[0][1] = ['auto', ...RET_ROW_LONG]; rows[1][1] = RET_ROW_SHORT; }
+      p.innerHTML = tabs + whoSw + rows.map(([h, list]) => `<h4 class="pk-h">${h}</h4>${list.map(retBtn).join('')}`).join('') +
+        `<div class="ret-cols"><small>${t('retColor')}</small>` + Object.entries(RET_COLORS).map(([k, c]) => `<button class="swatch ${(lo[kCol] || 'red') === k ? 'on' : ''} ${retColorOwned(k) ? '' : 'locked'}" style="background:${c}" data-col="${k}" ${retColorOwned(k) ? '' : `aria-disabled="true" title="${t('passOnly', { n: RET_PASS[k] })}"`} aria-label="${t('retColor')} ${k}"></button>`).join('') + '</div>';
+      p.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek(kRet, b.dataset.r); return; } setPart(kRet, b.dataset.r === 'auto' ? null : b.dataset.r); });
+      p.querySelectorAll('[data-col]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek(kCol, b.dataset.col); return; } setPart(kCol, b.dataset.col); });
+      p.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { retWho = b.dataset.who; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
+      drawRetPrev(lo, retWho, preview?.k === kRet ? preview.v : lo[kRet], preview?.k === kCol ? preview.v : lo[kCol]);
+      bind(); return;
     }
     if (slot === 'ret') {
       p.innerHTML = ['auto', ...RETICLES].map(r => { const open = retOwned(r); return `<button class="opt ${(lo.ret || 'auto') === r ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'ret' && preview.v === r ? 'peek' : ''}" data-r="${r}" ${open ? '' : 'aria-disabled="true"'}>${retIcon(r)}<br>${t('ret_' + r)}${open ? '' : `<br><small>${t('retShop')}</small>`}</button>`; }).join('') +
@@ -850,7 +1037,7 @@ export function initMenus(o) {
     else if (slot === 'conv') opts = [null, ...convOptions(lo.body)];
     else if (slot === 'muzzle') opts = [null, ...muzzleOptions(lo.body)];
     else opts = [null, ...C.handles.filter(h => handleFits(lo.body, cat, h))];
-    const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : slot === 'scope' && !lo.scope && cat !== 'sniper' ? 'iron_flip' : lo[slot];
+    const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : slot === 'scope' && !lo.scope && cat !== 'sniper' ? 'iron_own' : lo[slot];
     p.innerHTML = opts.map((id, i0) => {
       const i = slot === 'scope' ? [null, ...C.scopes].indexOf(id) : slot === 'handle' ? [null, ...C.handles].indexOf(id) : i0; /* 04/11: a lista de empunhaduras vem filtrada; pelo indice dela a peca aparecia aberta e a validacao tirava ao equipar */ // nivel da mira pelo lugar na lista original (as de trilho entraram na frente)
       if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
@@ -862,7 +1049,13 @@ export function initMenus(o) {
       const pill = slot === 'body' ? modePill(id) + (open ? `<small class="blv">${t('lvlShort', { n: wpnLevel(cat, id) })}</small>` : '') : '';
       return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : (() => { const rq = slot === 'muzzle' ? MUZZLE_LVL[id] : partReq(i, id); return `<small>${t('reqWpn', { n: rq })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: rq }) * 100)}%"></i></span>`; })()}</button>`;
     }).join('');
-    p.querySelectorAll('.opt').forEach(b => {
+    // mira de 45 graus: na secao Miras, uma linha abaixo (05/11, pedido dele)
+    if (slot === 'scope' && cantedFits(cat)) {
+      const open = partUnlocked(cat, 1, 'canted');
+      p.insertAdjacentHTML('beforeend', `<div class="scope-cant"><small>${t('slot_canted')}</small><button class="opt cant-opt ${lo.canted ? '' : 'on'}" data-cant="">${t('cantedOff')}</button><button class="opt cant-opt ${lo.canted ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'canted' ? 'peek' : ''}" data-cant="1" ${open ? '' : 'aria-disabled="true"'}>${t('cantedOn')}${open ? '' : `<br><small>${t('reqWpn', { n: CANTED_LVL })}</small>`}</button><p class="vis-note">${t('cantedNote')}</p></div>`);
+      p.querySelectorAll('[data-cant]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek('canted', true); return; } setPart('canted', b.dataset.cant ? true : null); });
+    }
+    p.querySelectorAll('.opt:not(.cant-opt)').forEach(b => {
       b.onclick = () => { if (b.classList.contains('locked')) { peek(slot, b.dataset.id || null); return; } setPart(slot, b.dataset.id || null); };
       b.onpointerenter = () => audio.play('ui_hover', { ui: true, vol: 0.3, key: 'hover', max: 1 });
     });
@@ -870,11 +1063,12 @@ export function initMenus(o) {
 
   // granadas (04/11, pedido dele): uma letal (G) e uma tatica (F), escolhidas em cartas como as sequencias
   function renderNadePick() {
-    const L = LETHALS.includes(S.lethal) ? S.lethal : 'frag', T = TACTICALS.includes(S.tactical) ? S.tactical : 'flash';
-    const card = (id, on, grp) => `<button class="stk-card ${on ? 'on' : ''}" data-n="${id}" data-g="${grp}" aria-pressed="${on}"><svg class="stk-ico" viewBox="0 0 48 48" aria-hidden="true">${NADE_SVG[id]}</svg><b class="stk-name">${t('n_' + id)}</b><span class="stk-d">${t('nd_' + id)}</span></button>`;
+    const lv = progressInfo().unlockLevel, open = (id) => lv >= (NADES[id].lvl || 0);
+    const L = LETHALS.includes(S.lethal) ? S.lethal : 'frag', T = TACTICALS.includes(S.tactical) && open(S.tactical) ? S.tactical : 'flash';
+    const card = (id, on, grp) => `<button class="stk-card ${on ? 'on' : ''} ${open(id) ? '' : 'locked'}" data-n="${id}" data-g="${grp}" aria-pressed="${on}" ${open(id) ? '' : 'aria-disabled="true"'}><svg class="stk-ico" viewBox="0 0 48 48" aria-hidden="true">${NADE_SVG[id]}</svg><b class="stk-name">${t('n_' + id)}</b><span class="stk-d">${open(id) ? t('nd_' + id) : t('lookLvl', { n: NADES[id].lvl })}</span></button>`;
     $('stkPane').innerHTML = `<p class="stk-hint">${t('nadeHint')}</p><h3 class="nade-h">${t('nadeLethal')}</h3><div class="stk-cards" role="radiogroup">${LETHALS.map(id => card(id, id === L, 'l')).join('')}</div>`
       + `<h3 class="nade-h">${t('nadeTac')}</h3><div class="stk-cards" role="radiogroup">${TACTICALS.map(id => card(id, id === T, 't')).join('')}</div>`;
-    $('stkPane').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { if (b.dataset.g === 'l') S.lethal = b.dataset.n; else S.tactical = b.dataset.n; o.saveSettings(); audio.play('ui_click', { ui: true }); renderNadePick(); });
+    $('stkPane').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } if (b.dataset.g === 'l') S.lethal = b.dataset.n; else S.tactical = b.dataset.n; o.saveSettings(); audio.play('ui_click', { ui: true }); renderNadePick(); });
   }
 
   // sequencias de abate: cartas com selo, abates e o que faz; tocar liga/desliga (no maximo STREAK_PICK)
@@ -922,12 +1116,14 @@ export function initMenus(o) {
       [t('st_move'), st.move * (W.moveK || 1), base.move * (W.moveK || 1), 1.1],
       [t('st_mag'), Math.round(W.mag * st.mag), Math.round(W.mag * base.mag), 48],
       [t('st_zoom'), st.zoom || W.zoom, base.zoom || W.zoom, 7],
+      ...(W.heat ? [[t('st_heat'), W.heat.shots / (st.heatK ?? 1), W.heat.shots / (base.heatK ?? 1), 100]] : []),
     ];
+    $('statBars').classList.toggle('dense', picking || rows.length > 10); // lista aberta ou linha a mais (Metralhadora): compacta, nada de cortar a ultima
     $('statBars').innerHTML = `<div class="fmrow">${modePill(lo.body)}</div>` + rows.map(([n, v, b, max]) => {
       const pct = Math.min(100, v / max * 100);
       const d = v - b, rel = b ? d / b : 0;
       const cls = Math.abs(rel) < 0.01 ? '' : rel > 0 ? 'up' : 'down';
-      const txt = n === t('st_range') ? v.toFixed(1) + ' m' : n === t('st_mag') ? v : n === t('st_zoom') ? v.toFixed(1) + 'x' : (Math.abs(rel) < 0.01 ? '=' : (rel > 0 ? '+' : '') + Math.round(rel * 100) + '%');
+      const txt = n === t('st_range') ? v.toFixed(1) + ' m' : n === t('st_mag') ? v : n === t('st_zoom') ? v.toFixed(1) + 'x' : n === t('st_heat') ? Math.round(v) : (Math.abs(rel) < 0.01 ? '=' : (rel > 0 ? '+' : '') + Math.round(rel * 100) + '%');
       return `<div class="stat"><span>${n}</span><span class="bar"><i style="width:${pct}%"></i></span><em class="${cls}">${txt}</em></div>`;
     }).join('');
   }
@@ -1003,8 +1199,8 @@ export function initMenus(o) {
 }
 
 // desenho pequeno de cada reticula pra lista do arsenal
-function retIcon(r) {
-  const c = '#d8453a', k = 'stroke="currentColor" stroke-width="2" fill="none"';
+function retIcon(r, c = '#d8453a') {
+  const k = 'stroke="currentColor" stroke-width="2" fill="none"';
   const P = RET_PATH[r];
   if (P) return `<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">${P.s ? `<path d="${P.s}" stroke="${c}" stroke-width="2" fill="none"/>` : ''}${P.f ? `<path d="${P.f}" fill="${c}" fill-rule="evenodd"/>` : ''}</svg>`;
   const body = {

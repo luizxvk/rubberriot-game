@@ -39,8 +39,11 @@ const outlineMat = new THREE.ShaderMaterial({
   side: THREE.BackSide,
 });
 const outlineMats = new Map();
+// 05/11 (pedido dele: malha piscando nas juncoes): o casco do contorno e empurrado pra tras na profundidade; quase colado na peca vizinha, nunca ganha dela
+// liga e desliga todos os contornos de uma vez (desenho do vidro da luneta em maquina que nao segura)
+export function outlinesOn(v) { for (const m of outlineMats.values()) m.visible = v; }
 function getOutlineMat(th) {
-  if (!outlineMats.has(th)) { const m = outlineMat.clone(); m.uniforms.th.value = th; outlineMats.set(th, m); }
+  if (!outlineMats.has(th)) { const m = outlineMat.clone(); m.uniforms.th.value = th; m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = 3; outlineMats.set(th, m); }
   return outlineMats.get(th);
 }
 

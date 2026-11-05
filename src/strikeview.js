@@ -318,10 +318,23 @@ function fireTex() {
 }
 const RAMP = [new THREE.Color(0xffe066), new THREE.Color(0xff9a1a), new THREE.Color(0xf04a12), new THREE.Color(0x5a1a08)];
 
+// caixa de municao (05/11): modelo do Tripo; quando ainda nao carregou o grupo fica vazio e recebe a malha no proximo estado
+let ABOX = null;
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/ammo_crate.glb').then((gl) => {
+  let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; }); if (!mesh) return;
+  gl.scene.updateMatrixWorld(true);
+  const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox(); let b = g0.boundingBox;
+  const k = 0.8 / (b.max.z - b.min.z); g0.scale(k, k, k); g0.computeBoundingBox(); b = g0.boundingBox;
+  g0.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+  ABOX = { geo: g0, map: mesh.material?.map || null }; if (ABOX.map) ABOX.map.colorSpace = THREE.SRGBColorSpace;
+}).catch(e => console.warn('ammo_crate.glb nao carregou', e));
+function fillBox(g) { if (!ABOX || g.children.length) return; const m = new THREE.Mesh(ABOX.geo, toon(0xffffff, { map: ABOX.map })); outline(m, 0.012); g.add(m); }
+export function ammoboxMesh() { const g = new THREE.Group(); fillBox(g); return g; }
+
 export class StrikeView {
   constructor(scene, fx) {
     this.scene = scene; this.fx = fx; this.root = new THREE.Group(); scene.add(this.root);
-    this.crafts = new Map(); this.fires = new Map(); this.puffT = 0;
+    this.crafts = new Map(); this.fires = new Map(); this.boxes = new Map(); this.puffT = 0;
     this.scorchGeo = new THREE.CircleGeometry(2.3, 16); this.scorchMat = new THREE.MeshBasicMaterial({ color: 0x1b1916, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
     this.shadowGeo = new THREE.CircleGeometry(1, 40);
     this.railMat = new THREE.MeshBasicMaterial({ color: PAL.red, transparent: true, opacity: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
@@ -330,6 +343,9 @@ export class StrikeView {
 
   // chamado a cada estado novo do servidor
   sync(s, floorAt) {
+    const on = new Set();
+    for (const b of s.abx || []) { on.add(b.id); let m = this.boxes.get(b.id); if (!m) { m = ammoboxMesh(); m.position.fromArray(b.pos); m.rotation.y = b.id * 1.7; this.root.add(m); this.boxes.set(b.id, m); } fillBox(m); }
+    for (const [id, m] of this.boxes) if (!on.has(id)) { this.fx.puff([m.position.x, m.position.y + 0.3, m.position.z], 4, 0.7, 0xd9d4c8, 0.5); this.root.remove(m); this.boxes.delete(id); }
     const seen = new Set();
     for (const f of s.crafts || []) {
       seen.add(f.id);
@@ -463,6 +479,7 @@ export class StrikeView {
   clear() {
     for (const [id, v] of this.crafts) this.drop(id, v);
     for (const f of this.fires.values()) this.root.remove(f.sc);
-    this.crafts.clear(); this.fires.clear();
+    for (const m of this.boxes.values()) this.root.remove(m);
+    this.crafts.clear(); this.fires.clear(); this.boxes.clear();
   }
 }

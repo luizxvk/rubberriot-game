@@ -176,6 +176,30 @@ export function eyeTex(style) {
 }
 
 // ---------- oculos (malha na frente do rosto) ----------
+// rosto (05/11): peca presa na cabeca. Nariz em (0, -0.08, -0.38), boca em (0, -0.17, -0.33); frente = -z
+export function buildFace(id) {
+  if (!id || id === 'none') return null;
+  const g = new THREE.Group(), add = (geo, col, x, y, z, rx = 0, ry = 0, rz = 0, th = 0.006) => { const m = ink(geo, col, th); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+  const INK = 0x141210, BROWN = 0x6b4326, GOLD = 0xd9a520;
+  switch (id) {
+    case 'olhoroxo': add(new THREE.TorusGeometry(0.075, 0.026, 6, 18), 0x5d3a86, 0.1, 0.045, -0.372, 0, Math.PI, 0, 0); add(new THREE.SphereGeometry(0.02, 6, 5), 0x8a6bb0, 0.17, 0.0, -0.345, 0, 0, 0, 0); break;
+    case 'curativo': add(new THREE.BoxGeometry(0.15, 0.04, 0.012), 0xe7c9a0, 0.14, -0.04, -0.33, 0, -0.42, 0.7); add(new THREE.BoxGeometry(0.15, 0.04, 0.012), 0xe7c9a0, 0.14, -0.04, -0.33, 0, -0.42, -0.7); break;
+    case 'bigodinho': add(new THREE.CapsuleGeometry(0.018, 0.09, 3, 8), INK, 0, -0.13, -0.355, 0, 0, Math.PI / 2, 0); break;
+    case 'sardas': for (const [x, y] of [[0.13, -0.03], [0.17, -0.06], [0.11, -0.08], [-0.13, -0.03], [-0.17, -0.06], [-0.11, -0.08]]) add(new THREE.SphereGeometry(0.012, 6, 5), 0x8a5a33, x, y, -0.325 + Math.abs(x) * 0.14, 0, 0, 0, 0); break;
+    case 'bigode': for (const s of [-1, 1]) { const m = add(new THREE.TorusGeometry(0.075, 0.021, 6, 14, Math.PI * 1.15), INK, s * 0.075, -0.13, -0.35, 0, 0, s > 0 ? Math.PI * 1.02 : -0.12, 0); m.scale.y = 0.7; } break;
+    case 'charuto': add(new THREE.CylinderGeometry(0.024, 0.024, 0.2, 8), BROWN, 0.08, -0.17, -0.42, Math.PI / 2 - 0.25, 0, 0.4); add(new THREE.SphereGeometry(0.024, 8, 6), 0xff7a1a, 0.125, -0.15, -0.52, 0, 0, 0, 0); break;
+    case 'dente': add(new THREE.BoxGeometry(0.05, 0.05, 0.02), GOLD, 0.05, -0.205, -0.335, 0, 0, 0, 0.004); break;
+    case 'cachimbo': add(new THREE.CylinderGeometry(0.016, 0.016, 0.16, 8), BROWN, 0.07, -0.19, -0.42, Math.PI / 2 - 0.3, 0, 0.35); add(new THREE.CylinderGeometry(0.05, 0.036, 0.08, 10), BROWN, 0.105, -0.17, -0.51, 0, 0, 0); break;
+    case 'cavanhaque': { const m = add(new THREE.ConeGeometry(0.06, 0.15, 10), INK, 0, -0.32, -0.25, Math.PI + 0.25, 0, 0, 0); m.userData.detail = false; break; }
+    case 'barba': { const m = add(new THREE.SphereGeometry(0.29, 14, 10, 0, Math.PI * 2, Math.PI * 0.56, Math.PI * 0.44), 0x3a2a1c, 0, -0.04, -0.09, 0, 0, 0, 0.01); m.scale.set(1.02, 1.1, 0.98); break; }
+    case 'tapa': add(new THREE.CircleGeometry(0.075, 14), INK, 0.1, 0.05, -0.385, 0, Math.PI, 0, 0); { const m = add(new THREE.TorusGeometry(0.37, 0.011, 5, 28), INK, 0, 0.08, 0, Math.PI / 2 + 0.2, 0, 0, 0); m.userData.detail = false; } break;
+    case 'gargalhada': { add(new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), 0xfaf8f2, 0, -0.15, -0.32, -0.1, 0, 0, 0.01); break; }
+    case 'lingua': { const m = add(new THREE.CapsuleGeometry(0.05, 0.07, 4, 10), 0xe07a8a, 0.02, -0.25, -0.34, 0.25, 0, 0, 0.006); m.scale.z = 0.5; break; }
+    default: return null;
+  }
+  return g;
+}
+
 export function buildEyewear(style) {
   const g = new THREE.Group();
   const rim = (x, r, col = PAL.ink, lens = null) => {
@@ -228,10 +252,16 @@ export function antiFlicker(root, base = 1) {
 
 export function buildHat(id, teamCol) {
   const g = new THREE.Group();
-  const band = (r, y, h = 0.06) => { const b = ink(new THREE.CylinderGeometry(r, r, h, 16), teamCol, 0); b.position.y = y; return b; }; // fita do time
+  const band = (r, y, h = 0.06) => { const b = ink(new THREE.CylinderGeometry(r, r, h, 36), teamCol, 0); b.position.y = y; return b; }; // fita do time
   const add = (m, x = 0, y = 0, z = 0) => { m.position.set(x, y, z); g.add(m); return m; };
   switch (id) {
     case 'none': return null;
+    case 'boina': { // boina de diretor: A Grande Estreia, nivel 50
+      const top = add(ink(new THREE.SphereGeometry(0.32, 16, 10), 0x3a1a1c, 0.02), 0.05, 0.07, 0.04); top.scale.set(1.1, 0.34, 1.05); top.rotation.z = -0.18;
+      add(ink(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 8), 0x3a1a1c, 0.008), 0.05, 0.2, 0.04);
+      add(band(0.262, 0.018, 0.1)); // fita alta: encosta na boina e na cabeca, sem vao
+      g.position.y = 0.27; return g;
+    }
     case 'bowler': {
       add(ink(new THREE.CylinderGeometry(0.2, 0.24, 0.18, 14), PAL.ink, 0.02));
       add(ink(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 16), PAL.ink, 0.02), 0, -0.09);
@@ -495,6 +525,8 @@ export function patternTex(id) {
     if (id === 'dots') for (let y = 8; y < h; y += 32) for (let x = 8 + ((y / 32) % 2) * 16; x < w; x += 32) { g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill(); }
     if (id === 'checker') for (let y = 0; y < h; y += 32) for (let x = (y / 32) % 2 ? 32 : 0; x < w; x += 64) g.fillRect(x, y, 32, 32);
     if (id === 'zigzag') { g.lineWidth = 9; for (let y = 16; y < h; y += 32) { g.beginPath(); for (let x = 0; x <= w; x += 16) g.lineTo(x, y + ((x / 16) % 2 ? -8 : 8)); g.stroke(); } }
+    if (id === 'filme') { g.fillRect(0, 0, w, 16); g.fillRect(0, h - 16, w, 16); g.fillStyle = 'rgba(250,248,242,.9)'; for (let x = 4; x < w; x += 22) { g.fillRect(x, 4, 10, 8); g.fillRect(x, h - 12, 10, 8); } }
+    if (id === 'cortina') for (let x = 0; x < w; x += 24) { const gr = g.createLinearGradient(x, 0, x + 24, 0); gr.addColorStop(0, 'rgba(20,18,16,.05)'); gr.addColorStop(1, 'rgba(20,18,16,.6)'); g.fillStyle = gr; g.fillRect(x, 0, 24, h); }
     if (id === 'stars') { g.fillStyle = 'rgba(250,248,242,.9)'; for (let y = 16; y < h; y += 42) for (let x = 16 + ((y / 42) % 2) * 20; x < w; x += 42) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 4 : 10; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.fill(); } }
   });
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 2);

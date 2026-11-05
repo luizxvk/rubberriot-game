@@ -4,9 +4,9 @@ export const WEAPONS = {
   smg:     { name: 'Matraca',    slot: 2, dmg: 21, rate: 0.068, mag: 32, reserve: 192, reload: 1.4, spread: 0.032, auto: true, zoom: 1.3, kick: 0.018, range: 140, recoil: [[1, 0.3], [0.9, -0.4], [1, 0.5], [0.8, -0.5], [1, 0.2], [0.9, -0.3]] },
   rifle:   { name: 'Trovão',     slot: 3, dmg: 34, rate: 0.1, mag: 30, reserve: 150, reload: 1.7, spread: 0.014, /* 04/11: mais preciso que a pistola de longe */ auto: true, zoom: 1.6, kick: 0.026, range: 300, recoil: [[1.2, 0], [1.1, 0.15], [1, 0.3], [0.9, 0.35], [0.8, 0.1], [0.8, -0.25], [0.8, -0.4], [0.7, -0.2]] },
   // Metralhadora (04/11, pedido dele: categoria nova): pente enorme, recarga longa, anda e mira mais devagar
-  lmg:     { name: 'Metralhadora', slot: 8, dmg: 23 /* 04/11 (hotfix, pedido dele): era 31 */, moveK: 0.72, runK: 0.62, slideK: 0.6 /* so com ela na mao: anda, corre e escorrega bem mais devagar */, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.024, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
+  lmg:     { name: 'Metralhadora', slot: 8, dmg: 23 /* 04/11 (hotfix, pedido dele): era 31 */, moveK: 0.72, runK: 0.62, slideK: 0.6 /* so com ela na mao: anda, corre e escorrega bem mais devagar */, heat: { shots: 45, cool: 0.42, wait: 0.35, kick: 0.8 } /* 05/11 (pedido dele): 45 tiros seguidos superaquece e trava ate esfriar; o coice cresce com o calor */, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.046 /* 05/11 (pedido dele): era 0,024 */, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
   shotgun: { name: 'Bacamarte',  slot: 4, dmg: 17, pellets: 10, rate: 0.7, mag: 6, reserve: 36, reload: 1.9, spread: 0.085, auto: false, zoom: 1.2, kick: 0.11, range: 45, recoil: [[1, 0.1]] },
-  minigun: { name: 'Moedor',     slot: 5, dmg: 16, rate: 0.045, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.012, spin: 0.35, noAds: true, range: 200, recoil: [[0.6, 0.6], [0.6, -0.6], [0.7, 0.4], [0.6, -0.5]] },
+  minigun: { name: 'Moedor',     slot: 5, dmg: 16, rate: 0.028, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.05, spin: 0.35, noAds: true, range: 200, recoil: [[0.6, 0.6], [0.6, -0.6], [0.7, 0.4], [0.6, -0.5]] },
   melee:   { name: 'Lâmina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
   sniper:  { name: 'Luneta',     slot: 6, dmg: 150, rate: 1.05, mag: 5, reserve: 25, reload: 2.1, spread: 0.04, adsSpread: 0, auto: false, zoom: 4, kick: 0.16, range: 400, recoil: [[1, 0.15]] },
   // punhos (battle royale): 3 socos derrubam quem esta sem colete (34 x 3 = 102)
@@ -85,8 +85,11 @@ export const NADES = {
   thermo: { speed: 27, fuse: 1.8, radius: 5.5, dmg: 95, burn: 5, burnR: 4, burnDps: 18 },
   smoke: { speed: 28, fuse: 1.4, radius: 6.5, time: 12 },
   beacon: { speed: 16, fuse: 0.7, hp: 120 },
+  // 05/11 (pedido dele): cai no chao e reabastece quem passa por cima (dono e aliados). lvl = nivel da conta; cd = espera por jogador.
+  // Explode em 3 casos: acabou o tempo, gastou os usos ou o inimigo destruiu a tiro (hp). blast/dmg = raio e dano da explosao
+  ammobox: { speed: 18, fuse: 0.8, time: 30, uses: 2, radius: 1.7, lvl: 15, cd: 4, hp: 60, blast: 4.5, dmg: 90 },
 };
-export const LETHALS = ['frag', 'tomahawk', 'thermo'], TACTICALS = ['flash', 'smoke', 'beacon'];
+export const LETHALS = ['frag', 'tomahawk', 'thermo'], TACTICALS = ['flash', 'smoke', 'beacon', 'ammobox'];
 
 // sequencias de abates (cartoon): radar espiao, chuva de bigornas, dirigivel atirador e,
 // com 15 sem cair, a Torta Atomica: avisa o outro time e depois de `delay` s derruba todo inimigo vivo
@@ -279,12 +282,12 @@ export const BODY_TRAITS = {
   fusil_6: { mode: 'burst', burst: 4, rate: 0.55, dmg: 0.85 },
   fusil_7: { mode: 'semi', rate: 1.7, dmg: 1.45, spread: 0.65, hip: 1.25 },
   fusil_11: { mode: 'auto', rate: 0.95, dmg: 1, kick: 0.9, hip: 1 },                   // bate-estaca: o fuzil certinho, pouco coice
-  fusil_12: { mode: 'semi', rate: 2.3, dmg: 1.5, spread: 0.55, hip: 1.35, kick: 1.35 }, // bico de pena: semi de precisao (abaixo da Agulha)
+  fusil_12: { mode: 'semi', rate: 2.3, dmg: 1.5, spread: 0.55, hip: 1.35, kick: 1.35, mag: 0.4 }, // bico de pena: semi de precisao (abaixo da Agulha); 12 no pente (30 x 0,4, pedido dele 05/11)
   fusil_13: { mode: 'auto', rate: 1.06, dmg: 1.1, kick: 1.2, spread: 1.05, hip: 1.05 },        // pipocadeira (pacote 3, AK-47): pipoca forte, coice de mula
   pistol_11: { mode: 'semi', pellets: 8, rate: 1.9, dmg: 0.62, spread: 6.5, hip: 1, kick: 3.2, mag: 0.1667, reload: 1.45 }, // serrada (03/11): 2 tiros de chumbo, so de perto
   shotgun_1: { mode: 'semi' },                                                     // bomba
   shotgun_2: { mode: 'semi', rate: 0.55, dmg: 0.82, kick: 0.85 },                  // semiautomatica
-  shotgun_3: { mode: 'auto', rate: 0.22, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~6,5/s; era 4,8, pedido dele 01/11), dano baixo por tiro, 32 no pente (6 x 5,34)
+  shotgun_3: { mode: 'auto', rate: 0.22, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~6,5/s; era 4,8, pedido dele 01/11), dano baixo por tiro, 32 no pente (05/11: o 12 era pra Bico de Pena, voltou)
   // pacote WW2
   fusil_9: { mode: 'auto', rate: 1.12, dmg: 1.1, kick: 1.15, hip: 1.05 },             // trovao de lata
   pistol_7: { mode: 'semi', rate: 1.25, dmg: 1.3, kick: 1.3 },                        // quarenta e cinco

@@ -4,12 +4,15 @@ import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, B
 import { getMap, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena, headroom } from './map.js';
 import { navPath, floorAt, standable, hop, lowAt, freeNear } from './nav.js';
 import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
-import { cleanLook } from './looks.js';
+import { cleanLook, DANCE_IDS } from './looks.js';
+// fim da partida em segundos: 0,9 + camera final ~3,5 + podio ~14 (3 s da camera chegando); sala sem lobby ainda mostra OVER_STATS de placar
+export const OVER_STATS = 8.5, OVER_LOBBY = 18.5, OVER_NEXT = OVER_LOBBY + OVER_STATS;
+import { bannerOk, botBanner, BANNER_DEFAULT } from './banners.js';
 import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
 import { escInit, escTick, escSpawn, escGoal, escSnap, escPos, escTimeout, trainBox } from './escort.js';
 import { EVENTS, EV } from './events.js';
 import { carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, heistPass, heistBotPass, heistCfg, HEIST_MAPS } from './heist.js';
-import { strikeReset, strikeUse, strikeTick, strikeSnap, tickBomber } from './strikes.js';
+import { strikeReset, strikeUse, strikeTick, strikeSnap, tickBomber, abxDrop, abxTake, abxShot } from './strikes.js';
 import { borInit, borBoxes, borTick, borHit, borKilled, borDown, borRescue, borBotShop, borSnap, borHoldSpawn } from './borroes.js';
 import { MOBS } from './mobs.js';
 import { brInit, brSpawn, brSpawnPoint, brArmor, brKill, brTick, brSnap, brGoal, lootList, brDown, brNear } from './br.js';
@@ -104,6 +107,7 @@ export class Core {
     if (this.mode === 'borroes') map = 'tinteiro';
     else if (this.mode === 'heist') map = HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)];
     else if (this.mode === 'smuggle') map = 'docas'; // Contrabando: so no Cais
+    else if (this.mode === 'escort' && !ESCORT_MAPS.includes(map)) map = ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]; // escolta precisa de trilho: sala criada com outro mapa quebrava o servidor
     else if (PVE_ONLY.includes(map)) map = 'auto';
     if (this.mode === 'borroes') bots = Math.min(3, bots | 0);
     // battle royale so na ilha (e a ilha so no battle royale)
@@ -478,14 +482,19 @@ export class Core {
     this.event({ k: 'msg', key: why === 'afk' ? 'leftAfk' : 'kicked', name });
   }
   takeDrops() { const d = this.drops || []; this.drops = []; return d; }
+  bnOf(p) { return p.bn || (p.bot ? botBanner(p.id) : BANNER_DEFAULT); }
   // parado sem mexer/atirar: AFK_PLAY s na partida, AFK_LOBBY s no lobby = sai (sala vazia fecha sozinha)
   checkAfk() {
     if (this.local) return; // solo e tela dividida: a partida e da pessoa, ninguem sai por ficar parado
     const now = this.clock || 0;
     if (now - (this.afkAt || 0) < 1) return; // 1x por segundo
     this.afkAt = now;
+    // 05/11: mudou de fase (lobby -> partida) ou esta carregando, o relogio zera. Sem isso quem esperou mais de AFK_PLAY no lobby
+    // sem mexer era expulso no instante em que a partida comecava
+    const fresh = this.afkPhase !== this.phase || this.waitLoad; this.afkPhase = this.phase;
     for (const p of [...this.players.values()]) {
       if (p.bot) continue;
+      if (fresh) p.actAt = now;
       p.actAt ??= now;
       const lim = this.phase === 'play' && !this.over ? AFK_PLAY : AFK_LOBBY;
       if (now - p.actAt > lim) this.drop(p.id, 'afk');
@@ -714,8 +723,15 @@ export class Core {
       case 'toLobby': {
         if (!this.over || !this.useLobby || p.bot) break;
         p.endBack = true;
-        this.backLobby = true; // qualquer um leva a sala de volta (02/11, pedido dele: nao depende mais do host)
+        // 05/11: com o podio um so nao corta a danca dos outros; volta quando todos apertam ou no fim do tempo, sem depender do host
+        this.backLobby = [...this.players.values()].every(o => o.bot || o.endBack);
         this.event({ k: 'endBack', id, host: id === this.hostId() });
+        break;
+      }
+      case 'dance': { // podio: so quem ficou entre os 3 dança, no maximo uma troca por 0,5 s
+        if (!this.over || !this.top3?.includes(id) || !DANCE_IDS.includes(m.d) || (p.danceAt ?? -9) + 0.5 > (this.clock || 0)) break;
+        p.danceAt = this.clock || 0;
+        this.event({ k: 'dance', id, d: m.d });
         break;
       }
       case 'ready': {
@@ -762,6 +778,7 @@ export class Core {
         break;
       }
       case 'loadout': {
+        if (typeof m.bn === 'string' && bannerOk(m.bn, Number(m.ul) || 1)) p.bn = m.bn; // banner: vale na hora, ate no meio da partida
         // partida rolando e vivo: guarda pro proximo renascimento (arma, pecas, skills, equipamento e sequencias).
         // Campo de treino manda now (troca na hora)
         if (this.phase === 'play' && p.alive && !m.now && !this.over && p.loSig) { p.nextLo = m; this.send(id, { t: 'ev', k: 'loNext' }); break; } // loSig: a 1a montagem (entrada na partida) vale na hora
@@ -774,7 +791,7 @@ export class Core {
         // skills passivas: so ids conhecidos, sem repetir, ate SKILL_SLOTS e liberadas pro nivel informado
         p.skills = Array.isArray(m.skills) ? [...new Set(m.skills.filter(s => SKILLS[s] && (p.ulvl || p.lvl || 1) >= SKILLS[s].lvl))].slice(0, SKILL_SLOTS) : [];
         p.los = cleanLoadouts(m.los);
-        p.lethal = LETHALS.includes(m.lethal) ? m.lethal : 'frag'; p.tactical = TACTICALS.includes(m.tactical) ? m.tactical : 'flash'; // aba Granadas (04/11)
+        p.lethal = LETHALS.includes(m.lethal) ? m.lethal : 'frag'; p.tactical = TACTICALS.includes(m.tactical) && (p.ulvl || p.lvl || 1) >= (NADES[m.tactical].lvl || 0) ? m.tactical : 'flash'; // aba Granadas (04/11)
         p.field = FIELD[m.field] && (p.ulvl || p.lvl || 1) >= FIELD[m.field].lvl ? m.field : null;
         p.streaks = pickStreaks(m.streaks); // sequencias que ele escolheu no Arsenal (02/11) // equipamento de campo
         p.tracer = typeof m.tracer === 'string' && /^[a-z]{2,10}$/.test(m.tracer) ? m.tracer : 'chalk';
@@ -809,7 +826,7 @@ export class Core {
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
         if (Math.abs(m.yaw - p.yaw) > 0.02 || Math.abs(m.pos[0] - p.pos[0]) + Math.abs(m.pos[2] - p.pos[2]) > 0.05) p.actAt = this.clock || 0; // mexeu: presente
         p.pos = clampArena(this.M, m.pos); p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
-        p.ads = m.ad === 1 ? 1 : 0; // mirando (04/11): brilho da luneta pros outros
+        p.ads = m.ad === 1 ? 1 : 0; p.ca = m.ca === 1 ? 1 : 0; // mirando (04/11): brilho da luneta pros outros; ca = mira de 45 graus (aparece na tela de morte)
         if (p.car && p.seat === 0 && m.car && Array.isArray(m.car.pos) && m.car.pos.every(Number.isFinite) && Number.isFinite(m.car.yaw)) { // quem dirige manda o carro (ate ~1 s de atraso de folga)
           const car = this.cars.find(k => k.id === p.car);
           if (car && Math.hypot(m.car.pos[0] - car.pos[0], m.car.pos[2] - car.pos[2]) < CAR.speed * 1.2 + 1) { car.pos = [...m.car.pos]; car.yaw = m.car.yaw; car.spd = Math.max(-CAR.rev, Math.min(CAR.speed, +m.car.spd || 0)); car.steer = Math.max(-1, Math.min(1, +m.car.st || 0)); }
@@ -881,6 +898,18 @@ export class Core {
         }
         break;
       }
+      case 'hitAbx': { // tiro na caixa de municao inimiga: as mesmas conferencias do tiro no dirigivel
+        const b = this.boxes.find(x => x.id === m.id), w = WEAPONS[m.wpn], owner = b && this.players.get(b.owner);
+        if (!b || !owner || !w || w.melee || !p.alive || p.down > 0 || !Number.isFinite(m.dmg) || m.dmg <= 0 || !this.enemies(p, owner)) return;
+        if (m.wpn !== p.wpn && m.wpn !== p.lastWpn) return;
+        const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]], bp = [b.pos[0], b.pos[1] + 0.4, b.pos[2]];
+        if (Math.sqrt(dist2(eye, bp)) > (w.range || 260) + 10 || !hasLOS(this.M, eye, bp)) return;
+        const dmg = Math.min(m.dmg, w.dmg * (w.pellets || 1) * 1.5, Math.max(0, p.budget));
+        if (dmg <= 0) return;
+        p.budget -= dmg;
+        abxShot(this, b, p, dmg);
+        break;
+      }
       // marcacao (ping) do battle royale: so o time ve (dupla = o parceiro; sozinho = so voce)
       // chat da sala: texto curto, 1 por segundo (3 seguidas e espera 4 s), palavrao mascarado. Bot nao fala.
       case 'chat': {
@@ -912,6 +941,9 @@ export class Core {
           const real = m.kind === 'frag' ? (p.lethal || 'frag') : (p.tactical || 'flash');
           this.throwNade(p, real, norm(m.d), real === 'frag' ? Number(m.cook) || 0 : 0, m.hand === true && real === 'frag');
         }
+        break;
+      case 'abx':
+        abxTake(this, p, m.id);
         break;
       case 'streak':
         if (p.alive) this.useStreak(p, m.kind);
@@ -1072,7 +1104,7 @@ export class Core {
     v.dmgBy = {};
     if (this.mode === 'br') brKill(this, v);
     if (this.bor) borKilled(this, v, a); // pontos do abate; gente so volta na onda seguinte
-    this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, pos: v.pos });
+    this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, pos: v.pos, bn: suicide ? undefined : this.bnOf(a) });
     // sobrevivente que cai (de qualquer jeito) vira infectado
     if (this.mode === 'infect' && v.team === 'blue' && this.infStarted) this.infect(v, suicide ? null : a);
     if (this.mode === 'ffa' && !suicide && a.kills >= this.limit) this.end(a.name);
@@ -1281,6 +1313,8 @@ export class Core {
       const y = floorAt(this.M, n.pos[0], n.pos[2]);
       this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, kind: 'beacon', owner: owner.id, team: owner.team, t: 1e9, hp: NADES.beacon.hp, maxHp: NADES.beacon.hp, pos: [n.pos[0], Number.isFinite(y) ? y : n.pos[1], n.pos[2]], botT: 0 });
       this.event({ k: 'beacon', id: owner.id, pos: n.pos });
+    } else if (n.kind === 'ammobox') {
+      if (owner) abxDrop(this, owner, n.pos);
     } else {
       this.event({ k: 'flash', pos: n.pos, owner: n.owner });
       for (const v of this.players.values()) {
@@ -1388,7 +1422,7 @@ export class Core {
       const mine = this.uavs.find(u => (this.cfg.teams ? u.team === p.team : u.owner === p.id) && this.players.has(u.owner));
       if (mine) mine.t += STREAKS.uav.time; // ja tem radar no ar: soma o tempo
       else this.uavs.push({ owner: p.id, team: p.team, t: STREAKS.uav.time });
-      this.event({ k: 'streak', id: p.id, kind, team: p.team });
+      this.event({ k: 'streak', id: p.id, kind, team: p.team, bn: this.bnOf(p) });
       return;
     }
     // Canyon Poeira (04/11, pedido dele): cabem dois baloes bombardeiros no ar; o segundo nao espera a fila (reta separada em strikes.js)
@@ -1427,17 +1461,18 @@ export class Core {
       const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), eye = [p.pos[0], p.pos[1] + 1, p.pos[2]], at = [p.pos[0] + fx * 1.3, p.pos[1], p.pos[2] + fz * 1.3];
       const pos = hasLOS(this.M, eye, [at[0], at[1] + 1, at[2]]) ? at : [...p.pos];
       this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, kind: 'sentry', owner: p.id, team: p.team, t: STREAKS.sentry.time, hp: STREAKS.sentry.hp, pos, yaw: p.yaw, fireT: 1, botT: 0 });
-      this.event({ k: 'streak', id: p.id, kind, team: p.team });
+      this.event({ k: 'streak', id: p.id, kind, team: p.team, bn: this.bnOf(p) });
       return;
     }
     if (kind === 'blimp') this.blimps.push({ id: this.blimpSeq = (this.blimpSeq || 0) + 1, owner: p.id, team: p.team, t: STREAKS.blimp.time, hp: STREAKS.blimp.hp, ang: rnd(0, 6.28), fireT: 1, pos: [0, 28, 0] });
     if (kind === 'nuke') this.nukes.push({ owner: p.id, t: STREAKS.nuke.delay });
-    this.event({ k: 'streak', id: p.id, kind, team: p.team, delay: kind === 'nuke' ? STREAKS.nuke.delay : undefined });
+    this.event({ k: 'streak', id: p.id, kind, team: p.team, bn: this.bnOf(p), delay: kind === 'nuke' ? STREAKS.nuke.delay : undefined });
   }
 
   tickStreaks(dt) {
     // intervalo entre sequencias: so comeca a contar quando a do ar acaba
-    if (this.blimps.length) this.streakGap = STREAK_GAP;
+    // 05/11: sentinela e sinalizador ficam no chao e nao travam a sala; contavam aqui e o contador parava em 4 s ate eles sumirem
+    if (this.blimps.some(b => b.kind !== 'sentry' && b.kind !== 'beacon')) this.streakGap = STREAK_GAP;
     else if (this.streakGap > 0) this.streakGap -= dt;
     // folga dos jogadores: sala livre + jogador com sequencia guardada = o relogio do bot corre; senao volta ao inicio
     if (!this.streakLock() && this.humanStreakWaiting()) this.botYield = (this.botYield ?? BOT_YIELD) - dt; else this.botYield = BOT_YIELD;
@@ -1637,8 +1672,11 @@ export class Core {
 
   end(winner) {
     if (this.over) return;
-    this.over = true; this.overT = 12.5; // +3,5 s: a camera da ultima morte roda antes do placar
-    this.event({ k: 'end', winner });
+    // 05/11 (pedido dele): camera da ultima morte -> podio dos 3 melhores -> sala com lobby volta sozinha e mostra o placar la; sala
+    // sem lobby ainda mostra o placar antes da proxima
+    this.over = true; this.overT = this.useLobby ? OVER_LOBBY : OVER_NEXT;
+    this.top3 = [...this.players.values()].filter(p => !p.mob).sort((a, b) => b.score - a.score || b.kills - a.kills).slice(0, 3).map(p => p.id);
+    this.event({ k: 'end', winner, top: this.top3 });
   }
 
   // ---------- bots ----------
@@ -1683,7 +1721,7 @@ export class Core {
       ai.cover = best && p.hp < (p.maxHp || BOT_HP) * 0.35 ? this.coverSpot(p, best) : null;
       ai.target = best;
       if (p.field && fieldReady(p) && !(this.freezeT > 0)) botField(this, p, best);
-      ai.goal = this.spreadGoal(p, this.objRoute(p, this.botGoal(p)));
+      ai.goal = this.spreadGoal(p, this.canyonGoal(p, this.objRoute(p, this.botGoal(p))));
     }
     const w = WEAPONS[p.wpn];
     // papel fixo de cada bot (01/11, pedido dele: movimento mais tatico e previsivel): 0 = ponta (chega perto,
@@ -1900,6 +1938,16 @@ export class Core {
     return standable(this.M, x, z) ? [x, g[1], z] : g;
   }
 
+  // Canyon (05/11, pedido dele: os bots so passavam pelo meio). Cada bot tem o seu vao: 2 em 5 pelo oeste, 2 em 5 pelo leste, 1 em 5 pelo meio.
+  // Precisa cruzar a vala: vai primeiro ate o vao dele; ja do outro lado, segue pro objetivo
+  canyonLane(p) { let h = 0; for (const ch of p.id) h += ch.charCodeAt(0); return [-86, -86, 0, 84, 84][h % 5]; }
+  canyonGoal(p, g) {
+    if (!g || this.M.id !== 'deserto') return g;
+    const pz = p.pos[2], gz = g[2];
+    if (Math.abs(gz) < 9 || Math.sign(pz) === Math.sign(gz)) return g; // mesmo lado da vala
+    return [this.canyonLane(p), 0, Math.sign(gz) * 3];
+  }
+
   // objetivo pelo flanco (04/11, pedido dele): o bot de papel "flanco" nao vai reto. Passa por um ponto de lado e so entao
   // segue pro objetivo; quem carrega, resgata ou ja esta perto vai direto, entao o objetivo nunca e largado. Canyon fica como esta.
   objRoute(p, g) {
@@ -1975,6 +2023,8 @@ export class Core {
     if (this.esc) return escGoal(this, p);
     if (this.heist) return heistGoal(this, p) || this.huntGoal(p); // defesa "caca": sem ninguem a vista patrulha (antes ficava parada onde nasceu)
     if (this.mode === 'dom') {
+      // Canyon (05/11): a zona da propria faixa vem primeiro enquanto nao for do time; senao 89% do tempo ficava todo mundo no centro
+      if (this.M.id === 'deserto') { const lane = this.canyonLane(p), own = this.zones.find(z => Math.abs(z.pos[0] - lane) < 30); if (own && own.owner !== p.team) return own.pos; }
       let best = null, bd = 1e9;
       for (const z of this.zones) {
         if (z.owner === p.team && Math.random() < 0.8) continue;
@@ -2048,6 +2098,7 @@ export class Core {
       if (d < 8) continue;
       let sc = Math.min(d, 45) - Math.max(0, d - 45) * 0.5 + rnd(0, 25) + (q[3] ? 12 : 0);
       if ((ai.visited || []).some(v => Math.hypot(v[0] - q[0], v[2] - q[2]) < 6)) sc -= 30;
+      if (this.M.id === 'deserto') sc -= Math.abs(q[0] - this.canyonLane(p)) * 0.35; // patrulha na propria faixa do mapa
       for (const o of mates) { const g = o.ai.route[o.ai.route.length - 1]; if (Math.hypot(g[0] - q[0], g[2] - q[2]) < 14) sc -= 18 + near * 4; }
       if (sc > bs) { bs = sc; best = q; }
     }
@@ -2151,10 +2202,8 @@ export class Core {
     if (this.phase !== 'play') { this.tickLobby(dt); return; }
     if (this.over) {
       this.overT -= dt;
-      // fim de partida: volta todo mundo pro lobby (pronto zerado). Sala com lobby (solo e de amigos) NAO volta
-      // sozinha: espera o host apertar "Voltar pro lobby" (ou todo mundo apertar); 3 min de trava (pedido dele 01/11)
-      const waitBack = this.useLobby && !this.backLobby && this.overT > -180;
-      if (this.overT <= 0 && !waitBack) {
+      // fim de partida: volta todo mundo pro lobby (pronto zerado) quando acaba o tempo do podio ou todo mundo apertou "Voltar pro lobby"
+      if (this.overT <= 0 || this.backLobby) {
         this.backLobby = false; for (const p of this.players.values()) p.endBack = false;
         if (this.useLobby) this.phase = 'lobby'; else if (this.autoNext) this.nextQuick(); else this.reset();
         this.over = false;

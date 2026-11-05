@@ -77,8 +77,8 @@ export class Pad {
       this.sx = (this.sx || 0) + (rx - (this.sx || 0)) * kk; this.sy = (this.sy || 0) + (ry - (this.sy || 0)) * kk;
       this.edgeT = Math.hypot(rx, ry) > 0.9 ? Math.min(1, (this.edgeT || 0) + dt / 0.6) : 0;
       const k = (S.padSens ?? 1) * (1 + (S.padAccel || 0) * this.edgeT * 1.2);
-      I.lookX += curve(this.sx) * LOOK * k * dt;
-      I.lookY += curve(this.sy) * LOOK * 0.72 * k * dt;
+      const gx = curve(this.sx) * LOOK * k * dt, gy = curve(this.sy) * LOOK * 0.72 * k * dt;
+      I.lookX += gx; I.lookY += gy; I.padLookX += gx; I.padLookY += gy; // a parte do controle fica separada: tem a sensibilidade dela
       // L3 trava a corrida ate parar de andar pra frente (igual COD)
       // botoes vem dos comandos remapeaveis (binds.js); Start e Select ficam fixos
       const P = I.padMap || (I.padMap = padBinds(I.settings)), bi = (id) => B[P[id]] ?? -1;

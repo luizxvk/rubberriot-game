@@ -21,7 +21,25 @@ const { BODY_TRAITS } = await import('../shared/weapons.js');
 for (const k of Object.keys(BODY_TRAITS)) if (k.startsWith('melee_') && !both('ml_' + k.slice(6))) falta.push('ml_' + k.slice(6));
 // Rovex Pass (04/11): toda recompensa com nome nos dois idiomas
 const { PASS } = await import('../src/pass.js');
-for (const p of PASS) if (!both(p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id)) falta.push('pass ' + p.id);
+const { PASS_FREE } = await import('../src/pass.js');
+for (const p of [...PASS, ...Object.values(PASS_FREE)]) if (!both(p.k === 'banner' ? 'bn_' + p.id : p.k === 'dance' ? 'dn_' + p.id : p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id)) falta.push('pass ' + p.id);
+if (new Set(PASS.map(p => p.k + (p.slot || '') + p.id)).size !== PASS.length) falta.push('item repetido no Pass');
+// todo item marcado como do Pass precisa estar em alguma trilha, senao ninguem consegue
+{ const { LOOKS: LK, DANCE_INFO } = await import('../shared/looks.js'), { BANNERS: BN } = await import('../shared/banners.js'), all = [...PASS, ...Object.values(PASS_FREE)];
+  for (const [slot, L] of Object.entries(LK)) for (const it of L) if (it.pass && !all.some(p => p.k === 'look' && p.slot === slot && p.id === it.id)) falta.push(`look ${slot}/${it.id} marcado pass e fora das trilhas`);
+  for (const b of BN) if (b.pass && !all.some(p => p.k === 'banner' && p.id === b.id)) falta.push('banner ' + b.id + ' marcado pass e fora das trilhas');
+  for (const [k, d] of Object.entries(DANCE_INFO)) if (d.pass && !all.some(p => p.k === 'dance' && p.id === k)) falta.push('dança ' + k + ' marcada pass e fora das trilhas');
+  for (const it of LK.charm) if (it.id !== 'none' && !fs.existsSync('public/models/src/charm_' + it.id + '.glb')) falta.push('chaveiro sem modelo: ' + it.id);
+  for (const b of BN) if (!b.pass && !b.shop) continue; }
+// podio (05/11, REGRA dele): todo mapa, inclusive os futuros, precisa de um lugar com espaco pros 3 tambores e pra camera
+{ const { MAP_IDS: ALL, getMap: gm } = await import('../shared/map.js'), { podiumSpot } = await import('../shared/podiumspot.js'); for (const k of ALL) if (!podiumSpot(gm(k))) falta.push('mapa sem lugar pro podio: ' + k + ' (abrir espaco ou definir M.podium)'); }
+// dancas (05/11): lista do servidor igual a do desenho e nome nos dois idiomas
+{ const { DANCE_IDS } = await import('../shared/looks.js'), { DANCES } = await import('../src/dances.js'); for (const k of DANCE_IDS) { if (!DANCES[k]) falta.push('danca sem desenho: ' + k); if (!both('dn_' + k)) falta.push('dn_' + k); } for (const k of Object.keys(DANCES)) if (!DANCE_IDS.includes(k)) falta.push('danca fora da lista do servidor: ' + k); }
+// REGRA dele (05/11): nada de reticencias cortando dado, em nenhuma tela (texto longo encolhe: src/fit.js)
+for (const k of ['src/style.css', 'src/split.css']) if (/text-overflow:\s*ellipsis/.test(fs.readFileSync(k, 'utf8'))) falta.push('reticencias no CSS: ' + k);
+// banners (05/11): nome nos dois idiomas e desenho
+const { BANNERS } = await import('../shared/banners.js'), bnSrc = fs.readFileSync('src/banners.js', 'utf8');
+for (const b of BANNERS) { if (!both('bn_' + b.id)) falta.push('bn_' + b.id); if (!new RegExp(String.raw`^\s*${b.id}: \(\)`, 'm').test(bnSrc)) falta.push('desenho do banner ' + b.id); }
 // miras (04/11): nome proprio nos dois idiomas
 for (const m of fs.readFileSync('src/arsenal.js', 'utf8').match(/SCOPE_NAMED = \[[^\]]+/)[0].matchAll(/'(\w+)'/g)) if (!both('scn_' + m[1])) falta.push('scn_' + m[1]);
 // mapa e vilao da noite (03/11): nome nos dois idiomas; sala que abre por porta tambem
@@ -34,7 +52,7 @@ const { SHOP_ITEMS, RARITY, RANGE, shopPrice } = await import('../shared/shop.js
 const sold = new Set(Object.values(SHOP_ITEMS).flatMap(it => it.give));
 for (const [k, it] of Object.entries(SHOP_ITEMS)) {
   if (!RARITY[it.r]) falta.push('raridade ' + it.r);
-  const pr = shopPrice(k), rg = RANGE[it.kind]; // faixa de preco dele (03/11): camo 3-6k, skin 5-10k, pacote 8-12k
+  const pr = shopPrice(k), rg = it.weapon ? RANGE.wpack : RANGE[it.kind]; // faixa de preco dele (03/11): camo 3-6k, skin 5-10k, pacote 8-12k
   if (!rg || !(pr >= rg[0] && pr <= rg[1])) falta.push(`preco fora da faixa: ${k} = ${pr}`);
   if (!both('shk_' + it.kind)) falta.push('shk_' + it.kind);
   if (it.kind === 'bundle') for (const p of ['si_', 'sid_']) if (!both(p + k)) falta.push(p + k);
@@ -42,6 +60,8 @@ for (const [k, it] of Object.entries(SHOP_ITEMS)) {
     const [slot, id] = g.split(':');
     if (slot === 'camo') { if (!CAMOS.find(c => c.id === id)?.shop) falta.push(`camo ${id} sem shop: true (${k})`); if (!both('camo_' + id)) falta.push('camo_' + id); }
     else if (LOOKS[slot]) { if (!LOOKS[slot].find(s => s.id === id)?.shop) falta.push(`${slot} ${id} sem shop: true (${k})`); if (!both('lk_' + slot + '_' + id)) falta.push('lk_' + slot + '_' + id); }
+    else if (slot === 'banner') { const { BANNERS: BN2 } = await import('../shared/banners.js'); if (!BN2.find(b => b.id === id)?.shop) falta.push(`banner ${id} sem shop: 1 (${k})`); if (!both('bn_' + id)) falta.push('bn_' + id); }
+    else if (slot === 'dance') { const { DANCE_INFO } = await import('../shared/looks.js'); if (!DANCE_INFO[id]?.shop) falta.push(`dança ${id} sem shop: true (${k})`); if (!both('dn_' + id)) falta.push('dn_' + id); }
     else if (slot === 'ret') { if (!both('ret_' + id)) falta.push('ret_' + id); } // reticula da Loja (04/11)
     else if (slot === 'wskin') { if (!WSKINS[id]) falta.push(`skin de modelo ${id} nao existe (${k})`); if (!both('ws_' + id)) falta.push('ws_' + id); } // skin de modelo (04/11)
     else falta.push(`item ${k}: give desconhecido ${g}`);

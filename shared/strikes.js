@@ -1,7 +1,7 @@
 // Sequencias grandes (03/11, pedido dele): Biplano, Trem Desgovernado, Balao Bombardeiro e Mao do Animador.
 // Biplano, trem e mao andam em c.crafts; o balao mora em c.blimps (kind 'bomber') pra herdar o tiro que derruba
 // e a trava de "uma sequencia grande por vez". O fogo que ele larga fica em c.fires.
-import { STREAKS } from './weapons.js';
+import { STREAKS, NADES } from './weapons.js';
 import { hasLOS } from './map.js';
 import { floorAt } from './nav.js';
 
@@ -9,7 +9,59 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export const BOMBER_GAP = 60; // m entre os dois baloes do deserto (o balao tem ~20 m)
-export function strikeReset(c) { c.crafts = []; c.fires = []; }
+export function strikeReset(c) { c.crafts = []; c.fires = []; c.boxes = []; }
+
+// caixa de municao (05/11): uma por dono; a nova troca a velha. O servidor nao conhece a reserva de ninguem: quem decide
+// pedir e o cliente, aqui so confere se a caixa existe, se esta perto e se a pessoa pode pegar
+export function abxDrop(c, owner, pos) {
+  const y = floorAt(c.M, pos[0], pos[2]), A = NADES.ammobox;
+  c.boxes = c.boxes.filter(b => b.owner !== owner.id);
+  c.boxes.push({ id: c.boxSeq = (c.boxSeq || 0) + 1, owner: owner.id, team: owner.team, pos: [pos[0], Number.isFinite(y) ? y : pos[1], pos[2]], t: A.time, uses: A.uses, hp: A.hp, botT: 1 });
+  c.event({ k: 'abxSet', id: owner.id, pos });
+}
+// explosao da caixa. Sozinha (tempo ou usos): e do dono e so fere inimigo dele, entao pegar a ultima carga nao machuca ninguem
+// do time. A tiro (by = quem destruiu): e de quem atirou, fere o time da caixa e ele leva metade se estiver perto
+export function abxBoom(c, b, by = null) {
+  c.boxes = c.boxes.filter(x => x !== b);
+  const A = NADES.ammobox, at = [b.pos[0], b.pos[1] + 0.4, b.pos[2]], who = by || c.players.get(b.owner);
+  if (!who) return;
+  c.event({ k: 'boom', pos: at, owner: who.id });
+  c.blastCars(at, A.blast + 1.5, 200, who);
+  for (const v of c.players.values()) {
+    if (!v.alive) continue;
+    const to = [v.pos[0], v.pos[1] + 0.9, v.pos[2]], d = Math.hypot(to[0] - at[0], to[1] - at[1], to[2] - at[2]);
+    if (d > A.blast || !hasLOS(c.M, at, to)) continue;
+    const self = v.id === who.id;
+    if (self ? !by : !c.enemies(who, v)) continue;
+    c.damage(v, who, (A.dmg * (1 - d / A.blast) + 10) * (self ? 0.5 : 1), 'frag', false);
+  }
+}
+// tiro na caixa: so inimigo acerta; o Core ja conferiu a arma, a distancia e o limite de dano
+export function abxShot(c, b, by, dmg) { if ((b.hp -= dmg) <= 0) abxBoom(c, b, by); }
+export function abxTake(c, p, id) {
+  const b = c.boxes.find(x => x.id === id), A = NADES.ammobox, now = c.clock || 0, owner = b && c.players.get(b.owner);
+  if (!b || !owner || !p.alive || p.down > 0 || (p !== owner && c.enemies(p, owner))) return;
+  if ((p.abxAt ?? -1e9) + A.cd > now) return;
+  if (Math.hypot(p.pos[0] - b.pos[0], p.pos[2] - b.pos[2]) > A.radius + 0.8 || Math.abs(p.pos[1] - b.pos[1]) > 2.5) return; // folga do atraso da rede
+  p.abxAt = now; b.uses--;
+  c.event({ k: 'abxTake', id: p.id, pos: b.pos });
+  if (b.uses <= 0) abxBoom(c, b);
+}
+function abxTick(c, dt) {
+  for (const b of [...c.boxes]) {
+    const owner = c.players.get(b.owner);
+    if (!owner) { c.boxes = c.boxes.filter(x => x !== b); continue; } // o dono saiu da sala: some sem explodir
+    if ((b.t -= dt) <= 0) { abxBoom(c, b); continue; }
+    if ((b.botT -= dt) > 0) continue; b.botT = 1;
+    const at = [b.pos[0], b.pos[1] + 0.4, b.pos[2]]; // bot inimigo perto atira nela, sem pressa
+    for (const v of c.players.values()) {
+      if (!v.bot || !v.alive || !c.enemies(owner, v) || Math.hypot(v.pos[0] - at[0], v.pos[2] - at[2]) > 12 || !hasLOS(c.M, [v.pos[0], v.pos[1] + 1.5, v.pos[2]], at)) continue;
+      c.event({ k: 'shot', id: v.id, o: [v.pos[0], v.pos[1] + 1.4, v.pos[2]], e: at, wpn: v.wpn });
+      abxShot(c, b, v, 15);
+      break;
+    }
+  }
+}
 
 // reta que passa pelo meio dos inimigos vivos, na direcao em que estao mais espalhados (mesma conta da Linha de Bigornas)
 export function enemyLine(c, p) {
@@ -161,6 +213,7 @@ export function tickBomber(c, b, dt) {
 }
 
 export function strikeTick(c, dt) {
+  abxTick(c, dt);
   for (const f of c.crafts) {
     const owner = c.players.get(f.owner);
     if (f.t !== undefined) f.t -= dt;
@@ -187,5 +240,6 @@ export function strikeSnap(c) {
   return {
     crafts: c.crafts.map(f => ({ id: f.id, k: f.k, team: f.team, owner: f.owner, pos: f.pos.map(r2), dir: f.dir?.map(r2), warn: f.warn > 0 ? r2(f.warn) : undefined, tg: f.tg, a: f.a?.map(r2), len: f.len ? r2(f.len) : undefined })),
     fires: c.fires.map(f => [f.id, ...f.pos.map(r2), r2(f.t)]),
+    abx: c.boxes.map(b => ({ id: b.id, pos: b.pos.map(r2), team: b.team, owner: b.owner })),
   };
 }

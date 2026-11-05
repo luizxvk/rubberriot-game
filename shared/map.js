@@ -2,6 +2,19 @@
 // Caixas sao AABB { min:[x,y,z], max:[x,y,z], kind, ... }. Cada sala carrega o seu mapa.
 import { MOBS } from './mobs.js';
 
+// conteiner aberto (05/11, pedido dele): da pra entrar, atravessa de ponta a ponta. Paredes finas e teto de verdade (colisao e tiro), as portas ficam
+// dobradas pra fora. O de cima de uma pilha continua fechado e apoia no teto deste
+function openCont(box, cx, cz, w, d, h, y0, seed) {
+  const X = w > d, t = 0.12, L = Math.max(w, d);
+  for (const s of [-1, 1]) {
+    if (X) box(cx, cz + s * (d - t) / 2, w, t, h, y0, 'contshell', { seed }); else box(cx + s * (w - t) / 2, cz, t, d, h, y0, 'contshell', { seed });
+    for (const e of [-1, 1]) { // porta dobrada contra a lateral
+      const k = e * (L / 2 - 0.62), o = s * ((X ? d : w) / 2 + 0.04);
+      if (X) box(cx + k, cz + o, 1.2, 0.08, h * 0.9, y0 + 0.08, 'contdoor'); else box(cx + o, cz + k, 0.08, 1.2, h * 0.9, y0 + 0.08, 'contdoor');
+    }
+  }
+  box(cx, cz, w, d, t, y0 + h - t, 'contshell', { seed, roof: true });
+}
 function builder(arena) {
   const boxes = [];
   const box = (cx, cz, w, d, h, y0 = 0, kind = 'crate', extra = {}) => {
@@ -255,7 +268,7 @@ function estaleiro() {
   const A = 22, { boxes, box, walls } = builder(A);
   walls(6);
   // conteiner deitado (6 x 2.6 x 2.6); along = 'x' ou 'z'
-  const cont = (cx, cz, along, y0 = 0, seed = 0) => box(cx, cz, along === 'x' ? 6 : 2.6, along === 'x' ? 2.6 : 6, 2.6, y0, 'container', { seed, along });
+  const cont = (cx, cz, along, y0 = 0, seed = 0) => { const w = along === 'x' ? 6 : 2.6, d = along === 'x' ? 2.6 : 6; if (y0 === 0 && seed % 2 === 0) return openCont(box, cx, cz, w, d, 2.6, 0, seed); box(cx, cz, w, d, 2.6, y0, 'container', { seed, along }); }; // no chao, um sim um nao fica aberto
   // anel de fora: um conteiner em cada lado de cada quadrante, alternando a direcao
   cont(-11, -6, 'z', 0, 1); cont(11, 6, 'z', 0, 2); cont(-6, 11, 'x', 0, 3); cont(6, -11, 'x', 0, 4);
   cont(-11, 8, 'z', 0, 5); cont(11, -8, 'z', 0, 6); cont(8, 11, 'x', 0, 7); cont(-8, -11, 'x', 0, 8);
@@ -314,10 +327,10 @@ function refinaria() {
   // barracas (uma por time) e conteineres soltos
   box(0, -31, 12, 5, 4, 0, 'house', { team: 'red', roof: 'flat', seed: 2 });
   box(0, 31, 12, 5, 4, 0, 'house', { team: 'blue', roof: 'flat', seed: 3 });
-  box(-30, 4, 2.6, 6, 2.6, 0, 'container', { seed: 4, along: 'z' });
+  openCont(box, -30, 4, 2.6, 6, 2.6, 0, 4);
   box(30, -4, 2.6, 6, 2.6, 0, 'container', { seed: 5, along: 'z' });
   box(-12, 24, 6, 2.6, 2.6, 0, 'container', { seed: 6, along: 'x' });
-  box(12, -24, 6, 2.6, 2.6, 0, 'container', { seed: 7, along: 'x' });
+  openCont(box, 12, -24, 6, 2.6, 2.6, 0, 7);
   // dunas e pedras pra quebrar a linha de tiro
   for (const [x, z, s] of [[-12, -10, 3], [12, 10, 3], [-28, -10, 4], [28, 10, 4], [-8, 22, 2.6], [8, -22, 2.6]]) box(x, z, s, s, s * 0.6, 0, 'rock');
   for (const [x, z] of [[-6, 12], [6, -12], [-20, 14], [20, -14]]) box(x, z, 2, 2, 1.4, 0, 'crate');
@@ -382,7 +395,7 @@ function ilha() {
   area('porto', -66, -66, 28);
   for (let i = 0; i < 6; i++) {
     const x = -84 + (i % 3) * 14, z = -82 + Math.floor(i / 3) * 16;
-    box(x, z, 6, 12, 2.6, 0, 'container', { seed: i });
+    if (i % 3 === 0) openCont(box, x, z, 6, 12, 2.6, 0, i); else box(x, z, 6, 12, 2.6, 0, 'container', { seed: i });
     if (i % 2 === 0) box(x, z, 6, 12, 2.6, 2.6, 'container', { seed: i + 3 });
     lootRing(x, z, 5, 7, 2);
   }
@@ -944,7 +957,7 @@ function docas() {
   box(-6, WZ - 2, 2.2, 3.6, 1.6, 0, 'forklift');
   // rua dos conteineres (meio): pilhas de 1 e 2, com vaos pra atravessar
   const C = [[-14, 16, 1], [-6, 6, 2], [6, 18, 1], [14, 4, 2], [-16, -6, 1], [0, -10, 1], [16, -16, 1], [-8, -22, 2], [8, -28, 1]];
-  C.forEach(([x, z, n], i) => { box(x, z, 2.6, 6.2, 2.6, 0, 'container', { seed: i }); if (n > 1) box(x, z, 2.6, 6.2, 2.6, 2.6, 'container', { seed: i + 3 }); });
+  C.forEach(([x, z, n], i) => { if (i % 2) openCont(box, x, z, 2.6, 6.2, 2.6, 0, i); else box(x, z, 2.6, 6.2, 2.6, 0, 'container', { seed: i }); if (n > 1) box(x, z, 2.6, 6.2, 2.6, 2.6, 'container', { seed: i + 3 }); });
   // pier dos pescadores (oeste): tabuado com casinhas, redes e barris
   // 04/11 (pedido dele): as casinhas do pier viraram casas de pescador que da pra entrar; escritorio do porto de 2
   // andares no leste e mais uma casa no noroeste. Cores de por do sol (reboco quente)

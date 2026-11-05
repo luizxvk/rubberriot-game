@@ -71,17 +71,30 @@ class Audio {
     return fallback;
   }
 
+  // tiro com silenciador (05/11, escolha dele na pagina escolha-silenciador): som proprio por categoria. Carrega no 1o uso; ate la o normal abafado
+  silSound(wpn) {
+    if (!['pistol', 'smg', 'rifle', 'sniper', 'lmg'].includes(wpn)) return null;
+    const n = 'sil_' + wpn;
+    if (this.buf[n]) return n;
+    if (this.ctx && !this.failed?.has(n)) this.load(n);
+    return null;
+  }
   // carrega o som do modelo antes do 1o tiro (03/11: o 1o disparo saia com o som generico da categoria)
   preloadGuns(bodies) { for (const b of bodies) if (b) { if (this.ctx) this.load('g_' + b); else (this.pendGuns ||= new Set()).add(b); } } // audio ainda desligado: guarda e carrega no init
 
-  async load(name) {
-    if (this.buf[name] || this.loading?.has(name) || this.failed?.has(name)) return;
-    (this.loading ||= new Set()).add(name);
+  // devolve sempre a mesma promessa enquanto carrega: quem chama depois espera junto (05/11: a dança desistia se o arquivo ja estava vindo)
+  load(name) {
+    if (this.buf[name] || this.failed?.has(name)) return Promise.resolve();
+    const now = (this.loading ||= new Map()).get(name); if (now) return now;
+    const p = this.fetchSound(name); this.loading.set(name, p);
+    return p;
+  }
+  async fetchSound(name) {
     try {
       const r = await fetch(`./sfx/${name}.mp3`);
       if (!r.ok) { (this.failed ||= new Set()).add(name); this.loading.delete(name); return; }
       const raw = await this.ctx.decodeAudioData(await r.arrayBuffer());
-      const pol = name.startsWith('music') ? raw : this.polish(raw);
+      const pol = name.startsWith('music') || name.startsWith('dn_') ? raw : this.polish(raw); // trilha nao passa pelo tratamento de efeito curto
       // arquivo mudo (veio vazio do gerador) = usa o sintetizado
       if (pol) this.buf[name] = pol;
       if (name === (this.track || 'music') && this.wantMusic) this.music(true);
@@ -188,6 +201,24 @@ class Audio {
   }
 
   // opts: vol, rate, jitter, pos [x,y,z], ui, key, max
+  // trilha de dança (05/11): um canal so. A que entra corta a anterior com um fade curto, e a musica de fundo abaixa enquanto toca
+  async dance(id) {
+    this.danceStop();
+    if (!this.ctx || !id) return;
+    const name = 'dn_' + id, token = (this.danceTok = (this.danceTok || 0) + 1);
+    if (!this.buf[name]) await this.load(name);
+    const b = this.buf[name]; if (!b || token !== this.danceTok) return;
+    const ctx = this.ctx, g = ctx.createGain(), s = ctx.createBufferSource(), t = ctx.currentTime;
+    s.buffer = b; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.45 * this.vol.sfx, t + 0.06); // 05/11 (pedido dele): danca mais baixa (era 0,85)
+    s.connect(g); g.connect(this.master || ctx.destination); s.start();
+    this.danceOn = { s, g }; s.onended = () => { if (this.danceOn?.s === s) this.danceOn = null; };
+    this.duck?.(0.25, Math.max(0.5, b.duration));
+  }
+  danceStop() {
+    this.danceTok = (this.danceTok || 0) + 1;
+    const D = this.danceOn; if (!D) return; this.danceOn = null;
+    const t = this.ctx.currentTime; D.g.gain.cancelScheduledValues(t); D.g.gain.setValueAtTime(D.g.gain.value, t); D.g.gain.linearRampToValueAtTime(0, t + 0.15); try { D.s.stop(t + 0.16); } catch { /* ja parou */ }
+  }
   play(name, o = {}) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;
@@ -206,7 +237,7 @@ class Audio {
       g.connect(p); node = p;
     }
     node.connect(o.ui ? this.uiBus : this.sfxBus);
-    if (!o.ui && !o.muffle && this.echoIn && (o.echo ?? /^r?gun/.test(o.key || ''))) node.connect(this.echoIn); // tiro ecoa (silenciador nao)
+    if (!o.ui && !o.muffle && !o.dry && this.echoIn && (o.echo ?? /^r?gun/.test(o.key || ''))) node.connect(this.echoIn); // tiro ecoa (silenciador nao)
     let src;
     if (b) {
       src = ctx.createBufferSource();

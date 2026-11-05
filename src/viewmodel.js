@@ -6,6 +6,7 @@ import { umbrellaMesh } from './fieldview.js';
 import { ink, toon, PAL, wordTexture } from './toon.js';
 import { Hose } from './character.js';
 import { buildGun } from './arsenal.js';
+import { attachCharm, tickCharm } from './charms.js';
 import { ovenTex } from './looks3d.js';
 
 const VM_SCALE = 0.8;
@@ -163,6 +164,7 @@ function inspectPose(k, p) {
 }
 const STREAK_DUR = 1.8; // chamar a sequencia: a arma sai de cena, o objeto aparece e a arma volta (01/11)
 const STIM_DUR = 1.15;
+const GRAB_DUR = 0.7;
 // seringa de desenho: tubo de vidro com o liquido verde, agulha, embolo e as abas de apoiar os dedos
 function syringeMesh() {
   const g = new THREE.Group();
@@ -321,9 +323,12 @@ export class ViewModel {
     this.gun = null; this.wpn = null;
   }
 
+  // mira que vale agora: a de 45 graus quando ligada, senao a principal
+  sight() { const u = this.gun?.userData; return (this.canted && u?.canted) || u?.scope || null; }
   setWeapon(id, loadout, instant = false) {
-    this.holder.clear();
+    this.holder.clear(); this.canted = false;
     this.gun = buildGun(id, loadout);
+    if (id !== 'melee' && id !== 'fists') attachCharm(this.gun, this.charm);
     this.gun.scale.setScalar(VM_SCALE);
     // faca em pegada invertida (COD): lamina sai por baixo do punho, deitada apontando pro centro
     // espada (04/11): pegada normal, lamina pra cima e pra frente (estilo BO3)
@@ -360,6 +365,8 @@ export class ViewModel {
   throwNade() { this.throwT = 0.5; }
   // estimulante (01/11): a mao esquerda sobe com a seringa, crava, o liquido desce e ela some (estilo COD)
   stim() { this.stimT = STIM_DUR; }
+  // caixa de municao (05/11): o braco esquerdo estica ate o chao, pega e volta; a arma so abaixa um pouco
+  grab() { this.grabT = GRAB_DUR; }
   // golpe de lamina: com arma na mao = faca rapida (a arma desce e a lamina entra pela direita);
   // com a lamina na mao = ela mesma corta
   meleeSwing(dur, lo) {
@@ -399,6 +406,7 @@ export class ViewModel {
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
   // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
   setGloves(look) {
+    if (look?.charm !== this.charm) { this.charm = look?.charm; if (this.gun && this.wpn !== 'melee' && this.wpn !== 'fists') attachCharm(this.gun, this.charm); }
     const style = look?.glove || 'classic';
     const col = style === 'golden' ? 0xd4a017 : style === 'oven' ? 0xffffff : parseInt(String(look?.gloveCol || '#faf8f2').slice(1), 16);
     const mat = style === 'oven' ? toon(0xffffff, { map: ovenTex() }) : toon(col);
@@ -432,6 +440,7 @@ export class ViewModel {
 
   // st: { dt, moving, speed, sprint, tac, ads(0..1 alvo), crouch, slide, air, lookDX, lookDY, firing }
   update(st) {
+    if (this.gun) tickCharm(this.gun, arguments[0]?.dt ?? 0);
     const dt = st.dt, s = this.s, g = this.gun?.userData || {};
     this.ads = st.ads;
     if (this.gun) this.gun.userData.fxHidden = st.ads > 0.3; // efeito da camo lendaria some mirando
@@ -466,21 +475,22 @@ export class ViewModel {
       // sniper: a mesma pose, so mais pro canto direito e mais baixa (inteira tampava a tela; a de 01/11 sumia dela)
       if (this.wpn === 'sniper') { tx = 0.22; ty = -0.27; tz = -0.42; trx = -0.38; tryy = 0.62; trz = 0.3; }
     } else if (st.ads > 0) {
-      const eye = ((g.scope && g.scope.eye) || g.iron || new THREE.Vector3(0, 0.08, -0.1)).clone().multiplyScalar(VM_SCALE);
+      const sc = this.sight(), eye = ((sc && sc.eye) || g.iron || new THREE.Vector3(0, 0.08, -0.1)).clone().multiplyScalar(VM_SCALE), roll = sc?.roll || 0;
       // luneta: a lente ocupa ~55% da altura da tela; red dot: olho um pouco atras da janela
       // distancia do olho estilo COD: a lente ocupa uma fatia fixa da altura da tela
       // (luneta ~62%, red dot ~14%), calculada pelo raio real de cada lente
-      const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / (g.scope?.big ? 1 : this.fovK || 1); // escala de FOV afasta a mira tambem; luneta segue enchendo a tela
-      let relief = g.scope ? g.scope.lensR * VM_SCALE / (half * (g.scope.big ? 0.62 : 0.14)) : 0.42;
-      if (pistol && !g.scope?.big) relief = Math.max(0.6, relief * 1.9);
+      const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / (sc?.big ? 1 : this.fovK || 1); // escala de FOV afasta a mira tambem; luneta segue enchendo a tela
+      let relief = sc ? sc.lensR * VM_SCALE / (half * (sc.big ? 0.62 : 0.14)) : 0.42;
+      if (pistol && !sc?.big) relief = Math.max(0.6, relief * 1.9);
       // eixo optico inclinado no modelo: gira a arma pra ele ficar reto no olho
-      const tilt = -(g.scope?.tilt || 0);
+      const tilt = -(sc?.tilt || 0);
+      this.adsEyeRaw = null; if (roll) eye.applyAxisAngle(new THREE.Vector3(0, 0, 1), roll); // mira de 45 graus: a arma deita e o red dot fica de pe
       eye.applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
       const ax = -eye.x, ay = -eye.y, az = -relief - eye.z;
-      this.adsEye = eye.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), -tilt);
+      this.adsEye = eye.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), -tilt); if (roll) this.adsEye.applyAxisAngle(new THREE.Vector3(0, 0, 1), -roll);
       tx = THREE.MathUtils.lerp(tx, ax, st.ads); ty = THREE.MathUtils.lerp(ty, ay, st.ads); tz = THREE.MathUtils.lerp(tz, az, st.ads);
       // mirando: arma reta, sem inclinacao da pose de quadril
-      trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy *= 1 - st.ads; trz *= 1 - st.ads;
+      trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy *= 1 - st.ads; trz = THREE.MathUtils.lerp(trz, roll, st.ads);
     }
     // inspecionar (pose por categoria); atirar, mirar, correr, recarregar ou granada cancela na hora
     let insp = null, akL = null, spinR = 0, spinL = 0;
@@ -560,6 +570,8 @@ export class ViewModel {
     // granada: abaixa a arma e a mao esquerda arremessa
     let th = 0;
     if (this.throwT > 0) { this.throwT -= dt; th = Math.sin((1 - this.throwT / 0.5) * Math.PI); }
+    let gr = 0;
+    if (this.grabT > 0) { this.grabT -= dt; const q = 1 - Math.max(0, this.grabT) / GRAB_DUR; gr = Math.min(1, q / 0.35, (1 - q) / 0.35); gr = gr * gr * (3 - 2 * gr); }
     // recarga: tomba a arma e volta
     let rl = 0;
     if (this.reloadT > 0) { if (!st.reloadPaused) this.reloadT -= dt; const p = 1 - this.reloadT / this.reloadDur; rl = Math.sin(Math.min(1, p) * Math.PI) * (st.reloadPaused ? 0.35 : 1); } // pausada correndo: a mao abaixa a arma
@@ -594,7 +606,7 @@ export class ViewModel {
     const c = cut || [0, 0, 0, 0, 0, 0];
     this.rig.position.set(
       s.x + bx + this.swayX * adsK + c[0],
-      s.y + by - this.land - sw * 0.35 - rl * 0.06 - th * 0.22 + this.swayY * adsK - dipQ * 0.75 - sk * 0.7 - stD * 0.75 + c[1],
+      s.y + by - this.land - sw * 0.35 - rl * 0.06 - th * 0.22 + this.swayY * adsK - dipQ * 0.75 - sk * 0.7 - stD * 0.75 - gr * 0.1 + c[1],
       s.z + this.kick * kickAds + c[2]);
     this.rig.rotation.set(
       s.rx + brx + this.kickR * kickAds * 0.5 - sw * 0.9 + rl * 0.35 - dipQ * 1.1 - sk * 0.9 - stD * 0.9 + c[3],
@@ -701,6 +713,7 @@ export class ViewModel {
     }
     // escalada: a esquerda bate na borda la na frente e vai empurrando pra baixo enquanto o corpo sobe
     if (mlD > 0 && !this.akimbo) pL.lerp(new THREE.Vector3(-0.2, -0.1 - Math.min(1, mlp / 0.7) * 0.16, -0.48 + Math.min(1, mlp / 0.7) * 0.1), mlD);
+    if (gr > 0 && !this.akimbo) pL.lerp(new THREE.Vector3(-0.15, -0.36, -0.78), gr);
     if (bo > 0) pR.add(new THREE.Vector3(0.03 * bo, 0.04 * bo, 0.1 * bo));
     if (this.knife) {
       this.knife.visible = this.swingQuick && this.swingT > 0;
@@ -797,9 +810,9 @@ export class ViewModel {
     } else if (this.chargeFx) this.chargeFx.visible = false;
     const hideHands = false;
     if (g.scope?.lens) {
-      g.scope.lens.material.uniforms.uOn.value = g.scope.big ? THREE.MathUtils.smoothstep(st.ads, 0.55, 0.9) : 1;
+      g.scope.lens.material.uniforms.uOn.value = g.scope.big ? (this.canted ? 0 : THREE.MathUtils.smoothstep(st.ads, 0.55, 0.9)) : 1;
       // luneta na mira cheia: o vidro e' desenhado por cima da carcaca (sem o tunel da caixa por dentro)
-      const over = g.scope.big && st.ads > 0.8;
+      const over = g.scope.big && st.ads > 0.8 && !this.canted;
       if (g.scope.lens.material.depthTest === over) { g.scope.lens.material.depthTest = !over; g.scope.lens.renderOrder = over ? 9 : 3; }
     }
     // 04/11 (pedido dele): a luva acompanha o braco em toda pose: a boca dela (+z) gira pro ombro e o dedo fica onde a pose mandou

@@ -48,8 +48,8 @@ export class GunLights {
       if (light) {
         const k = THREE.MathUtils.smoothstep(face, 0.82, 0.985) * THREE.MathUtils.clamp(1 - dist / 40, 0, 1);
         s.glow.position.copy(P).addScaledVector(TO, 0.25);
-        const sc = (0.25 + k * 1.6) * Math.max(1, dist * 0.06); s.glow.scale.set(sc, sc, 1);
-        s.glow.material.opacity = 0.15 + k * 0.7;
+        const sc = (0.15 + k * 0.7) * THREE.MathUtils.clamp(dist * 0.06, 1, 1.8); s.glow.scale.set(sc, sc, 1); // 05/11, pedido dele: brilho menor
+        s.glow.material.opacity = 0.12 + k * 0.5;
       }
       // reflexo da luneta: cone largo, distancia longa, piscando de leve (o tamanho cresce com a distancia pra se ver)
       s.glint.visible = !!glint;

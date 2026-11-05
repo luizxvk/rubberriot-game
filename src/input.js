@@ -65,7 +65,7 @@ export class Input {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = new Set();
-    this.lookX = 0; this.lookY = 0;
+    this.lookX = 0; this.lookY = 0; this.padLookX = 0; this.padLookY = 0; this.touchLookX = 0; this.touchLookY = 0; // total + a parte de cada aparelho
     this.mx = 0; this.my = 0; this.mHist = []; // mouse separado do toque/controle: suavizacao e aceleracao so nele
     this.mouse = { fire: false, ads: false };
     this.edges = new Set();
@@ -133,7 +133,7 @@ export class Input {
     this.mx = this.my = 0;
     const s = {
       moveX: mx, moveZ: mz,
-      lookX: this.lookX + smx, lookY: this.lookY + smy,
+      lookX: this.lookX + smx, lookY: this.lookY + smy, padLookX: this.padLookX, padLookY: this.padLookY, touchLookX: this.touchLookX, touchLookY: this.touchLookY,
       fire: A('fire') || t.fire || t.fireL || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
       ads: A('ads') || t.ads || !!pd.ads, adsPressed: E('ads') || edge('ADS'),
       sprint: A('sprint') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
@@ -142,6 +142,7 @@ export class Input {
       crouchPressed: E('crouch') || edge('CROUCH'),
       crouchHeld: A('crouch') || t.crouchHeld || !!pd.crouchHeld,
       reloadPressed: E('reload') || edge('RELOAD'),
+      cantedPressed: E('canted') || edge('CANTED'),
       fragPressed: E('frag') || edge('FRAG'),
       flashPressed: E('flash') || edge('FLASH'),
       // segurando a granada = cozinhando o pavio (solta = arremessa)
@@ -164,19 +165,25 @@ export class Input {
       board: has('Tab') || !!pd.board || !!this.touchBoard, // celular: tocou no placar de cima (main.js)
       pause: edge('Escape') || edge('KeyP'),
     };
-    this.lookX = this.lookY = 0; this.wheelAcc = 0; this.slotReq = -1;
+    this.lookX = this.lookY = this.padLookX = this.padLookY = this.touchLookX = this.touchLookY = 0; this.wheelAcc = 0; this.slotReq = -1;
     this.edges.clear();
     return s;
   }
 }
 
 // Material Icons (Google, Apache 2.0): caminhos SVG oficiais
+// granada letal (abacaxi com alavanca) e tatica (lata de clarao com faiscas): desenho proprio, com os recortes em evenodd
+const NADE_ICON = {
+  frag: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.5 2h5v3.2h-5zM15 2.6h3.2c1.3 0 2.3.7 2.8 1.9l.7 1.8-1.9.7-.7-1.8c-.2-.5-.5-.7-.9-.7H15zM12 6.4a7.8 7.8 0 1 1 0 15.6 7.8 7.8 0 0 1 0-15.6zM4.7 12.3v1.5h14.6v-1.5zM4.9 16.1v1.5h14.2v-1.5zM9 7.2v14.2h1.5V7.2zM13.5 7.2v14.2H15V7.2z"/></svg>',
+  flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M10.5 1h3v4.2h-3zM3.6 3.3l2.1-2.1 3 3-2.1 2.1zM15.3 4.2l3-3 2.1 2.1-3 3zM9 7h6c1.1 0 2 .9 2 2v11c0 1.7-1.3 3-3 3h-4c-1.7 0-3-1.3-3-3V9c0-1.1.9-2 2-2zM9 11v2h6v-2zM9 16v2h6v-2z"/></svg>',
+};
 const ICON = {
   gadget: 'M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z', // peca encaixada (Material Icons 'extension', Apache 2.0): a granada ja usa fogo
-  more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+  more: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z', // + (Material Icons): abre os botoes extras
   field: 'm13.127 14.56 1.43-1.43 6.44 6.443L19.57 21zm4.293-5.73 2.86-2.86c-3.95-3.95-10.35-3.96-14.3-.02 3.93-1.3 8.31-.25 11.44 2.88zM5.95 5.98c-3.94 3.95-3.93 10.35.02 14.3l2.86-2.86C5.7 14.29 4.65 9.91 5.95 5.98zm.02-.02-.01.01c-.38 3.01 1.17 6.88 4.3 10.02l5.73-5.73c-3.13-3.13-7.01-4.68-10.02-4.3z',
   fire: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   ads: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z',
+  canted: 'M15.55 5.55L11 1v3.07C7.06 4.56 4 7.92 4 12s3.05 7.44 7 7.93v-2.02c-2.84-.48-5-2.94-5-5.91s2.16-5.43 5-5.91V10l4.55-4.45zM19.93 11c-.17-1.39-.72-2.73-1.62-3.89l-1.42 1.42c.54.75.88 1.6 1.02 2.47h2.02zM13 17.9v2.02c1.39-.17 2.74-.71 3.9-1.61l-1.44-1.44c-.75.54-1.59.89-2.46 1.03zm3.89-2.42l1.42 1.41c.9-1.16 1.45-2.5 1.62-3.89h-2.02c-.14.87-.48 1.72-1.02 2.48z',
   jump: 'M6 17.59 7.41 19 12 14.42 16.59 19 18 17.59l-6-6zM6 11l1.41 1.41L12 7.83l4.59 4.58L18 11l-6-6z',
   crouch: 'M18 6.41 16.59 5 12 9.58 7.41 5 6 6.41l6 6zM18 13l-1.41-1.41L12 16.17l-4.59-4.58L6 13l6 6z',
   reload: 'M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
@@ -211,7 +218,7 @@ export function buildTouch(input, root) {
   const stick = el('div', 'stick'); const knob = el('i'); stick.appendChild(knob); root.appendChild(stick);
   stick.dataset.hid = 'stick';
   const btn = (label, cls, style, down, up) => {
-    const b = el('button', 'tbtn ' + cls); b.innerHTML = svg(ICON[cls.split(' ')[0] || 'fire']); b.setAttribute('aria-label', label); Object.assign(b.style, style);
+    const b = el('button', 'tbtn ' + cls); b.innerHTML = NADE_ICON[cls.split(' ')[0]] || svg(ICON[cls.split(' ')[0] || 'fire']); b.setAttribute('aria-label', label); Object.assign(b.style, style);
     b.dataset.hid = cls.split(' ')[0];
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.setPointerCapture(e.pointerId); b.classList.add('on'); down(e, b); });
     const end = (e) => { b.classList.remove('on'); up && up(e, b); };
@@ -226,7 +233,7 @@ export function buildTouch(input, root) {
   // atirar tambem mira arrastando (olhar enquanto segura)
   let fireId = null, fx = 0, fy = 0;
   const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; fx = e.clientX; fy = e.clientY; }, () => { input.touch.fire = false; fireId = null; });
-  fire.addEventListener('pointermove', (e) => { if (e.pointerId !== fireId) return; input.lookX += (e.clientX - fx) * 1.4; input.lookY += (e.clientY - fy) * 1.4; fx = e.clientX; fy = e.clientY; });
+  fire.addEventListener('pointermove', (e) => { if (e.pointerId !== fireId) return; { const dx = (e.clientX - fx) * 1.4, dy = (e.clientY - fy) * 1.4; input.lookX += dx; input.lookY += dy; input.touchLookX += dx; input.touchLookY += dy; } fx = e.clientX; fy = e.clientY; });
   input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); });
   btn(t('t_jump'), 'jump', at(0, 12, 66), () => input.edges.add('JUMP'));
   btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
@@ -246,6 +253,7 @@ export function buildTouch(input, root) {
   input.fireLBtn.dataset.hid = 'fireL'; input.adsFireBtn.dataset.hid = 'adsfire';
   btn(t('t_melee'), 'melee', at(162, 84, 50), () => input.edges.add('MELEE'));
   // equipamento de campo: o icone troca pelo equipado e o aro mostra a recarga
+  input.cantedBtn = btn(t('t_canted'), 'canted', at(270, 130, 48), () => input.edges.add('CANTED')); // so aparece com a mira de 45 graus (body.has-canted)
   input.fieldBtn = btn(t('t_field'), 'field', at(214, 150, 48), () => input.edges.add('FIELD'));
   // usar (plantar / desarmar a bomba): segurar; so aparece no modo bomba
   input.useBtn = btn(t('t_use'), 'use', at(4, 92, 80), () => { input.touch.use = true; }, () => { input.touch.use = false; });
@@ -281,7 +289,7 @@ export function buildTouch(input, root) {
     if (e.target !== root || e.clientX < innerWidth * 0.4 || lid !== null) return;
     lid = e.pointerId; lx = e.clientX; ly = e.clientY;
   });
-  root.addEventListener('pointermove', (e) => { if (e.pointerId !== lid) return; input.lookX += (e.clientX - lx) * 1.4; input.lookY += (e.clientY - ly) * 1.4; lx = e.clientX; ly = e.clientY; });
+  root.addEventListener('pointermove', (e) => { if (e.pointerId !== lid) return; { const dx = (e.clientX - lx) * 1.4, dy = (e.clientY - ly) * 1.4; input.lookX += dx; input.lookY += dy; input.touchLookX += dx; input.touchLookY += dy; } lx = e.clientX; ly = e.clientY; });
   const lend = (e) => { if (e.pointerId === lid) lid = null; };
   root.addEventListener('pointerup', lend); root.addEventListener('pointercancel', lend);
   // pausa

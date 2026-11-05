@@ -6,15 +6,17 @@
 // R$ 10 a R$ 25 (antes um pacote de 12 mil valia uns R$ 240 e ninguem pagaria). Camo 300 a 600, skin 500 a 1.000, pacote 800 a 1.200.
 // Item avulso: pela raridade dentro da faixa do tipo; pacote: preco proprio (price) dentro da faixa.
 // skin de modelo (04/11): troca o desenho de uma arma; faixa das skins de arma mais caras (pacote de modelos)
+// 05/11 (pedido dele: "ta muito barato"): tudo em dobro. Futuristic Weapon Pack: 10 mil, faixa propria (wpack)
 export const PRICE = {
-  camo: { raro: 300, epico: 450, lendario: 600 },
-  skin: { raro: 500, epico: 750, lendario: 1000 },
-  hat: { raro: 500, epico: 750, lendario: 750 }, // chapeu = visual do boneco (faixa das skins, mais barato)
-  bundle: { pacote: 1000 },
-  wskin: { lendario: 900 },
-  ret: { raro: 150, epico: 250 }, // reticula de mira (04/11): a coisa mais barata da Loja
+  camo: { raro: 600, epico: 900, lendario: 1200 },
+  skin: { raro: 1000, epico: 1500, lendario: 2000 },
+  hat: { raro: 1000, epico: 1500, lendario: 1500 }, // chapeu = visual do boneco (faixa das skins, mais barato)
+  bundle: { pacote: 2000 },
+  wskin: { lendario: 1800 },
+  dance: { epico: 900, lendario: 1600 }, banner: { lendario: 1000 }, charm: { raro: 500 }, face: { raro: 600 }, death: { lendario: 1400 }, // dança pro podio (05/11): com efeito e mortal sao as mais caras
+  ret: { raro: 300, epico: 500 }, // reticula de mira (04/11): a coisa mais barata da Loja
 };
-export const RANGE = { camo: [300, 600], skin: [500, 1000], hat: [500, 1000], bundle: [800, 1200], wskin: [600, 1200], ret: [100, 300] };
+export const RANGE = { wpack: [8000, 12000], camo: [600, 1200], skin: [1000, 2000], hat: [1000, 2000], bundle: [1600, 2400], wskin: [1200, 2400], ret: [200, 600], dance: [800, 2000], banner: [800, 1400], charm: [400, 700], face: [500, 800], death: [1000, 1800] };
 export const RARITY = { raro: 1, epico: 1, lendario: 1, pacote: 1 }; // raridades validas (cor do cartao)
 // Itens de verdade (03/11): give = o que libera ('camo:<id>' em src/camos.js com shop: true; 'skin:<id>' em
 // shared/looks.js LOOKS.skin com shop: true). Nome: item de um so usa o nome da camo/skin; pacote usa si_/sid_ no i18n.
@@ -68,23 +70,35 @@ export const SHOP_ITEMS = {
   rStar: { kind: 'ret', r: 'epico', give: ['ret:star'] }, rHeart: { kind: 'ret', r: 'epico', give: ['ret:heart'] }, rSmile: { kind: 'ret', r: 'epico', give: ['ret:smile'] }, rSkull: { kind: 'ret', r: 'epico', give: ['ret:skull'] }, rBolt: { kind: 'ret', r: 'epico', give: ['ret:bolt'] },
   rDiamond: { kind: 'ret', r: 'raro', give: ['ret:diamond'] }, rRadar: { kind: 'ret', r: 'raro', give: ['ret:radar'] }, rWings: { kind: 'ret', r: 'raro', give: ['ret:wings'] }, rLadder: { kind: 'ret', r: 'raro', give: ['ret:ladder'] }, rArtillery: { kind: 'ret', r: 'raro', give: ['ret:artillery'] },
   rSpiral: { kind: 'ret', r: 'epico', give: ['ret:spiral'] }, rCrown: { kind: 'ret', r: 'epico', give: ['ret:crown'] }, rEye: { kind: 'ret', r: 'epico', give: ['ret:eye'] }, rClover: { kind: 'ret', r: 'epico', give: ['ret:clover'] }, rMoon: { kind: 'ret', r: 'epico', give: ['ret:moon'] },
+  // reticulas de luneta (05/11, pedido dele): mesma quantidade das outras
+  sFio: { kind: 'ret', r: 'raro', give: ['ret:sn_fio'] }, sPoste: { kind: 'ret', r: 'raro', give: ['ret:sn_poste'] }, sTelemetro: { kind: 'ret', r: 'raro', give: ['ret:sn_telemetro'] }, sQueda: { kind: 'ret', r: 'raro', give: ['ret:sn_queda'] }, sCirculo: { kind: 'ret', r: 'raro', give: ['ret:sn_circulo'] }, sHalo: { kind: 'ret', r: 'raro', give: ['ret:sn_halo'] }, sTatica: { kind: 'ret', r: 'raro', give: ['ret:sn_tatica'] }, sSeta: { kind: 'ret', r: 'raro', give: ['ret:sn_seta'] }, sGrosso: { kind: 'ret', r: 'raro', give: ['ret:sn_grosso'] }, sQuatro: { kind: 'ret', r: 'raro', give: ['ret:sn_quatro'] }, sCanto: { kind: 'ret', r: 'raro', give: ['ret:sn_canto'] }, sGrade: { kind: 'ret', r: 'raro', give: ['ret:sn_grade'] },
+  sLua: { kind: 'ret', r: 'epico', give: ['ret:sn_lua'] }, sAlvo: { kind: 'ret', r: 'epico', give: ['ret:sn_alvo'] }, sFlecha: { kind: 'ret', r: 'epico', give: ['ret:sn_flecha'] }, sTres: { kind: 'ret', r: 'epico', give: ['ret:sn_tres'] }, sBang: { kind: 'ret', r: 'epico', give: ['ret:sn_bang'] }, sCaveira: { kind: 'ret', r: 'epico', give: ['ret:sn_caveira'] }, sCoracao: { kind: 'ret', r: 'epico', give: ['ret:sn_coracao'] }, sOlho: { kind: 'ret', r: 'epico', give: ['ret:sn_olho'] },
+  // danças (05/11, pedido dele): cambalhota, TikTok e as com efeito, so na Loja
+  dCambalhota: { kind: 'dance', r: 'lendario', give: ['dance:cambalhota'], feat: 1 }, dMortal: { kind: 'dance', r: 'lendario', give: ['dance:mortal'] },
+  dOmbrinho: { kind: 'dance', r: 'epico', give: ['dance:ombrinho'] }, dPassinho: { kind: 'dance', r: 'epico', give: ['dance:passinho'] }, dCruzadinha: { kind: 'dance', r: 'epico', give: ['dance:cruzadinha'] }, dFiodental: { kind: 'dance', r: 'epico', give: ['dance:fiodental'] }, dAponta: { kind: 'dance', r: 'epico', give: ['dance:aponta'] },
+  dCospefogo: { kind: 'dance', r: 'lendario', give: ['dance:cospefogo'], feat: 1 }, dCoracao: { kind: 'dance', r: 'lendario', give: ['dance:coracao'], feat: 1 }, dCanhao: { kind: 'dance', r: 'lendario', give: ['dance:canhao'], feat: 1 }, dRaio: { kind: 'dance', r: 'lendario', give: ['dance:raio'], feat: 1 }, dProjetor: { kind: 'dance', r: 'lendario', give: ['dance:projetor'], feat: 1 },
+  // leva de 05/11: banners animados premium, chaveiros do Tripo, rosto e morte
+  bCortina: { kind: 'banner', r: 'lendario', give: ['banner:cortina'] }, bHolofote: { kind: 'banner', r: 'lendario', give: ['banner:holofote'] }, bCarrossel: { kind: 'banner', r: 'lendario', give: ['banner:carrossel'] }, bVitrola: { kind: 'banner', r: 'lendario', give: ['banner:vitrola'] }, bFoguete: { kind: 'banner', r: 'lendario', give: ['banner:foguete'] }, bZepelim: { kind: 'banner', r: 'lendario', give: ['banner:zepelim'] },
+  kDado: { kind: 'charm', r: 'raro', give: ['charm:dado'] }, kPato: { kind: 'charm', r: 'raro', give: ['charm:pato'] },
+  fGargalhada: { kind: 'face', r: 'raro', give: ['face:gargalhada'] }, fLingua: { kind: 'face', r: 'raro', give: ['face:lingua'] }, mBalao: { kind: 'death', r: 'lendario', give: ['death:balao'] }, mMola: { kind: 'death', r: 'lendario', give: ['death:mola'] },
   // pacotes: skin + a camo que combina, mais barato que separado (8k a 12k)
-  pDragao: { kind: 'bundle', r: 'pacote', give: ['skin:dragao', 'camo:lava'], price: 1200, feat: 1 },
-  pTormenta: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:darkaether'], price: 1000, feat: 1 },
-  pAtelie: { kind: 'bundle', r: 'pacote', give: ['skin:massinha', 'camo:popart'], price: 800, feat: 1 },
+  pDragao: { kind: 'bundle', r: 'pacote', give: ['skin:dragao', 'camo:lava'], price: 2400, feat: 1 },
+  pTormenta: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:darkaether'], price: 2000, feat: 1 },
+  pAtelie: { kind: 'bundle', r: 'pacote', give: ['skin:massinha', 'camo:popart'], price: 1600, feat: 1 },
   // pacotes de 3 pecas (chapeu + skin + camo)
-  pEspaco: { kind: 'bundle', r: 'pacote', give: ['hat:ufo', 'skin:holograma', 'camo:plasma'], price: 1200, feat: 1 },
-  pFesta: { kind: 'bundle', r: 'pacote', give: ['hat:bolo', 'skin:discoteca', 'camo:hypno'], price: 1100, feat: 1 },
-  pPraia: { kind: 'bundle', r: 'pacote', give: ['hat:tubarao', 'skin:planta', 'camo:aquarium'], price: 900, feat: 1 },
+  pEspaco: { kind: 'bundle', r: 'pacote', give: ['hat:ufo', 'skin:holograma', 'camo:plasma'], price: 2400, feat: 1 },
+  pFesta: { kind: 'bundle', r: 'pacote', give: ['hat:bolo', 'skin:discoteca', 'camo:hypno'], price: 2200, feat: 1 },
+  pPraia: { kind: 'bundle', r: 'pacote', give: ['hat:tubarao', 'skin:planta', 'camo:aquarium'], price: 1800, feat: 1 },
   // leva de 04/11: pacotes com as pecas novas (sempre mais barato que separado)
-  pGelo: { kind: 'bundle', r: 'pacote', give: ['skin:aquarela', 'camo:frost'], price: 1100, feat: 1 },
-  pTrovao: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:stormcell'], price: 1200, feat: 1 },
-  pArcade: { kind: 'bundle', r: 'pacote', give: ['hat:alavanca', 'skin:pixel', 'camo:tvstatic'], price: 1200, feat: 1 },
-  pFloresta: { kind: 'bundle', r: 'pacote', give: ['hat:cogumelo', 'skin:planta', 'camo:ivy'], price: 1100, feat: 1 },
-  pDoceria: { kind: 'bundle', r: 'pacote', give: ['hat:sorvete', 'skin:trico', 'camo:honey'], price: 900, feat: 1 },
-  pGaragem: { kind: 'bundle', r: 'pacote', give: ['skin:papelao', 'camo:vinyl'], price: 800, feat: 1 },
+  pGelo: { kind: 'bundle', r: 'pacote', give: ['skin:aquarela', 'camo:frost'], price: 2200, feat: 1 },
+  pTrovao: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:stormcell'], price: 2400, feat: 1 },
+  pArcade: { kind: 'bundle', r: 'pacote', give: ['hat:alavanca', 'skin:pixel', 'camo:tvstatic'], price: 2400, feat: 1 },
+  pFloresta: { kind: 'bundle', r: 'pacote', give: ['hat:cogumelo', 'skin:planta', 'camo:ivy'], price: 2200, feat: 1 },
+  pDoceria: { kind: 'bundle', r: 'pacote', give: ['hat:sorvete', 'skin:trico', 'camo:honey'], price: 1800, feat: 1 },
+  pGaragem: { kind: 'bundle', r: 'pacote', give: ['skin:papelao', 'camo:vinyl'], price: 1600, feat: 1 },
   // Futuristic Weapon Pack (04/11): as duas skins de modelo juntas (so vende o pack); Agulha e Relampago futuristas
-  pFuturo: { kind: 'bundle', r: 'pacote', give: ['wskin:pulse', 'wskin:fiction'], price: 1200, feat: 1, weapon: 1, until: Date.UTC(2026, 10, 16) }, // lancamento: pacote da semana fixo ate 16/11 (segunda)
+  // elite: 1 (05/11, pedido dele): quem assina o Elite resgata de graca (POST /loja/resgatar); e a unica excecao a regra de cima
+  pFuturo: { kind: 'bundle', r: 'pacote', give: ['wskin:pulse', 'wskin:fiction'], price: 10000, feat: 1, weapon: 1, elite: 1, until: Date.UTC(2026, 10, 16) }, // lancamento: pacote da semana fixo ate 16/11 (segunda)
 };
 // Zions Points ganhos jogando (04/11, pedido dele): vitoria e desafio pagam, derrota paga bem menos. A partida solo roda no
 // navegador e o servidor nao tem como conferir o resultado: por isso o cliente so conta o que houve e o SERVIDOR decide o
@@ -121,7 +135,7 @@ function seeded(list, seed) {
 // Destaque = 1 lendario grande + 1 pacote largo + 2 pequenos; dia = 8 ofertas que nao repetem o destaque.
 // Prateleiras (04/11): o resto do catalogo por tipo, sorteado na semana, sem repetir o que ja esta em cima.
 // O rodizio e so vitrine: a compra confere o catalogo, nao o rodizio.
-export const SHELVES = [['bundle', 4], ['react', 4], ['camo', 8], ['skin', 4], ['hat', 4], ['ret', 8]];
+export const SHELVES = [['dance', 4], ['banner', 3], ['charm', 2], ['death', 2], ['face', 2], ['bundle', 4], ['react', 4], ['camo', 8], ['skin', 4], ['hat', 4], ['ret', 8]];
 export const shelfOf = (id) => (SHOP_ITEMS[id].react ? 'react' : SHOP_ITEMS[id].kind);
 export function shopRotation(now = Date.now()) {
   const day = Math.floor(now / DAY), week = Math.floor((day + 3) / 7);

@@ -12,7 +12,7 @@ export class Flashlights {
     this.mate = new THREE.SpotLight(0xffe6bc, 30, 24, 0.4, 0.6, 1.4);
     for (const l of [this.me, this.mate]) { scene.add(l, l.target); }
     // brilho pequeno na lanterna de cada parceiro (o cone de luz grande atrapalhava a tela: 03/11 pedido dele)
-    this.glowMat = new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff1c8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.glowMat = new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff1c8, opacity: 0.7, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     this.cones = new Map();
   }
   // r.pos/r.yaw/r.pitch dos remotos; so quem e do meu time e nao e vilao leva lanterna
@@ -29,7 +29,7 @@ export class Flashlights {
       if (r.mob || !r.alive || r.team !== myTeam || r.dn > 0) continue;
       seen.add(r.id);
       let c = this.cones.get(r.id);
-      if (!c) { c = new THREE.Sprite(this.glowMat); c.scale.set(0.7, 0.7, 1); this.scene.add(c); this.cones.set(r.id, c); }
+      if (!c) { c = new THREE.Sprite(this.glowMat); c.scale.set(0.45, 0.45, 1); this.scene.add(c); this.cones.set(r.id, c); }
       const cp = Math.cos(r.pitch || 0), dir = TMP.set(-Math.sin(r.yaw) * cp, Math.sin(r.pitch || 0), -Math.cos(r.yaw) * cp);
       c.position.set(r.pos[0] + dir.x * 0.45, r.pos[1] + 1.4, r.pos[2] + dir.z * 0.45);
       const d = (r.pos[0] - camera.position.x) ** 2 + (r.pos[2] - camera.position.z) ** 2;

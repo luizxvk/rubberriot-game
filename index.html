@@ -209,6 +209,7 @@ html.touch-boot .boot { display: grid; }
       <div class="wknd-note ev-note" id="evNote" role="dialog" aria-labelledby="evNoteName" hidden><small data-i18n="evTitle">Evento do fim de semana</small><b id="evNoteName"></b><span id="evNoteDesc"></span><button class="big" id="evPlay" data-i18n="evPlay">Jogar o evento</button></div>
       <p class="wknd-note" id="wkndNote" role="status" hidden><b data-i18n="wkndTitle">XP em dobro no fim de semana</b><span data-i18n="wkndBody">Sábado e domingo, todo XP vale o dobro: abates, partidas e desafios. Soma com o XP do Elite.</span></p>
       <!-- guest (site proprio sem conta): banner fixo pra criar a conta Rovex e nao perder o progresso. Icone: Material Icons (Apache 2.0) -->
+      <div class="promo-stack">
       <a class="elite-promo guest-promo" id="guestPromo" href="#" target="_top" rel="noopener" hidden>
         <svg class="ep-hex" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
         <span class="ep-txt"><b id="gpName">guest</b><small data-i18n="gpSub">Crie sua conta Rovex: salva o progresso e libera 3 itens exclusivos</small></span>
@@ -223,12 +224,21 @@ html.touch-boot .boot { display: grid; }
         <em class="ep-chip" id="epChip" data-i18n="epChip">XP 2x</em>
         <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </a>
+      <!-- Instagram da Rovex (05/11, pedido dele). Glifo: Lucide (ISC) -->
+      <a class="elite-promo ig-promo" id="igPromo" href="https://www.instagram.com/realrovex/" target="_blank" rel="noopener">
+        <svg class="ep-hex" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><path d="M17.5 6.5h.01"/></svg>
+        <span class="ep-txt"><b data-i18n="igTitle">Siga a Rovex</b><small data-i18n="igSub">@realrovex no Instagram</small></span>
+        <em class="ep-chip" data-i18n="igChip">Seguir</em>
+        <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+      </a>
+      </div>
       <!-- carteira (04/11): saldos de Zions num bilhete proprio na coluna do titulo (no topo ficavam espremidos e desalinhados) -->
       <div class="zbal wallet" id="homeBal" role="group" hidden></div>
       <nav class="bill" aria-label="Menu principal">
         <!-- icones: Material Icons (Apache 2.0) -->
         <button id="goSolo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
         <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span><i class="rk-mini" id="rkMini"></i></button>
+        <button data-go="friends" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span data-i18n="friends">Amigos</span></button>
         <button data-go="pass" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10V6c0-1.11-.9-2-2-2H4c-1.1 0-1.99.89-1.99 2v4c1.1 0 1.99.9 1.99 2s-.89 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2s.9-2 2-2zm-9 7.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2z"/></svg><span data-i18n="passTitle">Rovex Pass</span></button>
         <button data-go="shop" class="bill-item shop-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zm-2.99-3.9 1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-.94.47-.61 0-1.14-.49-1.21-1.14L16.98 5l1.93-.01zM13 5h1.96l.54 4.52c.05.39-.07.78-.33 1.07-.22.26-.54.41-.95.41-.67 0-1.22-.59-1.22-1.31V5zM8.49 9.52 9.04 5H11v4.69c0 .72-.55 1.31-1.29 1.31-.34 0-.65-.15-.89-.41-.25-.29-.37-.68-.33-1.070zm-4.45-.16L5.050 5h1.97l-.58 4.86c-.08.65-.6 1.14-1.21 1.14-.49 0-.8-.29-.93-.47-.27-.32-.36-.75-.26-1.17zM5 19v-6.03c.08.01.15.03.23.03.87 0 1.66-.36 2.24-.95.6.6 1.4.95 2.31.95.87 0 1.65-.36 2.23-.93.59.57 1.39.93 2.29.93.84 0 1.640-.35 2.24-.95.58.59 1.37.95 2.24.95.08 0 .15-.02.23-.03V19H5z"/></svg><span data-i18n="shop">Loja</span></button>
         <button data-go="look" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 18.2 13 11.75v-.91a3.496 3.496 0 0 0-.18-6.75A3.51 3.51 0 0 0 8.5 7.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5c0 .84-.69 1.52-1.53 1.5-.54-.01-.97.45-.97.99v1.76L2.4 18.2c-.77.58-.36 1.8.6 1.8h18c.96 0 1.37-1.22.6-1.8zM6 18l6-4.5 6 4.5H6z"/></svg><span data-i18n="look">Visual</span></button>
@@ -244,6 +254,29 @@ html.touch-boot .boot { display: grid; }
     </div>
   </section>
 
+  <!-- ranking da rankeada (05/11): mundial e amigos -->
+  <div class="rkp-pop" id="rkBoardPop" role="dialog" aria-modal="true" aria-labelledby="rkbTitle" hidden>
+    <div class="rkp-box rkb-box">
+      <button class="lb-x" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+      <h3 id="rkbTitle" data-i18n="rkbBtn">Ranking</h3>
+      <div class="rkp-tabs" role="tablist"><button role="tab" data-board="mundial" data-i18n="rkbWorld">Mundial</button><button role="tab" data-board="amigos" data-i18n="rkbFriends">Amigos</button></div>
+      <ol class="rkb-list" id="rkbList"></ol>
+      <ol class="rkb-list rkb-me" id="rkbMe"></ol>
+    </div>
+  </div>
+
+  <!-- premios da rankeada (05/11): uma faixa por vez, com a previa -->
+  <div class="rkp-pop" id="rkPrizePop" role="dialog" aria-modal="true" aria-labelledby="rkpName" hidden>
+    <div class="rkp-box">
+      <button class="lb-x" data-i18n-aria="close" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+      <div class="rkp-tabs" role="tablist"></div>
+      <div class="rkp-body">
+        <div class="rkp-art sp-art" id="rkpArt"></div>
+        <div class="rkp-txt"><h3 id="rkpName"></h3><small id="rkpPts"></small><ul id="rkpList"></ul><p class="rkp-state" id="rkpState"></p></div>
+      </div>
+    </div>
+  </div>
+
   <!-- convite de amigo: aparece no menu, no lobby e na partida (o sininho da Rovex fica escondido com o jogo aberto) -->
   <aside class="invite-toast" id="inviteToast" role="alertdialog" aria-labelledby="ivTxt" hidden>
     <span class="iv-av" id="ivAv" aria-hidden="true"></span>
@@ -253,7 +286,8 @@ html.touch-boot .boot { display: grid; }
 
   <!-- salas de amigos abertas agora (so com conta Rovex; some sem nenhuma) -->
   <!-- anuncios no PC (03/11): canto direito da tela, estilo cartaz -->
-  <aside class="ann ann-side" id="annSide" role="region" aria-roledescription="carrossel" data-i18n-aria="annTitle" aria-label="Novidades"></aside>
+  <!-- coluna da direita no PC largo: Novidades e, embaixo, os banners (ann.js move a .promo-stack pra ca; na tela estreita ela volta pro cartaz) -->
+  <div class="home-side" id="homeSide"><aside class="ann ann-side" id="annSide" role="region" aria-roledescription="carrossel" data-i18n-aria="annTitle" aria-label="Novidades"></aside></div>
 
   <aside class="news friends" id="friendRooms" aria-labelledby="frTitle" hidden>
     <header><h2 id="frTitle" data-i18n="frTitle">Amigos jogando</h2><span class="fr-n" id="frCount"></span></header>
@@ -267,6 +301,13 @@ html.touch-boot .boot { display: grid; }
     <div class="look-tabs" id="lookTabs" role="tablist"></div>
     <div class="look-grid" id="lookGrid"></div>
     <p class="look-note" id="lookNote" data-i18n="lookTeamNote">O short e a fita do chapéu ficam sempre na cor do seu time.</p>
+  </section>
+
+  <!-- amigos da Rovex (05/11): icone Material Icons (Apache 2.0) -->
+  <section class="card" id="scr-friends" hidden>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="friends">Amigos</h2><small class="fr-count" id="frOnline"></small></header>
+    <ul class="fr-list" id="frPeople"></ul>
+    <p class="fr-err" id="frErr" aria-live="polite"></p>
   </section>
 
   <section class="card" id="scr-mp" hidden>
@@ -288,6 +329,7 @@ html.touch-boot .boot { display: grid; }
       <div class="rk-me" id="rkMe"></div>
       <p class="rk-sub" data-i18n="rkSub">Captura a Bandeira, Dominação e Escolta.</p>
       <ol class="rk-tiers" id="rkTiers"></ol>
+      <div class="mp-rk-btns"><button class="mp-prizes" id="rkPrizes" data-i18n="rkpBtn">Ver prêmios</button><button class="mp-prizes" id="rkBoardGo" data-i18n="rkbBtn">Ranking</button></div>
       <button class="big rk-find" id="rkFind" data-i18n="rkFind">Procurar partida</button>
     </section>
   </section>
@@ -305,8 +347,10 @@ html.touch-boot .boot { display: grid; }
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="arsenal">Arsenal</h2><button class="gs-range" id="smithRange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg><span data-i18n="rangeGo">Campo de treino</span></button><button class="big gs-done" id="smithDone" hidden></button></header>
     <div class="cats" id="catTabs" role="tablist"></div>
     <div class="equip" id="equipBar"></div>
+    <p class="smith-hint" id="smithHint" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7C6.48 7 2 9.24 2 12c0 2.24 2.94 4.13 7 4.77V20l4-4-4-4v2.73c-3.15-.56-5-1.9-5-2.73 0-1.06 3.04-3 8-3s8 1.94 8 3c0 .73-1.46 1.89-4 2.53v2.05c3.53-.77 6-2.53 6-4.58 0-2.76-4.48-5-10-5z"/></svg><span data-i18n="smithSpin">Arraste pra girar a arma</span></p>
     <!-- gunsmith: pecas em blocos; tocou numa, o painel vira a lista de opcoes (com status ao lado) -->
     <div class="stk-pane" id="stkPane" hidden></div>
+    <div class="ret-prev" id="retPrev" hidden></div>
     <div class="smith" id="smith">
       <div class="slots" id="slotList"></div>
       <div class="gs-pick" id="pickWrap" hidden>
@@ -320,7 +364,7 @@ html.touch-boot .boot { display: grid; }
   <!-- perfil (31/10): nome, conta, nivel e todas as estatisticas; sair/trocar de conta (Rovex) -->
   <section class="card wide" id="scr-profile" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="profile">Perfil</h2></header>
-    <div class="pf" id="pfBody"></div>
+    <div class="prof" id="pfBody"></div>
   </section>
 
   <!-- Rovex Pass (04/11): so itens do jogo, em src/passview.js -->
@@ -333,6 +377,20 @@ html.touch-boot .boot { display: grid; }
   <section class="card wide shop-card" id="scr-shop" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="shop">Loja</h2><div class="zbal shop-zbal" id="shopBal" role="group" hidden></div><button class="shop-addz" id="shopBuyZ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button></header>
     <div class="shop" id="shopPane"></div>
+    <!-- cena de compra (05/11, pedido dele): o item comprado em tela cheia, com nome e raridade. Clicar fecha -->
+    <div class="buy-cine" id="buyCine" role="dialog" aria-modal="true" aria-labelledby="bcName" hidden>
+      <span class="st-bg bc-bg"></span><span class="bc-rays" aria-hidden="true"></span><span class="bc-flash" aria-hidden="true"></span>
+      <div class="bc-stage">
+        <div class="bc-hero"><span class="bc-burst" aria-hidden="true"></span><div class="bc-art" id="bcArt"></div></div>
+        <div class="bc-txt">
+          <p class="bc-kicker" id="bcKicker"></p>
+          <h2 class="bc-name" id="bcName"></h2>
+          <p class="bc-rar" id="bcRar"></p>
+          <ul class="sp-gives bc-gives" id="bcGives"></ul>
+        </div>
+      </div>
+      <button class="bc-close" id="bcClose" data-i18n="shopCineClose">Toque para fechar</button>
+    </div>
     <div class="shop-pop" id="shopPop" role="dialog" aria-modal="true" aria-labelledby="shopPopName" hidden>
       <div class="sp-box">
         <div class="sp-art"></div>
@@ -493,13 +551,14 @@ html.touch-boot .boot { display: grid; }
 </div>
 
 <!-- camera da ultima morte: faixas de cinema + quem fechou a partida -->
-<div id="cine" class="cine" aria-hidden="true"><i class="cine-bar t"></i><i class="cine-bar b"></i><div class="cine-tag"><small id="cineKind">ABATE FINAL</small><b id="cineWho"></b></div></div>
+<div id="cine" class="cine" aria-hidden="true"><i class="cine-bar t"></i><i class="cine-bar b"></i><div class="cine-bnr" id="cineBnr" hidden></div><div class="cine-tag"><small id="cineKind">ABATE FINAL</small><b id="cineWho"></b></div></div>
 
 <div id="dead" class="dead" hidden>
   <p class="dead-title" data-i18n="pancake">Virou panqueca!</p>
   <p class="dead-by" id="deadBy"></p>
   <p class="dead-t" id="deadT"></p>
   <!-- kill cam em quadrinhos: tira de 3 quadros (quem foi, o tiro, voce) -->
+  <div class="dead-bnr" id="deadBnr" hidden></div>
   <div class="comic" id="comic" hidden></div>
   <button class="big dead-go" id="deadGo" hidden data-i18n="respawn">Renascer</button>
   <div class="spec-bar" id="specBar" hidden><button id="specNext" data-i18n="specNext">Próximo</button><button id="specMap" data-i18n="specMapBtn">Mapa</button></div>
@@ -557,6 +616,15 @@ html.touch-boot .boot { display: grid; }
     <button class="plain" id="pauseSettings" data-i18n="settings">Ajustes</button>
     <button class="plain" id="quit" data-i18n="quit">Sair pro menu</button>
     <button class="plain" id="rangeBack" data-i18n="rangeBack" hidden>Voltar ao Arsenal</button>
+  </div>
+</div>
+
+<!-- podio: os 3 melhores depois da camera final -->
+<div id="podium" class="podium" hidden>
+  <header class="pod-head"><h2 data-i18n="podTitle">Os três melhores</h2><p id="podTime"></p></header>
+  <div class="pod-bar">
+    <div class="pod-dances" id="podDances" hidden></div>
+    <button class="pod-back" id="podBack" type="button" hidden></button>
   </div>
 </div>
 

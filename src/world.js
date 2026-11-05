@@ -1,4 +1,5 @@
 // Vila Borracha: cena, cidade que danca, ceu, objetivos, pickups e efeitos.
+import { podiumClear } from '../shared/podiumspot.js';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
@@ -145,6 +146,13 @@ export function buildWorld(scene, M) {
     if (TH.desert && b.kind === 'bridge') { const g = DESERT.plank(w, h, d); g.position.set(cx, b.min[1], cz); root.add(g); continue; }
     if (b.kind === 'wall') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.06, { map: brick });
     else if (b.kind === 'crate') mesh = ink(new THREE.BoxGeometry(w, h, d), 0xffffff, 0.045, { map: plank });
+    else if (b.kind === 'contshell' || b.kind === 'contdoor') {
+      // conteiner aberto: parede fina com o mesmo friso de fora; porta dobrada mais escura
+      const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
+      const col = CONT_COLS[(b.seed || 0) % CONT_COLS.length], door = b.kind === 'contdoor', part = ink(new THREE.BoxGeometry(w, h, d), door ? PAL.dark : col, 0.02); part.position.y = h / 2; g.add(part);
+      if (!door && !b.roof) { const X = w > d, len = Math.max(w, d), n = Math.floor(len / 0.5); for (let i = 1; i < n; i++) { const k = -len / 2 + i * (len / n), rib = ink(new THREE.BoxGeometry(X ? 0.06 : w + 0.06, h * 0.86, X ? d + 0.06 : 0.06), col, 0); rib.material = rib.material.clone(); rib.material.color.multiplyScalar(0.82); rib.position.set(X ? k : 0, h / 2, X ? 0 : k); g.add(rib); } }
+      root.add(g); continue;
+    }
     else if (b.kind === 'container') {
       // conteiner: caixa colorida com a chapa ondulada (frisos) e as portas na ponta
       const g = new THREE.Group(); g.position.set(cx, b.min[1], cz);
@@ -368,6 +376,7 @@ export function buildWorld(scene, M) {
   }
   for (const [x, z] of TH.trees) {
     if (M.boxes.some(b => x > b.min[0] - 2 && x < b.max[0] + 2 && z > b.min[2] - 2 && z < b.max[2] + 2)) continue; // arvore nunca dentro de casa/pedra
+    if (podiumClear(M, x, z)) continue; // nem entre a camera e o podio (REGRA: enfeite novo do mapa passa por aqui)
     const t = makeTree(0.8);
     t.position.set(x, 0, z);
     root.add(t);
@@ -1335,7 +1344,7 @@ function tinteiroDecor(root, A) {
 function forestDecor(root, M, trees) {
   const S = M.studio, A = M.arena, F = M.forest;
   let seed = 977; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const solid = (x, z, m) => M.boxes.some(b => b.kind !== 'forestedge' && x > b.min[0] - m && x < b.max[0] + m && z > b.min[2] - m && z < b.max[2] + m);
+  const solid = (x, z, m) => podiumClear(M, x, z) || M.boxes.some(b => b.kind !== 'forestedge' && x > b.min[0] - m && x < b.max[0] + m && z > b.min[2] - m && z < b.max[2] + m);
   const inStudio = (x, z, m = 0) => Math.max(Math.abs(x), Math.abs(z)) < S + 1 + m;
   const segD = (x, z) => { let best = Infinity; for (let i = 1; i < F.creek.length; i++) { const [ax, az] = F.creek[i - 1], [bx, bz] = F.creek[i], dx = bx - ax, dz = bz - az, k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); best = Math.min(best, Math.hypot(x - ax - dx * k, z - az - dz * k)); } return best; };
   const nearPool = (x, z, r) => (M.bor?.pools || []).some(q => Math.hypot(q.pos[0] - x, q.pos[1] - z) < r);

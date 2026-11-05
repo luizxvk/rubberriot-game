@@ -3,7 +3,7 @@
 import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted, wasUnlocked } from './challenges.js';
 import { shopOwned } from './shopstore.js';
 import { pushSoon, me as rovexMe } from './rovex.js';
-import { PASS, PASS_PER, PASS_MAX } from './pass.js';
+import { PASS, PASS_PER, PASS_MAX, PASS_FREE } from './pass.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
 export const MAX_LEVEL = 55;
@@ -102,9 +102,9 @@ function emit(ev) { for (const fn of listeners) fn(ev); }
 export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpnAmount = amount) {
   if (!amount && !wpnAmount) return;
   const key = wpn ? keyOf(wpn, body) : null, cBefore = wpn ? catLevel(wpn) : 0;
-  const before = level(), wBefore = wpn ? wpnLevel(wpn, body) : 0, passFrom = passLevel();
+  const before = level(), wBefore = wpn ? wpnLevel(wpn, body) : 0, passFrom = passLevel(), freeFrom = passTrack();
   data.xp += amount;
-  if (passOn()) data.passXp = (data.passXp || 0) + amount; // Rovex Pass: so o Elite acumula
+  data.passXp = (data.passXp || 0) + amount; // Rovex Pass: todo mundo sobe; o premium so abre com o Elite (e quem assina depois leva o que ja passou)
   if (key) data.wpn[key] = (data.wpn[key] || 0) + wpnAmount;
   if (kind === 'kill') data.kills++;
   if (kind === 'match') data.matches++;
@@ -112,7 +112,7 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpn
   save();
   const after = level(), wAfter = wpn ? wpnLevel(wpn, body) : 0, cAfter = wpn ? catLevel(wpn) : 0;
   const passTo = passLevel();
-  emit({ passUp: passTo > passFrom ? passTo : 0, passFrom, kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
+  emit({ passUp: passTo > passFrom ? passTo : 0, passFrom, freeFrom, freeTo: passTrack(), kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
 }
 
 // ---------- desbloqueios ----------
@@ -121,6 +121,8 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpn
 // 04/11 (hotfix, pedido dele): "no inicio to desbloqueando tudo". Cada tipo de peca tem o seu passo e comeca num nivel
 // diferente, entao quase todo nivel abre UMA coisa nova e o fim fica la no 30. [primeira, passo]
 export const MUZZLE_LVL = { comp: 5, flash: 10, brake: 15, silencer: 21, silencer2: 27 };
+// municao (05/11, pedido dele): sai do progresso da arma, nao mais de desafio
+export const AMMO_LVL = { fire: 7, slug: 9, trace: 12, boom: 17, ap: 23 };
 const STEP = { scope: [2, 3], handle: [3, 4], charger: [4, 4], laser: [6, 5], body: [2, 3] };
 const slotOf = (id) => !id ? 'body' : /scope/.test(id) ? 'scope' : /laser/.test(id) ? 'laser' : /handle|akimbo|^gd_/.test(id) ? 'handle' : /charg|drum|_ext_/.test(id) ? 'charger' : 'body';
 export function partReq(i, id) { if (i <= 0) return 1; const [a, b] = STEP[slotOf(id)]; return Math.min(MAX_WPN_LEVEL, a + (i - 1) * b); }
@@ -137,14 +139,16 @@ function hadOld(wpn, i, id) {
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 // modelo que so abre num nivel de JOGADOR (01/11, pedido dele): Liquidificador no 40
 export const BODY_MIN_LVL = { shotgun_3: 40, melee_17: 30, melee_18: 35 }; // Katana: nivel 30 do jogador; Sabre de Neon: 35 (04/11)
+export const CANTED_LVL = 8; // mira de 45 graus (05/11, pedido dele)
 export function partUnlocked(wpn, i, id) {
+  if (id === 'canted') return !!data.unlockAll || wpnLevel(wpn) >= CANTED_LVL;
   const own = id && LOCKED_BY[wpn + ':' + id]; // peca com desafio proprio nesta arma (akimbo da Espirro/Cuspideira)
   if (own) return !!data.unlockAll || unlockDone(own.id);
   if (id && BODY_MIN_LVL[id]) return !!data.unlockAll || unlockLevel() >= BODY_MIN_LVL[id];
   if (data.unlockAll || gifted(id) || wasUnlocked(id)) return true; // presente do treino / desafio antigo ja fechado
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
-  if (id && id.startsWith('am:')) return true;  // bala normal
+  if (id && id.startsWith('am:')) return wpnLevel(wpn) >= (AMMO_LVL[id.slice(3)] || 1) || (id === 'am:slug' && !!data.lg?.[keyOf(wpn)]); // balote ja era aberto pra quem usava a escopeta
   if (id && id.startsWith('mz:')) return wpnLevel(wpn) >= (MUZZLE_LVL[id.slice(3)] || 1) || hadOld(wpn, i, id);
   if (id && bodiesOf(wpn).includes(id)) return catLevel(wpn) >= partReq(i, id) || hadOld(wpn, i, id); // corpo novo: pelo melhor corpo
   return wpnLevel(wpn) >= partReq(i, id) || hadOld(wpn, i, id);
@@ -159,10 +163,15 @@ export function reqProgress(wpn, req) {
 
 // Rovex Pass (04/11): nivel 0 ate fechar o primeiro passo
 export const passOn = () => !!data.unlockAll || !!rovexMe?.elite; // so o Elite da Rovex ativa
-export const passLevel = () => (passOn() ? Math.min(PASS_MAX, Math.floor((data.passXp || 0) / PASS_PER)) : 0);
-export const passInfo = () => ({ on: passOn(), level: passLevel(), into: (data.passXp || 0) % PASS_PER, need: PASS_PER });
-export const passHasLook = (slot, id) => { const i = PASS.findIndex(x => x.k === 'look' && x.slot === slot && x.id === id); return i >= 0 && passLevel() > i; };
+export const passTrack = () => Math.min(PASS_MAX, Math.floor((data.passXp || 0) / PASS_PER)); // nivel na trilha, com ou sem Elite
+export const passLevel = () => (passOn() ? passTrack() : 0); // nivel que vale pro premium
+export const passInfo = () => ({ on: passOn(), level: passTrack(), into: (data.passXp || 0) % PASS_PER, need: PASS_PER });
+export const passHasDance = (id) => { const i = PASS.findIndex(x => x.k === 'dance' && x.id === id); return i >= 0 && passLevel() > i; };
+const freeHas = (test) => Object.entries(PASS_FREE).some(([n, p]) => test(p) && passTrack() >= +n);
+export const passHasBanner = (id) => { const i = PASS.findIndex(x => x.k === 'banner' && x.id === id); return !!data.unlockAll || (i >= 0 && passLevel() > i) || freeHas(p => p.k === 'banner' && p.id === id); };
+export const passHasLook = (slot, id) => { const i = PASS.findIndex(x => x.k === 'look' && x.slot === slot && x.id === id); return !!data.unlockAll || (i >= 0 && passLevel() > i) || freeHas(p => p.k === 'look' && p.slot === slot && p.id === id); };
 export function camoUnlocked(wpn, camo) {
+  if (camo.acct) return !!data.unlockAll || !!rovexMe; // so de quem tem conta Rovex: nem presente, nem desafio, nem Loja
   if (camo.pass) return !!data.unlockAll || passLevel() >= camo.pass; // so do Rovex Pass
   if (camo.shop) return !!data.unlockAll || shopOwned('camo:' + camo.id); // so da Loja (03/11): nem presente do treino, nem desafio, nem nivel
   if (data.unlockAll || gifted(camo.id)) return true; // presente do treino vale em todas as armas

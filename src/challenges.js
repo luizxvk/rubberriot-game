@@ -61,11 +61,7 @@ export const UNLOCKS = [
   // pacote 2 (30/10, pedido dele): cada arma nova sai de um desafio proprio (antes abria por nivel)
   { id: 'u_pk_cuca', n: 20, xp: 2000, ok: (e) => e.type === 'kill' && e.head && e.wpn === 'sniper', reward: { slot: 'body', id: 'sniper_4', wpn: 'sniper' } },
   { id: 'u_pk_dmr', n: 6, xp: 2000, ok: (e) => e.type === 'streak', reward: { slot: 'body', id: 'fusil_12', wpn: 'rifle' } },
-  // tipos de bala (peca Municao, equipada por arma; a normal ja vem aberta)
-  { id: 'u_am_fire', n: 40, xp: 1500, ok: K(), reward: { slot: 'ammo', id: 'am:fire' } },
-  { id: 'u_am_trace', n: 15, xp: 1250, ok: (e) => e.type === 'assist', reward: { slot: 'ammo', id: 'am:trace' } },
-  { id: 'u_am_boom', n: 8, xp: 1750, ok: K('frag'), reward: { slot: 'ammo', id: 'am:boom' } },
-  { id: 'u_am_ap', n: 35, xp: 1750, ok: (e) => e.type === 'kill' && e.head, reward: { slot: 'ammo', id: 'am:ap' } },
+  // tipos de bala: sairam daqui (05/11), agora abrem no nivel da arma (AMMO_LVL em progress.js); quem fechou o desafio mantem (WAS_CH)
   // tracados do tiro (equipados por arma no Arsenal; Giz e Nenhum ja vem abertos)
   { id: 'u_tr_fire', n: 20, xp: 750, ok: K('shotgun'), reward: { slot: 'tracer', id: 'tr:fire' } },
   { id: 'u_tr_ink', n: 15, xp: 750, ok: (e) => e.type === 'assist', reward: { slot: 'tracer', id: 'tr:ink' } },
@@ -107,7 +103,7 @@ export function eliteToday() {
 
 // modelos que eram de desafio e agora abrem por nivel (31/10, pedido dele): quem ja tinha fechado o
 // desafio antigo continua com o modelo aberto
-const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
+const WAS_CH = { 'am:fire': ['u_am_fire', 40], 'am:trace': ['u_am_trace', 15], 'am:boom': ['u_am_boom', 8], 'am:ap': ['u_am_ap', 35], pistol_10: ['u_revolver', 30], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
 export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
 // item -> desafio que libera (o arsenal consulta isso)
 // a mesma peca em outra arma (akimbo da pistola x da submetralhadora) tem desafio proprio: chave 'arma:peca'

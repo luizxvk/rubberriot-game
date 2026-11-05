@@ -9,8 +9,7 @@ import { toon, outline, geo } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeGun } from './guns.js';
 import { t, wName } from './i18n.js';
-import { camoGlsl, camoTime, camoById } from './camos.js';
-import { attachCamoFx } from './camofx.js';
+import { camoGlsl, camoTime, camoById, rovexLogoU } from './camos.js';
 import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS, GADGETS, WSKINS, baseBody } from '../shared/weapons.js';
 import { bpUnlocked, progressInfo, passLevel } from './progress.js';
 import { RET_PASS } from './pass.js';
@@ -97,7 +96,7 @@ export const PART_LABEL = {
 
 // nome de exibicao das pecas (cartoon, nada de marca)
 export function partName(slot, id) {
-  if (!id) return slot === 'muzzle' ? t('muzzleNone') : slot === 'conv' ? t('convNone') : slot === 'scope' ? t('ir_iron_flip') : slot === 'handle' ? t('noGrip') : slot === 'laser' ? t('noLaser') : t('stdPart');
+  if (!id) return slot === 'muzzle' ? t('muzzleNone') : slot === 'conv' ? t('convNone') : slot === 'scope' ? t('ir_iron_own') : slot === 'handle' ? t('noGrip') : slot === 'laser' ? t('noLaser') : t('stdPart');
   const n = id.match(/(\d+)$/)?.[1] ?? '0';
   if (slot === 'body' && id.startsWith('melee_')) return t('ml_' + n);
   if (slot === 'body' && WW2_BODIES.includes(id)) return t('ww_' + id);
@@ -105,6 +104,7 @@ export function partName(slot, id) {
   if (slot === 'scope' && IRONS[id]) return t('ir_' + id);
   if (slot === 'scope' && SNIPER_SCOPE_NAME[id]) return t(SNIPER_SCOPE_NAME[id]); // lunetas com nome do que fazem (01/11)
   if (slot === 'scope') { const b = parts[id]?.box; const big = b && (b.max.z - b.min.z) >= 0.6; return (big ? t('scopeBig') : t('scopeDot')) + ' ' + n + (id.startsWith('sniper') ? ' ' + t('long') : ''); }
+  if (slot === 'charger' && DRUM_MAGS[id]?.heatK) return t('coolMag');
   if (slot === 'charger' && DRUM_MAGS[id]?.ext) return t(id.endsWith('_2') ? 'extMag2' : 'extMag');
   if (slot === 'charger' && DRUM_MAGS[id]) return t('drumMag');
   if (slot === 'charger' && id.startsWith('lmg_')) return t('lmgBox'); // metralhadora: caixa de fita (04/11)
@@ -510,54 +510,17 @@ const SCOPE_ZOOM = { fusil_scope_4: 1.4, fusil_scope_5: 1.4, fusil_scope_2: 1.4,
 const SCOPE_NAMED = ['pistol_scope_5','subfusil_scope_2','subfusil_scope_6','subfusil_scope_9','subfusil_scope_1','subfusil_scope_5','subfusil_scope_7','subfusil_scope_8','subfusil_scope_10','fusil_scope_1','fusil_scope_7','fusil_scope_2','fusil_scope_4','fusil_scope_5'];
 for (const id of SCOPE_NAMED) SNIPER_SCOPE_NAME[id] = 'scn_' + id;
 export const IRONS = {
-  iron_flip: {},                                  // Mira de Trilho (padrao): alca de furo com orelhas + massa com orelhas e ponto verde
-  iron_hood: { adsTime: 0.94, spread: 0.96 },     // Mira de Trilho com Aro: massa dentro de um aro fechado, ponto vermelho (estilo da foto do COD)
   iron_own: { adsTime: 0.9 },                     // so pistola (04/11, pedido dele): sem peca nenhuma, mira pela alca e massa do proprio modelo
 };
 const IRON_OWN = 'iron_own';
-export const DEFAULT_IRON = 'iron_flip';
-export const ironOptions = (cat) => (cat === 'sniper' || cat === 'melee' ? [] : Object.keys(IRONS).filter(id => id !== IRON_OWN || ['pistol', 'rifle', 'smg', 'shotgun'].includes(cat))); // alca propria: pistola, fuzil, submetralhadora e escopeta (04/11)
+export const DEFAULT_IRON = 'iron_own'; // 05/11 (pedido dele): Mira de Trilho e Mira de Trilho com Aro sairam do jogo
+export const ironOptions = (cat) => (cat === 'sniper' || cat === 'melee' ? [] : Object.keys(IRONS)); // alca propria: pistola, fuzil, submetralhadora e escopeta (04/11)
 // alca do proprio modelo (04/11): a linha de mira passa na ponta da massa (o ponto mais alto da frente do corpo, perto do
 // eixo); o ADS poe esse ponto no centro da tela, entao a massa fica rente ao crosshair
 function ownIronPoint(body, cx) {
   const pr = profile(body), b = parts[body].box, N = pr.hi.length; let y = -Infinity, k = 0;
   for (let i = 0; i < Math.ceil(N * 0.8); i++) if (pr.hi[i] > y) { y = pr.hi[i]; k = i; } /* ate 80%: a parte mais alta antes da coronha (alca/ferrolho) nao pode tapar a linha */
   return new THREE.Vector3(cx, y + 0.008, b.min.z + (b.max.z - b.min.z) * 0.62);
-}
-// miras de trilho (01/11, fotos dele): alca atras = base no trilho, duas orelhas de protecao, disco com furo (peep) e
-// botao de regulagem do lado; massa na frente = base, orelhas (ou aro fechado) e pino com ponto colorido no topo.
-// A linha de visada passa pelo centro do furo e pelo ponto; e por ela que a mira (ADS) olha.
-function addIrons(id, body, inner, origin, partMat) {
-  const b = parts[body].box, len = b.max.z - b.min.z, cx = axisX(body), w = b.max.x - b.min.x;
-  const zR = b.min.z + len * 0.6, zF = b.min.z + len * 0.08;
-  const top = (z0, z1) => { const y = hiUnder(body, cx, w * 0.18, z0, z1); return Number.isFinite(y) ? y : b.max.y; };
-  const yR = top(zR - len * 0.03, zR + len * 0.03), yF = top(zF - len * 0.03, zF + len * 0.03), u = len * 0.016;
-  const H = Math.max(yR, yF, top(zF, b.max.z)) + u * 2.6; // acima de tudo entre a massa e a coronha
-  const pal = paletteReader(gunTex), uvA = pal ? paletteUV(pal, [30, 30, 30]) : [0.4, 0.4];
-  const gs = [], put = (ge, x, y, z) => { ge.translate(x, y, z); if (ge.index) ge = ge.toNonIndexed(); ge.deleteAttribute('uv'); setUV(ge, uvA); gs.push(ge); };
-  const block = (bw, y0, y1, bd, x, z) => put(new THREE.BoxGeometry(bw, Math.max(0.001, y1 - y0), bd), x, (y0 + y1) / 2, z);
-  // ---- alca (tras) ----
-  block(u * 4.6, yR, yR + u * 1.1, u * 3.4, cx, zR);                       // base presa no trilho
-  block(u * 2.2, yR + u * 1.1, H - u * 1.75, u * 1.1, cx, zR);             // corpo que sobe ate o furo (baixo: nao tampa a vista)
-  for (const sd of [-1, 1]) block(u * 0.45, yR + u * 1.1, H + u * 1.4, u * 1.3, cx + sd * u * 2.3, zR); // orelhas de protecao (finas)
-  const peep = new THREE.TorusGeometry(u * 1.35, u * 0.28, 8, 22); put(peep, cx, H, zR); // anel do furo (vazado: a massa aparece la dentro)
-  const knob = new THREE.CylinderGeometry(u * 0.55, u * 0.55, u * 0.7, 10); knob.rotateZ(Math.PI / 2); put(knob, cx + u * 2.7, H - u * 1.4, zR); // botao de regulagem
-  // ---- massa (frente) ----
-  block(u * 3.6, yF, yF + u * 1.1, u * 3, cx, zF);                         // base
-  block(u * 0.55, yF + u * 1.1, H, u * 0.6, cx, zF);                       // pino
-  if (id === 'iron_hood') {
-    const hood = new THREE.TorusGeometry(u * 1.75, u * 0.38, 8, 20); put(hood, cx, H - u * 0.2, zF); // aro fechado em volta do pino
-    block(u * 1.4, yF + u * 1.1, H - u * 1.8, u * 1.2, cx, zF);            // pescoco que segura o aro
-  } else {
-    for (const sd of [-1, 1]) block(u * 0.6, yF + u * 1.1, H + u * 0.6, u * 1.3, cx + sd * u * 1.5, zF); // orelhas abertas
-  }
-  const geo = mergeGeometries(gs); geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, partMat); outline(m, 0.0035); m.position.copy(origin).multiplyScalar(-1); inner.add(m);
-  // pontos que acendem (tritio): verde na massa padrao, vermelho na de aro; dois verdinhos na alca
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(u * 0.36, 10, 8), new THREE.MeshBasicMaterial({ color: id === 'iron_hood' ? 0xff4a3a : 0x6cff6c }));
-  dot.position.set(cx, H, zF).sub(origin); inner.add(dot);
-  for (const sd of [-1, 1]) { const d2 = new THREE.Mesh(new THREE.SphereGeometry(u * 0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0x6cff6c })); d2.position.set(cx + sd * u * 1.9, H + u * 0.3, zR + u * 0.75).sub(origin); inner.add(d2); }
-  return new THREE.Vector3(cx, H, zR + len * 0.04).sub(origin).multiplyScalar(S);
 }
 
 // bocais (01/11, pedido dele): toda arma de fogo (lamina nao). Entram no lugar da ponta do cano.
@@ -645,6 +608,9 @@ export const DRUM_MAGS = { pistol_drum: { body: 'pistol_2', rounds: 40, reload: 
   // encaixa no mesmo poco, sem malha cruzando). magK = multiplica o pente; ext = quanto estica a altura
   subfusil_ext_1: { body: 'subfusil_5', of: 'subfusil_charguer_5', ext: 1.45, magK: 1.4, reload: 1.12, adsTime: 1.05, move: 0.98, kick: 1 },
   subfusil_ext_2: { body: 'subfusil_5', of: 'subfusil_charguer_5', ext: 1.95, magK: 1.8, reload: 1.25, adsTime: 1.1, move: 0.96, kick: 0.97 },
+  // caixa refrigerada da Metralhadora (05/11, pedido dele): mesmas balas, mas leva bem mais tiro ate esquentar. heatK = calor por tiro
+  lmg_ext_1: { body: 'lmg_1', of: 'lmg_charger_1', ext: 1.22, magK: 1, heatK: 0.6, reload: 1.15, adsTime: 1.06, move: 0.97, kick: 1 },
+  lmg_ext_2: { body: 'lmg_2', of: 'lmg_charger_2', ext: 1.22, magK: 1, heatK: 0.6, reload: 1.15, adsTime: 1.06, move: 0.97, kick: 1 },
 };
 // troca de modelo das lunetas (04/11, pedido dele): a Militar ganha o desenho da Termica e a Termica o da Militar.
 // Troca so a peca (geometria, caixa, lente): id, nome, jeito de mirar, desafio e variantes continuam os mesmos
@@ -941,7 +907,7 @@ function loadSaber(loader) {
 // 3 camadas: miolo cor de papel, faixa de cor chapada de borda dura e halo fraco. Mistura normal (nao aditiva): em fundo
 // claro o brilho tinge em vez de estourar em branco. O contorno "ferve" a 12 quadros/s, como a linha dos cartoons.
 // uK = quanto da lamina ja saiu do cabo: 0 apagada, 1 inteira (acende de baixo pra cima).
-const SABER_GREEN = '#46e06a', SABER_ON = 0.55;
+const SABER_GREEN = '#46e06a', SABER_ON = 1.15; // 05/11, pedido dele: a lamina sobe mais devagar (era 0,55)
 const SABER_QUAD = new THREE.BufferGeometry();
 SABER_QUAD.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 1, 0]), 3));
 SABER_QUAD.setIndex([0, 1, 2, 0, 2, 3]);
@@ -1207,6 +1173,7 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false) {
     uPaint: { value: new THREE.Color(paint || '#ffffff') }, uPaintOn: { value: 1 }, // sem pintura escolhida: o verde de fabrica vira BRANCO (03/11, pedido dele)
     uAccent: { value: new THREE.Color(accent || '#ffffff') }, uAccentOn: { value: accent ? 1 : 0 },
     uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 }, uCamoGreen: { value: camoGreen ? 1 : 0 },
+    ...(glslCode === 60 ? { uRovexLogo: rovexLogoU() } : {}),
   };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, m.userData.u);
@@ -1247,11 +1214,21 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false) {
 
 // 04/11 (pedido dele): militares e comicas novas, vendidas na Loja por Zions (RET_PAID; posse 'ret:<id>')
 export const RET_PAID = ['horseshoe', 'acog', 'german', 'triangle', 'brackets', 'star', 'heart', 'smile', 'skull', 'bolt', 'diamond', 'radar', 'wings', 'ladder', 'artillery', 'spiral', 'crown', 'eye', 'clover', 'moon'];
-export const RETICLES = ['dot', 'cross', 'circle', 'chevron', 'tee', 'duplex', 'mildot', ...RET_PAID];
-export const retOwned = (r) => !RET_PAID.includes(r) || !!progressInfo().unlockAll || shopOwned('ret:' + r);
+// 05/11 (pedido dele): reticulas de luneta, a venda na Loja, na mesma quantidade das outras. A ordem e fixa: o numero do desenho no shader vem do lugar na lista
+export const RET_SNIPER = ['sn_fio', 'sn_poste', 'sn_telemetro', 'sn_queda', 'sn_circulo', 'sn_halo', 'sn_tatica', 'sn_seta', 'sn_grosso', 'sn_quatro', 'sn_canto', 'sn_grade', 'sn_lua', 'sn_alvo', 'sn_flecha', 'sn_tres', 'sn_bang', 'sn_caveira', 'sn_coracao', 'sn_olho'];
+export const RETICLES = ['dot', 'cross', 'circle', 'chevron', 'tee', 'duplex', 'mildot', ...RET_PAID, ...RET_SNIPER];
+export const RET_ROW_SHORT = ['dot', 'cross', 'circle', 'chevron', 'tee', ...RET_PAID], RET_ROW_LONG = ['duplex', 'mildot', ...RET_SNIPER];
+export const retOwned = (r) => (!RET_PAID.includes(r) && !RET_SNIPER.includes(r)) || !!progressInfo().unlockAll || shopOwned('ret:' + r);
+// luneta (zoom fechado) ou mira de perto: decide a fileira que vem primeiro e a previa
+export const sightIsBig = (id) => { const P = id && parts[id]; if (!P) return false; return SCOPE_ZOOM[id] ? SCOPE_ZOOM[id] >= 2 : P.box.max.z - P.box.min.z >= 0.6; };
 // desenho no icone e na Loja (caixa de 24): s = traco, f = preenchido (buracos pela regra evenodd)
 const DOT = 'M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0';
 export const RET_PATH = {
+  sn_fio: { s: 'M12 2v20M2 12h20' }, sn_poste: { s: 'M2 12h6.5M15.5 12H22', f: 'M10.8 13h2.4v9h-2.4z' }, sn_telemetro: { s: 'M12 3v18M3 12h18M15 10.5v3M18 10.5v3M10.5 15h3M10.5 18h3' }, sn_queda: { s: 'M12 3v18M3 9h18M8.5 13h7M9.5 16.5h5M10.5 20h3' },
+  sn_circulo: { s: 'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16M12 1v3M12 20v3M1 12h3M20 12h3', f: DOT }, sn_halo: { s: 'M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7M12 2v20M2 12h20' }, sn_tatica: { s: 'M12 2v20M2 12h20M6 10.5v3M9 10.5v3M15 10.5v3M18 10.5v3M10.5 6h3M10.5 9h3M10.5 15h3M10.5 18h3' }, sn_seta: { s: 'M7 15l5-5 5 5M12 15v7M2 12h5M17 12h5' },
+  sn_grosso: { s: 'M12 8v8M8 12h8', f: 'M10.8 1h2.4v7h-2.4zM10.8 16h2.4v7h-2.4zM1 10.8h7v2.4H1zM16 10.8h7v2.4h-7z' }, sn_quatro: { f: DOT + 'M10.5 5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M10.5 19a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M3.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M17.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0' }, sn_canto: { s: 'M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5', f: DOT }, sn_grade: { s: 'M4 8h16M4 12h16M4 16h16M8 4v16M12 4v16M16 4v16' },
+  sn_lua: { s: 'M12 1v22M1 12h22', f: 'M16 5.5a7 7 0 1 0 0 13a8.5 8.5 0 0 1 0-13z' }, sn_alvo: { s: 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20M12 6.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11', f: DOT }, sn_flecha: { s: 'M12 12v10M7 17l5-5 5 5M2 12h6M16 12h6' }, sn_tres: { s: 'M7 8l5 4 5-4M7 13l5 4 5-4M7 18l5 4 5-4M12 2v6' },
+  sn_bang: { s: 'M12 1v6M12 17v6M1 12h6M17 12h6M4.5 4.5l4 4M15.5 15.5l4 4M19.5 4.5l-4 4M8.5 15.5l-4 4' }, sn_caveira: { s: 'M12 1v5M12 19v4M1 12h5M18 12h5', f: 'M12 6.5a5.5 5.5 0 0 0-3.5 9.7V19h7v-2.8A5.5 5.5 0 0 0 12 6.5zM8.8 11.5a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0-2.8 0zM12.4 11.5a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0-2.8 0z' }, sn_coracao: { s: 'M12 1v6M12 18v5M1 12h5M18 12h5', f: 'M12 17.5s-5.5-3.3-5.5-7.2a3 3 0 0 1 5.5-1.7a3 3 0 0 1 5.500 1.7c0 3.900-5.500 7.200-5.500 7.200z' }, sn_olho: { s: 'M3 12q9-8 18 0q-9 8-18 0zM12 1v6M12 17v6', f: 'M10 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0' },
   horseshoe: { s: 'M7.5 18.5a8 8 0 1 1 9 0', f: DOT }, acog: { s: 'M6 13l6-6 6 6M12 11v9M9 16.5h6' }, german: { s: 'M12 13v9M2 12h7M15 12h7' }, triangle: { s: 'M12 4.5l7.5 13h-15z', f: DOT }, brackets: { s: 'M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4', f: DOT },
   star: { f: 'M12 3l2.7 5.8 6.3.8-4.6 4.3 1.2 6.3L12 17.1 6.4 20.2l1.2-6.3L3 9.6l6.3-.8z' }, heart: { f: 'M12 20.5s-8.5-5-8.5-11.2a4.6 4.6 0 0 1 8.5-2.5a4.6 4.6 0 0 1 8.5 2.5c0 6.2-8.5 11.2-8.5 11.2z' },
   smile: { s: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17M7.5 14.5q4.5 4 9 0', f: 'M8 9.5a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0-2.8 0M13.2 9.5a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0-2.8 0' },
@@ -1273,7 +1250,7 @@ const KIND_RET = { hunt: 'duplex', mil: 'milbdc', thermal: 'cross', vari: 'duple
 function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
   const ri = RETICLES.indexOf(ret), style = ret === 'milbdc' ? 7 : ri >= 7 ? ri + 1 : Math.max(0, ri); // 7 = milbdc da Militar; as novas vem do 8 em diante
   return lensOwn(new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false,
+    transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
     uniforms: {
       tScope: { value: scopeTarget.texture }, uBig: { value: big ? 1 : 0 }, uOn: { value: 0 },
       uStyle: { value: style }, uCol: { value: new THREE.Color(RET_COLORS[color] || RET_COLORS.red) },
@@ -1315,6 +1292,32 @@ function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
         if (s == 25) { float u = q.x / 0.42; return max(ln(abs(q.y) - 0.22 * (1.0 - u * u), 0.018 * wk) * step(abs(q.x), 0.42), dotp(q, vec2(0.0), 0.1 * wk)); }
         if (s == 26) { float d = min(min(length(q - vec2(0.15, 0.0)), length(q + vec2(0.15, 0.0))), min(length(q - vec2(0.0, 0.15)), length(q + vec2(0.0, 0.15)))); return 1.0 - smoothstep(0.13, 0.14 + 0.01 * wk, d); }
         if (s == 27) return (1.0 - smoothstep(0.33, 0.34 + 0.01 * wk, length(q))) * smoothstep(0.27, 0.28, length(q - vec2(0.15, 0.07)));
+        // reticulas de luneta (05/11): traco fino, feitas pra encher o vidro
+        if (s >= 28) {
+          float hx = ln(q.x, 0.005 * wk), hy = ln(q.y, 0.005 * wk), hair = max(hx, hy);
+          vec2 a = abs(q);
+          if (s == 28) return hair;
+          if (s == 29) return max(ln(q.x, 0.03) * step(q.y, -0.02), ln(q.y, 0.022) * step(0.14, a.x));
+          if (s == 30) { float t = hair; for (int i = 1; i <= 6; i++) { float m = float(i) * 0.13; t = max(t, max(ln(q.x - m, 0.006) * step(a.y, 0.035), ln(q.y + m, 0.006) * step(a.x, 0.035))); } return t; }
+          if (s == 31) { float t = max(hx, ln(q.y - 0.18, 0.005)); for (int i = 1; i <= 5; i++) { float m = float(i) * 0.14; t = max(t, ln(q.y + m - 0.18, 0.006) * step(a.x, 0.42 - float(i) * 0.07)); } return t; }
+          if (s == 32) return max(max(ring(q, 0.55, 0.008 * wk), dotp(q, vec2(0.0), 0.02)), hair * step(0.55, length(q)));
+          if (s == 33) { float t = max(ring(q, 0.16, 0.006 * wk), hair * step(0.16, length(q))); for (int i = 2; i <= 6; i++) { float m = float(i) * 0.12; t = max(t, max(dotp(a, vec2(m, 0.0), 0.016), dotp(a, vec2(0.0, m), 0.016))); } return t; }
+          if (s == 34) { float t = hair; for (int i = 1; i <= 7; i++) { float m = float(i) * 0.1; t = max(t, max(ln(a.x - m, 0.005) * step(a.y, 0.028), ln(a.y - m, 0.005) * step(a.x, 0.028))); } return t; }
+          if (s == 35) return max(max(ln(q.y + a.x * 0.9, 0.012) * step(a.x, 0.14) * step(-0.14, q.y), hx * step(q.y, -0.13)), hy * step(0.2, a.x));
+          if (s == 36) return max(hair * step(length(q), 0.5), max(ln(q.x, 0.05) * step(0.42, a.y), ln(q.y, 0.05) * step(0.42, a.x)));
+          if (s == 37) return max(max(dotp(a, vec2(0.34, 0.0), 0.025), dotp(a, vec2(0.0, 0.34), 0.025)), dotp(q, vec2(0.0), 0.022));
+          if (s == 38) return max(dotp(q, vec2(0.0), 0.018), max(ln(a.x - 0.46, 0.01) * step(0.28, a.y) * step(a.y, 0.46), ln(a.y - 0.46, 0.01) * step(0.28, a.x) * step(a.x, 0.46)));
+          if (s == 39) { vec2 g = abs(fract(q / 0.2 + 0.5) - 0.5) * 0.2; return max(hair, 0.55 * max(ln(g.x, 0.003), ln(g.y, 0.003))); }
+          if (s == 40) return max(hair, ln(length(q + vec2(0.04, 0.0)) - 0.3, 0.012) * step(0.0, length(q - vec2(0.13, 0.0)) - 0.28));
+          if (s == 41) return max(max(ring(q, 0.62, 0.008 * wk), ring(q, 0.34, 0.008 * wk)), dotp(q, vec2(0.0), 0.022));
+          if (s == 42) return max(max(ln(q.y + a.x, 0.012) * step(a.x, 0.17) * step(q.y, 0.0), hx * step(q.y, 0.0)), hy * step(0.2, a.x));
+          if (s == 43) { float t = hx * step(0.0, q.y); for (int i = 0; i < 3; i++) { float y = q.y + float(i) * 0.16; t = max(t, ln(y + a.x * 0.8, 0.01) * step(a.x, 0.17)); } return t; }
+          if (s == 44) { vec2 r = vec2(a.x - a.y, a.x + a.y) * 0.7071; float t = max(hair, ln(r.x, 0.006)); return t * step(0.14, length(q)) * step(length(q), 0.72); }
+          if (s == 45) { float h = 1.0 - smoothstep(0.1, 0.108, length(q * vec2(1.0, 0.9))); h *= smoothstep(0.024, 0.03, length(a - vec2(0.045, -0.012))); return max(h, hair * step(0.14, length(q))); }
+          if (s == 46) { vec2 h = q * vec2(1.0, 1.1) / 0.12; float d = h.x * h.x + pow(h.y + 0.15 - sqrt(abs(h.x)) * 0.7, 2.0); return max(1.0 - smoothstep(0.9, 1.0, d), hair * step(0.16, length(q))); }
+          if (s == 47) { float e = abs(q.y) - 0.16 * (1.0 - pow(a.x / 0.34, 2.0)); return max(max(ln(e, 0.008) * step(a.x, 0.34), dotp(q, vec2(0.0), 0.05)), hx * step(0.2, a.y)); }
+          return hair;
+        }
         if (s == 17) return 1.0 - smoothstep(0.03, 0.03 + 0.012 * wk, min(min(seg(q, vec2(0.1, 0.4), vec2(-0.14, -0.02)), seg(q, vec2(-0.14, -0.02), vec2(0.14, 0.02))), seg(q, vec2(0.14, 0.02), vec2(-0.1, -0.4))));
         return 0.0;
       }
@@ -1590,6 +1593,12 @@ export function chargerOptions(body, cat) {
 }
 
 // ponto mais alto do corpo numa faixa (x) e trecho (z): onde a mira assenta
+// borda do corpo do lado direito, acima da altura yMin e dentro do trecho z0..z1 (mira de 45 graus: fica por fora dela)
+function edgeRight(body, xc, yMin, z0, z1) {
+  const pos = parts[body].geo.attributes.position; let best = xc;
+  for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i); if (z >= z0 && z <= z1 && pos.getY(i) >= yMin && pos.getX(i) > best) best = pos.getX(i); }
+  return best;
+}
 function hiUnder(body, xc, halfW, z0, z1) {
   const g = parts[body].geo, pos = g.attributes.position;
   const idx = g.index ? g.index.array : Array.from({ length: pos.count }, (_, i) => i);
@@ -1685,13 +1694,15 @@ export function buildSight(ret, color = 'red', id = SIGHT_SHOW) {
   const r = (L ? L.r : sh * 0.3) * 0.96, holder = new THREE.Group(), inner = new THREE.Group();
   inner.scale.setScalar(S); holder.add(inner);
   const m = new THREE.Mesh(p.geo, paintMaterial(null, null, null, true)); outline(m, 0.0055); m.position.copy(c).negate(); inner.add(m);
+  const long = sightIsBig(id), lz = (long && rearTube(id) ? Math.max(L ? L.z : b.max.z, b.max.z - 0.006) : (L ? L.z : b.max.z)) - c.z; // luneta: o vidro fica na boca de tras do tubo
+  // luneta na vitrine: vidro claro atras da retícula; no tubo escuro o traco fino sumia
   const lens = new THREE.Mesh(geo(THREE.CircleGeometry, Math.round(r * 1e4) / 1e4, 32), lensMaterial(false, ret, color, null, 1));
-  lens.position.set(0, 0, (L ? L.z : b.max.z) - c.z - 0.004); lens.renderOrder = 3; inner.add(lens);
+  lens.position.set(0, 0, lz + 0.003); lens.renderOrder = 3; if (long) lens.material.depthTest = false; /* na vitrine o vidro inteiro aparece, sem a peca de tras cortar */ inner.add(lens);
   return holder;
 }
 export function buildGun(wpn, lo) {
   const g = buildGunParts(wpn, lo), fx = g?.userData.saber ? null : camoById(lo?.camo).fx; // sabre nao leva camo
-  if (g && fx) attachCamoFx(g, fx);
+  // 05/11 (pedido dele): sem chama, estrela e faisca em volta da arma; a camo fica so na superficie
   return g;
 }
 function buildGunParts(wpn, lo) {
@@ -1715,7 +1726,7 @@ function buildGunParts(wpn, lo) {
   // revolver: o metal (zona verde) e preto de fabrica e leva a camo por cima
   const camoGreen = !!parts[lo.body]?.camoGreen;
   const mat = paintMaterial(lo.paint || (camoGreen ? parts[lo.body].metal : null), lo.accent, lo.camo, false, camoGreen);
-  const partMat = paintMaterial(lo.paint, lo.accent, null, true);
+  const partMat = paintMaterial(lo.paint, lo.accent, null, true); partMat.polygonOffset = true; partMat.polygonOffsetFactor = -1; partMat.polygonOffsetUnits = -2; // 05/11: base da mira colada no corpo nao pisca
   const bodyBox = parts[lo.body].box;
   const len = bodyBox.max.z - bodyBox.min.z, h = bodyBox.max.y - bodyBox.min.y, cx = axisX(lo.body);
   const chargerSlot = bodySlot(lo.body, 'charger');
@@ -1745,7 +1756,7 @@ function buildGunParts(wpn, lo) {
     const mm = new THREE.Mesh(P.geo, mat); outline(mm, key === 'drum' ? 0.0055 : 0.003); mm.position.copy(P.pivot).multiplyScalar(-1);
     piv.add(mm); inner.add(piv); anim[key] = piv;
   }
-  let scopeInfo = null;
+  let scopeInfo = null, scopeBack = (bodyBox.min.z + bodyBox.max.z) / 2, mainSight = null;
   // frente do pente montado (z minimo, espaco do corpo): gadget de baixo do cano nunca encosta nele (03/11)
   let magFrontZ = null, gadgetShift = null;
   const noteMag = (mm) => { if (!mm) return; mm.geometry.computeBoundingBox(); const z = mm.geometry.boundingBox.min.z + mm.position.z + origin.z; magFrontZ = magFrontZ == null ? z : Math.min(magFrontZ, z); };
@@ -1819,7 +1830,7 @@ function buildGunParts(wpn, lo) {
       // luneta no Bacamarte (LONG_SCOPE): a mira da ponta do cano levantava a luneta e ela boiava; assenta no cano
       const lift = hand || LONG_SCOPE[lo.body]?.includes(id) ? 0 : Math.min(sh * 0.5, Math.max(0, top + 0.012 - (lensC.y + shift.y - lr * 0.82))); // teto: a luneta trocada (04/11) subia um poste na Pica-Pau
       shift.y += lift;
-      add(id, { self: new THREE.Vector3(), target: shift }, partMat);
+      { const mm = add(id, { self: new THREE.Vector3(), target: shift }, partMat); if (mm) mm.userData.sight = 'main'; }
       // vao entre a mira e o corpo vira suporte (riser), nunca fica boiando
       const gap = Number.isFinite(seat) ? b.min.y + shift.y - seat : lift;
       if (gap > 0.012) {
@@ -1838,11 +1849,13 @@ function buildGunParts(wpn, lo) {
       const kind = big ? SCOPE_KIND[id] || null : null;
       const ret = lo.ret && lo.ret !== 'auto' ? lo.ret : big ? KIND_RET[kind] || 'duplex' : 'dot';
       const lens = new THREE.Mesh(geo(THREE.CircleGeometry, Math.round(lensR * 1e4) / 1e4, 32), lensMaterial(big, ret, lo.retColor || 'red', kind));
-      lens.position.set(lensC.x, lensC.y, lensZ - 0.004).add(shift).sub(origin);
+      lens.position.set(lensC.x, lensC.y, lensZ + 0.003).add(shift).sub(origin); // 05/11: o vidro fica do lado do olho, com folga: no mesmo plano do modelo ele piscava
       lens.renderOrder = 3;
       inner.add(lens);
       // inclinacao do eixo optico (frente x tras); a pose de mira compensa pra ficar reta
       const tilt = L && L.f ? Math.atan2(L.f.y - L.c.y, L.c.z - L.f.z) : 0;
+      scopeBack = b.max.z + shift.z;
+      mainSight = { id, front: b.min.z + shift.z, mid: (b.min.z + b.max.z) / 2 + shift.z, halfX: (b.max.x - b.min.x) / 2, x: (b.min.x + b.max.x) / 2 + shift.x };
       scopeInfo = { big, kind, zoom: SCOPE_ZOOM[id] || (big ? 2.6 + sl * 1.6 : 1.55), eye, len: sl * S, lensR: lensR * S, lens, lift, tilt };
     }
   }
@@ -1878,12 +1891,37 @@ function buildGunParts(wpn, lo) {
   gripL.position.copy(hs).sub(origin).multiplyScalar(S);
   if (isPistol) gripL.position.set(-0.03, -0.05, 0.01);
   // sem mira: a mira de ferro fica no topo do corpo
-  const iron = IRONS[lo.scope] && lo.scope !== IRON_OWN ? addIrons(lo.scope, lo.body, inner, origin, partMat) : (lo.scope === IRON_OWN ? ownIronPoint(lo.body, cx) : new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6)).sub(origin).multiplyScalar(S);
+  let cantedInfo = null;
+  if (lo.canted && cantedFits(wpn)) {
+    // 05/11 (pedido dele): AO LADO da mira atual, rente ao trilho, como nas armas de verdade, e nunca o mesmo modelo dela
+    const cantedId = cantedPart(lo.scope), P = parts[cantedId], b = P.box, sz = b.max.z - b.min.z, L = P.lens, bx = (b.min.x + b.max.x) / 2, lensUp = (L ? L.c.y - b.min.y : (b.max.y - b.min.y) * 0.62), lensR0 = L ? L.r : (b.max.y - b.min.y) * 0.3;
+    // lado a lado com a mira atual; em luneta comprida, na metade da frente dela. Sem mira, um pouco a frente do meio do corpo
+    const zWant = mainSight ? Math.min(mainSight.mid, mainSight.front + sz * 0.6) : (bodyBox.min.z + bodyBox.max.z) / 2 - (bodyBox.max.z - bodyBox.min.z) * 0.08;
+    const zs = Math.max(bodyBox.min.z + sz * 0.5, Math.min(bodyBox.max.z - sz * 0.5, zWant));
+    const seat = hiUnder(lo.body, cx, 0.04, zs - sz / 2, zs + sz / 2), y00 = Number.isFinite(seat) ? seat : bodyBox.max.y;
+    // 05/11 (pedido dele): nada encosta nem pisca. O canto mais perto da mira deitada fica a uma folga medida do corpo e da mira atual
+    const halfCant = (b.max.x - b.min.x) / 2, reach = lensUp * Math.SQRT1_2, gapX = 0.025, yFloor = y00 - 0.03;
+    const edgeBody = edgeRight(lo.body, cx, yFloor, zs - sz / 2, zs + sz / 2), edgeMain = mainSight ? mainSight.x + mainSight.halfX : cx;
+    const gx = Math.max(edgeBody, edgeMain) + gapX + halfCant * Math.SQRT1_2, lensX = gx + reach;
+    // o que ainda ficar na frente do vidro (massa de mira, guarda-mao) levanta so o necessario
+    const inFront = topInFront(lo.body, lensX, lensR0 * 0.75, zs - sz / 2), y0 = Math.max(yFloor, Number.isFinite(inFront) ? inFront + 0.012 + lensR0 * 0.82 - reach : -Infinity);
+    const G = new THREE.Group(); G.position.set(gx, y0, zs).sub(origin); G.rotation.z = -CANTED_ROLL; G.userData.sight = 'canted';
+    // suporte: braco deitado saindo de dentro do corpo, por baixo da mira atual; se a mira subiu, um poste do lado de fora
+    { const x0 = edgeBody - 0.02, x1 = gx + 0.015, arm = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.03, sz * 0.5), toon(0x2a2724)); arm.position.set((x0 + x1) / 2, yFloor - 0.02, zs).sub(origin); outline(arm, 0.0055); inner.add(arm);
+      if (y0 - yFloor > 0.01) { const h = y0 - yFloor + 0.03, post = new THREE.Mesh(new THREE.BoxGeometry(0.035, h, sz * 0.5), toon(0x2a2724)); post.position.set(gx, yFloor - 0.02 + h / 2, zs).sub(origin); outline(post, 0.0055); inner.add(post); } }
+    const base = new THREE.Vector3(bx, b.min.y, (b.min.z + b.max.z) / 2), m = new THREE.Mesh(P.geo, partMat); m.position.copy(base).negate(); outline(m, 0.0055); G.add(m);
+    const lc = L ? L.c : new THREE.Vector3(bx, b.min.y + (b.max.y - b.min.y) * 0.62, 0), lz = L ? L.z : b.max.z, lr = (L ? L.r : (b.max.y - b.min.y) * 0.3) * 0.96;
+    const lens = new THREE.Mesh(geo(THREE.CircleGeometry, Math.round(lr * 1e4) / 1e4, 32), lensMaterial(false, lo.ret45 && lo.ret45 !== 'auto' ? lo.ret45 : 'dot', lo.retColor45 || 'red', null)); lens.position.set(lc.x, lc.y, lz + 0.003).sub(base); lens.renderOrder = 3; G.add(lens);
+    inner.add(G);
+    const eye = new THREE.Vector3(lc.x, lc.y, lz).sub(base).applyAxisAngle(new THREE.Vector3(0, 0, 1), -CANTED_ROLL).add(G.position).multiplyScalar(S);
+    cantedInfo = { part: cantedId, big: false, kind: null, zoom: 1.25, eye, len: sz * S, lensR: lr * S, lens, lift: 0, tilt: 0, roll: CANTED_ROLL };
+  }
+  const iron = (lo.scope === IRON_OWN ? ownIronPoint(lo.body, cx) : new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6)).sub(origin).multiplyScalar(S);
   // skin de modelo: o neon e uma malha a parte que nunca pega camo nem pintura (04/11)
   if (parts[lo.body].neon) { const nm = new THREE.Mesh(parts[lo.body].neon, NEON_MAT); nm.position.copy(origin).multiplyScalar(-1); inner.add(nm); }
   holder.add(muzzle, gripR, gripL);
   const laser = lo.laser && LASER_DEF[lo.laser] ? addLaser(holder, lo, origin, isPistol) : null;
-  holder.userData = { id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, iron, mat, laser, stats: loadoutStats(wpn, lo), drum: anim.drum || null, hammer: anim.hammer || null, sawed: !!parts[lo.body]?.sawed, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
+  holder.userData = { id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, canted: cantedInfo, iron, mat, laser, stats: loadoutStats(wpn, lo), drum: anim.drum || null, hammer: anim.hammer || null, sawed: !!parts[lo.body]?.sawed, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
   return holder;
 }
 
@@ -1985,7 +2023,7 @@ const GRIP_TRAITS = {
 function meleeMaterial(map, camo) {
   const m = toon(0xffffff, map ? { map, unique: true } : { vertexColors: true, unique: true }); // espada: cor no vertice
   const glslCode = camoById(camo).code; // so a camo desta lamina entra no shader
-  m.userData.u = { uCamo: { value: glslCode }, uTime: camoTime, uReact: { value: 0 } };
+  m.userData.u = { uCamo: { value: glslCode }, uTime: camoTime, uReact: { value: 0 }, ...(glslCode === 60 ? { uRovexLogo: rovexLogoU() } : {}) };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, m.userData.u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;\nattribute float aBlade;\nvarying float vBlade;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position * 0.22; vBlade = aBlade;');
@@ -2103,6 +2141,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
   if (drum && parts[lo.charger]) { // tambor: balas fixas (sobre o pente base da categoria), pesa e troca devagar
     if (drum.magK) st.mag *= drum.magK; else st.mag = drum.rounds / (WEAPONS[wpn]?.mag || drum.rounds);
     for (const k of ['reload', 'adsTime', 'move', 'kick']) st[k] *= drum[k];
+    if (drum.heatK) st.heatK = drum.heatK;
   } else if (lo.charger && nat && parts[lo.charger] && lo.charger !== nat) {
     const vol = (b) => { const s = b.getSize(new THREE.Vector3()); return s.x * s.y * s.z; };
     const m = st.mag = Math.max(0.7, Math.min(1.6, vol(parts[lo.charger].box) / vol(parts[nat].box)));
@@ -2163,7 +2202,7 @@ export function partEffects(wpn, lo, slot, id) {
   const out = [
     ['st_ctrl', a.kick / b.kick - 1], ['st_acc', a.spread / b.spread - 1], ['st_hip', a.hip / b.hip - 1], ['st_ads', a.adsTime / b.adsTime - 1],
     ['st_reload', a.reload / b.reload - 1], ['st_move', b.move / a.move - 1], ['st_mag', b.mag / a.mag - 1],
-    ['st_rate', a.rate / b.rate - 1], ['st_zoom', b.zoomK / a.zoomK - 1],
+    ['st_rate', a.rate / b.rate - 1], ['st_zoom', b.zoomK / a.zoomK - 1], ['st_heat', (a.heatK ?? 1) / (b.heatK ?? 1) - 1],
   ].filter(([, v]) => Math.abs(v) >= 0.01);
   return out.sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
 }
@@ -2176,6 +2215,7 @@ export function getLoadouts() {
   let gone = false;
   for (const c of Object.keys(CATEGORY)) {
     const lo = { ...defaultLoadout(c), ...(s[c] || {}) };
+    if (lo.scope?.startsWith('iron_') && !IRONS[lo.scope]) lo.scope = c === 'sniper' ? null : IRON_OWN; // mira que saiu do jogo (05/11)
     // modelo que saiu do jogo (Maquina de Escrever, subfusil_11): volta pro padrao e o save some com ele
     if (lo.body && !CATEGORY[c].bodies.includes(lo.body)) { lo.body = defaultLoadout(c).body; lo.charger = null; gone = true; }
     // save antigo (sem m1): equipa a mira gratis uma vez so; depois vale a escolha do jogador
@@ -2194,6 +2234,12 @@ export function saveVariants(v) { try { localStorage.setItem(VKEY, JSON.stringif
 export function saveLoadouts(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ } pushSoon(); } // sobe pra conta Rovex tambem (antes so ia junto com outro save)
 
 // Na partida so vale o que ja foi desbloqueado; peca bloqueada volta pro padrao (o salvo fica intacto)
+// mira de 45 graus estilo PUBG (05/11, pedido dele): um red dot de verdade inclinado no trilho, a direita. Na mira, um botao gira a arma 45 graus
+// e o olho passa pro red dot. Zoom curto, pra perto, sem largar a luneta. Lamina e pistola nao levam
+// a mais curta primeiro (caixinha de janela quadrada); perto da mira atual tem que dar pra ver que sao duas miras: nunca a mesma nem uma de cara igual
+const CANTED_PARTS = ['fusil_scope_7', 'subfusil_scope_6', 'subfusil_scope_8'], CANTED_ROLL = Math.PI / 4, CANTED_LOOKALIKE = { fusil_scope_7: ['subfusil_scope_2', 'subfusil_scope_9'], subfusil_scope_6: ['subfusil_scope_8'], subfusil_scope_8: ['subfusil_scope_6'] };
+const cantedPart = (mainScope) => CANTED_PARTS.find(id => parts[id] && id !== mainScope && !CANTED_LOOKALIKE[id]?.includes(mainScope));
+export const cantedFits = (cat) => !!cat && cat !== 'melee' && cat !== 'pistol' && !!cantedPart(null);
 export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   const C = CATEGORY[cat];
   if (!C || !lo) return lo;
@@ -2204,6 +2250,8 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   if (out.ws && (!wsOwned(out.ws))) delete out.ws; // skin de outro modelo ou nao comprada
   if (out.ret && !retOwned(out.ret)) delete out.ret; // reticula da Loja sem comprar
   if (out.retColor && !retColorOwned(out.retColor)) delete out.retColor; // cor do Rovex Pass antes do nivel
+  if (out.ret45 && !retOwned(out.ret45)) delete out.ret45;
+  if (out.retColor45 && !retColorOwned(out.retColor45)) delete out.retColor45;
   // variante de elite liberada: a montagem dela vale mesmo com peca que o nivel ainda nao abriu
   const B = out.bp && BLUEPRINTS[out.bp];
   if (B && B.wpn === cat && bpUnlocked(out.bp)) {
@@ -2222,6 +2270,7 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   if (out.conv && !CONV_KITS[out.body]?.[out.conv]) out.conv = null; // trocou de corpo: o kit era do outro
   if (out.muzzle && !muzzleOptions(out.body).includes(out.muzzle)) out.muzzle = null; // bocal so onde existe
   if (out.muzzle && !partOpen(cat, 0, 'mz:' + out.muzzle)) out.muzzle = null; // bocal que o nivel da arma ainda nao abriu
+  if (out.canted && (!cantedFits(cat) || !partOpen(cat, 1, 'canted'))) out.canted = null; // mira de 45 graus
   if (out.scope?.startsWith('iron_') && !IRONS[out.scope]) out.scope = null; // mira de ferro antiga (trocada pelas de trilho)
   if (out.laser && !ok([null, ...LASERS], out.laser)) out.laser = null;
   if (out.tracer && !partOpen(cat, 1, 'tr:' + out.tracer)) out.tracer = null;

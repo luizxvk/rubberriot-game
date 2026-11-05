@@ -4,7 +4,8 @@
 // Icones: Material Icons (Apache 2.0); selo = EliteHexIcon do template-magazine.
 import { t } from './i18n.js';
 import { audio } from './audio.js';
-import { me } from './rovex.js';
+import { me, loadMe } from './rovex.js';
+import { pieceShot } from './shop.js';
 
 const P = {
   xp: 'M7 2v11h3v9l7-12h-4l4-8z',
@@ -20,11 +21,15 @@ const P = {
 const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
 const HEX = '<svg viewBox="0 0 64 64" aria-hidden="true"><path class="ep-hex-in" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path class="ep-hex-out" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path d="M32 18L35.5 26L44 27L38 33L39 42L32 38L25 42L26 33L20 27L28.5 26L32 18Z"/></svg>';
 // beneficios: no jogo (o que o codigo libera de verdade) e na Rovex (pagina do Elite)
-const GAME = [['xp', 'el_xp'], ['camo', 'el_camo'], ['look', 'el_look'], ['badge', 'el_badge']];
+const GAME = [['xp', 'el_xp'], ['camo', 'el_pack'], ['camo', 'el_camo'], ['look', 'el_look'], ['badge', 'el_badge']];
 const ROVEX = [['pass', 'el_pass'], ['zions', 'el_zions'], ['vault', 'el_vault'], ['frame', 'el_frame'], ['games', 'el_games']];
 
 let opener = null;
-const li = ([k, key]) => `<li>${ico(k)}<span><b>${t(key)}</b><small>${t(key + 'D')}</small></span></li>`;
+// XP em dobro: selo desenhado de verdade; pack, camo e visual: foto da peca (preenchida depois, a foto leva um quadro pra sair)
+const XP2 = '<svg class="elp-xp2" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 2l7.500 9.500L51 8l1.500 12L64 25l-7 10 4 11.500-12 1.500-5 11.500-11-5.500-11 5.500-5-11.500-12-1.500 4-11.500-7-10 11.500-5L13 8l12 3.500z" fill="#ffc83d" stroke="#141210" stroke-width="3" stroke-linejoin="round"/><path d="M15 24c1-5 5-8 10-8 6 0 10 3.500 10 8.500 0 4-2.500 6.500-7 10l-2.500 2H35v6H15v-5l8.500-7.500c3-2.600 4.500-4.200 4.500-6 0-1.800-1.200-2.800-3-2.800-1.900 0-3 1.200-3.400 3.200zM37 25h7.500l3 5.200 3.100-5.200h7.100l-6.400 9 6.700 9.500h-7.400l-3.400-5.700-3.400 5.700H37l6.700-9.300z" fill="#141210"/></svg>';
+const SHOTS = { el_pack: 'wskin:pulse', el_camo: 'camo:hexelite', el_look: 'hat:tvhead' };
+const li = ([k, key]) => `<li>${key === 'el_xp' ? XP2 : SHOTS[key] ? `<span class="elp-shot" data-shot="${SHOTS[key]}">${ico(k)}</span>` : ico(k)}<span><b>${t(key)}</b><small>${t(key + 'D')}</small></span></li>`;
+async function fillShots(pop) { for (const e of pop.querySelectorAll('[data-shot]')) { const [sl, v] = e.dataset.shot.split(':'); try { const u = await pieceShot(sl, v); if (u && e.isConnected) e.innerHTML = `<img src="${u}" alt="">`; } catch (err) { console.warn('foto do Elite', err); } } }
 
 function draw(pop) {
   const on = !!me?.elite;
@@ -38,6 +43,32 @@ function draw(pop) {
     <a class="big elp-go" href="${document.getElementById('elitePromo')?.href || 'https://tryrovex.com/elite'}" target="_top" rel="noopener">${t(on ? 'el_manage' : 'el_join')}</a>
   </div>`;
   pop.querySelector('.lb-x').onclick = () => { audio.play('ui_back', { ui: true }); close(); };
+  // saiu pra assinar: quando voltar com o Elite ativo, o parabens abre
+  pop.querySelector('.elp-go').addEventListener('click', () => { if (!on) try { localStorage.setItem(WAIT, String(Date.now())); } catch { /* */ } });
+}
+// assinou saindo daqui e voltou (05/11, pedido dele): parabens, primeiro o que ganha no jogo e embaixo o que ganha na Rovex
+const WAIT = 'rr_elite_wait', WAIT_MS = 14 * 864e5;
+export function openEliteWelcome() {
+  const pop = document.getElementById('elitePop'); if (!pop) return;
+  opener = null;
+  pop.innerHTML = `<div class="elp-box elp-welcome">
+    <header class="elp-head"><span class="elp-hex">${HEX}</span><div><h2 id="elpTitle">${t('el_welcome')}</h2><p>${t('el_welcomeSub')}</p></div></header>
+    <div class="elp-cols elp-one"><section><h3>${t('el_inGame')}</h3><ul>${GAME.map(li).join('')}</ul></section>
+    <section><h3>${t('el_inRovex')}</h3><ul>${ROVEX.map(li).join('')}</ul></section></div>
+    <button class="big elp-go" id="elpDone">${t('el_welcomeGo')}</button>
+  </div>`;
+  pop.querySelector('#elpDone').onclick = () => { audio.play('ui_click', { ui: true }); close(); };
+  pop.hidden = false; pop.classList.add('welcome'); fillShots(pop);
+  audio.play('unlock', { ui: true, vol: 0.8, jitter: 0 });
+  pop.querySelector('#elpDone').focus({ preventScroll: true });
+}
+function welcomeCheck() {
+  let at = 0; try { at = +localStorage.getItem(WAIT) || 0; } catch { /* */ }
+  if (!at) return;
+  if (Date.now() - at > WAIT_MS) { try { localStorage.removeItem(WAIT); } catch { /* */ } return; }
+  if (!me?.elite || document.body.classList.contains('ingame')) return; // no meio da partida espera voltar pro menu
+  try { localStorage.removeItem(WAIT); } catch { /* */ }
+  openEliteWelcome();
 }
 function close() {
   const pop = document.getElementById('elitePop'); if (!pop || pop.hidden) return;
@@ -49,7 +80,7 @@ export function openElite(from) {
   const pop = document.getElementById('elitePop'); if (!pop) return;
   opener = from || null;
   draw(pop);
-  pop.hidden = false;
+  pop.hidden = false; pop.classList.remove('welcome'); fillShots(pop);
   audio.play('ui_click', { ui: true });
   pop.querySelector('.elp-go').focus({ preventScroll: true });
 }
@@ -59,6 +90,9 @@ export function initElitePop() {
   pop.id = 'elitePop'; pop.className = 'elite-pop'; pop.hidden = true;
   pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true'); pop.setAttribute('aria-labelledby', 'elpTitle');
   document.body.appendChild(pop);
+  addEventListener('rovex-me', welcomeCheck); setInterval(welcomeCheck, 4000);
+  addEventListener('focus', () => { let at = 0; try { at = +localStorage.getItem(WAIT) || 0; } catch { /* */ } if (at && !me?.elite) loadMe().then(welcomeCheck).catch(() => {}); });
+  welcomeCheck();
   pop.addEventListener('click', (e) => { if (e.target === pop) close(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); close(); } });
   const promo = document.getElementById('elitePromo');

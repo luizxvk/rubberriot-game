@@ -5,9 +5,13 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ink, toon, PAL, wordTexture, smoothGeo } from './toon.js';
 import { buildGun, disposeGun } from './arsenal.js';
 import { cleanLook } from '../shared/looks.js';
-import { eyeTex, buildEyewear, buildHat, styleGlove, patternTex, buildFx, skinMat, antiFlicker } from './looks3d.js';
+import { eyeTex, buildEyewear, buildHat, buildFace, styleGlove, patternTex, buildFx, skinMat, antiFlicker } from './looks3d.js';
+import { attachCharm, tickCharm } from './charms.js';
+import { applyDance, applyPose } from './dances.js';
 
 const SEG = 10, RAD = 6;
+
+const hP = new THREE.Vector3(), hT = new THREE.Vector3(), hD = new THREE.Vector3(), hB = new THREE.Vector3(), hN = new THREE.Vector3(), hX = new THREE.Vector3(1, 0, 0), hY = new THREE.Vector3(0, 1, 0), hZ = new THREE.Vector3(0, 0, 1);
 
 // Tubo bezier quadratico: start -> ctrl -> end. Atualiza vertices na mao.
 export class Hose {
@@ -37,20 +41,26 @@ export class Hose {
   set(a, c, b) {
     const P = this.mesh.geometry.attributes.position.array, N = this.mesh.geometry.attributes.normal.array;
     const PO = this.line.geometry.attributes.position.array;
-    const p = new THREE.Vector3(), t = new THREE.Vector3(), n = new THREE.Vector3(), bn = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 0, 1);
+    const p = hP, t = hT, n = this.n0 || (this.n0 = new THREE.Vector3()), bn = hB, n1 = hN;
+    // 05/11: transporte paralelo. Cada anel herda o giro do anel anterior e o primeiro herda o do quadro anterior; antes cada anel
+    // escolhia sozinho por um eixo fixo, e o tubo torcia e beliscava quando o braco apontava pra frente
+    n1.copy(n);
     for (let i = 0; i <= SEG; i++) {
       const u = i / SEG, iu = 1 - u;
       p.set(iu * iu * a.x + 2 * iu * u * c.x + u * u * b.x, iu * iu * a.y + 2 * iu * u * c.y + u * u * b.y, iu * iu * a.z + 2 * iu * u * c.z + u * u * b.z);
-      t.set(2 * iu * (c.x - a.x) + 2 * u * (b.x - c.x), 2 * iu * (c.y - a.y) + 2 * u * (b.y - c.y), 2 * iu * (c.z - a.z) + 2 * u * (b.z - c.z)).normalize();
-      n.crossVectors(t, Math.abs(t.z) > 0.9 ? new THREE.Vector3(1, 0, 0) : up).normalize();
-      bn.crossVectors(t, n);
+      hD.set(2 * iu * (c.x - a.x) + 2 * u * (b.x - c.x), 2 * iu * (c.y - a.y) + 2 * u * (b.y - c.y), 2 * iu * (c.z - a.z) + 2 * u * (b.z - c.z));
+      if (hD.lengthSq() > 1e-10) t.copy(hD).normalize(); else if (i === 0) t.subVectors(b, a).normalize(); // ponto de controle em cima da ponta: fica a direcao que ja tinha
+      n1.addScaledVector(t, -n1.dot(t));
+      if (n1.lengthSq() < 1e-5) { const ax = Math.abs(t.x), ay = Math.abs(t.y), az = Math.abs(t.z); n1.crossVectors(t, ax <= ay && ax <= az ? hX : ay <= az ? hY : hZ); } // primeiro quadro, ou dobra de 180 graus
+      n1.normalize();
+      if (i === 0) n.copy(n1);
+      bn.crossVectors(t, n1);
       // mangueira afina um tiquinho no meio (cara de borracha)
       const r = this.r * (1 - Math.sin(u * Math.PI) * 0.12);
       for (let j = 0; j < RAD; j++) {
         const ang = (j / RAD) * Math.PI * 2, cs = Math.cos(ang), sn = Math.sin(ang);
         const k = (i * RAD + j) * 3;
-        const nx = n.x * cs + bn.x * sn, ny = n.y * cs + bn.y * sn, nz = n.z * cs + bn.z * sn;
+        const nx = n1.x * cs + bn.x * sn, ny = n1.y * cs + bn.y * sn, nz = n1.z * cs + bn.z * sn;
         P[k] = p.x + nx * r; P[k + 1] = p.y + ny * r; P[k + 2] = p.z + nz * r;
         N[k] = nx; N[k + 1] = ny; N[k + 2] = nz;
         const ro = r + this.outTh;
@@ -122,6 +132,10 @@ function gripGeo() {
   });
 }
 const gX = new THREE.Vector3(), gY = new THREE.Vector3(), gZ = new THREE.Vector3(), gM = new THREE.Matrix4();
+let KO_STAR = null; const KO_NUM = new Map();
+function koStar() { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.035 : 0.085, an = i / 10 * Math.PI * 2; sh[i ? 'lineTo' : 'moveTo'](Math.sin(an) * r, Math.cos(an) * r); } sh.closePath(); return new THREE.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: false }).translate(0, 0, -0.011); }
+function koNum(n) { if (!KO_NUM.has(n)) KO_NUM.set(n, wordTexture(String(n), { burst: false, size: 256, fill: '#faf8f2' })); return KO_NUM.get(n); }
+const wX = new THREE.Vector3(), wY = new THREE.Vector3(), wZ = new THREE.Vector3(), wM = new THREE.Matrix4(), WRIST_RATE = 12, WRIST_MAX = 24;
 function stripeTex() {
   if (STRIPE) return STRIPE;
   const c = document.createElement('canvas'); c.width = 256; c.height = 16;
@@ -147,10 +161,11 @@ export class Character {
     const teamCol = team === 'red' ? PAL.red : team === 'blue' ? PAL.blue : PAL.mid;
     this.teamCol = teamCol;
 
-    const torso = ink(shared(`new THREE.SphereGeometry(0.42, 16, 12)`, () => new THREE.SphereGeometry(0.42, 16, 12)), PAL.ink, 0.03);
+    // 05/11 (pedido dele: malha piscando): esferas mais redondas. Com poucos lados o encontro de duas malhas saia rasgado e o contorno soltava farpas
+    const torso = ink(shared(`new THREE.SphereGeometry(0.42, 28, 20)`, () => new THREE.SphereGeometry(0.42, 28, 20)), PAL.ink, 0.03);
     torso.scale.set(1, 1.15, 0.9); torso.position.y = 1.05;
     this.body.add(torso); this.torso = torso;
-    const shorts = ink(shared(`new THREE.SphereGeometry(0.44, 16, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45)`, () => new THREE.SphereGeometry(0.44, 16, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45)), teamCol, 0.03);
+    const shorts = ink(shared(`new THREE.SphereGeometry(0.44, 28, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45)`, () => new THREE.SphereGeometry(0.44, 28, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45)), teamCol, 0.03);
     shorts.scale.set(1, 1.15, 0.92); shorts.position.y = 1.05;
     this.body.add(shorts); this.shorts = shorts;
     for (const s of [-1, 1]) {
@@ -161,16 +176,17 @@ export class Character {
     this.head = new THREE.Group();
     this.head.position.y = 1.62;
     this.body.add(this.head);
-    const skull = ink(shared(`new THREE.SphereGeometry(0.36, 18, 14)`, () => new THREE.SphereGeometry(0.36, 18, 14)), PAL.ink, 0.03);
+    const skull = ink(shared(`new THREE.SphereGeometry(0.36, 28, 20)`, () => new THREE.SphereGeometry(0.36, 28, 20)), PAL.ink, 0.03);
     this.head.add(skull); this.skull = skull;
-    const mask = ink(shared(`new THREE.SphereGeometry(0.3, 16, 12)`, () => new THREE.SphereGeometry(0.3, 16, 12)), 0xf0ebe0, 0.015);
+    const mask = ink(shared(`new THREE.SphereGeometry(0.3, 28, 20)`, () => new THREE.SphereGeometry(0.3, 28, 20)), 0xf0ebe0, 0); // sem casca: ela e que soltava as farpas pretas no pescoco
     mask.position.set(0, -0.06, -0.14); mask.scale.set(1.05, 0.85, 0.8);
     this.head.add(mask);
-    const eyes = new THREE.Mesh(shared(`new THREE.PlaneGeometry(0.42, 0.21)`, () => new THREE.PlaneGeometry(0.42, 0.21)), new THREE.MeshBasicMaterial({ map: EYE, transparent: true }));
-    eyes.position.set(0, 0.04, -0.37); eyes.rotation.y = Math.PI;
+    // olhos colados na curva do rosto: o plano reto cortava a mascara e piscava em cima dela
+    const eyes = new THREE.Mesh(shared('geo:eyes', () => { const g = new THREE.PlaneGeometry(0.42, 0.21, 20, 10), P = g.attributes.position, RX = 0.315, RY = 0.255, RZ = 0.24; for (let i = 0; i < P.count; i++) { const u = P.getX(i) / RX, v = (P.getY(i) + 0.1) / RY, k = Math.max(0, 1 - u * u - v * v), y = P.getY(i) + 0.04, sk = Math.sqrt(Math.max(0, 0.1296 - P.getX(i) ** 2 - y * y)); P.setZ(i, Math.max(0.14 + RZ * Math.sqrt(k), sk) + 0.007); /* na frente do que estiver mais a frente: mascara ou cabeca */ } P.needsUpdate = true; return g; }), new THREE.MeshBasicMaterial({ map: EYE, transparent: true, depthWrite: false }));
+    eyes.position.set(0, 0.04, 0); eyes.rotation.y = Math.PI;
     this.head.add(eyes); this.eyes = eyes;
     const nose = ink(shared(`new THREE.SphereGeometry(0.075, 10, 8)`, () => new THREE.SphereGeometry(0.075, 10, 8)), PAL.ink, 0.012);
-    nose.position.set(0, -0.08, -0.38); nose.scale.set(1.3, 1, 1); nose.userData.detail = true;
+    nose.position.set(0, -0.08, -0.395); nose.scale.set(1.3, 1, 1); nose.userData.detail = true;
     this.head.add(nose);
     const mouth = ink(shared(`new THREE.TorusGeometry(0.11, 0.022, 6, 12, Math.PI)`, () => new THREE.TorusGeometry(0.11, 0.022, 6, 12, Math.PI)), PAL.ink, 0);
     mouth.position.set(0, -0.17, -0.33); mouth.rotation.set(0, 0, Math.PI); mouth.userData.detail = true;
@@ -235,6 +251,9 @@ export class Character {
     this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
     this.far = false;
     this.v = new THREE.Vector3();
+    // 05/11: camadas do corpo: o que esta por cima ganha sempre do que esta por baixo (rosto sobre a cabeca, short sobre o tronco)
+    antiFlicker(mask, 1); antiFlicker(nose, 2);
+    this.body.traverse(o => { if (o.userData.detail && o.geometry?.type === 'SphereGeometry' && o !== nose) antiFlicker(o, 2); });
     this.setLook(look);
   }
 
@@ -254,15 +273,18 @@ export class Character {
     // com skin o contorno da mangueira cobria a mangueira inteira (de preto nao dava pra ver): some so com skin
     for (const h of [this.armR, this.armL, this.legR, this.legL]) h.line.visible = !skinMat(L.skin);
     const pt = patternTex(L.pattern);
-    this.shorts.material = pt ? toon(tc, { map: pt }) : toon(tc);
-    this.eyes.material = eyeMat(L.eyes);
+    this.shorts.material = pt ? toon(tc, { map: pt }) : toon(tc); antiFlicker(this.shorts, 1);
+    this.eyes.material = eyeMat(L.eyes); this.eyes.material.polygonOffset || antiFlicker(this.eyes, 2);
     if (this.eyewear) this.head.remove(this.eyewear);
     this.eyewear = buildEyewear(L.eyes); if (this.eyewear) { antiFlicker(this.eyewear); this.head.add(this.eyewear); }
+    if (this.faceP) this.head.remove(this.faceP);
+    this.faceP = buildFace(L.face); if (this.faceP) { antiFlicker(this.faceP); this.head.add(this.faceP); }
     if (this.hat) this.head.remove(this.hat);
     this.hat = buildHat(L.hat, tc); if (this.hat) { antiFlicker(this.hat); this.head.add(this.hat); }
     if (this.curl) this.curl.visible = !['bolo', 'tubarao', 'sorvete', 'cogumelo', 'alavanca'].includes(L.hat); // chapeu que cobre o topo: o topete atravessava
     styleGlove(this.handR, L.glove, L.gloveCol); styleGlove(this.handL, L.glove, L.gloveCol);
     for (const h of [this.handR, this.handL]) for (const c of h.children) if (c.userData.gloveExtra) antiFlicker(c, 2); // peca extra da luva (polegar, anel...) por cima da luva
+    if (this.gun && this.gun.userData.charm?.id !== L.charm && L.charm !== 'none') attachCharm(this.gun, L.charm); else if (this.gun && L.charm === 'none') attachCharm(this.gun, null);
     if (this.fx) this.root.remove(this.fx.group);
     this.fx = buildFx(L.fx); if (this.fx) this.root.add(this.fx.group);
     this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
@@ -286,6 +308,7 @@ export class Character {
     disposeGun(this.gun); // a arma velha era so deste boneco: libera a pintura (vazava a cada troca)
     this.gunHolder.clear();
     this.gun = buildGun(id, lo);
+    if (id !== 'melee' && id !== 'fists') attachCharm(this.gun, this.look?.charm);
     if (id === 'melee') this.gun.scale.setScalar(this.gun.userData.sword ? 1.05 : 1.6); /* espada ja e comprida (04/11) */ // faca na mao (01/11): maior pra ler de longe
     this.twoHand(id === 'melee' && !!this.gun?.userData.sword);
     this.gunHolder.add(this.gun);
@@ -311,6 +334,25 @@ export class Character {
     const x = new THREE.Vector3().crossVectors(y, z);
     hand.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
     if (twist) hand.rotateY(twist);
+  }
+  // igual a wristAlign, pra dança (05/11): a boca da luva segue o braco na hora, mas o giro em volta do pulso anda no maximo RATE rad/s.
+  // Com o braco no eixo z a referencia inverte de um quadro pro outro, e a luva dava um giro de meia volta de repente
+  wristEase(hand, ctrl, twist, dt) {
+    const y = wY.copy(ctrl).sub(hand.position).normalize();
+    const goal = wZ.set(0, 0, 1).addScaledVector(y, -y.z);
+    if (goal.lengthSq() < 1e-4) goal.set(1, 0, 0).addScaledVector(y, -y.x);
+    goal.normalize();
+    const z = hand.userData.wz || (hand.userData.wz = goal.clone());
+    z.addScaledVector(y, -z.dot(y));
+    if (z.lengthSq() < 1e-4) z.copy(goal); else z.normalize();
+    const ang = Math.atan2(wX.crossVectors(z, goal).dot(y), z.dot(goal)), lim = WRIST_RATE * Math.max(dt || 0, 1 / 120);
+    z.applyAxisAngle(y, Math.max(-lim, Math.min(lim, ang))).normalize();
+    wX.crossVectors(y, z);
+    hand.quaternion.setFromRotationMatrix(wM.makeBasis(wX, y, z));
+    if (twist) hand.rotateY(twist);
+    // mao passando rente ao cotovelo: a boca da luva vira rapido demais. Teto no giro total, sem trocar de direcao
+    const q = hand.userData.wq || (hand.userData.wq = hand.quaternion.clone());
+    q.rotateTowards(hand.quaternion, WRIST_MAX * Math.max(dt || 0, 1 / 120)); hand.quaternion.copy(q);
   }
 
   // nivel de detalhe pela distancia da camera: 16 bonecos x 48 malhas pesavam no celular
@@ -342,8 +384,43 @@ export class Character {
     }
   }
 
+  // animacao de morte (05/11, pedido dele): dura ate 1,4 s (depois o boneco some). So desenho, igual pra todo mundo ver
+  deathAnim(dt) {
+    const T = this.deadT, B = this.body, id = this.look?.death || 'pancake', sm = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, end = sm((T - 1.05) / 0.3);
+    if (id === 'nocaute') { // rankeada: leva o direto, cambaleia, cai de costas; estrelinhas em volta da cabeca e o juiz conta ate 10
+      const fall = sm((T - 0.26) / 0.3), a = -fall * 1.42; B.rotation.set(a + (T < 0.26 ? -Math.sin(T * 30) * 0.16 : 0), 0, T < 0.26 ? Math.sin(T * 22) * 0.2 : 0); B.position.y = 0.04; B.scale.setScalar(1 - end * 0.25);
+      if (!this.deathProp) {
+        const P = this.deathProp = new THREE.Group(); KO_STAR ||= koStar();
+        for (let i = 0; i < 4; i++) { const s = ink(KO_STAR, 0xf2c94c, 0.006); s.userData.star = i; P.add(s); }
+        const n = new THREE.Sprite(new THREE.SpriteMaterial({ map: koNum(1), transparent: true, depthTest: false })); n.scale.set(0.9, 0.9, 1); n.renderOrder = 5; n.userData.count = 1; P.add(n); B.add(P);
+      }
+      const num = Math.min(10, 1 + Math.floor(T / 1.1 * 10));
+      for (const o of this.deathProp.children) {
+        if (o.userData.star != null) { const w = T * 7 + o.userData.star * Math.PI / 2; o.position.set(Math.cos(w) * 0.42, 1.98 + Math.sin(w * 2) * 0.03, Math.sin(w) * 0.42); o.rotation.y = T * 9; }
+        else { if (o.userData.count !== num) { o.userData.count = num; o.material.map = koNum(num); o.material.needsUpdate = true; } const r = 1.9; o.position.set(0, Math.cos(a) * r, Math.sin(a) * r); } // sempre em cima do boneco, mesmo caido
+      }
+    } else if (id === 'tabua') { // cai duro feito cenario de papelao
+      const f = sm(T / 0.42), hit = Math.max(0, 1 - (T - 0.42) / 0.3); B.rotation.set(-f * Math.PI / 2 + (T > 0.42 ? Math.sin((T - 0.42) * 24) * 0.06 * hit : 0), 0, 0); B.position.y = 0.05; B.scale.set(1 - end, 1 - end, 1 - end);
+    } else if (id === 'fita') { // a pelicula queima: fica chapado, gira como quadro solto e encolhe
+      const f = sm(T / 0.3); B.scale.set((1 + f * 0.25) * (1 - end), (1 + f * 0.1) * (1 - end), Math.max(0.03, 1 - f * 0.97)); B.rotation.y = T * T * 7; B.position.y = 0.9 * end;
+    } else if (id === 'anjo') { // sobe de asinha e aureola
+      if (!this.deathProp) { const P = this.deathProp = new THREE.Group(), gold = ink(new THREE.TorusGeometry(0.2, 0.03, 6, 18), 0xf2c94c, 0.008); gold.rotation.x = Math.PI / 2; gold.position.y = 2.2; P.add(gold); for (const s of [-1, 1]) { const w = ink(new THREE.SphereGeometry(0.34, 10, 8), 0xfaf8f2, 0.012); w.scale.set(1.2, 0.5, 0.1); w.position.set(s * 0.56, 1.45, 0.34); w.rotation.z = s * 0.45; w.userData.side = s; P.add(w); } B.add(P); }
+      for (const w of this.deathProp.children) if (w.userData.side) w.rotation.z = w.userData.side * (0.45 + Math.sin(T * 18) * 0.35);
+      B.position.y = T * T * 2.4; B.position.x = Math.sin(T * 5) * 0.12; B.scale.setScalar(1 - end);
+    } else if (id === 'sanfona') { // fecha e abre como sanfona, cada vez menor
+      const k = sm(T / 1.05), q = 1 - k * 0.75 + Math.sin(T * 24) * 0.3 * (1 - k); B.scale.set((1 + (1 - q) * 0.7) * (1 - end), Math.max(0.05, q * (1 - end)), (1 + (1 - q) * 0.7) * (1 - end));
+    } else if (id === 'balao') { // incha e sai voando
+      const f = sm(T / 0.45); B.scale.setScalar((1 + f * 0.8) * (1 - end * 0.9)); B.position.y = Math.max(0, T - 0.4) ** 2 * 7; B.rotation.z = Math.sin(T * 16) * 0.22 * f;
+    } else if (id === 'mola') { // amassa e dispara girando
+      const a = sm(T / 0.22), fly = Math.max(0, T - 0.22); B.scale.set(1 + a * (fly ? 0 : 0.4), fly ? 1.3 : 1 - a * 0.6, 1 + a * (fly ? 0 : 0.4)); B.position.y = fly * fly * 16; B.rotation.y = fly * 26; if (end) B.scale.multiplyScalar(1 - end);
+    } else { // panqueca: achata e gira, depois some numa nuvem (o FX faz a nuvem)
+      const k = Math.min(1, T / 0.25); B.scale.set(1 + k * 0.8, 1 - k * 0.88, 1 + k * 0.8); B.rotation.y += dt * 8 * (1 - k);
+    }
+  }
+
   update(dt, s) {
     const { anim, pitch = 0, alive, speed = 0, t } = s;
+    if (!this.far) tickCharm(this.gun, dt);
     this.chute.visible = alive && anim === 'chute';
     // visual: efeito em volta (some de longe e morto), helice gira, enfeite balanca
     if (this.fx) { this.fx.group.visible = alive && !this.far; if (this.fx.group.visible) this.fx.tick(dt, t); }
@@ -375,16 +452,13 @@ export class Character {
     const climb = this.climbK;
 
     if (!alive) {
-      // panqueca: achata e gira, depois some numa nuvem (o FX faz a nuvem)
       this.deadT += dt;
-      const k = Math.min(1, this.deadT / 0.25);
-      this.body.scale.set(1 + k * 0.8, 1 - k * 0.88, 1 + k * 0.8);
-      this.body.rotation.y += dt * 8 * (1 - k);
+      this.deathAnim(dt);
       this.tag.visible = false;
       this.root.visible = this.deadT < 1.4;
       return;
     }
-    this.deadT = 0;
+    this.deadT = 0; if (this.deathProp) { this.body.remove(this.deathProp); this.deathProp = null; }
     this.root.visible = true;
     this.tag.visible = true;
     this.body.rotation.y = 0;
@@ -395,7 +469,7 @@ export class Character {
     const bounce = moving ? Math.abs(Math.sin(ph)) : (Math.sin(t * 4.4 + this.phase) * 0.5 + 0.5) * 0.3;
     const sq = anim === 'jump' ? 1.12 : 1 + (bounce - 0.5) * 0.08;
     this.body.scale.set(1 / Math.sqrt(sq), sq * (1 - crouch * 0.35), 1 / Math.sqrt(sq));
-    this.body.position.y = moving && seat < 0.5 ? bounce * 0.12 : 0;
+    this.body.position.y = moving && seat < 0.5 ? bounce * 0.12 : 0; this.body.position.x = 0; // x: a danca desloca o corpo pro lado
     if (seat > 0.01) { this.body.position.y -= SEAT_POSE.sink * seat; this.body.scale.set(1, 1, 1); this.body.rotation.x = 0; } // sentado: parado (sem quique nem respiracao)
     this.body.rotation.x = this.leanK + fl * 0.35 - climb * 0.45;
     if (fl) this.body.scale.multiplyScalar(1 - fl * 0.06);
@@ -473,6 +547,8 @@ export class Character {
     }
     if (climb && !this.gun2h) this.handL.position.lerp(new THREE.Vector3(-0.22, 1.72, -0.5), climb);
     const shR = new THREE.Vector3(0.36, 1.32, 0), shL = new THREE.Vector3(-0.36, 1.32, 0);
+    if (anim === 'dance' && applyDance(this, s.dance, s.danceT || 0, dt)) return; // danca de vitoria (05/11): src/dances.js
+    if (anim === 'posed') { applyPose(this, s.pose, s.gunPose, dt); return; } // podio: dança, descanso e a volta pra arma
     if (anim === 'pose') { // vitrine (Visual e Loja, 03/11): sem arma. Ciclo de 8 s com transicao suave:
       // solto (bracos caidos balancando, peso trocando de perna) -> aceno (mao direita ao lado da cabeca, a outra na
       // cintura, cabeca inclina) -> maos na cintura (cotovelo pra fora, peito estufado). A luva gira junto com a pose.
