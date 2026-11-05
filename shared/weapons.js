@@ -4,7 +4,7 @@ export const WEAPONS = {
   smg:     { name: 'Matraca',    slot: 2, dmg: 21, rate: 0.068, mag: 32, reserve: 192, reload: 1.4, spread: 0.032, auto: true, zoom: 1.3, kick: 0.018, range: 140, recoil: [[1, 0.3], [0.9, -0.4], [1, 0.5], [0.8, -0.5], [1, 0.2], [0.9, -0.3]] },
   rifle:   { name: 'Trovão',     slot: 3, dmg: 34, rate: 0.1, mag: 30, reserve: 150, reload: 1.7, spread: 0.014, /* 04/11: mais preciso que a pistola de longe */ auto: true, zoom: 1.6, kick: 0.026, range: 300, recoil: [[1.2, 0], [1.1, 0.15], [1, 0.3], [0.9, 0.35], [0.8, 0.1], [0.8, -0.25], [0.8, -0.4], [0.7, -0.2]] },
   // Metralhadora (04/11, pedido dele: categoria nova): pente enorme, recarga longa, anda e mira mais devagar
-  lmg:     { name: 'Metralhadora', slot: 8, dmg: 31, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.024, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
+  lmg:     { name: 'Metralhadora', slot: 8, dmg: 23 /* 04/11 (hotfix, pedido dele): era 31 */, moveK: 0.72, runK: 0.62, slideK: 0.6 /* so com ela na mao: anda, corre e escorrega bem mais devagar */, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.024, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
   shotgun: { name: 'Bacamarte',  slot: 4, dmg: 17, pellets: 10, rate: 0.7, mag: 6, reserve: 36, reload: 1.9, spread: 0.085, auto: false, zoom: 1.2, kick: 0.11, range: 45, recoil: [[1, 0.1]] },
   minigun: { name: 'Moedor',     slot: 5, dmg: 16, rate: 0.045, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.012, spin: 0.35, noAds: true, range: 200, recoil: [[0.6, 0.6], [0.6, -0.6], [0.7, 0.4], [0.6, -0.5]] },
   melee:   { name: 'Lâmina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
@@ -107,6 +107,7 @@ export const SKILLS = {
   pique: { lvl: 16, reload: 0.9, icon: 'double_arrow' },                   // recarrega correndo (sem ela, correr pausa a recarga) e 10% mais rapido (02/11)
   couro: { lvl: 18, blast: 0.7, icon: 'shield' },                           // menos dano de explosao
   folego: { lvl: 22, after: 4, regen: 8, icon: 'favorite' },                // vida volta sozinha depois de 4 s sem dano
+  fervor: { lvl: 20, hip: 1.5, icon: 'whatshot' },                         // Fervoroso (04/11, pedido dele): atira correndo, sem parar a corrida; o tiro abre mais (hip)
   pavio: { lvl: 26, streak: 1, icon: 'local_fire_department' },             // sequencias custam 1 abate a menos
 };
 export const SKILL_SLOTS = 3; // 03/11 (hotfix, pedido dele): 3o espaco de skill
@@ -155,7 +156,7 @@ export const FIELD = {
   anvil: { lvl: 13, need: 400, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
   // 01/11 (pedido dele): estimulante injeta e devolve vida em 1,5 s; colete nasce vestido (absorve 70% do tiro ate
   // quebrar, ai o dano volta pra vida) e a barra cheia conserta ele
-  stim: { lvl: 3, need: 220, heal: 70, dur: 1.5, boost: 1.15, boostT: 6, fov: 7, icon: 'vaccines' }, // 03/11: + correria e FOV aberto por boostT s
+  stim: { lvl: 3, need: 220, heal: 40 /* 04/11 (hotfix, pedido dele): era 70 */, dur: 1.5, boost: 1.15, boostT: 6, fov: 7, icon: 'vaccines' }, // 03/11: + correria e FOV aberto por boostT s
   vest: { lvl: 7, need: 300, armor: 60, icon: 'shield' },
 };
 export const FIELD_IDS = Object.keys(FIELD);
@@ -176,7 +177,7 @@ export const STREAKS = {
   anvline: { kills: 9, n: 12, gap: 3.2 },
   // Sentinela (04/11, pedido dele): torreta no chao que mira e atira sozinha; menos dano que o dirigivel (que da 14 a
   // cada 0,55 s acertando 60%), da pra destruir a tiro (hp), dura time s. Fica marcada no HUD e no minimapa
-  sentry: { kills: 8, time: 50, dmg: 7, rate: 0.5, hit: 0.5, range: 30, hp: 850 }, // 04/11: mais vida (era 380)
+  sentry: { kills: 8, time: 90 /* 04/11 (hotfix, pedido dele): 1min30 e some sozinha */, dmg: 7, rate: 0.5, hit: 0.5, range: 30, hp: 850 }, // 04/11: mais vida (era 380)
   rpg: { kills: 6, shots: 1, speed: 46, radius: 7.5, dmg: 220, life: 3.5 }, // 04/11 (pedido dele): area maior e mais forte (era raio 5,5 dano 150) // Bazuca: um foguete so e volta pra arma de antes (03/11)
   // 03/11 (pedido dele): as grandes
   plane: { kills: 11, speed: 30, h: 11, lead: 9, rate: 0.08, dmg: 30, hitR: 1.9, lane: 8, passes: 2 }, // Biplano: ida e volta metralhando a reta dos inimigos (mira em quem esta no corredor)

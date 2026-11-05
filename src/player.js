@@ -283,10 +283,11 @@ export class Player {
 
     // corrida e disparada (duplo toque no Shift ou botao da disparada)
     const wantSprint = inp.sprint && mz > 0.3 && this.onGround !== false && !inp.ads;
-    if (wantSprint && !this.sprint && this.sprintOut <= 0 && !fire) this.sprint = true; // gatilho apertado nao religa a corrida (03/11: correr + atirar travava a arma a cada 0,12 s e a cadencia caia)
+    const fervor = this.g.skills?.includes('fervor') && !W.melee; // Fervoroso (04/11): o gatilho nao para a corrida
+    if (wantSprint && !this.sprint && this.sprintOut <= 0 && (!fire || fervor)) this.sprint = true; // gatilho apertado nao religa a corrida (03/11: correr + atirar travava a arma a cada 0,12 s e a cadencia caia)
     if (!inp.sprint && !this.tac) this.sprint = false;
     if (mz <= 0.3 || inp.ads) { this.sprint = false; this.tac = false; }
-    if (fire && (this.sprint || this.tac)) { this.sprint = false; this.tac = false; this.sprintOut = 0.12; }
+    if (fire && (this.sprint || this.tac) && !fervor) { this.sprint = false; this.tac = false; this.sprintOut = 0.12; }
     if (this.slideT > 0) { this.sprint = false; this.tac = false; } // escorregando nao corre (Shift segurado religava e levantava)
     this.sprintOut -= dt;
     if (this.tac) { this.tacFuel -= dt; if (this.tacFuel <= 0) { this.tac = false; } }
@@ -298,7 +299,7 @@ export class Player {
     const wasLow = this.crouch || this.slideT > 0;
     if (this.slideT > 0 && inp.crouchPressed && this.slideT < SLIDE.dur - 0.2) { this.endSlide(false); inp = { ...inp, crouchPressed: false }; } // agachar de novo: levanta
     if (inp.crouchPressed && !(this.slideT > 0) && (this.g.skills?.includes('carrinho') || this.g.tutorial?.slideOn) && this.onGround && (this.sprint || this.tac) && hsNow > SLIDE.minSpeed && !this.slideCd && !this.g.down && !(this.air && this.g.bounce)) {
-      this.slideT = SLIDE.dur; this.slideDir = [this.vel[0] / hsNow, this.vel[2] / hsNow]; this.slideV0 = hsNow + SLIDE.boost;
+      this.slideT = SLIDE.dur; this.slideDir = [this.vel[0] / hsNow, this.vel[2] / hsNow]; this.slideV0 = (hsNow + SLIDE.boost) * (W.slideK || 1);
       this.crouch = true; this.sprint = false; this.tac = false; this.slideDust = 0;
       audio.play('slide', { vol: 0.6, key: 'slide', max: 1 });
       this.g.tip?.('slide');
@@ -321,6 +322,7 @@ export class Player {
     if (this.crated) { speed *= SMUGGLE.carrySlow; this.sprint = false; this.tac = false; } // Contrabando: caixote pesado
     if (this.adsK > 0.3) speed *= 0.6;
     if (W.id === 'minigun' || this.wpn === 'minigun') speed *= this.firing ? 0.6 : 0.85;
+    if (W.moveK) speed *= this.sprint || this.tac ? W.runK : W.moveK; // Metralhadora (04/11, hotfix): pesa so com ela na mao
     if (this.g.mode === 'infect' && this.g.myTeam === 'red') speed *= INFECT.speed;
     if (this.g.down) speed *= BR.duo.crawl;
     if (this.g.snap?.bor?.puddles.some(q => (q[1] - this.pos[0]) ** 2 + (q[3] - this.pos[2]) ** 2 < q[4] * q[4] && Math.abs(q[2] - this.pos[1]) < 1.2)) speed *= BOR.spit.slow; // poca do Cuspidor
@@ -417,7 +419,7 @@ export class Player {
     // trocas
     // trava de troca so vale no modo que a ligou (escada de armas / infectado): o jogador vive a sala inteira e
     // a trava vazava pra partida seguinte em outro modo (nao trocava mais de arma)
-    if (!this.forced || (this.g.mode !== 'gungame' && this.g.mode !== 'infect')) {
+    if (!this.forced || this.g.mode !== 'gungame') { // 04/11: a trava do infectado vazava pra rodada seguinte e o sobrevivente nao trocava mais de arma
       if (inp.slot >= 0 && this.owned[inp.slot]) this.equip(this.owned[inp.slot]);
       // luneta variavel mirando: a rodinha (ou o botao de troca no celular) alterna os 2 zooms em vez de trocar de arma
       const vari = this.adsK > 0.5 && this.g.vmScopeKind?.() === 'vari';
@@ -486,8 +488,10 @@ export class Player {
     if (this.pumpSfxT > 0 && (this.pumpSfxT -= dt) <= 0) audio.play('bolt', { vol: 0.6, rate: 1.3 }); // clack da bomba da escopeta
 
     // minigun gira antes
-    if (W.spin) this.spinK = fire && !this.sprint ? Math.min(1, this.spinK + dt / W.spin) : Math.max(0, this.spinK - dt);
-    this.firing = fire && !this.sprint && !this.tac && this.switchT <= 0;
+    if (W.spin) this.spinK = fire && (!this.sprint || this.g.skills?.includes('fervor')) ? Math.min(1, this.spinK + dt / W.spin) : Math.max(0, this.spinK - dt);
+    const runFire = this.g.skills?.includes('fervor') && !W.melee; // Fervoroso: correndo o gatilho vale
+    const running = (this.sprint || this.tac) && !runFire;
+    this.firing = fire && !running && this.switchT <= 0;
     // modo do modelo: automatica segura, semi uma por puxada, rajada solta N tiros seguidos
     const mode = st.mode || (W.auto ? 'auto' : 'semi');
     if (mode === 'burst' && firePressed && !(this.burstLeft > 0) && this.fireT <= 0) this.burstLeft = st.burst || 3;
@@ -505,8 +509,8 @@ export class Player {
       const auto = mode === 'auto', L = onPad ? inp.ads : inp.fire, R = onPad ? inp.fire : inp.ads;
       const Lp = onPad ? inp.adsPressed : inp.firePressed, Rp = onPad ? inp.firePressed : inp.adsPressed;
       const want = [auto ? L : Lp, auto ? R : Rp];
-      this.firing = (L || R) && !this.sprint && !this.tac && this.switchT <= 0;
-      const can = this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !this.sprint && !this.tac;
+      this.firing = (L || R) && !running && this.switchT <= 0;
+      const can = this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !running;
       for (const i of [0, 1]) {
         if (!want[i] || !can || T[i] > 0) continue;
         if (a && a.mag !== Infinity && a.mag <= 0) { if (a.reserve > 0) this.startReload(); else audio.play('empty', { vol: 0.5 }); break; }
@@ -518,7 +522,7 @@ export class Player {
       }
     } else if (chargeKit) {
       // Canhao de Carga (kit da Luneta, 01/11): segurando carrega ate 3 s; soltando atira. Carga cheia = abate na hora
-      const ready = this.fireT <= 0 && this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !this.sprint && !this.tac;
+      const ready = this.fireT <= 0 && this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !running;
       if (fire && ready && a && a.mag > 0) {
         if (!(this.chargeT > 0)) { this.chargeT = 1e-3; audio.play('chargeup', { key: 'charge', max: 1, vol: 0.75, jitter: 0 }); }
         this.chargeT = Math.min(3, this.chargeT + dt);
@@ -527,7 +531,7 @@ export class Player {
         if (ready && a && a.mag > 0) { this.megaShot = full; this.shoot(W, st); this.megaShot = false; this.g.vm.bolt(W.rate * st.rate); this.boltSfxT = 0.22; }
       } else if (inp.firePressed && a && a.mag <= 0) { if (a.reserve > 0) this.startReload(); else audio.play('empty', { vol: 0.5 }); }
       this.g.vm.charge = (this.chargeT || 0) / 3;
-    } else if (trigger && this.fireT <= 0 && this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !this.sprint && !this.tac && (!W.spin || this.spinK >= 1)) {
+    } else if (trigger && this.fireT <= 0 && this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !running && (!W.spin || this.spinK >= 1)) {
       if (a && a.mag !== Infinity && a.mag <= 0) {
         if (a.reserve > 0) this.startReload();
         else if (inp.firePressed) audio.play('empty', { vol: 0.5 });
@@ -694,6 +698,7 @@ export class Player {
     const slug = this.wpn === 'shotgun' && this.ammoNow() === 'slug'; // balote: um projetil, quase sem espalhar
     if (slug) spread *= AMMO.slug.spread;
     if (this.crouch) spread *= 0.75;
+    if (this.sprint || this.tac) spread *= SKILLS.fervor.hip; // Fervoroso: correndo o tiro abre mais
     if (this.slideT > 0) spread *= SLIDE.spread; // atirando escorregando: espalha (o agachado nao vale aqui)
     const kick = (W.kick ?? 0.05) * (st.kick ?? 1) * this.sk('lince', 'kick');
     // recuo com padrao fixo por arma (aprende e compensa), volta ao inicio se soltar o gatilho

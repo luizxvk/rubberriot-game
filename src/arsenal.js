@@ -1969,6 +1969,7 @@ const AKIMBO_LONG = {
   smg: { mag: 2, rate: 0.78, dmg: 0.82, spread: 1.35, kick: 1.15, reload: 2.1, move: 0.95 },
   shotgun: { mag: 2, rate: 0.85, dmg: 0.9, spread: 1.2, kick: 1.1, reload: 1.9, move: 0.95 },
 };
+const GRIP_HOLD = { lmg: 0.45, rifle: 0.7, smg: 0.7 };
 const GRIP_TRAITS = {
   gd_flame: { adsTime: 1.1, move: 0.97 },                                     // lanca-chamas: pesa na mira
   gd_shot: { adsTime: 1.08, kick: 1.05 },                                      // escopetinha: pesa um pouco
@@ -2116,6 +2117,8 @@ export function loadoutStats(wpn, lo, noStyle = false) {
   if (lo.handle) {
     const g = (lo.handle === 'akimbo' && AKIMBO_LONG[wpn]) || GRIP_TRAITS[lo.handle] || { spread: 0.8, kick: 0.72, adsTime: 1.08 };
     for (const k in g) st[k] *= g[k];
+    // 04/11 (hotfix, pedido dele): empunhadura de verdade segura o tranco, mais ainda na Metralhadora (era so -30%: 12 tiros/s subiam igual)
+    if (lo.handle !== 'akimbo' && !GADGETS[lo.handle]) st.kick *= GRIP_HOLD[wpn] ?? 0.75;
   }
   if (IRONS[lo.scope]) for (const [k, v] of Object.entries(IRONS[lo.scope])) st[k] *= v; // mira de ferro: entra rapido, sem zoom
   const mz = lo.muzzle && muzzleFits(lo.body) && MUZZLES[lo.muzzle];

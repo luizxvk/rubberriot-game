@@ -170,7 +170,7 @@ export function carDamage(c, car, dmg, attacker) {
   for (const p of [...c.players.values()]) { // dentro: morre; fora, perto: morre tambem (so escapa quem correu)
     if (!p.alive) continue;
     const inside = who.includes(p.id), d = Math.hypot(p.pos[0] - at[0], p.pos[2] - at[2]);
-    if (inside || (d < CAR.blast && Math.abs(p.pos[1] - car.pos[1]) < 3)) c.kill(p, attacker && attacker !== p ? attacker : null, 'car', false);
+    if (inside || (d < CAR.blast && Math.abs(p.pos[1] - car.pos[1]) < 3)) c.kill(p, attacker && attacker !== p ? attacker : null, 'carx', false); // explosao tem nome proprio: 'car' e atropelamento (motorista via "atropelado" ao morrer no carro)
   }
 }
 
@@ -179,7 +179,8 @@ function runOver(c, car, drv) {
   if (Math.abs(car.spd) < 4.5) return;
   const [hx, , hz] = CAR.half, co = Math.cos(car.yaw), si = Math.sin(car.yaw);
   for (const v of c.players.values()) {
-    if (!v.alive || v.car || v.team === car.team || v.inRing) continue;
+    // 04/11 (hotfix): lado de quem dirige, nao o da garagem (carro roubado atropelava o proprio time e poupava o dono); dentro de carro nunca e atropelado
+    if (v === drv || !v.alive || v.car || !c.enemies(drv, v) || v.inRing) continue;
     const dx = v.pos[0] - car.pos[0], dz = v.pos[2] - car.pos[2];
     if (Math.abs(v.pos[1] - car.pos[1]) > 1.6) continue;
     const lx = dx * co - dz * si, lz = dx * si + dz * co;

@@ -549,21 +549,35 @@ export class Core {
   }
 
   // melhor ponto da lista: longe de inimigo, fora da visao dele e sem colar em colega
-  bestSpawn(list, enemies, mates) {
+  // far (Contra Todos e Escada, 04/11, pedido dele): a distancia manda e nao para de contar nos 60 m; quem enxerga so pesa de perto
+  bestSpawn(list, enemies, mates, far = false) {
     let best = null;
     for (const s of list) {
       if (!standable(this.M, s[0], s[1])) continue;
       const y = floorAt(this.M, s[0], s[1]);
-      let m = 60;
+      let m = far ? 220 : 60;
       for (const e of enemies) m = Math.min(m, Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]));
       // alguem ja olhando pra la? nascer na mira e' o pior que existe
-      const seen = enemies.some(e => Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]) < 45 && hasLOS(this.M, [e.pos[0], e.pos[1] + 1.5, e.pos[2]], [s[0], y + 1.4, s[1]]));
+      const seen = enemies.some(e => Math.hypot(e.pos[0] - s[0], e.pos[2] - s[1]) < (far ? 30 : 45) && hasLOS(this.M, [e.pos[0], e.pos[1] + 1.5, e.pos[2]], [s[0], y + 1.4, s[1]]));
       // ponto ja ocupado: quase proibido (o freeSpot ainda afasta se nao tiver outro)
       const crowd = mates.some(o => Math.hypot(o.pos[0] - s[0], o.pos[2] - s[1]) < 2.2);
-      const sc = m - (seen ? 25 : 0) - (crowd ? 40 : 0) + rnd(0, 8);
+      const sc = m - (seen ? (far ? m * 0.15 : 25) : 0) - (crowd ? 40 : 0) + rnd(0, far ? 4 : 8);
       if (!best || sc > best.sc) best = { s, y, sc };
     }
     return best;
+  }
+
+  // pontos extras do Contra Todos: malha pelo chao do mapa, so onde da pra chegar andando (sem isso eram 12 pontos e a sala
+  // cheia sempre tinha alguem perto). Calcula uma vez por mapa
+  openSpots() {
+    const M = this.M; if (M.openSpots) return M.openSpots;
+    const out = [], A = M.arena - 3, step = Math.max(8, A / 4), b = M.spawns.ffa[0], from = [b[0], floorAt(M, b[0], b[1]), b[1]];
+    for (let x = -A; x <= A; x += step) for (let z = -A; z <= A; z += step) {
+      if (!standable(M, x, z)) continue;
+      const y = floorAt(M, x, z);
+      if (Math.abs(y - from[1]) <= 0.6 && navPath(M, from, [x, y, z], 8000)) out.push([x, z]);
+    }
+    return (M.openSpots = out);
   }
 
   // ninguem nasce dentro de ninguem: ponto ocupado (alguem vivo a menos de SPAWN_GAP) procura em
@@ -589,7 +603,7 @@ export class Core {
   spawn(p) {
     // montagem/arma trocada durante a vida: so vale agora, no renascimento (pedido dele 03/11)
     if (p.nextLo) { const m = p.nextLo; p.nextLo = null; this.handle(p.id, { ...m, now: true }); }
-    p.down = 0; p.reviveT = 0; p.brBp = null; // variante pega no BR some ao renascer (bate-volta)
+    p.down = 0; p.reviveT = 0; p.brBp = null; p.brGun = null; // variante pega no BR some ao renascer (bate-volta)
     const S = this.M.spawns;
     const infect = this.mode === 'infect';
     let list = S.ffa;
@@ -600,12 +614,14 @@ export class Core {
     const mates = [...this.players.values()].filter(o => o !== p && o.alive && !this.enemies(p, o));
     // comeco da partida: o time nasce junto na base (o "ponto neutro" espalhava metade pelo mapa, pedido dele 01/11)
     const first = !p.spawnedIn; p.spawnedIn = true;
-    let pick = this.bestSpawn(list, first ? [] : enemies, first ? [] : mates);
+    const solo = !this.cfg.teams && !infect && this.mode !== 'br' && !this.bor; // cada um por si: usa tambem os pontos das bases, que ficam nas pontas do mapa
+    if (solo) list = [...S.ffa, ...(S.red || []), ...(S.blue || []), ...this.openSpots()].filter(q => q.length === 2);
+    let pick = this.bestSpawn(list, first && !solo ? [] : enemies, first ? [] : mates, solo);
     // base do time "quente" (inimigo em cima): nasce num ponto neutro (escolta nao: o ponto neutro caia colado no bonde)
-    if (list !== S.ffa && !this.esc && !first && (!pick || pick.sc < 6)) { const alt = this.bestSpawn(S.ffa, enemies, mates); if (alt && (!pick || alt.sc > pick.sc)) pick = alt; }
+    if (list !== S.ffa && !solo && !this.esc && !first && (!pick || pick.sc < 6)) { const alt = this.bestSpawn(S.ffa, enemies, mates); if (alt && (!pick || alt.sc > pick.sc)) pick = alt; }
     let s = this.mode === 'br' ? brSpawnPoint(this, p) : pick ? pick.s : list[0];
     // 1o nascimento num modo de time: todo mundo em roda em volta do ponto mais central da base (juntos, nao espalhados)
-    if (first && this.mode !== 'br' && list !== S.ffa && !this.esc && list.length) {
+    if (first && this.mode !== 'br' && list !== S.ffa && !solo && !this.esc && list.length) {
       const cx = list.reduce((a, q) => a + q[0], 0) / list.length, cz = list.reduce((a, q) => a + q[1], 0) / list.length;
       const base = list.reduce((b, q) => (Math.hypot(q[0] - cx, q[1] - cz) < Math.hypot(b[0] - cx, b[1] - cz) ? q : b), list[0]);
       const k = (this.firstN ||= {})[p.team] = ((this.firstN[p.team] ?? -1) + 1);
@@ -683,8 +699,10 @@ export class Core {
   handle(id, m) {
     const p = this.players.get(id);
     if (!p || !m || typeof m !== 'object') return;
-    if (m.t !== 'state' && m.t !== 'ping') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
+    if (m.t !== 'state' && m.t !== 'ping' && m.t !== 'lat') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
     switch (m.t) {
+      // ping no Tab (04/11, pedido dele): o jogo mede a ida e volta e conta o que deu; o placar mostra de todo mundo
+      case 'lat': { p.ping = Math.max(0, Math.min(999, m.ms | 0)); this.send(id, { t: 'latr', c: m.c }); break; }
       // host tira alguem da sala (02/11, pedido dele): sai na hora, mas pode entrar de novo pelo codigo
       case 'kick': {
         const o = this.players.get(m.id);
@@ -1024,13 +1042,13 @@ export class Core {
         if (a.gunLvl >= this.ladder.length) { a.gunLvl = this.ladder.length - 1; this.end(a.name); }
         else { a.wpn = this.ladder[a.gunLvl].wpn; this.event({ k: 'give', id: a.id, wpn: a.wpn, force: true, body: this.ggBody(a) }); }
       }
-      if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && this.mode !== 'borroes' && wpn !== 'nuke') for (const kind of a.streaks || pickStreaks(null)) {
+      if (this.mode !== 'infect' && this.mode !== 'bomb' && this.mode !== 'br' && this.mode !== 'borroes' && this.mode !== 'gungame' && wpn !== 'nuke') for (const kind of a.streaks || pickStreaks(null)) {
         const s = STREAKS[kind];
         if (a.streak === s.kills - (hasSkill(a, 'pavio') && s.kills > 3 ? SKILLS.pavio.streak : 0)) {
           // bot e Torta Atomica (01/11, pedido dele): so 30% das vezes e no maximo uma por partida (pegavam toda hora)
           // as grandes novas (03/11) seguem o mesmo freio: metade das vezes e uma de cada por partida
           if (kind === 'nuke' && a.bot && ((this.botNukes || 0) >= 1 || Math.random() > 0.3)) continue;
-          if (BOT_BIG.includes(kind) && a.bot && (((this.botBig ||= {})[kind] || 0) >= 1 || Math.random() > 0.5)) continue;
+          if (BOT_BIG.includes(kind) && a.bot && (((this.botBig ||= {})[kind] || 0) >= (kind === 'bomber' && this.M.id === 'deserto' ? 2 : 1) || Math.random() > 0.5)) continue;
           if (BOT_BIG.includes(kind) && a.bot) this.botBig[kind] = (this.botBig[kind] || 0) + 1;
           if (kind === 'nuke' && a.bot) this.botNukes = (this.botNukes || 0) + 1;
           a.ready.push(kind);
@@ -1373,7 +1391,9 @@ export class Core {
       this.event({ k: 'streak', id: p.id, kind, team: p.team });
       return;
     }
-    const lock = STREAK_FREE.includes(kind) ? null : this.streakLock();
+    // Canyon Poeira (04/11, pedido dele): cabem dois baloes bombardeiros no ar; o segundo nao espera a fila (reta separada em strikes.js)
+    const twoBomb = kind === 'bomber' && this.M.id === 'deserto' && this.blimps.filter(b => b.kind === 'bomber').length === 1;
+    const lock = STREAK_FREE.includes(kind) || twoBomb ? null : this.streakLock();
     if (lock) { if (!p.bot) this.send(p.id, { t: 'ev', k: 'streakWait', kind: lock.kind, n: Math.ceil(lock.t) }); return; }
     // vez dos jogadores (03/11, pedido dele): bot so pega a sala se nenhum jogador tem sequencia guardada, ou se o
     // jogador deixou passar BOT_YIELD s com a sala livre (ai o bot tambem puxa). A sequencia do bot fica guardada
@@ -1771,6 +1791,7 @@ export class Core {
     p.yaw += clampA(angDiff(p.yaw, wantYaw), (t ? this.skill.turn : 5) * dt);
 
     let speed = sprint ? 9.3 : ai.blind > 0 ? 3 : 6.4; // acompanha o jogador mais lento (01/11)
+    if (WEAPONS[p.wpn]?.moveK) speed *= sprint ? WEAPONS[p.wpn].runK : WEAPONS[p.wpn].moveK; // bot com Metralhadora pesa igual
     if (this.mode === 'infect' && p.team === 'red') speed *= INFECT.speed;
     if (this.heist?.kind === 'smuggle' && carryingBag(this, p)) { speed = Math.min(speed, 6.4) * heistCfg(this.heist).carrySlow; heistBotPass(this, p); } // caixote pesado: lento (e passa quando der)
     const ground = p.onGround;
@@ -2268,7 +2289,7 @@ export class Core {
     const players = [];
     for (const p of this.players.values()) {
       players.push({
-        id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive,
+        id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive, pg: p.ping || undefined,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
         nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)

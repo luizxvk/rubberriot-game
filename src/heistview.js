@@ -155,6 +155,10 @@ export class HeistView {
   // H = estado do servidor; posOf(id) = posicao atual de um jogador (eu ou remoto)
   sync(H, posOf, myId) {
     if (!H) return;
+    // 04/11 (hotfix): trocar Cofre <-> Contrabando no lobby reaproveitava a cena: o Cais ficava com cofre, van e placa do outro modo
+    const key = H.kind + '|' + H.vault + '|' + H.van;
+    if (this.built && this.key !== key) this.clear();
+    this.key = key;
     if (!this.built) this.build(H);
     this.H = H; this.posOf = posOf; this.myId = myId;
     const k = Math.round(H.crack * SEG);
@@ -261,11 +265,21 @@ export class HeistView {
     const re = document.getElementById('hsRole'); if (re.textContent !== role) { re.textContent = role; re.className = 'eb-role ' + (mine ? 'bag' : myTeam || ''); }
   }
 
+  // tira tudo da cena e volta pro estado de antes do build (a raiz fica)
+  clear() {
+    this.freeParts();
+    for (const c of [...this.root.children]) this.root.remove(c);
+    this.bags.clear(); this.built = false; this.smuggle = false; this.lastOpen = false; this.segs = []; this.flights = [];
+    this.vault = this.van = this.vanRing = this.vLbl = this.nLbl = null; this.segGeo = this.segOff = this.segOn = this.vanRingGeo = null; this.H = null;
+  }
   dispose() {
     this.root.parent?.remove(this.root);
+    this.freeParts();
+    document.getElementById('hsBar')?.setAttribute('hidden', '');
+  }
+  freeParts() {
     this.segGeo?.dispose(); this.segOff?.dispose(); this.segOn?.dispose(); this.vanRingGeo?.dispose(); this.vanRing?.material.dispose();
     for (const l of [this.vLbl, this.nLbl]) { l?.material.map?.dispose(); l?.material.dispose(); }
     if (this.van?.userData.own) for (const o of this.van.userData.own) o.dispose();
-    document.getElementById('hsBar')?.setAttribute('hidden', '');
   }
 }

@@ -860,7 +860,7 @@ export function initMenus(o) {
       const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser' || slot === 'conv' || slot === 'muzzle') && id ? partEffects(cat, lo, slot, id) : [];
       const fxHtml = fx.length ? `<span class="fx">${fx.slice(0, 4).map(([k, v]) => `<b class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '+' : '−'} ${t(k)}</b>`).join('')}</span>` : '';
       const pill = slot === 'body' ? modePill(id) + (open ? `<small class="blv">${t('lvlShort', { n: wpnLevel(cat, id) })}</small>` : '') : '';
-      return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : (() => { const rq = slot === 'muzzle' ? MUZZLE_LVL[id] : partReq(i); return `<small>${t('reqWpn', { n: rq })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: rq }) * 100)}%"></i></span>`; })()}</button>`;
+      return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : (() => { const rq = slot === 'muzzle' ? MUZZLE_LVL[id] : partReq(i, id); return `<small>${t('reqWpn', { n: rq })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: rq }) * 100)}%"></i></span>`; })()}</button>`;
     }).join('');
     p.querySelectorAll('.opt').forEach(b => {
       b.onclick = () => { if (b.classList.contains('locked')) { peek(slot, b.dataset.id || null); return; } setPart(slot, b.dataset.id || null); };
@@ -919,7 +919,7 @@ export function initMenus(o) {
       [t('st_ctrl'), 1 / (W.kick * st.kick), 1 / (W.kick * base.kick), 60],
       [t('st_ads'), 1 / st.adsTime, 1 / base.adsTime, 1.2],
       [t('st_reload'), 1 / (W.reload * st.reload), 1 / (W.reload * base.reload), 1.2],
-      [t('st_move'), st.move, base.move, 1.1],
+      [t('st_move'), st.move * (W.moveK || 1), base.move * (W.moveK || 1), 1.1],
       [t('st_mag'), Math.round(W.mag * st.mag), Math.round(W.mag * base.mag), 48],
       [t('st_zoom'), st.zoom || W.zoom, base.zoom || W.zoom, 7],
     ];

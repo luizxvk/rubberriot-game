@@ -2,18 +2,19 @@
 // existir, o servidor confere item e preco por aqui (nunca confiar no preco que o cliente mandar).
 // Regra (vault: monetizacao.md): so aparencia; o que esta na loja nao sai por desafio, XP nem Elite.
 
-// precos em Zions Points (03/11, pedido dele): camo de arma 3k a 6k, skin do boneco 5k a 10k, pacote 8k a 12k.
+// precos em Zions Points. 04/11 (pedido dele): tudo dividido por 10. 1.000 Zions custam R$ 24,90, entao um item bom sai por
+// R$ 10 a R$ 25 (antes um pacote de 12 mil valia uns R$ 240 e ninguem pagaria). Camo 300 a 600, skin 500 a 1.000, pacote 800 a 1.200.
 // Item avulso: pela raridade dentro da faixa do tipo; pacote: preco proprio (price) dentro da faixa.
 // skin de modelo (04/11): troca o desenho de uma arma; faixa das skins de arma mais caras (pacote de modelos)
 export const PRICE = {
-  camo: { raro: 3000, epico: 4500, lendario: 6000 },
-  skin: { raro: 5000, epico: 7500, lendario: 10000 },
-  hat: { raro: 5000, epico: 7500, lendario: 7500 }, // chapeu = visual do boneco (faixa das skins, mais barato)
-  bundle: { pacote: 10000 },
-  wskin: { lendario: 9000 },
-  ret: { raro: 1500, epico: 2500 }, // reticula de mira (04/11): a coisa mais barata da Loja
+  camo: { raro: 300, epico: 450, lendario: 600 },
+  skin: { raro: 500, epico: 750, lendario: 1000 },
+  hat: { raro: 500, epico: 750, lendario: 750 }, // chapeu = visual do boneco (faixa das skins, mais barato)
+  bundle: { pacote: 1000 },
+  wskin: { lendario: 900 },
+  ret: { raro: 150, epico: 250 }, // reticula de mira (04/11): a coisa mais barata da Loja
 };
-export const RANGE = { camo: [3000, 6000], skin: [5000, 10000], hat: [5000, 10000], bundle: [8000, 12000], wskin: [6000, 12000], ret: [1000, 3000] };
+export const RANGE = { camo: [300, 600], skin: [500, 1000], hat: [500, 1000], bundle: [800, 1200], wskin: [600, 1200], ret: [100, 300] };
 export const RARITY = { raro: 1, epico: 1, lendario: 1, pacote: 1 }; // raridades validas (cor do cartao)
 // Itens de verdade (03/11): give = o que libera ('camo:<id>' em src/camos.js com shop: true; 'skin:<id>' em
 // shared/looks.js LOOKS.skin com shop: true). Nome: item de um so usa o nome da camo/skin; pacote usa si_/sid_ no i18n.
@@ -68,27 +69,28 @@ export const SHOP_ITEMS = {
   rDiamond: { kind: 'ret', r: 'raro', give: ['ret:diamond'] }, rRadar: { kind: 'ret', r: 'raro', give: ['ret:radar'] }, rWings: { kind: 'ret', r: 'raro', give: ['ret:wings'] }, rLadder: { kind: 'ret', r: 'raro', give: ['ret:ladder'] }, rArtillery: { kind: 'ret', r: 'raro', give: ['ret:artillery'] },
   rSpiral: { kind: 'ret', r: 'epico', give: ['ret:spiral'] }, rCrown: { kind: 'ret', r: 'epico', give: ['ret:crown'] }, rEye: { kind: 'ret', r: 'epico', give: ['ret:eye'] }, rClover: { kind: 'ret', r: 'epico', give: ['ret:clover'] }, rMoon: { kind: 'ret', r: 'epico', give: ['ret:moon'] },
   // pacotes: skin + a camo que combina, mais barato que separado (8k a 12k)
-  pDragao: { kind: 'bundle', r: 'pacote', give: ['skin:dragao', 'camo:lava'], price: 12000, feat: 1 },
-  pTormenta: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:darkaether'], price: 10000, feat: 1 },
-  pAtelie: { kind: 'bundle', r: 'pacote', give: ['skin:massinha', 'camo:popart'], price: 8000, feat: 1 },
+  pDragao: { kind: 'bundle', r: 'pacote', give: ['skin:dragao', 'camo:lava'], price: 1200, feat: 1 },
+  pTormenta: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:darkaether'], price: 1000, feat: 1 },
+  pAtelie: { kind: 'bundle', r: 'pacote', give: ['skin:massinha', 'camo:popart'], price: 800, feat: 1 },
   // pacotes de 3 pecas (chapeu + skin + camo)
-  pEspaco: { kind: 'bundle', r: 'pacote', give: ['hat:ufo', 'skin:holograma', 'camo:plasma'], price: 12000, feat: 1 },
-  pFesta: { kind: 'bundle', r: 'pacote', give: ['hat:bolo', 'skin:discoteca', 'camo:hypno'], price: 11000, feat: 1 },
-  pPraia: { kind: 'bundle', r: 'pacote', give: ['hat:tubarao', 'skin:planta', 'camo:aquarium'], price: 9000, feat: 1 },
+  pEspaco: { kind: 'bundle', r: 'pacote', give: ['hat:ufo', 'skin:holograma', 'camo:plasma'], price: 1200, feat: 1 },
+  pFesta: { kind: 'bundle', r: 'pacote', give: ['hat:bolo', 'skin:discoteca', 'camo:hypno'], price: 1100, feat: 1 },
+  pPraia: { kind: 'bundle', r: 'pacote', give: ['hat:tubarao', 'skin:planta', 'camo:aquarium'], price: 900, feat: 1 },
   // leva de 04/11: pacotes com as pecas novas (sempre mais barato que separado)
-  pGelo: { kind: 'bundle', r: 'pacote', give: ['skin:aquarela', 'camo:frost'], price: 11000, feat: 1 },
-  pTrovao: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:stormcell'], price: 12000, feat: 1 },
-  pArcade: { kind: 'bundle', r: 'pacote', give: ['hat:alavanca', 'skin:pixel', 'camo:tvstatic'], price: 12000, feat: 1 },
-  pFloresta: { kind: 'bundle', r: 'pacote', give: ['hat:cogumelo', 'skin:planta', 'camo:ivy'], price: 11000, feat: 1 },
-  pDoceria: { kind: 'bundle', r: 'pacote', give: ['hat:sorvete', 'skin:trico', 'camo:honey'], price: 9000, feat: 1 },
-  pGaragem: { kind: 'bundle', r: 'pacote', give: ['skin:papelao', 'camo:vinyl'], price: 8000, feat: 1 },
+  pGelo: { kind: 'bundle', r: 'pacote', give: ['skin:aquarela', 'camo:frost'], price: 1100, feat: 1 },
+  pTrovao: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:stormcell'], price: 1200, feat: 1 },
+  pArcade: { kind: 'bundle', r: 'pacote', give: ['hat:alavanca', 'skin:pixel', 'camo:tvstatic'], price: 1200, feat: 1 },
+  pFloresta: { kind: 'bundle', r: 'pacote', give: ['hat:cogumelo', 'skin:planta', 'camo:ivy'], price: 1100, feat: 1 },
+  pDoceria: { kind: 'bundle', r: 'pacote', give: ['hat:sorvete', 'skin:trico', 'camo:honey'], price: 900, feat: 1 },
+  pGaragem: { kind: 'bundle', r: 'pacote', give: ['skin:papelao', 'camo:vinyl'], price: 800, feat: 1 },
   // Futuristic Weapon Pack (04/11): as duas skins de modelo juntas (so vende o pack); Agulha e Relampago futuristas
-  pFuturo: { kind: 'bundle', r: 'pacote', give: ['wskin:pulse', 'wskin:fiction'], price: 12000, feat: 1, weapon: 1, until: Date.UTC(2026, 10, 16) }, // lancamento: pacote da semana fixo ate 16/11 (segunda)
+  pFuturo: { kind: 'bundle', r: 'pacote', give: ['wskin:pulse', 'wskin:fiction'], price: 1200, feat: 1, weapon: 1, until: Date.UTC(2026, 10, 16) }, // lancamento: pacote da semana fixo ate 16/11 (segunda)
 };
 // Zions Points ganhos jogando (04/11, pedido dele): vitoria e desafio pagam, derrota paga bem menos. A partida solo roda no
 // navegador e o servidor nao tem como conferir o resultado: por isso o cliente so conta o que houve e o SERVIDOR decide o
 // valor, com intervalo minimo no relogio dele, teto por dia e desafio pago uma vez so.
-export const ZP = { win: 100, lose: 15, daily: 50, elite: 150, unlock: 100, dayCap: 600, gapMs: 90000, chDay: { daily: 3, elite: 1, unlock: 3 } };
+// 04/11 (pedido dele): teto de 600 pra 150 por dia. Grátis demais competia com a venda; com a Loja nova um pacote leva ~8 dias jogando
+export const ZP = { win: 40, lose: 8, daily: 20, elite: 60, unlock: 40, dayCap: 150, gapMs: 90000, chDay: { daily: 3, elite: 1, unlock: 3 } };
 // st = o que ja pagou hoje { n, last, ch }; claim = { won, ch: [{ k, id }] }. Funcao pura: devolve o estado novo e as linhas pagas
 export function zpCredit(st, claim, now) {
   const s = { n: Math.max(0, Number(st?.n) || 0), last: Number(st?.last) || 0, ch: Array.isArray(st?.ch) ? [...st.ch] : [] }, want = [];

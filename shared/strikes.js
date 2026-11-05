@@ -8,6 +8,7 @@ import { floorAt } from './nav.js';
 const rnd = (a, b) => a + Math.random() * (b - a);
 const r2 = (v) => Math.round(v * 100) / 100;
 
+export const BOMBER_GAP = 60; // m entre os dois baloes do deserto (o balao tem ~20 m)
 export function strikeReset(c) { c.crafts = []; c.fires = []; }
 
 // reta que passa pelo meio dos inimigos vivos, na direcao em que estao mais espalhados (mesma conta da Linha de Bigornas)
@@ -50,7 +51,15 @@ export function strikeUse(c, p, kind) {
     return true;
   }
   if (kind === 'bomber') {
-    const S = STREAKS.bomber, L = enemyLine(c, p), d = L.dir, back = A + 40;
+    const S = STREAKS.bomber, L = enemyLine(c, p), back = A + 40;
+    let d = L.dir;
+    // segundo balao (04/11, pedido dele: so no deserto): reta paralela a do primeiro, a pelo menos BOMBER_GAP de distancia, entao nunca se tocam
+    const b1 = c.blimps.find(b => b.kind === 'bomber');
+    if (b1) {
+      const nx = -b1.dir[1], nz = b1.dir[0], off = (L.cx - b1.pos[0]) * nx + (L.cz - b1.pos[2]) * nz, at = b1.pos[0] * nx + b1.pos[2] * nz;
+      const lane = Math.abs(off) >= BOMBER_GAP && Math.abs(at + off) < A ? off : (Math.abs(at + BOMBER_GAP) < A ? 1 : -1) * BOMBER_GAP;
+      d = [...b1.dir]; L.cx = nx * (at + lane); L.cz = nz * (at + lane);
+    }
     c.blimps.push({ id: c.blimpSeq = (c.blimpSeq || 0) + 1, kind: 'bomber', owner: p.id, team: p.team, t: S.time, hp: S.hp, dir: d, pos: [L.cx - d[0] * back, S.h, L.cz - d[1] * back], speed: (back * 2) / S.time, dropT: 3 });
     return true;
   }

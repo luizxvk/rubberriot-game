@@ -52,6 +52,7 @@ export const DEATH_SVG = {
   fall: `<path d="M24 6v24" fill="none" ${INK_S}/><path d="M15 22l9 10 9-10" fill="none" ${INK_S}/><path d="M8 40h32" fill="none" ${INK_S}/><path d="M14 40l-3 4M24 40v4M34 40l3 4" fill="none" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/>`,
   iris: `<circle cx="24" cy="24" r="17" fill="#141210" ${INK_S}/><circle cx="24" cy="24" r="8" fill="#ece9e1" ${INK_S}/><path d="M24 7v9M24 32v9M7 24h9M32 24h9" stroke="#ece9e1" stroke-width="2.5" stroke-linecap="round"/>`,
 };
+DEATH_SVG.carx = DEATH_SVG.car; // carro explodido (04/11): nome proprio, mesmo desenho
 const nextStreak = (n, pavio, mine) => { for (const s of pickStreaks(mine).map(k => STREAKS[k])) { const k = s.kills - (pavio && s.kills > 3 ? 1 : 0); if (k > n) return k - n; } return 0; };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -736,8 +737,8 @@ export class Hud {
     const cfg = MODES[snap.mode];
     const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
     const bomb = snap.mode === 'bomb';
-    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${devIcon(p.dv)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td></tr>`).join('');
-    const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th></tr>`;
+    const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${devIcon(p.dv)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td><td class="n ${p.pg ? (p.pg < 80 ? 'pg-ok' : p.pg < 160 ? 'pg-mid' : 'pg-bad') : ''}">${p.pg || '–'}</td></tr>`).join('');
+    const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th><th class="n">${t('b_ping')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
     let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || snap.mode)}</h3>`;
     if (cfg.teams) {

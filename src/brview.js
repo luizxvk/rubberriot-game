@@ -103,16 +103,16 @@ export class BrView {
   }
   dispose() { this.root.parent?.remove(this.root); freeGeos(this.root); }
 
-  setLoot(list, loadouts) {
+  setLoot(list) {
     const seen = new Set(), now = performance.now() / 1000;
-    for (const [id, kind, wpn, x, y, z, bp, life] of list) {
+    for (const [id, kind, wpn, x, y, z, bp, life, body] of list) {
       seen.add(id);
       // life = segundos que faltam pro item sumir (0 = fica); a lista so chega quando muda
       const die = life > 0 ? now + life : 0;
       if (this.items.has(id)) { this.items.get(id).die = die; continue; }
       const g = new THREE.Group();
       // arma no chao sem mira laser (o feixe atravessava o mapa)
-      if (kind === 'wpn') { const lo = bp ? bpLoadout(bp) : loadouts?.[wpn] || null; const gun = buildGun(wpn, lo ? { ...lo, laser: null } : null); if (gun) { gun.scale.setScalar(1.6); g.add(gun); } }
+      if (kind === 'wpn') { const lo = bp ? bpLoadout(bp) : body ? { body } : null; /* modelo do chao, nunca a sua montagem */ const gun = buildGun(wpn, lo ? { ...lo, laser: null } : null); if (gun) { gun.scale.setScalar(1.6); g.add(gun); } }
       else if (kind === 'armor') g.add(vest());
       else if (kind === 'hp') g.add(milkBottle());
       else if (kind === 'nade') g.add(grenade());

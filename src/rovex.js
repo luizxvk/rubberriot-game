@@ -140,6 +140,12 @@ export async function supportCheckout(amount) {
   return j?.url || null;
 }
 
+// pacote de Zions Points: no site proprio o Stripe volta pro jogo; dentro da Rovex, pra Rovex
+export async function zionsCheckout(zions) {
+  const j = await call('/payment/stripe/zions/create-session', { method: 'POST', body: { zions, type: 'points', from: STANDALONE ? 'rr' : undefined }, timeout: 12000 });
+  return j?.url || null;
+}
+
 // ---------- save na conta ----------
 // a conta manda: logou, o save dela entra no lugar do local. Conta sem save herda o
 // progresso local, a nao ser que ele seja de OUTRA conta deste navegador.

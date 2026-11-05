@@ -9,6 +9,7 @@ import { t } from './i18n.js';
 import { me, buyItem } from './rovex.js';
 import { audio } from './audio.js';
 import { SHOP_ITEMS, shopPrice as price, shopRotation as rotation } from '../shared/shop.js';
+import { openZionBuy } from './zionbuy.js';
 import { buildGun, buildSight, getLoadouts, RET_PATH } from './arsenal.js';
 import { WSKINS } from '../shared/weapons.js';
 import { Character } from './character.js';
@@ -223,6 +224,7 @@ export function renderShop() {
   const pane = $('shopPane'); if (!pane) return;
   const RT = rotation(), keepY = pane.scrollTop;
   renderBal($('shopBal')); // Zions Points e Zions Cash no canto (zbal.js)
+  { const zb = $('shopBuyZ'); zb.setAttribute('aria-label', t('zbAdd')); zb.title = t('zbAdd'); zb.onclick = () => openZionBuy(zb); }
   pane.innerHTML = `
     <section class="shop-sec" aria-labelledby="shopFeatH">
       <header><h3 id="shopFeatH">${t('shopFeat')}</h3><span class="shop-left">${t('shopChanges')} <b id="shopWeekLeft"></b></span></header>
@@ -302,8 +304,9 @@ export function initShop() {
     audio.play('empty', { ui: true, vol: 0.5 });
     b.disabled = false; b.textContent = t('shopBuy');
     msg.hidden = false; msg.className = 'sp-soon';
-    msg.innerHTML = r.code === 'sem_saldo' ? `${t('shopNoFunds', { n: fmt(r.preco ?? price(id)), s: fmt(r.saldo ?? 0) })} <a href="https://tryrovex.com/zions" target="_top" rel="noopener">${t('shopGetZions')}</a>`
+    msg.innerHTML = r.code === 'sem_saldo' ? `${t('shopNoFunds', { n: fmt(r.preco ?? price(id)), s: fmt(r.saldo ?? 0) })} <button class="sp-getz" id="shopGetZ">${t('zbAdd')}</button>`
       : r.code === 'login' ? t('shopLogin') : r.code === 'ja_tem' ? t('shopOwned') : t('shopErr');
+    const gz = $('shopGetZ'); if (gz) gz.onclick = () => openZionBuy(gz);
   };
   new MutationObserver(() => { if (pop.hidden) $('shopPopSoon').hidden = true; }).observe(pop, { attributes: true, attributeFilter: ['hidden'] });
 }

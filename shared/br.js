@@ -6,7 +6,7 @@
 // - A iris (zona) fecha em fases: espera, fecha, proxima. Fora dela perde vida.
 // - O dirigivel solta um caixote de tempos em tempos (variante de elite sorteada + colete cheio), dentro da
 //   proxima iris. A variante viaja com a arma: quem cai larga ela no chao (p.brBp[wpn] = id da variante).
-import { BR, WEAPONS, PRIMARIES, BLUEPRINTS } from './weapons.js';
+import { BR, WEAPONS, PRIMARIES, BLUEPRINTS, botBody } from './weapons.js';
 import { floorAt, standable } from './nav.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -22,7 +22,7 @@ export function brInit(c) {
   const spot = (x, z, wpnK) => {
     if (!standable(M, x, z)) return;
     const r = Math.random(), pos = [x, floorAt(M, x, z), z];
-    if (r < wpnK) addLoot(c, 'wpn', pos, lootGun(), { life: BR.spawnLife * rnd(0.8, 1.25), spawn: 1 });
+    if (r < wpnK) { const w = lootGun(); addLoot(c, 'wpn', pos, w, { life: BR.spawnLife * rnd(0.8, 1.25), spawn: 1, body: botBody(w) || undefined }); }
     else if (r < wpnK + (1 - wpnK) * 0.38) addLoot(c, 'armor', pos);
     else if (r < wpnK + (1 - wpnK) * 0.74) addLoot(c, 'hp', pos);
     else addLoot(c, 'nade', pos);
@@ -52,9 +52,10 @@ function lootGun() {
 function randomBp() { const ids = Object.keys(BLUEPRINTS); return ids[Math.floor(Math.random() * ids.length)]; }
 // larga a arma no chao levando a variante junto (se era variante)
 function dropGun(c, p, wpn, pos) {
-  const bp = p.brBp?.[wpn] || null;
+  const bp = p.brBp?.[wpn] || null, body = p.brGun?.[wpn];
   if (p.brBp) delete p.brBp[wpn];
-  return addLoot(c, 'wpn', pos, wpn, { life: BR.dropLife, ...(bp ? { bp } : {}) });
+  if (p.brGun) delete p.brGun[wpn];
+  return addLoot(c, 'wpn', pos, wpn, { life: BR.dropLife, ...(bp ? { bp } : {}), ...(body ? { body } : {}) });
 }
 
 function addLoot(c, kind, pos, wpn = null, extra = {}) {
@@ -83,7 +84,8 @@ function lootAge(c, step) {
       if ([...c.players.values()].some(p => p.alive && (p.pos[0] - x) ** 2 + (p.pos[2] - z) ** 2 < 15 * 15)) continue;
       put = [x, floorAt(c.M, x, z), z];
     }
-    addLoot(c, 'wpn', put || it.pos, put ? lootGun() : it.wpn, { life: BR.spawnLife * rnd(0.8, 1.25), spawn: 1 });
+    const w = put ? lootGun() : it.wpn;
+    addLoot(c, 'wpn', put || it.pos, w, { life: BR.spawnLife * rnd(0.8, 1.25), spawn: 1, body: put ? botBody(w) || undefined : it.body });
   }
 }
 
@@ -323,7 +325,12 @@ function give(c, p, it) {
       p.owned.add(it.wpn);
     }
     if (it.bp) (p.brBp ||= {})[it.wpn] = it.bp; else if (p.brBp) delete p.brBp[it.wpn];
-    c.event({ k: 'give', id: p.id, wpn: it.wpn, bp: it.bp || undefined });
+    // 04/11 (pedido dele): arma do chao e a do chao, com modelo proprio sorteado, nunca a montagem de quem pegou
+    (p.brGun ||= {})[it.wpn] = it.body; p.losBase ||= { ...(p.los || {}) };
+    const lo = it.body ? { body: it.body } : {};
+    p.los = { ...(p.los || {}), [it.wpn]: lo };
+    c.event({ k: 'lo', id: p.id, los: p.los, tracer: p.tracer });
+    c.event({ k: 'give', id: p.id, wpn: it.wpn, bp: it.bp || undefined, lo: it.bp ? undefined : lo });
     c.event({ k: 'brBp', id: p.id, wpn: it.wpn, bp: it.bp || null });
     if (p.bot && RANK.indexOf(it.wpn) > RANK.indexOf(p.wpn)) { p.wpn = it.wpn; c.botReload(p, true); }
   }
@@ -402,7 +409,7 @@ export function brTick(c, dt) {
 
 export function lootList(c) {
   const r = (v) => Math.round(v * 100) / 100;
-  return c.loot.filter(it => !(it.fallT > 0)).map(it => [it.id, it.kind, it.wpn || 0, r(it.pos[0]), r(it.pos[1]), r(it.pos[2]), it.bp || 0, it.life > 0 ? Math.round(it.life) : 0]);
+  return c.loot.filter(it => !(it.fallT > 0)).map(it => [it.id, it.kind, it.wpn || 0, r(it.pos[0]), r(it.pos[1]), r(it.pos[2]), it.bp || 0, it.life > 0 ? Math.round(it.life) : 0, it.body || 0]);
 }
 
 export function brSnap(c) {

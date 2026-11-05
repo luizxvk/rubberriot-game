@@ -7,7 +7,7 @@ import { PASS, PASS_PER, PASS_MAX } from './pass.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
 export const MAX_LEVEL = 55;
-export const MAX_WPN_LEVEL = 20;
+export const MAX_WPN_LEVEL = 30; // 04/11 (hotfix, pedido dele): progressao mais longa (era 20)
 export const MAX_PRESTIGE = 10;
 
 // 29/10: ganhos cortados ~45% (subia de nivel facil demais). A curva ficou igual: quem ja tem nivel nao perde.
@@ -18,7 +18,7 @@ export const XP = { kill: 55, assist: 25, head: 20, streak: 80, flagCap: 170, fl
 // A curva fica gravada na hora de prestigiar (data.pk): quem esta no meio de um prestigio nao perde nivel com a mudanca
 export const PRESTIGE_XP = 0.15;
 export const levelXp = (n) => n <= 1 ? 0 : Math.round((600 * (n - 1) + 90 * (n - 1) ** 2) * (data?.pk || 1));
-export const wpnLevelXp = (n) => n <= 1 ? 0 : Math.round(350 * (n - 1) + 40 * (n - 1) ** 2);
+export const wpnLevelXp = (n) => n <= 1 ? 0 : Math.round(550 * (n - 1) + 40 * (n - 1) ** 2);
 
 let data = load();
 const listeners = new Set();
@@ -28,7 +28,8 @@ function load() {
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
   // meta = set Ouro da Borracha ganho (semana em que a comunidade bateu a meta); st = estatisticas do Perfil
-  return { passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
+  // lg = XP das armas na hora da progressao nova (04/11): o que ja estava aberto na regra antiga continua aberto
+  return { lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
@@ -117,8 +118,22 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpn
 // ---------- desbloqueios ----------
 // peca na posicao i da lista da categoria abre no nivel da arma 1 + i*1.5 (a primeira ja vem aberta)
 // bocal (02/11, pedido dele): entra no nivel da arma como as outras pecas (antes vinha tudo aberto)
-export const MUZZLE_LVL = { comp: 3, flash: 6, brake: 9, silencer: 13, silencer2: 16 };
-export function partReq(i) { return i <= 0 ? 1 : Math.min(MAX_WPN_LEVEL, 1 + Math.ceil(i * 1.5)); }
+// 04/11 (hotfix, pedido dele): "no inicio to desbloqueando tudo". Cada tipo de peca tem o seu passo e comeca num nivel
+// diferente, entao quase todo nivel abre UMA coisa nova e o fim fica la no 30. [primeira, passo]
+export const MUZZLE_LVL = { comp: 5, flash: 10, brake: 15, silencer: 21, silencer2: 27 };
+const STEP = { scope: [2, 3], handle: [3, 4], charger: [4, 4], laser: [6, 5], body: [2, 3] };
+const slotOf = (id) => !id ? 'body' : /scope/.test(id) ? 'scope' : /laser/.test(id) ? 'laser' : /handle|akimbo|^gd_/.test(id) ? 'handle' : /charg|drum|_ext_/.test(id) ? 'charger' : 'body';
+export function partReq(i, id) { if (i <= 0) return 1; const [a, b] = STEP[slotOf(id)]; return Math.min(MAX_WPN_LEVEL, a + (i - 1) * b); }
+// regra antiga (curva, passo 1,5 e bocais), so pro que a conta ja tinha aberto antes do hotfix
+const OLD_MZ = { comp: 3, flash: 6, brake: 9, silencer: 13, silencer2: 16 };
+const oldLv = (xp) => { let n = 1; while (n < 20 && xp >= Math.round(350 * n + 40 * n ** 2)) n++; return n; };
+function hadOld(wpn, i, id) {
+  const L = data.lg || {}, w = oldLv(L[keyOf(wpn)] || 0);
+  if (id && id.startsWith('mz:')) return w >= (OLD_MZ[id.slice(3)] || 1);
+  const need = i <= 0 ? 1 : Math.min(20, 1 + Math.ceil(i * 1.5));
+  if (id && bodiesOf(wpn).includes(id)) return Math.max(w, ...bodiesOf(wpn).map(b => oldLv(L[b] || 0))) >= need;
+  return w >= need;
+}
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 // modelo que so abre num nivel de JOGADOR (01/11, pedido dele): Liquidificador no 40
 export const BODY_MIN_LVL = { shotgun_3: 40, melee_17: 30, melee_18: 35 }; // Katana: nivel 30 do jogador; Sabre de Neon: 35 (04/11)
@@ -130,9 +145,9 @@ export function partUnlocked(wpn, i, id) {
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
   if (id && id.startsWith('am:')) return true;  // bala normal
-  if (id && id.startsWith('mz:')) return wpnLevel(wpn) >= (MUZZLE_LVL[id.slice(3)] || 1);
-  if (id && bodiesOf(wpn).includes(id)) return catLevel(wpn) >= partReq(i); // corpo novo: pelo melhor corpo
-  return wpnLevel(wpn) >= partReq(i);
+  if (id && id.startsWith('mz:')) return wpnLevel(wpn) >= (MUZZLE_LVL[id.slice(3)] || 1) || hadOld(wpn, i, id);
+  if (id && bodiesOf(wpn).includes(id)) return catLevel(wpn) >= partReq(i, id) || hadOld(wpn, i, id); // corpo novo: pelo melhor corpo
+  return wpnLevel(wpn) >= partReq(i, id) || hadOld(wpn, i, id);
 }
 // quanto falta pra um requisito (0..1): nivel da arma e/ou do jogador
 export function reqProgress(wpn, req) {

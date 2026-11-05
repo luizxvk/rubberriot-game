@@ -7,7 +7,8 @@ const fmt = (n) => Number(n || 0).toLocaleString(document.documentElement.lang |
 
 export function renderBal(el) {
   if (!el) return;
-  const p = me?.zionsPoints, c = me?.zions, ok = Number.isFinite(p) || Number.isFinite(c);
+  // Loja: o saldo fica sempre a vista, com a moeda (04/11, pedido dele); visitante ve zero
+  const shop = el.classList.contains('shop-zbal'), p = me?.zionsPoints ?? (shop ? 0 : undefined), c = me?.zions ?? (shop ? 0 : undefined), ok = Number.isFinite(p) || Number.isFinite(c);
   el.hidden = !ok;
   if (!ok) { el.innerHTML = ''; return; }
   if (el.classList.contains('wallet')) { // carteira do menu: duas linhas alinhadas (moeda | valor | nome)

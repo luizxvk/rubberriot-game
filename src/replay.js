@@ -6,11 +6,13 @@
 // Faixas pretas de cinema e o nome de quem fechou a partida ficam no CSS (body.replay).
 import * as THREE from 'three';
 import { Character } from './character.js';
+import { isSaber } from './arsenal.js';
 import { raycast } from '../shared/map.js';
 
 const KEEP = 14, STEP = 1 / 20; // 14 s: da pra repassar o ultimo abate do jogador no clipe
 const BEFORE = 5, AFTER = 1.6; // segundos de partida antes e depois do abate
 const DIVE0 = -2.6, DIVE1 = -1.1; // o mergulho pra primeira pessoa: comeca e termina (segundos antes do abate)
+const BLADE = new Set(['melee', 'fists']);
 const HELD = new Set(['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee', 'fists', 'minigun', 'rpg', 'ubshot']); // abate com arma na mao
 const EYE = (anim) => (anim === 'crouch' || anim === 'slide' ? 1.05 : 1.55);
 const SLOW = 0.28, SLOW_W = 0.3; // camera lenta em volta do instante da queda
@@ -28,9 +30,9 @@ const tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpE = new THRE
 const lerpA = (a, b, k) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 
 export class Replay {
-  constructor() { this.hist = []; this.shots = []; this.kill = null; this.on = false; this.lastRec = -1; this.dt = 0; }
+  constructor() { this.hist = []; this.shots = []; this.swings = []; this.kill = null; this.on = false; this.lastRec = -1; this.dt = 0; }
 
-  reset(scene) { this.overAt = null; this.done = null; this.stop(scene); this.hist.length = 0; this.shots.length = 0; this.kill = null; this.mine = null; this.lastRec = -1; }
+  reset(scene) { this.overAt = null; this.done = null; this.stop(scene); this.hist.length = 0; this.shots.length = 0; this.swings.length = 0; this.kill = null; this.mine = null; this.lastRec = -1; }
 
   // uma foto de todo mundo (remotos + eu)
   record(now, G) {
@@ -46,8 +48,10 @@ export class Replay {
     this.hist.push({ t: now, p });
     while (this.hist.length && now - this.hist[0].t > KEEP) this.hist.shift();
     while (this.shots.length && now - this.shots[0].t > KEEP) this.shots.shift();
+    while (this.swings.length && now - this.swings[0].t > KEEP) this.swings.shift();
   }
   shot(now, s) { if (!this.on) this.shots.push({ t: now, ...s }); }
+  swing(now, id) { if (!this.on) this.swings.push({ t: now, id }); } // golpes de arma branca: o replay repete (04/11, pedido dele)
   setKill(now, e, pos, myId) { if (this.on) return; this.kill = { t: now, a: e.a || null, v: e.v, wpn: e.wpn, head: !!e.head, pos: pos ? [...pos] : null }; if (myId && e.a === myId) this.mine = this.kill; } // mine = ultimo abate meu (clipe)
   // clipe: tem abate meu (ou o final) ainda dentro da gravacao?
   clipKill() { const last = this.hist[this.hist.length - 1]?.t ?? -1, ok = (K) => K && last - K.t <= KEEP - CLIP_BEFORE && this.hist.length >= 10; return ok(this.mine) ? this.mine : ok(this.kill) ? this.kill : null; }
@@ -90,6 +94,9 @@ export class Replay {
     if (last - K.t > KEEP - (clip ? CLIP_BEFORE : BEFORE)) return false;
     this.t0 = Math.max(H[0].t, K.t - (clip ? CLIP_BEFORE : BEFORE)); this.t1 = K.t + (clip ? CLIP_AFTER : AFTER); // nunca pela gravacao: o fim do replay e sempre depois do abate
     this.rt = this.t0; this.done = done; this.on = true; this.fx = fx; this.audio = audio; this.G = G;
+    // abate de lamina sem golpe gravado (o meu e' local, o do bot pode nao ter evento): o golpe acerta no instante da queda
+    if (BLADE.has(K.wpn) && K.a && !this.swings.some(s => s.id === K.a && s.t > K.t - 0.6 && s.t <= K.t + 0.1)) { this.swings.push({ t: K.t - 0.2, id: K.a }); this.swings.sort((a, b) => a.t - b.t); }
+    this.swingI = this.swings.findIndex(s => s.t >= this.t0); if (this.swingI < 0) this.swingI = this.swings.length;
     this.firedKill = false; this.shotI = this.shots.findIndex(s => s.t >= this.t0); if (this.shotI < 0) this.shotI = this.shots.length;
     // eu tambem apareço: um boneco com o meu visual e a minha arma
     const P = G.player;
@@ -123,9 +130,23 @@ export class Replay {
       this.audio.play(s.snd || s.wpn, { pos: s.o, vol: 0.7, rate: near ? 0.7 : 1, key: 'rpgun', max: 2 });
       if (this.fpVm && s.id === K.a) this.vm?.fire(this.kickOf?.(s.wpn) || 1); // o coice aparece na arma, no mesmo instante do tiro
     }
+    while (this.swingI < this.swings.length && this.swings[this.swingI].t <= this.rt) this.playSwing(this.swings[this.swingI++]);
     if (!this.firedKill && this.rt >= K.t) { this.firedKill = true; this.killFx(); }
     if (this.rt >= this.t1) { this.stop(scene); return 0; }
     return this.dt;
+  }
+
+  // golpe na camera final: na mao em primeira pessoa, no boneco de fora
+  playSwing(s) {
+    const G = this.G, K = this.kill;
+    if (s.t > this.t1) return;
+    if (this.fpVm && s.id === K.a) {
+      const lo = K.wpn === 'fists' ? { fists: true } : K.a === G.myId ? G.player?.lo?.('melee') : G.remoteLo?.get(K.a)?.melee;
+      this.vm?.meleeSwing(0.7, lo || null);
+    } else if (s.id === G.myId) this.ghost?.swing?.();
+    else G.remotes.get(s.id)?.char.swing?.();
+    const body = s.id === G.myId ? G.player?.lo?.('melee')?.body : G.remoteLo?.get(s.id)?.melee?.body, sb = isSaber(body);
+    this.audio.play(sb ? 'saber_swing' : 'whoosh', { pos: this.sample(this.rt, s.id)?.pos, vol: 0.7, rate: sb ? 0.85 : 1, key: 'rpgun', max: 2 });
   }
 
   // a queda: se nao gravou o tiro (o meu e' local), desenha um do matador ate a vitima
@@ -134,7 +155,7 @@ export class Replay {
     if (!v) return;
     const a = K.a && this.sample(K.t - 0.05, K.a);
     const hadShot = this.shots.some(s => s.id === K.a && Math.abs(s.t - K.t) < 0.3);
-    if (a && !hadShot) {
+    if (a && !hadShot && !BLADE.has(K.wpn)) { // lamina nao solta tiro
       const fxd = -Math.sin(a.yaw), fzd = -Math.cos(a.yaw);
       fx.bullet([a.pos[0] + fxd * 0.6, a.pos[1] + 1.35, a.pos[2] + fzd * 0.6], [v[0], v[1] + (K.head ? 1.6 : 1.1), v[2]], this.G.tracerOf?.(K.a) || 'chalk', K.wpn);
       this.audio.play(K.wpn, { pos: a.pos, vol: 0.8, rate: 0.7, key: 'rpgun', max: 2 });
