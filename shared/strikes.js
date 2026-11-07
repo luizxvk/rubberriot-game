@@ -91,7 +91,7 @@ export function strikeUse(c, p, kind) {
     const S = STREAKS.plane, L = enemyLine(c, p), d = L.dir, back = A + 30;
     if (Math.random() < 0.5) { d[0] = -d[0]; d[1] = -d[1]; }
     const h = planeClear(c.M, L.cx, L.cz, d, back, S.h);
-    c.crafts.push({ id, k: 'plane', owner: p.id, team: p.team, dir: d, h, pos: [L.cx - d[0] * back, h, L.cz - d[1] * back], t: (back * 2) / S.speed, fireT: 1.2, pass: 1, c: [L.cx, L.cz], back });
+    c.crafts.push({ id, k: 'plane', hp: S.hp, owner: p.id, team: p.team, dir: d, h, pos: [L.cx - d[0] * back, h, L.cz - d[1] * back], t: (back * 2) / S.speed, fireT: 1.2, pass: 1, c: [L.cx, L.cz], back });
     return true;
   }
   if (kind === 'train') {
@@ -238,7 +238,7 @@ export function strikeTick(c, dt) {
 
 export function strikeSnap(c) {
   return {
-    crafts: c.crafts.map(f => ({ id: f.id, k: f.k, team: f.team, owner: f.owner, pos: f.pos.map(r2), dir: f.dir?.map(r2), warn: f.warn > 0 ? r2(f.warn) : undefined, tg: f.tg, a: f.a?.map(r2), len: f.len ? r2(f.len) : undefined })),
+    crafts: c.crafts.map(f => ({ id: f.id, k: f.k, hp: f.k === 'plane' ? Math.max(0, Math.round(f.hp / STREAKS.plane.hp * 100)) : undefined, team: f.team, owner: f.owner, pos: f.pos.map(r2), dir: f.dir?.map(r2), warn: f.warn > 0 ? r2(f.warn) : undefined, tg: f.tg, a: f.a?.map(r2), len: f.len ? r2(f.len) : undefined })),
     fires: c.fires.map(f => [f.id, ...f.pos.map(r2), r2(f.t)]),
     abx: c.boxes.map(b => ({ id: b.id, pos: b.pos.map(r2), team: b.team, owner: b.owner })),
   };

@@ -22,11 +22,17 @@ export function toon(color, opts = {}) {
   return m;
 }
 
+// 07/11: o contorno entra na nevoa (antes ficava preto no fundo e a nevoa nem aparecia: a silhueta continuava la)
+// contorno so de perto (07/11, pedido dele): alem de OUTLINE_FAR (onde a nevoa ja come quase tudo) o casco nem e desenhado.
+// Valor atualizado todo quadro pelo main.js; 1e9 = sem limite (menus, luneta)
+export const OUTLINE_FAR = { value: 1e9 };
 const outlineMat = new THREE.ShaderMaterial({
-  uniforms: { th: { value: 0.045 } },
+  uniforms: { th: { value: 0.045 }, uFar: OUTLINE_FAR, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
+  fog: true,
   vertexShader: `
-    uniform float th;
+    uniform float th, uFar;
     attribute float _x;
+    #include <fog_pars_vertex>
     void main(){
       vec4 mv = modelViewMatrix * vec4(position, 1.0);
       vec3 n = normalize(normalMatrix * normal);
@@ -34,8 +40,14 @@ const outlineMat = new THREE.ShaderMaterial({
       float k = th * clamp(-mv.z * 0.06 + 0.7, 0.7, 3.0);
       mv.xyz += n * k;
       gl_Position = projectionMatrix * mv;
+      if (-mv.z > uFar) gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // longe: fora do recorte, o triangulo nem rasteriza
+      vec4 mvPosition = mv;
+      #include <fog_vertex>
     }`,
-  fragmentShader: `void main(){ gl_FragColor = vec4(0.07,0.06,0.055,1.0); }`,
+  fragmentShader: `#include <fog_pars_fragment>
+    void main(){ gl_FragColor = vec4(0.07,0.06,0.055,1.0);
+    #include <fog_fragment>
+    }`,
   side: THREE.BackSide,
 });
 const outlineMats = new Map();
@@ -43,7 +55,7 @@ const outlineMats = new Map();
 // liga e desliga todos os contornos de uma vez (desenho do vidro da luneta em maquina que nao segura)
 export function outlinesOn(v) { for (const m of outlineMats.values()) m.visible = v; }
 function getOutlineMat(th) {
-  if (!outlineMats.has(th)) { const m = outlineMat.clone(); m.uniforms.th.value = th; m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = 3; outlineMats.set(th, m); }
+  if (!outlineMats.has(th)) { const m = outlineMat.clone(); m.uniforms.th.value = th; m.uniforms.uFar = OUTLINE_FAR; m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = 3; outlineMats.set(th, m); }
   return outlineMats.get(th);
 }
 
@@ -168,7 +180,7 @@ vec3 moveIt(vec3 p) {
 function movingMaterial(mat, uT) {
   const m = mat.clone();
   if (m.isShaderMaterial) {
-    m.uniforms.uMoveT = uT;
+    m.uniforms.uMoveT = uT; if (m.uniforms.uFar) m.uniforms.uFar = OUTLINE_FAR;
     m.vertexShader = MOVE_GLSL + m.vertexShader.replace('vec4 mv = modelViewMatrix * vec4(position, 1.0);', 'vec4 mv = modelViewMatrix * vec4(moveIt(position), 1.0);');
   } else {
     m.onBeforeCompile = (sh) => {

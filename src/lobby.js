@@ -187,6 +187,8 @@ export class Lobby {
       ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
       ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
+      // horario (07/11, pedido dele): Roubo ao Cofre de dia ou de noite
+      ...(raw === 'heist' ? [['tod', ['day', 'night'], c.tod || 'day', (v) => t(v === 'night' ? 'todNight' : 'todDay')]] : []),
       br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)], // blitz: ate 24
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
       // Arte-Final: onda que vence a noite (10 a 50)
@@ -226,7 +228,7 @@ export class Lobby {
     for (const b of $('lbCfgList').querySelectorAll('.ar')) b.onclick = () => {
       const k = b.closest('li').dataset.k, row = rows.find(r => r[0] === k), list = row[1];
       const v = list[(Math.max(0, list.indexOf(row[2])) + Number(b.dataset.d) + list.length) % list.length];
-      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0, mut: c.mut || '', ranked: !!c.ranked };
+      const next = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0, mut: c.mut || '', ranked: !!c.ranked, tod: c.tod || 'day' };
       if (k === 'players') next.bots = v - 1; else if (k === 'wave') next.limit = v; else next[k] = v;
       if (k === 'mode') { next.limit = 0; next.time = 0; if (v === 'br' || v === 'duo') next.map = 'auto'; } // meta e tempo de outro modo nao servem
       audio.play('ui_click', { ui: true, vol: 0.6 });

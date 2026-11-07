@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Checagem de miras</title>
+<style>body{font:13px monospace;background:#222;color:#ddd;padding:12px}b.bad{color:#f66}b.ok{color:#6f6}</style><pre id="o">medindo...</pre>
+<script type="module">
+// Regra dele (07/11): mira NUNCA flutua nem fica longe do trilho. Monta toda arma com toda mira e acusa folga entre a base
+// da mira e o corpo maior que 3 mm (em metros reais) ou mira montada fora do corpo. window.__bad = lista
+import { loadArsenal, buildGun, CATEGORY, scopeFits, debugParts } from '../src/arsenal.js';
+await loadArsenal();
+const P = debugParts(), bad = [], lines = [];
+for (const [cat, C] of Object.entries(CATEGORY)) {
+  if (cat === 'melee') continue;
+  for (const body of C.bodies) {
+    if (!P[body]) continue;
+    const u = P[body].u || (1 / 0.37); // unidade do jogo por metro (TT tem u; antigas ~2,7)
+    for (const scope of C.scopes) {
+      if (!scopeFits(body, cat, scope)) continue;
+      const g = buildGun(cat, { body, scope }), G = g.userData.sightGap;
+      if (!G) continue;
+      const mm = G.gap / u * 1000, poke = G.poke / G.h; // poke: fracao da altura da mira que o corpo atravessa
+      const ok = mm > -4 && mm < 3 && poke < 0.45;
+      if (!ok) bad.push({ body, scope, mm: Math.round(mm), poke: Math.round(poke * 100) });
+      lines.push(`${ok ? '<b class="ok">ok </b>' : '<b class="bad">RUIM</b>'} ${body.padEnd(12)} ${scope.padEnd(18)} folga ${mm.toFixed(1)} mm  atravessa ${Math.round(poke * 100)}%`);
+    }
+  }
+}
+document.getElementById('o').innerHTML = `${bad.length} miras fora do trilho\n\n` + lines.filter(l => l.includes('RUIM')).join('\n') + '\n\n' + lines.filter(l => !l.includes('RUIM')).join('\n');
+window.__bad = bad; document.title = 'pronto';
+</script>

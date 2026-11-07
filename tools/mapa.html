@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>Mapa</title><style>body{margin:0}</style>
+<script type="module">
+// Print do mapa do jogo (06/11): ?m=vila&c=x,y,z&t=x,y,z&w=segundos de espera (o .glb chega assincrono)
+import * as THREE from 'three';
+import { getMap } from '../shared/map.js';
+import { buildWorld } from '../src/world.js';
+const q = new URLSearchParams(location.search), M = getMap(q.get('m') || 'vila');
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 600);
+if (q.get('old')) globalThis.__NO_MAP_GLB = true; // ?old=1: desenho de caixas de antes do Blender
+buildWorld(scene, M);
+const v = (s, d) => (s || d).split(',').map(Number);
+cam.position.set(...v(q.get('c'), '0,30,60')); cam.lookAt(...v(q.get('t'), '0,0,0'));
+// &dd=75|110|160: distancia de desenho do jogo (07/11), com a nevoa do mesmo jeito que o main.js faz
+if (q.get('dd')) { const dd = +q.get('dd'), b = [scene.fog.near, scene.fog.far], ff = Math.min(b[1], dd * 0.94); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.45); cam.far = dd; cam.updateProjectionMatrix(); }
+setTimeout(() => { r.render(scene, cam); document.title = 'pronto'; }, +(q.get('w') || 6) * 1000);
+</script>

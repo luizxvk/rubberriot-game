@@ -2,6 +2,7 @@
 import { podiumClear } from '../shared/podiumspot.js';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildGun, rocketMesh } from './arsenal.js';
@@ -38,6 +39,9 @@ const THEME = {
 // conteineres: cores de carga desbotadas, uma por semente
 const CONT_COLS = [0x9c4a36, 0x3f6a8a, 0x5f7f3e, 0xb08a3a, 0x7a4f7a, 0x4f7f7a, 0xa8653a, 0x5a5f8f];
 
+// arvores do tema do mapa (07/11): a camera de cinema do lobby desvia delas (nao sao caixa de colisao)
+export const mapTrees = (M) => (THEME[M.theme] || THEME.vila).trees || [];
+
 // Monta o cenario do mapa M num grupo (troca de mapa = remove o grupo e monta outro)
 export function buildWorld(scene, M) {
   const dancers = [];
@@ -50,7 +54,8 @@ export function buildWorld(scene, M) {
   scene.background = new THREE.Color(TH.sky);
   scene.fog = new THREE.Fog(TH.sky, TH.fog ? TH.fog[0] : ARENA * 1.2, TH.fog ? TH.fog[1] : ARENA * 4);
 
-  root.add(new THREE.HemisphereLight(TH.dark ? 0x5a6280 : 0xffffff, TH.dark ? 0x0a0908 : 0x6e6a63, TH.dark ? 0.32 : 1.4));
+  const hemiL = new THREE.HemisphereLight(TH.dark ? 0x5a6280 : 0xffffff, TH.dark ? 0x0a0908 : 0x6e6a63, TH.dark ? 0.32 : 1.4);
+  root.add(hemiL);
   const sun = new THREE.DirectionalLight(TH.dark ? 0x8fa0c8 : TH.docks ? 0xffc996 : 0xffffff, TH.dark ? 0.3 : 2.2); // escuro: luar fraco; cais: sol baixo e laranja
   sun.position.set(30, 60, 20);
   if (TH.docks) sun.position.set(-10, 22, -60);
@@ -95,7 +100,13 @@ export function buildWorld(scene, M) {
 
   const hazardTex = hazardTexture();
   const forestTrees = [];
-  for (const b of M.boxes) {
+  const preBoxes = new Set(root.children); // mapa modelado no Blender (06/11): o que o laco desenha sai quando o .glb chega
+  let tagFrom = root.children.length, tagKind = null; // cada objeto sabe de que peca veio (MAP_KEEP: o que o .glb NAO substitui)
+  const tagNew = () => { for (let i = tagFrom; i < root.children.length; i++) root.children[i].userData.kind = tagKind; tagFrom = root.children.length; };
+  for (const b0 of M.boxes) {
+    tagNew(); tagKind = b0.kind + (b0.sign ? '+sign' : '');
+    if (b0.kind === 'tier') continue; // degrau de colisao de forma redonda (06/11): o desenho vem da 1a caixa
+    const b = b0.vis ? { ...b0, min: b0.vis.min, max: b0.vis.max } : b0; // desenha com a medida do desenho, nao a do degrau
     const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], d = b.max[2] - b.min[2];
     const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
     if (b.kind === 'roof') continue; // corpo invisivel do telhado pontudo (o desenho vem com a casa)
@@ -341,6 +352,17 @@ export function buildWorld(scene, M) {
     root.add(mesh);
   }
 
+  // Vila remodelada no Blender (06/11, pedido dele): o .glb tem cada peca na medida da caixa de colisao. Enquanto carrega,
+  // fica o desenho de caixas; quando chega, as caixas desenhadas saem e entra o modelo (material de desenho + contorno)
+  let ready = Promise.resolve(); // 07/11: resolve quando o modelo do mapa ja esta no lugar (a cortina da troca de mapa espera isto)
+  if (MAP_GLB[M.id] && !globalThis.__NO_MAP_GLB) { // __NO_MAP_GLB: tools/mapa.html?old=1 (print do antes, pro Reels)
+    tagNew(); const keep = MAP_KEEP[M.id] || [];
+    const boxObjs = root.children.filter(o => !preBoxes.has(o) && !keep.includes(o.userData.kind)); for (const o of boxObjs) o.userData.mapBox = true; // fora da fusao: saem quando o modelo chega
+    const cached = MAPG.get(MAP_GLB[M.id]);
+    if (cached) { for (const o of boxObjs) { root.remove(o); freeGeos(o); } root.add(cached.clone()); } // ja baixado (preloadMap na tela de carregamento): nada de caixa antes
+    else { for (const o of boxObjs) o.visible = false; // ainda baixando: caixa nenhuma aparece (o modelo chega na tela de carregamento)
+      ready = mapModel(MAP_GLB[M.id]).then(g => { if (!root.parent) return; if (!g) { for (const o of boxObjs) o.visible = true; return; } /* .glb falhou: volta o desenho de caixas */ for (const o of boxObjs) { root.remove(o); freeGeos(o); } root.add(g.clone()); }); }
+  }
   if (M.id === 'ferradura') bankDecor(root); // decoracao com posicoes do Banco Ferradura (a Casa da Moeda usa o mesmo tema, mas nao isso)
   const studio = TH.dark ? tinteiroDecor(root, M.studio || ARENA) : null;
   const preForest = new Set(root.children); // o que e do estudio/mapa (a mata vem depois e fica de fora do recorte)
@@ -407,14 +429,42 @@ export function buildWorld(scene, M) {
   mergeMoving(root, [...trees.map(s => ({ obj: s.obj, phase: s.phase, amp: s.amp })), ...clouds.map(c => ({ obj: c, phase: 0, amp: -1 }))], moveT);
   const chimneys = swayers.filter(s => !s.tree);
   // o resto que fica parado vira poucas malhas (so chamine e sol continuam soltos)
-  const keep = new Set([...carGroups, ...root.children.filter(o => o.userData.async), ...chimneys.map(s => s.obj), sunSpr, ...(studio ? studio.moving : []), ...(forest ? forest.moving : [])]);
+  const keep = new Set([...carGroups, ...root.children.filter(o => o.userData.async || o.userData.mapBox), ...chimneys.map(s => s.obj), sunSpr, ...(studio ? studio.moving : []), ...(forest ? forest.moving : [])]);
   if (inner) { mergeStatic(inner, keep); keep.add(inner); }
   const merged = mergeStatic(root, keep);
   if (typeof location !== 'undefined' && /[?&]perf/.test(location.search)) console.log('[mapa] malhas juntadas', merged);
   const fdoor = M.bor?.doors.find(d => d.id === 'floresta');
 
+  // modo NOITE (07/11, pedido dele: Roubo ao Cofre no Banco Ferradura de noite). Leve: nenhuma luz de verdade a mais. Ceu e
+  // nevoa azul-noite, luar e ambiente baixos, lua no lugar do sol, sem nuvem; lampioes com halo e poca de luz no chao (imagem
+  // somada), portas do banco acesas e lustres no salao. Os bonecos ganham brilho proprio no main.js (nightChar).
+  const day = { sky: TH.sky, h: [hemiL.color.getHex(), hemiL.groundColor.getHex(), hemiL.intensity], s: [sun.color.getHex(), sun.intensity], map: sunSpr.material.map };
+  let nightOn = false, nightG = null;
+  function setNight(on) {
+    on = !!on; if (on === nightOn) return; nightOn = on;
+    const sky = on ? 0x1d2438 : day.sky;
+    scene.background = new THREE.Color(sky); if (scene.fog) scene.fog.color.set(sky);
+    hemiL.color.set(on ? 0x8494c8 : day.h[0]); hemiL.groundColor.set(on ? 0x221f24 : day.h[1]); hemiL.intensity = on ? 0.8 : day.h[2];
+    sun.color.set(on ? 0xa8b8e6 : day.s[0]); sun.intensity = on ? 0.9 : day.s[1];
+    sunSpr.material.map = on ? (setNight.moon ||= moonTexture()) : day.map; sunSpr.material.needsUpdate = true;
+    for (const c of clouds) c.visible = !on;
+    if (on && !nightG) { nightG = nightLights(M); root.add(nightG); }
+    if (nightG) nightG.visible = on;
+    paintNight(on);
+  }
+  // janelas acesas e banco iluminado (07/11, pedido dele: sem pesar na memoria): so liga o brilho (emissive) dos materiais
+  // que o modelo do mapa ja tem: vidro das janelas = luz quente de dentro; marmore = fachada iluminada. Nada novo e criado
+  const BLACK = new THREE.Color(0);
+  function paintNight(on) {
+    root.traverse(o => {
+      if (!o.isMesh || !/^(map|vila)_/.test(o.name) || !o.material?.emissive) return;
+      if (/glass/.test(o.name)) o.material.emissive.set(on ? 0xd8963a : 0);
+      else if (/marble/.test(o.name)) o.material.emissive.copy(on ? o.material.color : BLACK).multiplyScalar(on ? 0.42 : 1);
+    });
+  }
+  paintNight(false); ready.then(() => paintNight(nightOn)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
-    root,
+    root, ready, setNight,
     dispose() { scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
     // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
     cull(p) {
@@ -558,6 +608,31 @@ function makeTree(s = 1) {
   return g;
 }
 
+// luzes de mentira da noite (07/11): halo (sprite somado) + poca de luz no chao; nada de PointLight (pesa no celular)
+let GLOW_TEX = null;
+function glowTex() {
+  if (GLOW_TEX) return GLOW_TEX;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,226,150,1)'); gr.addColorStop(0.35, 'rgba(255,196,96,.55)'); gr.addColorStop(1, 'rgba(255,170,60,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  GLOW_TEX = new THREE.CanvasTexture(c); GLOW_TEX.colorSpace = THREE.SRGBColorSpace; return GLOW_TEX;
+}
+function nightLights(M) {
+  const G = new THREE.Group(), tex = glowTex();
+  const halo = (x, y, z, s, op = 0.9) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: op })); sp.position.set(x, y, z); sp.scale.set(s, s, 1); G.add(sp); };
+  const poolMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  const pool = (x, y, z, r) => { const m = new THREE.Mesh(new THREE.CircleGeometry(r, 28), poolMat); m.rotation.x = -Math.PI / 2; m.position.set(x, y + 0.04, z); G.add(m); };
+  const glowPlane = (x, y, z, w, h, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: 0xffc46a, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); m.position.set(x, y, z); m.rotation.y = ry; G.add(m); };
+  for (const b of M.boxes) if (b.kind === 'lamp') { const x = (b.min[0] + b.max[0]) / 2, z = (b.min[2] + b.max[2]) / 2; halo(x, b.max[1] + 0.25, z, 2.8); pool(x, b.min[1], z, 4.2); }
+  if (M.id === 'ferradura') {
+    glowPlane(0, 5, 14.5, 5.6, 3.8, 0); // porta da frente (no vao, longe das faces da parede)
+    for (const sx of [-1, 1]) glowPlane(sx * 16.5, 4.5, 0, 3.6, 2.8, Math.PI / 2); // portas dos lados
+    for (const [x, z] of [[-7, 9], [7, 9], [-12.5, -5], [12.5, -5]]) { halo(x, 9.6, z, 3.4, 0.75); pool(x, 3, z, 3.6); } // lustres do salao
+    halo(0, 6, -4, 5, 0.55); pool(0, 0, -4, 5); // luz em cima do cofre, no fosso
+    halo(0, 3.7, 31, 3, 0.8); pool(0, 0.5, 31, 3.5); // lampada do coreto
+  }
+  return G;
+}
 function makeCloud() {
   const g = new THREE.Group();
   for (const [x, y, r] of [[0, 0, 4], [4, -0.5, 3], [-4, -0.6, 3.2], [1.8, 1.8, 2.8], [-1.8, 1.4, 2.6]]) {
@@ -726,7 +801,7 @@ const TRACERS = {
   laser: { w: 2.8, life: 0.2, grow: 0.0 },     // laser (fora da lista: e do modelo Bico Longo): raio vermelho de miolo branco
 };
 // modelo que sempre atira laser (tiro e som proprios, ignora o tracado escolhido)
-export const LASER_BODY = 'pistol_5';
+export const LASER_BODY = null; // 07/11 (pedido dele): a Bico Longo (pistol_5) e o revolver Webley-Fosbery: som de revolver e tracante normal (antes era a pistola de laser)
 // bala visivel: risco curto que voa da boca ate o impacto. seg = comprimento do risco (m), speed = m/s na
 // tela (bem abaixo da real, pra dar pra ver; cada tiro da rajada vira uma bala, a cadencia vira um fio)
 const BULLET = {
@@ -982,20 +1057,21 @@ export class FX {
     // anel compartilhado; o material (opacidade piscando) e de cada aviso e sai no done (antes: geometria nova por aviso, nunca liberada)
     this.warnRing ||= new THREE.RingGeometry(2.6, 3.4, 24);
     const ring = new THREE.Mesh(this.warnRing, new THREE.MeshBasicMaterial({ color: PAL.red, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2; ring.position.set(pos[0], 0.05, pos[2]);
+    ring.rotation.x = -Math.PI / 2; ring.position.set(pos[0], (pos[1] || 0) + 0.05, pos[2]); // 07/11: no telhado, se e la que ela para
     this.add(ring, 1.9, (f, k) => { f.obj.material.opacity = 0.4 + Math.sin(k * 40) * 0.3; f.obj.scale.setScalar(1.2 - k * 0.3); }, (o) => o.material.dispose());
   }
 
   anvil(pos) {
+    const y0 = pos[1] || 0; // 07/11: o servidor manda a altura onde parou (telhado, laje ou chao)
     const m = anvilMesh();
-    m.position.set(pos[0], 20, pos[2]);
-    this.add(m, 0.18, (f, k) => { f.obj.position.y = 20 * (1 - k); });
+    m.position.set(pos[0], y0 + 20, pos[2]);
+    this.add(m, 0.18, (f, k) => { f.obj.position.y = y0 + 20 * (1 - k); });
     setTimeout(() => {
-      this.puff([pos[0], 0.4, pos[2]], 8, 1.6, PAL.paper, 0.8);
-      this.word('TOIN!', [pos[0], 2.5, pos[2]], 3, 0.8);
-      this.splat([pos[0], 0, pos[2]], 3, 0x2a2724);
-      const lie = anvilMesh(); lie.position.set(pos[0], 0, pos[2]); lie.rotation.y = Math.random() * 6;
-      this.add(lie, 3, (f, k) => { f.obj.position.y = -k * k * 1.2; });
+      this.puff([pos[0], y0 + 0.4, pos[2]], 8, 1.6, PAL.paper, 0.8);
+      this.word('TOIN!', [pos[0], y0 + 2.5, pos[2]], 3, 0.8);
+      this.splat([pos[0], y0, pos[2]], 3, 0x2a2724);
+      const lie = anvilMesh(); lie.position.set(pos[0], y0, pos[2]); lie.rotation.y = Math.random() * 6;
+      this.add(lie, 3, (f, k) => { f.obj.position.y = y0 - k * k * 1.2; });
     }, 180);
   }
 
@@ -1526,5 +1602,40 @@ function tripoModel(file) {
     return { geo: g0, mat: toon(0xffffff, { map, unique: true }), len: g0.boundingBox.max.z - g0.boundingBox.min.z };
   }).catch(e => { console.warn(file + ' nao carregou', e); return null; });
   TRIPO.set(file, p);
+  return p;
+}
+
+// ---------- mapas modelados no Blender (06/11) ----------
+// pecas que o .glb NAO desenha (ficam as do jogo): carro do Tripo (chega depois) e o frontao com a placa pintada em canvas
+const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'] }; // tinteiro: a floresta fica a do jogo
+const MAP_GLB = { vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
+const MAPM = new Map(), MAPG = new Map(); // MAPG: modelo ja pronto (o mapa monta direto com ele, sem as caixas antes)
+// mapas comprimidos com Draco (06/11, pedido dele: PC e celular; ~15x menor). Decoder em public/draco (copia do three)
+let draco = null;
+function mapLoader() {
+  const l = new GLTFLoader();
+  if (!draco) { draco = new DRACOLoader(); draco.setDecoderPath(import.meta.env.BASE_URL + 'draco/'); }
+  l.setDRACOLoader(draco); return l;
+}
+// baixa o modelo do mapa antes da partida (tela de carregamento): quando o mundo monta, ja entra o do Blender direto
+export function preloadMap(id) { return MAP_GLB[id] ? mapModel(MAP_GLB[id]) : Promise.resolve(null); }
+function mapModel(file) {
+  if (MAPM.has(file)) return MAPM.get(file);
+  const p = mapLoader().loadAsync(import.meta.env.BASE_URL + 'models/maps/' + file).then(gl => {
+    const g = new THREE.Group();
+    gl.scene.updateMatrixWorld(true);
+    gl.scene.traverse(o => {
+      if (!o.isMesh || !/^vila_|^map_/.test(o.name)) return; // so as malhas do mapa (nada que tenha ficado selecionado no Blender)
+      const geo = o.geometry.clone().applyMatrix4(o.matrixWorld); geo.computeVertexNormals();
+      const col = o.material?.color ? o.material.color.getHex() : 0xffffff;
+      const glass = /glass/.test(o.name);
+      const m = new THREE.Mesh(geo, toon(col, { unique: true })); m.name = o.name; // nome do material do Blender (a noite acende vidro e marmore por ele)
+      outline(m, glass ? 0.02 : 0.045);
+      g.add(m);
+    });
+    if (g.children.length) MAPG.set(file, g);
+    return g.children.length ? g : null;
+  }).catch(e => { console.warn(file + ' nao carregou', e); return null; });
+  MAPM.set(file, p);
   return p;
 }

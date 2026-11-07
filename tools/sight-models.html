@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>miras</title>
+<style>body{margin:0;background:#ddd;font:12px sans-serif}.c{display:inline-block;margin:4px;background:#fff;text-align:center}</style>
+<script type="module">
+// folha das miras de modelo (07/11): cada uma de LADO (frente = esquerda) e por TRAS; a lente em vermelho
+import * as THREE from 'three';
+import { loadArsenal, debugParts } from '../src/arsenal.js';
+import { SIGHT_MODEL } from '../src/sights.js';
+await loadArsenal(); const P = debugParts(), r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(300, 200); r.setClearColor(0xffffff);
+for (const id of Object.keys(SIGHT_MODEL)) { const p = P[id]; if (!p) continue;
+  for (const view of ['side', 'back']) {
+    const sc = new THREE.Scene(); sc.add(new THREE.Mesh(p.geo, new THREE.MeshNormalMaterial()));
+    const L = p.lens; if (L) { const ring = new THREE.Mesh(new THREE.RingGeometry(L.r * 0.9, L.r, 32), new THREE.MeshBasicMaterial({ color: 0xff0000, side: 2, depthTest: false })); ring.position.copy(L.c); sc.add(ring); if (L.f) { const d = new THREE.Mesh(new THREE.SphereGeometry(L.r * 0.15), new THREE.MeshBasicMaterial({ color: 0x0000ff, depthTest: false })); d.position.copy(L.f); sc.add(d); } }
+    const b = p.box, c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3()), h = Math.max(s.z / 1.5, s.y, s.x) * 0.6;
+    const cam = new THREE.OrthographicCamera(-h * 1.5, h * 1.5, h, -h, -100, 100); if (view === 'side') cam.position.set(c.x + 10, c.y, c.z); else cam.position.set(c.x, c.y, c.z + 10); cam.lookAt(c);
+    r.render(sc, cam); const d = document.createElement('div'); d.className = 'c'; d.innerHTML = id + ' ' + view + '<br>'; const im = new Image(); im.src = r.domElement.toDataURL(); d.appendChild(im); document.body.appendChild(d);
+  } }
+document.title = 'pronto';
+</script>

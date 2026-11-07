@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>ferro</title><pre id="o"></pre>
+<script type="module">
+// depuracao da mira de ferro TT (07/11): ponto, profundidade e inclinacao por arma
+import { loadArsenal, debugParts, TT_LIST } from '../src/arsenal.js';
+await loadArsenal(); const P = debugParts(), r = {}; window.__P = P; window.__TT = TT_LIST;
+for (const g of TT_LIST) { const p = P[g.id]; if (!p) continue; const b = p.box, L = b.max.z - b.min.z; r[g.id] = { pt: p.ironPt ? [((p.ironPt.z - b.min.z) / L).toFixed(2), ((p.ironPt.y - b.min.y) / (b.max.y - b.min.y)).toFixed(2)] : null, depth: p.ironDepth ? (p.ironDepth / L).toFixed(2) : null, tilt: p.ironTilt?.toFixed(3) }; }
+document.getElementById('o').textContent = JSON.stringify(r); window.__r = r; document.title = 'pronto';
+</script>

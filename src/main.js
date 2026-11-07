@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { offscreen } from './offscreen.js';
-import { buildWorld, buildObjectives, FX, LASER_BODY } from './world.js';
+import { buildWorld, buildObjectives, FX, LASER_BODY, preloadMap } from './world.js';
 import { EscortView } from './escortview.js';
 import { rankResult, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
 import { Character } from './character.js';
@@ -10,11 +10,11 @@ import { GunLights } from './gunlights.js';
 let flash = null; // lanterna (so no Estudio Tinteiro escuro)
 let gunL = null; // lanterna de arma + reflexo de luneta (04/11)
 import { ViewModel } from './viewmodel.js';
-import { makePipeline } from './post.js';
+import { makePipeline, makeMenuPipeline } from './post.js';
 import { Tutorial, keyLabel } from './tutorial.js';
 import { Range } from './range.js';
 import { trainBox } from '../shared/escort.js';
-import { heistBoxes } from '../shared/heist.js';
+import { heistBoxes, heistCfg } from '../shared/heist.js';
 import { borDoorBoxes } from '../shared/borroes.js';
 import { useBinds, bindLabel } from './binds.js';
 import * as ARS from './arsenal.js'; // so pro atalho de depuracao window.__A
@@ -24,6 +24,7 @@ import { startEndSlides } from './endslides.js';
 import { Podium } from './podium.js';
 import { wornDances, bannerOpen } from './lookstore.js';
 import { kbBinds, padBinds, PAD_BTN, keyName } from './binds.js';
+import { initPocket, openPocket } from './pocket.js';
 import { startFit } from './fit.js';
 import { startArrows } from './arrows.js';
 startFit(); startArrows();
@@ -45,13 +46,16 @@ import { EV, currentEvent, META, metaWeek } from '../shared/events.js';
 import { wantedPoster, shareFile, ClipRec } from './share.js';
 import { updateCamoFx } from './camofx.js';
 import { propBoxes, getMap, hasLOS, raycast } from '../shared/map.js';
+import { LobbyCam } from './lobbycam.js'; // camera de cinema do lobby (07/11)
+import { modeTipsTick, modeTipsHide } from './modetips.js'; // dicas por modo na partida (07/11)
+const lobbyCam = new LobbyCam();
 import { attachCharm, tickCharm } from './charms.js';
 import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang } from './i18n.js';
-import { outlinesOn, ink, PAL } from './toon.js';
+import { outlinesOn, ink, PAL, OUTLINE_FAR } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
-import { AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
+import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
 import { unlockDone, LOCKED_BY, track, grantTutorial } from './challenges.js';
@@ -81,7 +85,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { scopeQ: 'fast', v: 4, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, grain: 0.6, film: 'color', res: isTouch ? 0.7 : 1, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, draw: isTouch ? 'mid' : 'far', hudMode: 'full' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, voSubs: true, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -91,13 +95,15 @@ try {
   if (Array.isArray(saved.skills)) saved.skills = saved.skills.filter(k => SKILLS[k]);
   // versao 4: quem ja tinha ajustado leva o valor pro toque e pro controle (o do controle era multiplicado pelo do mouse)
   if ((saved.v || 0) < 4 && saved.sens != null) { saved.touchSens ??= saved.sens; saved.touchAdsSens ??= saved.adsSens ?? 0.8; saved.padAdsSens ??= saved.adsSens ?? 0.8; saved.padSens = Math.max(0.3, Math.min(2.5, (saved.padSens ?? 1) * saved.sens)); }
-  Object.assign(settings, saved, { v: 4 });
+  // versao 5 (07/11, pedido dele): grafico padrao = resolucao 80%, desenho medio, antisserrilhado 2x; aplica uma vez em todo mundo, depois cada um muda
+  if ((saved.v || 0) < 5) { saved.res = 0.8; saved.draw = 'mid'; saved.aa = '2x'; }
+  Object.assign(settings, saved, { v: 5 });
 } catch { /* sem storage */ }
 function saveSettings() { try { localStorage.setItem('rr_settings', JSON.stringify(settings)); } catch { /* */ } applySettings(); }
 
 // ---------- render ----------
 const canvas = $('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); // 07/11: antisserrilhado so no composer (Ajustes > Video)
 // celular sem memoria de video perde o contexto do WebGL (tela fica branca/preta): segura o contexto pro
 // navegador devolver (o three refaz tudo na volta) e manda o aviso pro servidor
 // log 02/11: 3 celulares Android perderam o contexto no meio da partida = a "tela branca" que relataram. Agora: aviso
@@ -116,7 +122,8 @@ canvas.addEventListener('webglcontextrestored', () => { clearTimeout(glLostT); $
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 // distancia de desenho (03/11): curta pra todos; a luneta mirando enxerga longe
-const DRAW_DIST = { near: 95, scope: 500 };
+// 07/11 (pedido dele): volta a opcao nos Ajustes (Curta/Media/Longa); a nevoa acompanha e esconde o corte
+const DRAW_DIST = { near: 75, mid: 110, far: 160, scope: 500 };
 const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.1, 500); // 05/11: near 0,05 pra 0,1 dobra a precisao de profundidade (malha piscando de longe)
 camera.rotation.order = 'YXZ';
 // luneta 3D: a lente mostra esta camera ampliada (picture-in-picture)
@@ -166,15 +173,17 @@ const bombMesh = (() => {
   return g;
 })();
 let bombBeep = 0;
-const { composer, film, vmPass } = makePipeline(renderer, scene, camera, vm);
+const { composer, film, vmPass, setAA } = makePipeline(renderer, scene, camera, vm);
+const menuPipe = makeMenuPipeline(renderer); // Visual e Arsenal com antisserrilhado (07/11)
 
 function applySettings() {
   document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
   renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1)); // tela dividida: 2-4 desenhos por quadro
   resize();
+  { const n = { off: 0, '2x': 2, '4x': 4, '8x': 8 }[settings.aa] ?? (isTouch ? 0 : 4); setAA(n); menuPipe.setAA(n); } // antisserrilhado (07/11)
   film.uniforms.grain.value = settings.grain;
   film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
-  audio.setVolumes(SS?.vol || { master: settings.master, music: settings.music, sfx: settings.sfx }); // tela dividida: volume do PC, igual nas telas
+  audio.setVolumes(SS?.vol || { master: settings.master, music: settings.music, sfx: settings.sfx, vo: settings.vo ?? 0.7 }); // tela dividida: volume do PC, igual nas telas
   input.settings = settings; useBinds(settings);
   setRawMouse(settings.rawMouse);
   setFireButton(input);
@@ -185,6 +194,7 @@ function resize() {
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
   composer.setPixelRatio(renderer.getPixelRatio());
+  menuPipe.composer.setSize(w, h); menuPipe.composer.setPixelRatio(renderer.getPixelRatio());
   camera.aspect = w / h; camera.updateProjectionMatrix();
   vm.camera.aspect = w / h; vm.camera.updateProjectionMatrix();
   smithCam.aspect = w / h; smithCam.updateProjectionMatrix();
@@ -274,7 +284,10 @@ const onlyBots = () => !(G.snap?.players || []).some(p => !p.bot && p.id !== G.m
 const weekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
 // blitz (02/11): evento fixo, XP em dobro (soma com Elite e fim de semana)
 // 05/11 (pedido dele): XP em dobro NAO empilha. Elite, fim de semana e Blitz valem o maior deles: quem ja esta em 2x continua em 2x
-const xpMult = () => Math.max(rovexMe?.elite ? 2 : 1, weekend() ? 2 : 1, G.blitz ? BLITZ_XP : 1) * (onlyBots() && G.mode !== 'borroes' ? BOTS_ONLY_XP : 1);
+// 06/11 (pedido dele): o Elite nao da mais 2x direto; da 6 fichas por mes (Bolso). A ficha ativa vale 2x e o relogio dela so anda
+// quando ela soma alguma coisa: em partida, fora do treino, fora do fim de semana e do Blitz (que ja dao 2x e nao acumulam)
+const boostCounts = () => G.state === 'game' && !G.snap?.over && !G.range && !G.tutorial && !weekend() && !G.blitz;
+const xpMult = () => Math.max(boostInfo().active && boostCounts() ? 2 : 1, weekend() ? 2 : 1, G.blitz ? BLITZ_XP : 1) * (onlyBots() && G.mode !== 'borroes' ? BOTS_ONLY_XP : 1);
 // Noite dos Borroes (03/11, pedido dele): abate de vilao rende bem menos que abate de gente (a noite acumula centenas)
 const BOR_XP = 0.2, BOR_XP_KINDS = ['kill', 'head', 'assist'];
 function wkndBadge() {
@@ -386,6 +399,7 @@ function gainXp(kind, wpn = null, mult = 1) {
   const ras = night && G.snap?.bor && !G.snap.bor.art && CATEGORY[wpn] && wpn !== 'melee';
   addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : null, night ? base : amount);
   hud.xpPop(`+${amount} ${t('xp_' + kind)}`);
+  if (boostSync()) hud.message(t('boostGot'), 2.6); // subiu num nivel do Pass que paga ficha
 }
 // o que abre exatamente neste nivel (pra avisar na hora)
 // o que abriu nesse nivel: [{ slot, id, wpn, name }] (camo de nivel de jogador vale pra arma em uso)
@@ -443,6 +457,8 @@ onProgress((e) => {
   // trilha gratis: quem nao tem Elite ve o premio dela (quem tem ve o do premium no mesmo aviso)
   if (e.freeTo > e.freeFrom && G.state === 'game') for (let n = e.freeFrom + 1; n <= e.freeTo; n++) if (PASS_FREE[n]) { (G.matchLog.passFree ||= []).push(n); hud.push(passEvent(n, true), 'ev-unl ev-pass', 4600); audio.play('unlock', { vol: 0.8, ui: true }); }
   if (e.passUp && G.state === 'game') for (let n = e.passFrom + 1; n <= e.passUp; n++) { (G.matchLog.pass ||= []).push(n); hud.push(passEvent(n), 'ev-unl ev-pass', 4600); audio.play('unlock', { vol: 0.8, ui: true }); }
+  // mestre da arma (07/11): banner-poster e chaveiro de ouro dela. Carimbo grande + aviso na lista do HUD
+  if (e.mastery && G.state === 'game') { const w = partName('body', e.mastery); (G.matchLog.mastery ||= []).push(e.mastery); hud.stampText(t('mstStamp', { w })); hud.push(t('mstGot', { w }), 'ev-unl', 6000); audio.play('unlock', { vol: 0.9, ui: true }); }
   if (G.state !== 'game' || (!e.levelUp && !e.wpnUp && !e.catUp)) return;
   G.loadouts = matchLoadouts(); sendLoadout();
   // som de subir de nivel + o que desbloqueou
@@ -555,7 +571,10 @@ function escHud(E) {
 // troca o cenario quando a sala usa outro mapa
 function setMap(id) {
   if (world && G.M.id === id) return;
+  const swap = !!world && G.state !== 'loading' && G.state !== 'game'; // troca no lobby/menu (a partida ja tem a tela de carregamento dela)
+  if (swap) mapCurtain(true, id);
   G.M = getMap(id);
+  preloadMap(id); // ja comeca a baixar o modelo do Blender (Draco) enquanto o lobby roda
   world && world.dispose(); objectives && objectives.dispose();
   world = buildWorld(scene, G.M);
   objectives = buildObjectives(scene, G.M);
@@ -564,6 +583,22 @@ function setMap(id) {
   escView && escView.dispose(); escView = G.escView = G.M.track ? new EscortView(scene, G.M) : null; // trilho e Bonde da Tinta (escolta)
   flash && flash.dispose(); flash = G.M.theme === 'tinteiro' ? new Flashlights(scene) : null; gunL?.dispose(); gunL = new GunLights(scene); if (import.meta.env.DEV) window.__GL = gunL; // estudio escuro: todo mundo de lanterna
   hud.setMap(G.M);
+  if (swap) { // a cortina so abre com o modelo no lugar, os shaders prontos e 2 quadros desenhados (nada de peca surgindo do nada)
+    const w = world, t0 = performance.now();
+    Promise.race([w.ready, new Promise(r => setTimeout(r, 12000))])
+      .then(() => renderer.compileAsync ? renderer.compileAsync(scene, camera) : renderer.compile(scene, camera)).catch(() => {})
+      .then(() => new Promise(r => setTimeout(r, Math.max(0, 650 - (performance.now() - t0)))))
+      .then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
+      .then(() => { if (world === w) mapCurtain(false); });
+  }
+}
+// cortina da troca de mapa (07/11, pedido dele): tela escura com o nome do mapa e "Carregando" animado; some em fade
+function mapCurtain(on, id) {
+  let el = $('mapCurtain');
+  if (!el) { el = document.createElement('div'); el.id = 'mapCurtain'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); el.innerHTML = '<b class="mc-map"></b><p class="mc-txt"><span></span><i></i><i></i><i></i></p>'; document.body.appendChild(el); }
+  clearTimeout(el._t);
+  if (on) { el.querySelector('.mc-map').textContent = t('map_' + id); el.querySelector('.mc-txt span').textContent = t('mapLoading'); el.hidden = false; el.classList.remove('out'); void el.offsetWidth; el.classList.add('in'); }
+  else { el.classList.remove('in'); el.classList.add('out'); el._t = setTimeout(() => { el.hidden = true; }, 600); }
 }
 
 // visual dos outros: o que a pessoa mandou; bot tem o seu sorteado (fixo pelo id)
@@ -588,7 +623,7 @@ function lookOf(p) { return G.remoteLook.get(p.id) || (p.bot ? botLook(p.id) : n
 // peca nova no meio da partida (arma de outro com camo que ainda nao apareceu): compila em segundo plano e so
 // mostra quando o shader esta pronto. Antes a 1a aparicao de cada camo travava o quadro compilando (03/11)
 function warmLater(obj) {
-  if (!renderer.compileAsync || G.state !== 'game') return;
+  if (!obj || !renderer.compileAsync || G.state !== 'game') return; // borrao (modo Borroes) nao tem suporte de arma (06/11: erro a cada quadro)
   const n = (obj.userData.warmN = (obj.userData.warmN || 0) + 1);
   const show = () => { if (obj.userData.warmN === n) obj.visible = true; };
   const p = renderer.compileAsync(obj, camera, scene); // pega os materiais agora (so percorre o que esta visivel)...
@@ -606,10 +641,51 @@ function remoteFor(p) {
   return r;
 }
 
+audio.voBlock = () => !!G.range; // narrador NAO fala no Campo de treino (regra dele 06/11)
+// legenda do narrador (06/11, pedido dele, estilo Black Ops 4): o que ele fala aparece embaixo, no idioma do jogo, enquanto ele fala
+audio.onVoice = (key, dur) => {
+  if (settings.voSubs === false) return;
+  const el = $('voSub'); if (!el) return;
+  el.innerHTML = `<b>${esc(t('vosubWho'))}:</b> ${esc(t('vosub_' + key))}`;
+  el.hidden = false; el.classList.remove('out');
+  clearTimeout(G.voSubT); G.voSubT = setTimeout(() => { el.classList.add('out'); G.voSubT = setTimeout(() => { el.hidden = true; }, 300); }, dur * 1000 + 400);
+};
+// narrador nas sequencias (06/11, pedido dele: o aviso inimigo repetia demais): no maximo uma fala de sequencia a cada 9 s
+// (Torta Atomica fura a fila). Inimiga: metade das vezes o nome dela, metade um dos 6 avisos, nunca o mesmo aviso duas vezes seguidas
+let voStreakAt = 0, voWarnLast = 0;
+function streakVoice(kind, friendly) {
+  const now = performance.now();
+  if (kind !== 'nuke' && now - voStreakAt < 9000) return;
+  voStreakAt = now;
+  if (kind === 'nuke' || friendly || Math.random() < 0.5) return audio.voice(kind);
+  let n; do n = 1 + Math.floor(Math.random() * 6); while (n === voWarnLast);
+  voWarnLast = n; audio.voice(n === 1 ? 'enemystreak' : 'enemystreak' + n);
+}
+// narrador dos modos (06/11, pedido dele: "time azul roubou o dinheiro do cofre", "time vermelho capturou a bandeira"):
+// fala o nome do TIME (vermelho/azul), nao "voce". Evento repetitivo (bolsa, ponto) no maximo 1 fala a cada 5 s;
+// prio (captura, cofre aberto, bomba, rodada) fura essa espera. A fila de 1 do audio.voice segura o resto.
+let voModeAt = 0;
+function modeVoice(key, prio) {
+  if (!key) return;
+  const now = performance.now();
+  if (!prio && now - voModeAt < 5000) return;
+  voModeAt = now; audio.voice(key);
+}
+const teamKey = (base, team) => team === 'red' || team === 'blue' ? base + '_' + team : null;
+// trilha da partida (06/11, pedido dele): modo novo tem musica propria no tema; depois o mapa; senao sorteia entre as 4 de sempre
+const MODE_TRACK = { heist: 'music_heist', smuggle: 'music_heist', borroes: 'music_borroes', arte: 'music_borroes', infect: 'music_borroes', bomb: 'music_bomb', escort: 'music_escort' };
+const MAP_TRACK = { deserto: 'music_deserto', ferradura: 'music_heist', moeda: 'music_heist', tinteiro: 'music_borroes', bonde: 'music_escort', apito: 'music_escort' };
+function matchTrack() {
+  if (G.mode === 'br' || G.duo || G.bounce) return 'music_br';
+  if (G.blitz) return G.M?.id === 'deserto' ? 'music_deserto' : 'music_blitz';
+  return MODE_TRACK[G.mode] || MAP_TRACK[G.M?.id] || 'music_m' + (1 + Math.floor(Math.random() * 4));
+}
 function onSnap(s) {
+  // narrador: ultimo minuto (so em partida corrida; modo de rounds zera o relogio a cada round)
+  if (G.state === 'game' && !s.round && !G.range && !G.tutorial && G.snap?.time > 60 && s.time <= 60 && s.time > 50) audio.voice('lastmin');
   G.snap = s;
   if (s.mut !== G.mutSeen) { G.mutSeen = s.mut; if (s.mut && G.state === 'game') { hud.message(t('evOn', { e: t('ev_' + s.mut) }), 3.5); audio.play('ringbell', { vol: 0.6, ui: true }); } } // evento de fim de semana: anuncia na entrada
-  G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen; G.blitz = s.blitz || false;
+  { const wasBz = G.blitz; G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen; G.blitz = s.blitz || false; if (!wasBz && G.blitz && G.state === 'game') audio.music(true, matchTrack()); } // blitz chegou depois do inicio: troca pra trilha dele
   if (s.map && s.map !== G.M.id) setMap(s.map);
   const seen = new Set();
   for (const p of s.players) {
@@ -732,6 +808,9 @@ function downMarks() {
   for (const [id, el] of _dm) if (!seen.has(id)) { el.remove(); _dm.delete(id); }
 }
 
+// banner (07/11, pedido dele): o NICK de verdade (o seu tambem, nao "Voce") e o nivel de quem e o banner
+function nickOf(id) { if (id === G.myId) return settings.name || rovexMe?.name || (rovexGuest() ? rovexGuestName() : t('youCap')); return nameOf(id); }
+function lvlOf(id) { if (id === G.myId) return progressInfo().level; return G.snap?.players?.find(x => x.id === id)?.lvl || 0; }
 function nameOf(id) {
   if (id === G.myId) return t('youCap');
   const p = G.snap?.players.find(x => x.id === id);
@@ -781,7 +860,7 @@ function onEvent(e) {
       if (e.id !== 'blimp') G.seen.set(e.id, G.t + 2.2);
       const r = G.remotes.get(e.id);
       if (G.specVm && G.specVm.startsWith(e.id + '|') && !G.player?.alive) vm.fire((WEAPONS[e.wpn]?.kick || 1) * 1.3);
-      const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && rBody === 'pistol_10', aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
+      const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && (rBody === 'pistol_10' || rBody === 'pistol_5') /* Bico Longo virou revolver (06/11) */, aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
       const rTr = lzBody ? 'laser' : G.remoteLo.get(e.id)?.[e.wpn]?.tracer || 'chalk', rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : aaBody ? 'aa12' : audio.gunSound(rBody, e.wpn); // som proprio do modelo
       const rSilOn = String(G.remoteLo.get(e.id)?.[e.wpn]?.muzzle || '').startsWith('silencer'), rSil = rSilOn && !lzBody ? audio.silSound(e.wpn) : null;
       audio.play(rSil || rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2, muffle: rSilOn && !rSil, dry: !!rSil });
@@ -871,7 +950,7 @@ function onEvent(e) {
         // kill cam em quadrinhos (so quando alguem te pegou; iris, queda e bigorna propria nao)
         const kr = e.a && e.a !== G.myId ? G.remotes.get(e.a) : null, cm = $('comic');
         cm.hidden = true;
-        { const db = $('deadBnr'); db.hidden = !(e.a && e.a !== G.myId && e.bn); if (!db.hidden) { db.innerHTML = bannerHtml(e.bn, { name: nameOf(e.a), lvl: G.snap?.players?.find(x => x.id === e.a)?.lvl || kr?.lvl || 0 }); $('deadBy').textContent = ''; } } // o banner ja diz quem foi (pedido dele 05/11)
+        { const db = $('deadBnr'); db.hidden = !(e.a && e.a !== G.myId && e.bn); if (!db.hidden) { db.innerHTML = bannerHtml(e.bn, { name: nickOf(e.a), lvl: lvlOf(e.a) || kr?.lvl || 0 }); $('deadBy').textContent = ''; } } // o banner ja diz quem foi (pedido dele 05/11)
         if (kr?.pos && inGame) {
           const wn = gunName(e.a, e.wpn), dpos = G.deathPos, life = G.lifeN = (G.lifeN || 0) + 1;
           // quadro do meio: a arma de quem te pegou, inteira e de lado, com o nome do modelo (pedido dele 01/11)
@@ -974,11 +1053,12 @@ function onEvent(e) {
       if (inGame && e.state === 'crack') audio.play('safetick', { pos: G.snap?.heist?.vault, vol: 0.8, key: 'safe', max: 1 });
       break;
     case 'heistOpen':
-      if (inGame) { const atk = G.snap?.heist?.atk === G.myTeam; hud.alert(t('hsOpen'), t(atk ? 'hsOpenSub' : 'hsDefSub'), atk ? (G.myTeam || 'red') : 'enemy'); audio.play('siren', { vol: 0.9, ui: true, key: 'siren', max: 1 }); }
+      if (inGame) { const atk = G.snap?.heist?.atk === G.myTeam; hud.alert(t('hsOpen'), t(atk ? 'hsOpenSub' : 'hsDefSub'), atk ? (G.myTeam || 'red') : 'enemy'); audio.play('siren', { vol: 0.9, ui: true, key: 'siren', max: 1 }); modeVoice('vault', true); }
       break;
     case 'heistBag':
       if (!inGame) break;
       const sm = G.snap?.heist?.kind === 'smuggle';
+      if (e.act === 'bank') { const k = teamKey(sm ? 'crate' : 'cash', G.snap?.heist?.atk); if (k) modeVoice(k); } // narrador: "time X roubou o dinheiro"
       if (e.act === 'take') { if (e.id === G.myId) { if (!sm) hud.message(t('hsYouBag'), 2.4); audio.play('pickup', { ui: true, vol: 0.7 }); } else hud.message(t('hsTake', { n: nameOf(e.id) }), 1.8); }
       else if (e.act === 'drop') { hud.message(t('hsDrop'), 1.8); audio.play('land', { pos: e.pos, vol: 0.8 }); }
       else if (e.act === 'return') hud.message(t('hsReturn'), 1.8);
@@ -989,7 +1069,7 @@ function onEvent(e) {
       if (inGame) { G.heistView?.pass(e); audio.play('whoosh', { pos: e.from, vol: 0.7 }); if (e.to === G.myId) hud.message(t('smCatch'), 1.8); }
       break;
     case 'heistRound':
-      if (inGame) { const mine = e.win === G.myTeam; hud.alert(t('hsWinR', { t: t(e.win === 'red' ? 'h_red' : 'h_blue') }), t(e.why === 'quota' ? (G.snap?.heist?.kind === 'smuggle' ? 'smWhyQuota' : 'hsWhyQuota') : 'hsWhyTime') + ` · ${e.wins.red} x ${e.wins.blue}`, mine ? (G.myTeam || 'red') : 'enemy'); audio.play(mine ? 'win' : 'lose', { ui: true, vol: 0.6 }); }
+      if (inGame) { const mine = e.win === G.myTeam; hud.alert(t('hsWinR', { t: t(e.win === 'red' ? 'h_red' : 'h_blue') }), t(e.why === 'quota' ? (G.snap?.heist?.kind === 'smuggle' ? 'smWhyQuota' : 'hsWhyQuota') : 'hsWhyTime') + ` · ${e.wins.red} x ${e.wins.blue}`, mine ? (G.myTeam || 'red') : 'enemy'); audio.play(mine ? 'win' : 'lose', { ui: true, vol: 0.6 }); const k = teamKey('round', e.win); if (k) modeVoice(k, true); }
       break;
     case 'heistNew':
       if (inGame) { const atk = e.atk === G.myTeam; const smq = G.snap?.heist?.kind === 'smuggle'; hud.alert(t(atk ? 'hsAtk' : 'hsDef'), t(atk ? (smq ? 'smAtkSub' : 'hsAtkSub') : (smq ? 'smDefSub' : 'hsDefSub')), atk ? (G.myTeam || 'red') : 'enemy'); }
@@ -1010,7 +1090,7 @@ function onEvent(e) {
       if (e.sentry && e.id === G.myId) hud.message(t(e.beacon ? 'beaconDown' : 'sentryDown'), 2.2);
       if (e.beacon && e.owner === G.myId) hud.message(t('beaconLost'), 2.4);
       audio.play('explosion', { pos: e.pos, vol: 0.9, key: 'blimpx', max: 1 });
-      hud.message(t('blimpDownMsg', { w: nameOf(e.id), o: nameOf(e.owner) }), 2.6);
+      hud.message(t(e.plane ? 'planeDownMsg' : 'blimpDownMsg', { w: nameOf(e.id), o: nameOf(e.owner) }), 2.6);
       if (e.id === G.myId) gainXp('blimpDown');
       break;
     case 'streak':
@@ -1021,8 +1101,9 @@ function onEvent(e) {
         if (e.kind === 'plane' || e.kind === 'bomber') audio.play(e.kind === 'plane' ? 'planefly' : 'bomberdrone', { vol: e.kind === 'bomber' ? 1 : 0.8, ui: true, key: e.kind, max: 1 });
         // Torta Atomica: aviso grande pra todo mundo, com o nome de quem pediu
         if (e.kind === 'nuke') hud.alert(t(mine ? 'nukeYou' : ally ? 'nukeAlly' : 'nukeEnemy', { n: nameOf(e.id) }), t(mine ? 'nukeYouSub' : ally ? 'nukeAllySub' : 'nukeEnemySub', { t: e.delay || 6 }), mine || ally ? 'blue' : 'red');
-        else hud.push(`${bannerHtml(e.bn, { name: nameOf(e.id) })}<small>${esc(t(mine || ally ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }))}</small>`, 'ev-bnr' + (mine || ally ? '' : ' foe'), 3200);
+        else hud.push(`${bannerHtml(e.bn, { name: nickOf(e.id), lvl: lvlOf(e.id) })}<small>${esc(t(mine || ally ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }))}</small>`, 'ev-bnr' + (mine || ally ? '' : ' foe'), 3200);
         audio.play(mine || ally ? 'flag' : 'capture', { vol: 0.7, ui: true });
+        streakVoice(e.kind, mine || ally);
       }
       break;
     case 'look':
@@ -1075,7 +1156,7 @@ function onEvent(e) {
     case 'drop':
       G.brDrops = [...G.brDrops.filter(d => d.t > G.t), { pos: e.pos, t: G.t + (e.fall || 6) + 1 }];
       brView?.drop(e.pos, e.fall);
-      if (inGame) { hud.alert(t('br_drop'), t('br_dropSub'), 'red'); audio.play('flag', { ui: true, vol: 0.45 }); }
+      if (inGame) { hud.alert(t('br_drop'), t('br_dropSub'), 'red'); audio.play('flag', { ui: true, vol: 0.45 }); modeVoice('supply'); }
       break;
     case 'loot1':
       if (e.by === G.myId && inGame) {
@@ -1185,6 +1266,10 @@ function onEvent(e) {
       hud.message(t('fl_' + e.act, { w: e.who, t: t(e.team === 'red' ? 'flagRed' : 'flagBlue') }), 2.6);
       if (e.who && e.who === G.myName) gainXp(e.act === 'cap' ? 'flagCap' : e.act === 'return' ? 'flagReturn' : '');
       audio.play(e.act === 'cap' ? 'flag' : 'capture', { vol: 0.7, ui: true });
+      { const other = e.team === 'red' ? 'blue' : 'red'; // e.team = dono da bandeira; quem pega/captura e o outro time
+        if (e.act === 'cap') modeVoice(teamKey('flagcap', e.by || other), true);
+        else if (e.act === 'take') modeVoice(teamKey('flagtake', other));
+        else if (e.act === 'return' && e.who) modeVoice('flagback'); }
       break;
     }
     case 'esc': // escolta: o bonde mudou de estado
@@ -1196,13 +1281,13 @@ function onEvent(e) {
       else if (inGame && e.by === G.myId) { hud.message(t('ggDownThem', { n: nameOf(e.id) }), 3); audio.play('comic', { ui: true, vol: 0.6 }); }
       break;
     case 'escCp':
-      if (inGame) { hud.message(t('es_cp', { n: e.n, o: e.of, b: e.bonus }), 3); audio.play('capture', { vol: 0.7, ui: true }); if (G.myTeam === 'red') gainXp('zone'); }
+      if (inGame) { hud.message(t('es_cp', { n: e.n, o: e.of, b: e.bonus }), 3); audio.play('capture', { vol: 0.7, ui: true }); modeVoice('checkpoint', true); if (G.myTeam === 'red') gainXp('zone'); }
       break;
     case 'escPass': // round 2 passou a marca do round 1: so aviso, a partida segue
       if (inGame) { hud.message(t('es_pass'), 3); audio.play('capture', { vol: 0.7, ui: true }); }
       break;
     case 'escOt':
-      if (inGame) { hud.message(t('es_ot'), 3); audio.play('ringbell', { vol: 0.6, ui: true }); }
+      if (inGame) { hud.message(t('es_ot'), 3); audio.play('ringbell', { vol: 0.6, ui: true }); modeVoice('overtime', true); }
       break;
     case 'carBoom': // carro estourado a tiro (04/11): explosao grande no lugar dele
       if (!inGame) break;
@@ -1232,6 +1317,7 @@ function onEvent(e) {
     case 'zone':
       if (inGame) {
         hud.message(t('zoneTaken', { z: e.id, t: t(e.team === 'red' ? 'h_red' : 'h_blue') }), 2); audio.play('capture', { vol: 0.6, ui: true });
+        { const k = teamKey('zone', e.team); if (k) modeVoice(k); }
         const z = G.M.zones.find(q => q.id === e.id), p = G.player;
         if (z && p && p.alive && e.team === G.myTeam && Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) < z.r + 0.5) gainXp('zone');
       }
@@ -1251,7 +1337,7 @@ function onEvent(e) {
       if (inGame && ['joined', 'left', 'leftAfk', 'kicked'].includes(e.key) && e.name !== G.myName) chat.sys(t(e.key, { n: e.name })); // entrou/saiu: aparece no chat tambem (03/11)
       break;
     // Noite dos Borroes: avisos de onda, compras e a Caixa de Surpresas do Nanquim
-    case 'borWave': if (inGame) hud.alert(G.snap?.bor?.goal ? t('bor_goal', { n: e.n, g: G.snap.bor.goal }) : t('bor_wave', { n: e.n }), e.boss ? t('bor_boss', { n: t('mob_' + e.boss) }) : '', 'red'); break;
+    case 'borWave': if (inGame) modeVoice(e.boss ? 'boss' : 'wave', true); if (inGame) hud.alert(G.snap?.bor?.goal ? t('bor_goal', { n: e.n, g: G.snap.bor.goal }) : t('bor_wave', { n: e.n }), e.boss ? t('bor_boss', { n: t('mob_' + e.boss) }) : '', 'red'); break;
     case 'borClear': if (inGame) hud.alert(t('bor_clear', { n: e.n }), t('bor_clearSub'), 'blue'); break;
     case 'borDoor': if (inGame) hud.message(t('bor_doorFeed', { a: nameOf(e.by), r: t('bor_room_' + e.id) }), 2.6); break;
     // chefoes (03/11): o servidor ja mandava, o cliente nao mostrava nada
@@ -1300,6 +1386,7 @@ function onEvent(e) {
         if (iWon) { gainXp('win'); chEvent({ type: 'win' }); }
         // ta-da ou trombone triste, por cima da musica abaixada
         audio.duck(0.3, 2.2); setTimeout(() => audio.play(iWon ? 'win' : 'lose', { ui: true, vol: 0.6, jitter: 0, key: 'end', max: 1 }), 350);
+        if (!G.range && !G.tutorial) setTimeout(() => audio.voice(iWon ? 'win' : e.winner ? 'lose' : 'tie'), 1500); // narrador fecha a partida depois da fanfarra
         chEvent({ type: 'match' });
         gainXp('match');
         if (G.snap?.ranked && G.mode !== 'br') rankEnd(iWon);
@@ -1334,12 +1421,14 @@ function onEvent(e) {
       const mine = e.id === G.myId;
       if (mine) { G.myTeam = 'red'; hud.alert(t(e.first ? 'inf_firstYou' : 'inf_you'), t(e.first ? 'inf_firstSub' : 'inf_youSub'), 'red'); audio.play('death', { ui: true, vol: 0.6, rate: 0.8 }); }
       else if (e.first) hud.alert(t('inf_first', { n: nameOf(e.id) }), '', 'red');
+      if (e.first) modeVoice('outbreak', true);
       else hud.feed(esc(t('inf_got', { n: nameOf(e.id) })));
       if (!mine) audio.play('capture', { ui: true, vol: 0.5 });
       break;
     }
     case 'lastStand':
       if (!inGame) break;
+      modeVoice('lastone', true);
       if (e.id === G.myId) { hud.alert(t('inf_lastYou'), t('inf_lastSub'), 'blue'); audio.play('flag', { ui: true, vol: 0.8 }); }
       else hud.alert(t('inf_last', { n: nameOf(e.id) }), '', G.myTeam === 'red' ? 'red' : 'blue');
       break;
@@ -1358,6 +1447,7 @@ function onEvent(e) {
       if (!inGame) break;
       const won = e.winner === G.myTeam;
       hud.alert(t(won ? 'roundWon' : 'roundLost'), t('why_' + e.why), e.winner === 'red' ? 'red' : 'blue');
+      if (e.why !== 'defuse') { const k = teamKey('round', e.winner); if (k) modeVoice(k, true); } // desarme: a fala do desarme ja conta a rodada
       audio.play(won ? 'flag' : 'capture', { ui: true, vol: 0.8 });
       if (won) { gainXp('roundWin'); chEvent({ type: 'win' }); }
       break;
@@ -1367,8 +1457,8 @@ function onEvent(e) {
       break;
     case 'bomb':
       if (!inGame) break;
-      if (e.act === 'plant') { hud.message(t('bombPlanted', { s: e.site }), 2.6); audio.play('flag', { ui: true, vol: 0.7, rate: 0.8 }); if (e.id === G.myId) gainXp('plant'); }
-      else if (e.act === 'defuse') { hud.feed(esc(t('bombDefusedBy', { n: nameOf(e.id) }))); if (e.id === G.myId) gainXp('defuse'); }
+      if (e.act === 'plant') { hud.message(t('bombPlanted', { s: e.site }), 2.6); audio.play('flag', { ui: true, vol: 0.7, rate: 0.8 }); modeVoice('bombplant', true); if (e.id === G.myId) gainXp('plant'); }
+      else if (e.act === 'defuse') { hud.feed(esc(t('bombDefusedBy', { n: nameOf(e.id) }))); modeVoice('bombdefuse', true); if (e.id === G.myId) gainXp('defuse'); }
       else if (e.act === 'drop') hud.feed(esc(t('bombDropFeed')));
       else if (e.act === 'take' && e.id === G.myId) { hud.message(t('bombCarry'), 2); audio.play('pickup', { ui: true, vol: 0.6 }); }
       break;
@@ -1379,7 +1469,7 @@ function onEvent(e) {
 function cineTag() {
   const K = replay.kill;
   $('cineKind').textContent = t('finalKill');
-  { const cb = $('cineBnr'); cb.hidden = !K.bn; if (K.bn) cb.innerHTML = bannerHtml(K.bn, { plain: true }); }
+  { const cb = $('cineBnr'); cb.hidden = !K.bn; if (K.bn) cb.innerHTML = bannerHtml(K.bn, { name: nickOf(K.a), lvl: lvlOf(K.a) || G.remotes.get(K.a)?.lvl || 0 }); } // 06/11 (pedido dele): nome e nivel de quem fez o abate final, igual ao cartao de quem te derrubou
   const v = `<span class="${teamCls(K.v)}">${esc(nameOf(K.v))}</span>`;
   $('cineWho').innerHTML = K.a && K.a !== K.v ? t('finalKillBy', { a: `<span class="${teamCls(K.a)}">${esc(nameOf(K.a))}</span>`, v }) : t('finalSelf', { v });
 }
@@ -1536,7 +1626,7 @@ function showEnd(winner) {
 
 // barra de XP enchendo do XP de antes da partida ate o de agora (vira o nivel no caminho)
 function animateEndXp(from, to, gained) {
-  const lvlOf = (xp) => { let n = 1; while (levelXp(n + 1) <= xp && n < 99) n++; return n; };
+  const lvlOf = (xp) => { let n = 1; while (levelXp(n + 1) <= xp && n < MAX_LEVEL) n++; return n; };
   const t0 = performance.now(), dur = Math.min(2200, 600 + gained * 0.9);
   let shownLvl = lvlOf(from);
   const step = () => {
@@ -1575,9 +1665,28 @@ function onMsg(m) {
     if (G.blimpMeshes.length) { while (G.blimpMeshes.length) scene.remove(G.blimpMeshes.pop()); G.strikes?.clear(); }
     if (m.map) setMap(m.map);
     if (m.mode) { G.mode = m.mode; G.duo = !!m.duo; } // o host pode ter trocado o modo
+    G.lobbyCfg = m.cfg; // horario do lobby (07/11)
     if (G.state === 'lobby') { lobby.render(m, G.myId); syncLobbyPick(m.duo ? 'duo' : m.bounce ? 'bounce' : m.mode); }
     duoLineup(m);
   }
+}
+
+// zoom de verdade da luneta (07/11, pedido dele: a Militar de 3,8x parecia 1x). A lente mostra a imagem INTEIRA do scopeCam
+// dentro do circulo, entao o aumento depende do tamanho do circulo na tela: aumento = (fracao da tela que a lente ocupa /
+// fov da luneta) / (1 / fov normal). Antes era so fov / zoom: com o olho mais longe da mira (regra de 07/11, camera fora da
+// arma) a lente encolheu na tela e os 3,8x viraram ~1,4x. Mede a lente pela camera da arma a cada quadro.
+const _lc = new THREE.Vector3(), _lt = new THREE.Vector3(), _lu = new THREE.Vector3();
+function scopeFov(zoom) {
+  const L = vm.gun?.userData?.scope?.lens, cam = vm.camera, r = L?.geometry?.parameters?.radius;
+  if (!L || !cam || !r) return settings.fov / zoom;
+  L.updateWorldMatrix(true, false); cam.updateMatrixWorld();
+  L.getWorldPosition(_lc);
+  _lu.set(0, 1, 0).applyQuaternion(cam.quaternion); // pra cima da tela
+  const sc = _lt.setFromMatrixScale(L.matrixWorld).y || 1;
+  _lt.copy(_lc).addScaledVector(_lu, r * sc);
+  const a = _lc.project(cam).y, b = _lt.project(cam).y, frac = Math.abs(b - a); // raio em NDC = fracao da altura da tela (diametro / altura)
+  if (!(frac > 0.01) || frac > 1.5) return settings.fov / zoom;
+  return Math.max(1, Math.min(settings.fov, settings.fov * frac / zoom));
 }
 
 // lobby da Dupla (31/10): os dois da dupla no meio da tela, com o visual de cada um e a arma na mao, de frente
@@ -1783,11 +1892,12 @@ async function beginMatch(join) {
   lobby.hide();
   await runLoading({ map: G.M.id, mode: G.duo ? 'duo' : G.bounce ? 'bounce' : G.mode, join });
   if (G.state !== 'loading') return;
+  await preloadMap(G.M.id); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
   await warmGuns();
   hideLoading();
   G.state = 'game';
   funil('jogou');
-  audio.music(true, G.mode === 'br' || G.duo ? 'music_br' : 'music_m' + (1 + Math.floor(Math.random() * 4)));
+  audio.music(true, matchTrack());
   G.plafts = 0; G.gadgetTold = null; G.gadgetShown = null; G.stimBoostT = 0; G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); setTimeout(() => { if (G.blitz && G.state === 'game') hud.message(t('blitzOn'), 3); }, 5000); G.countEnd = 0; G.spec = { i: 0, map: false };
   input.mode = G.mode; setFireButton(input); // botoes do modo (usar, inclinar, marcar) valem a partir desta partida
   // avisa o servidor que carregou: quando o ultimo avisar, sai a contagem pra todo mundo
@@ -2058,6 +2168,8 @@ document.addEventListener('pointerdown', (e) => {
 }, true);
 $('resume').onclick = () => { audio.play('ui_click', { ui: true }); setPaused(false); };
 $('quit').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
+initPocket(() => settings, () => { if (G.state === 'game') hud.message(t('boostOn'), 2.4); });
+$('goPocket').onclick = openPocket; $('pausePocket').onclick = openPocket; $('lbPocket').onclick = openPocket;
 $('pauseSettings').onclick = () => { $('pause').hidden = true; $('menu').hidden = false; ui.go('settings', true); };
 
 // ---------- dica leve na tela (01/11, pedido dele, estilo COD) ----------
@@ -2145,7 +2257,7 @@ const ui = initMenus({
   previewDeath: (on) => { G.lookDeath = !!on; },
   previewDance: (id) => { if (id === G.lookDance?.id) return; G.lookDance = id ? { id, t: 0 } : null; lookFx?.clear(); if (id) audio.dance(id); else audio.danceStop(); },
   // vitrine: o feixe do laser e' curto (o de 12 m da partida cruzava a tela inteira); so mostra a cor saindo do cano
-  onSmith: (gun, cat, charm) => { smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') attachCharm(gun, charm ?? wornLook().charm, 1); },
+  onSmith: (gun, cat, charm) => { smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') attachCharm(gun, charm ?? wornLook().charm, 1); },
   onBackFromSettingsInGame: () => { $('menu').hidden = true; $('pause').hidden = false; },
   // arsenal aberto do lobby: aplica a arma montada e volta pra sala (ready = ja marca pronto)
   onBackToLobby: (ready) => closeLobbySmith(ready),
@@ -2203,7 +2315,25 @@ function frame() {
     try { composer.render(realDt); } catch { /* */ }
   }
 }
+// selo do XP em dobro embaixo do placar (06/11): contando, pausado (com o motivo) ou escondido
+function boostHud(realDt) {
+  const B = boostInfo(), on = B.active && G.state === 'game' && !G.range && !G.tutorial, el = $('xpChip');
+  if (on && boostCounts()) boostTick(realDt * 1000);
+  document.body.classList.toggle('xp2', on);
+  if (!el) return; el.hidden = !on; if (!on) return;
+  const why = G.snap?.over ? '' : weekend() ? t('boostPauseWknd') : G.blitz ? t('boostPauseBlitz') : '';
+  const s = Math.ceil(B.ms / 1000), txt = why || `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${String(Math.floor(s / 60) % 60).padStart(Math.floor(s / 3600) ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`;
+  if (el.dataset.t !== txt) { el.dataset.t = txt; el.classList.toggle('paused', !!why); el.querySelector('.t').textContent = txt; }
+}
+function useBoostNow() {
+  if (!boostUse()) { hud.message(t('boostNone'), 2.2); return; }
+  hud.message(t('boostOn'), 2.4); audio.play('unlock', { ui: true, vol: 0.6, jitter: 0 });
+}
+G.useBoost = useBoostNow;
+addEventListener('rovex-me', () => { if (boostSync()) hud.message(t('boostGot'), 2.6); });
+addEventListener('keydown', (e) => { if (e.repeat || G.state !== 'game' || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return; if (kbBinds(settings).boost?.includes(e.code)) useBoostNow(); });
 function frameBody(now, realDt) {
+  boostHud(realDt);
   // camera lenta no abate final
   if (G.slowT > 0) G.slowT -= realDt;
   G.timeScale += ((G.slowT > 0 ? 0.25 : 1) - G.timeScale) * Math.min(1, realDt * 8);
@@ -2229,7 +2359,7 @@ function frameBody(now, realDt) {
     lookCam.position.set(0, 1.45, z); lookCam.lookAt(0, 1.3, 0);
     lookCam.setViewOffset(innerWidth, innerHeight, innerWidth / 2 - free / 2, 0, innerWidth, innerHeight);
     lookCam.updateProjectionMatrix();
-    renderer.render(lookScene, lookCam);
+    menuPipe.render(lookScene, lookCam);
     pad.poll(realDt, false); // controle no Visual
     return;
   }
@@ -2271,7 +2401,7 @@ function frameBody(now, realDt) {
     }
     // gravacao de video (05/11): camera e arma da vitrine escolhidas de fora (captura/rec-armas.cjs); no jogo normal fica parado
     if (window.__smithShot) { const o = window.__smithShot; smithCam.position.set(o[0], o[1], o[2]); smithCam.lookAt(0, o[3] || 0, 0); }
-    renderer.render(smithScene, smithCam);
+    menuPipe.render(smithScene, smithCam);
     pad.poll(realDt, false); // controle no Arsenal (antes saia daqui sem ler o controle)
     return;
   }
@@ -2368,6 +2498,8 @@ function frameBody(now, realDt) {
   for (const [id, g] of G.gunDrops) { const age = G.t - g.userData.born; g.rotation.y += dt * 0.8; g.position.y = g.userData.y + Math.sin(G.t * 3 + id) * 0.04; g.visible = age < 8 || Math.floor(age * 8) % 2 === 0; if (age > 11) { scene.remove(g); disposeGun(g); G.gunDrops.delete(id); } }
   for (const m of G.nadeMeshes.values()) { const to = m.userData.to, moving = to && m.position.distanceToSquared(tmpV.fromArray(to)) > 0.0004; if (moving) { if (m.userData.spin) m.rotation.x -= dt * 16; else m.rotation.z -= dt * 6; } else if (m.userData.spin) m.rotation.x = -Math.PI / 2; } // gira so no ar; no chao fica deitada
   tickNadeFx(dt);
+  // noite no banco (07/11): o servidor sorteia (snap.nt); o cenario troca a luz e os bonecos ganham brilho proprio
+  { const night = G.state === 'game' && (!!G.snap?.nt || !!G.forceNight); /* forceNight: so teste */ world?.setNight?.(night); if (night !== G.nightOn) G.nightOn = night; for (const r of G.remotes.values()) nightChar(r.char, night); }
   for (const m of G.nadeMeshes.values()) if (m.userData.to) { m.position.lerp(tmpV.fromArray(m.userData.to), Math.min(1, dt * 18)); if (m.userData.rocket) { if (Math.random() < dt * 30) fx.puff(m.position.toArray(), 1, 0.35, 0x8a8478, 0.5); } else m.rotation.x += dt * 8; } // foguete nao gira: solta fumaca
   for (const m of G.blimpMeshes) if (m.userData.to) {
     if (m.userData.bomber) { // dirigivel bombardeiro (04/11): aparece e vai embora esmaecendo perto da borda do mapa
@@ -2430,8 +2562,18 @@ function frameBody(now, realDt) {
     if (carPr) { hud.prompt(carPr); if (input.useBtn) input.useBtn.hidden = false; }
     else if (G.carPrompt) { hud.prompt(null); if (input.useBtn && G.mode !== 'bomb' && G.mode !== 'br' && G.mode !== 'borroes') input.useBtn.hidden = true; }
     G.carPrompt = !!carPr;
+    // Cofre/Contrabando (07/11, pedido dele): a sacola/caixote so vem apertando a acao; perto do cofre aberto ou de uma no chao aparece o aviso
+    let bagPr = null;
+    const H = G.snap?.heist;
+    if (H && !carPr && p.alive && !G.down && G.myTeam === H.atk && !(G.player.bagged || G.player.crated)) {
+      const K = heistCfg(H), d2 = (q, r) => q && (q[0] - p.pos[0]) ** 2 + (q[2] - p.pos[2]) ** 2 < r * r && Math.abs(q[1] - p.pos[1]) < 2.5;
+      if ((H.open && H.bags.some(b => b[1] === 0) && d2(H.vault, K.takeR)) || H.bags.some(b => b[1] === 2 && d2(b[3], K.touchR))) bagPr = t(H.kind === 'smuggle' ? (isTouch ? 'crateTakeTouch' : 'crateTake') : (isTouch ? 'bagTakeTouch' : 'bagTake'), { k: bindLabel(settings, 'use', G.pad?.active ? 1 : 0) });
+    }
+    if (bagPr) { hud.prompt(bagPr); if (input.useBtn) input.useBtn.hidden = false; }
+    else if (G.bagPrompt) { hud.prompt(null); if (input.useBtn) input.useBtn.hidden = true; }
+    G.bagPrompt = !!bagPr;
     // arma no chao (03/11): perto aparece "E pegar X"; so pega apertando usar (antes trocava sozinho ao passar)
-    if (G.gunDrops.size && p.alive && G.mode !== 'br' && !carPr) {
+    if (G.gunDrops.size && p.alive && G.mode !== 'br' && !carPr && !bagPr) {
       let near = null, best = 2.2 * 2.2;
       for (const [id, g] of G.gunDrops) { const q = g.userData.pos, d2 = (q[0] - p.pos[0]) ** 2 + (q[2] - p.pos[2]) ** 2; if (d2 < best && Math.abs(q[1] - p.pos[1]) < 1.6) { best = d2; near = [id, g]; } }
       G.dropNear = near ? near[0] : null;
@@ -2446,6 +2588,7 @@ function frameBody(now, realDt) {
     if (G.M) G.M.dyn = [...(G.snap?.esc ? [trainBox(G.M, G.snap.esc.d)] : G.snap?.heist ? heistBoxes(G.snap.heist) : G.snap?.bor ? borDoorBoxes(G.M, G.snap.bor.doors) : []), ...propBoxes(G.snap?.blimps, G.snap?.cars)]; // bonde (01/11), cofre e van (03/11) e portas fechadas da noite solidos: voce nao atravessa e a bala para
     if (!G.paused) p.update(dt, inp);
     ctxHint(realDt, p);
+    modeTipsTick(realDt, G, p, inp, p.alive && !G.paused && !G.intro && !replay.on && !G.tutorial && !G.range && !(G.snap?.freeze > 0) && !G.over); // dicas do modo (07/11)
     nadeArc(p);
     if (G.range && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) { G.range.begin(); if (!G.range.armed) { G.range.armed = true; rangeEquip(G.range.cat, G.range.body); } } G.range.update(); }
     if (G.tutorial && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) G.tutorial.begin(); G.tutorial.update(dt, inp); }
@@ -2466,11 +2609,13 @@ function frameBody(now, realDt) {
     const fovS = 1 + ((settings.fovScale || 1) - 1) * (vm.sight()?.big ? 1 - p.adsK : 1);
     const fovT = Math.min(125, (settings.fov + (p.tac ? 12 : p.sprint ? 6 : 0)) * (stimOn ? 1.05 : 1) / (1 + (outer - 1) * p.adsK) * fovS);
     if (stimOn !== !!G.stimFx) { G.stimFx = stimOn; document.body.classList.toggle('stim-rush', stimOn); }
-    // distancia de desenho (03/11, pedido dele): curta pra todos, sem opcao. So a luneta (zoom grande mirando) enxerga longe
+    // distancia de desenho: Curta/Media/Longa nos Ajustes (07/11). Luneta (zoom grande mirando) enxerga longe e a nevoa abre junto
     const longEye = (big || zoom >= 3) && p.adsK > 0.5;
-    const dd = longEye ? DRAW_DIST.scope : DRAW_DIST.near;
+    const dd = longEye ? DRAW_DIST.scope : DRAW_DIST[settings.draw] || DRAW_DIST.mid;
     if (camera.far !== dd) camera.far = dd;
-    if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = Math.min(b[1], dd * 0.96); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.55); } // rrBase: a nevoa original do mapa
+    // nevoa: comeca na metade da distancia e fecha antes do corte (nada some de repente). rrBase: a nevoa do proprio mapa (Tinteiro e Docas tem a deles, mais fechada)
+    if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = longEye ? Math.min(b[1], dd * 0.96) : Math.min(b[1], dd * 0.94); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.45); }
+    OUTLINE_FAR.value = scene.fog && !longEye ? scene.fog.near + (scene.fog.far - scene.fog.near) * 0.8 : 1e9; // contorno so de perto (07/11): a 80% da nevoa ele ja quase nao aparece
     camera.fov += (fovT - camera.fov) * (1 - Math.exp(-14 * realDt));
     camera.updateProjectionMatrix();
     // escala de FOV (04/11, pedido dele): 1x = como sempre; acima disso a arma fica mais longe do olho, parada e mirando (o mundo nao muda)
@@ -2616,23 +2761,34 @@ function frameBody(now, realDt) {
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
     const low = p.alive ? Math.max(0, (40 - p.hp) / 40) * 0.5 : 0.4;
     film.uniforms.hurt.value = Math.min(1, G.hurtFlash + low);
-    if (big && p.adsK > 0.3 && p.alive && !replay.on) {
+    const rpScope = replay.on && replay.bigScope && replay.fpVm && G.specVm === 'replay'; // tela de morte com luneta (07/11)
+    if ((big && p.adsK > 0.3 && p.alive && !replay.on) || rpScope) {
       scopeOn = true;
       camera.updateMatrixWorld();
       scopeCam.position.copy(camera.position);
       scopeCam.quaternion.copy(camera.quaternion);
-      scopeCam.fov = settings.fov / zoom;
+      scopeCam.fov = scopeFov(rpScope ? vm.sight()?.zoom || 3 : zoom);
       scopeCam.updateProjectionMatrix();
     }
   } else {
     menuT += realDt;
-    const a = menuT * 0.06;
-    camera.position.set(Math.sin(a) * 46, 14 + Math.sin(menuT * 0.2) * 3, Math.cos(a) * 46);
-    camera.lookAt(0, 4, 0);
-    camera.fov = 55; camera.updateProjectionMatrix();
+    modeTipsHide();
+    { const ln = G.state === 'lobby' && G.lobbyCfg?.mode === 'heist' && G.lobbyCfg?.tod === 'night'; // lobby ja mostra o mapa no horario escolhido
+      if (ln !== !!G.nightOn) { G.nightOn = ln; world?.setNight?.(ln); for (const r of G.remotes.values()) nightChar(r.char, ln); } }
+    film.uniforms.smoke.value = 0; // veu da fumaca nao fica preso fora da partida
+    // lobby (07/11, pedido dele): tomadas de cinema pelo mapa com fade entre elas; menu e mapa sem tomada boa: a orbita de sempre
+    const fade = G.state === 'lobby' ? lobbyCam.frame(realDt, G.M, camera) : null;
+    if (fade === null) {
+      const a = menuT * 0.06;
+      camera.position.set(Math.sin(a) * 46, 14 + Math.sin(menuT * 0.2) * 3, Math.cos(a) * 46);
+      camera.lookAt(0, 4, 0);
+      camera.fov = 55; camera.updateProjectionMatrix();
+    }
+    film.uniforms.fade.value = fade || 0;
     vmPass.enabled = false;
     film.uniforms.hurt.value = 0;
   }
+  if (G.state !== 'lobby' && film.uniforms.fade.value) film.uniforms.fade.value = 0;
   // luneta (05/11, pedido dele: o FPS caia ao abrir, 66 pra 49 medido): a imagem do vidro desenha o mapa inteiro de novo. Se o quadro passa de 17 ms, o
   // vidro desenha sem os contornos (metade das chamadas); passou de 18,5 ms, tambem atualiza um quadro sim, outro nao. A folga evita ficar trocando. Termica: mascara a cada 3
   G.frameAvg = (G.frameAvg ?? realDt) + (realDt - (G.frameAvg ?? realDt)) * 0.05;
@@ -2664,12 +2820,29 @@ function frameBody(now, realDt) {
   }
   // com a luneta aberta a cena ja atualizou as matrizes neste quadro: nao percorre tudo de novo
   if (scopeOn && G.scopeDrawn) scene.matrixWorldAutoUpdate = false;
+  const farBack = keepStreaksInView(); // sequencias sempre a vista (07/11): o que passou da nevoa e desenhado mais perto, encolhido na mesma proporcao
   composer.render(realDt);
+  for (const [o, p, sc] of farBack) { o.position.copy(p); o.scale.copy(sc); }
   scene.matrixWorldAutoUpdate = true;
   G.clipRec?.draw(); // clipe gravando: copia o quadro na hora (o canvas do jogo nao guarda o desenho)
   if (lineup.chars.some(c => c.root.visible)) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(lineupScene, camera); renderer.autoClear = true; }
 }
 
+// Distancia de desenho curta (07/11, pedido dele): nuvens somem, sequencias NUNCA. Dirigivel, balao, biplano, trem e mao que estao
+// alem do comeco da nevoa vao pra um ponto na mesma direcao, no comeco dela, com a escala reduzida igual: mesmo tamanho na tela, sem nevoa e sem corte
+const _kv = new THREE.Vector3(), _kw = new THREE.Vector3();
+function keepStreaksInView() {
+  const back = []; if (!scene.fog || G.state !== 'game') return back;
+  const lim = scene.fog.near * 0.95, list = [...G.blimpMeshes.filter(m => m.visible && (m.userData.kind === 'blimp' || m.userData.kind === 'bomber' || !m.userData.kind)), ...(G.strikes?.root.visible ? G.strikes.root.children.filter(o => o.visible) : [])];
+  for (const o of list) {
+    o.getWorldPosition(_kw); const d = _kw.distanceTo(camera.position); if (d <= lim) continue;
+    back.push([o, o.position.clone(), o.scale.clone()]);
+    const k = lim / d; _kv.copy(_kw).sub(camera.position).multiplyScalar(k).add(camera.position);
+    if (o.parent) o.parent.worldToLocal(_kv); o.position.copy(_kv); o.scale.multiplyScalar(k);
+  }
+  if (back.length) scene.updateMatrixWorld();
+  return back;
+}
 $('deadGo').onclick = () => G.net?.send({ t: 'respawn' });
 hud.onStreakTap = (id) => { G.streakKind = id; input.edges.add('STREAK'); }; // celular: tocou num selo pronto
 $('pauseTeam').onclick = () => { audio.play('ui_click', { ui: true }); G.net?.send({ t: 'team' }); setPaused(false); };
@@ -2842,13 +3015,13 @@ let SMOKE_TEX = null;
 function smokeTex() { if (SMOKE_TEX) return SMOKE_TEX; const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 4, 32, 32, 32); gr.addColorStop(0, 'rgba(225,222,214,1)'); gr.addColorStop(0.6, 'rgba(205,202,194,.95)'); gr.addColorStop(1, 'rgba(200,197,190,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return (SMOKE_TEX = new THREE.CanvasTexture(c)); }
 // Fumaca (04/11, otimizada): era 26 sprites = 26 desenhos por nuvem. Agora 14 bolas numa malha instanciada (1 desenho), a
 // geometria e uma so pra todas as nuvens e cada nuvem so tem o proprio material (uniform de opacidade). Teto de 4 nuvens.
-const SMOKE_MAX = 4;
+const SMOKE_MAX = 3; // 07/11 (pedido dele: fumaca pesada quando usada muito): era 4
 let SMOKE_GEO = null, SMOKE_MAT = null;
 function smokeGeo() {
   if (SMOKE_GEO) return SMOKE_GEO;
-  const g = new THREE.InstancedBufferGeometry(), N = 14, off = new Float32Array(N * 3), size = new Float32Array(N);
+  const g = new THREE.InstancedBufferGeometry(), N = 10 /* 07/11: era 14 (bolas um pouco maiores cobrem igual) */, off = new Float32Array(N * 3), size = new Float32Array(N);
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
-  for (let i = 0; i < N; i++) { const a = i * 2.4, r = 1 + (i % 5) * 0.85; off.set([Math.cos(a) * r, 0.9 + (i * 0.37 % 1) * 3, Math.sin(a) * r], i * 3); size[i] = 2.3 + (i * 0.61 % 1) * 1.3; }
+  for (let i = 0; i < N; i++) { const a = i * 2.4, r = 1 + (i % 5) * 0.85; off.set([Math.cos(a) * r, 0.9 + (i * 0.37 % 1) * 3, Math.sin(a) * r], i * 3); size[i] = 2.6 + (i * 0.61 % 1) * 1.4; }
   g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 3)); g.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 1));
   g.instanceCount = N; g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 2, 0), 9);
   return (SMOKE_GEO = g);
@@ -2857,16 +3030,31 @@ function smokeCloud(pos, dur) {
   const list = G.smokeFx || []; if (list.length >= SMOKE_MAX) list[0].t = Math.max(list[0].t, list[0].dur - 1.5); // a mais velha comeca a sumir
   SMOKE_MAT ||= new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, uniforms: { tMap: { value: smokeTex() }, uOp: { value: 0 } },
-    vertexShader: 'attribute vec3 aOff; attribute float aSize; varying vec2 vUv; void main() { vUv = position.xy * 0.5 + 0.5; vec4 mv = modelViewMatrix * vec4(aOff, 1.0); mv.xy += position.xy * aSize; gl_Position = projectionMatrix * mv; }',
-    fragmentShader: 'uniform sampler2D tMap; uniform float uOp; varying vec2 vUv; void main() { vec4 c = texture2D(tMap, vUv); gl_FragColor = vec4(c.rgb, c.a * uOp); \n#include <colorspace_fragment>\n }',
+    vertexShader: 'attribute vec3 aOff; attribute float aSize; varying vec2 vUv; varying float vNear; void main() { vUv = position.xy * 0.5 + 0.5; vec4 mv = modelViewMatrix * vec4(aOff, 1.0); vNear = smoothstep(0.8, 3.2, -mv.z); mv.xy += position.xy * aSize; gl_Position = projectionMatrix * mv; }', // 07/11: bola colada na camera some (cobria a tela inteira, camada sobre camada); o veu de dentro vem do filtro
+    fragmentShader: 'uniform sampler2D tMap; uniform float uOp; varying vec2 vUv; varying float vNear; void main() { vec4 c = texture2D(tMap, vUv); float a = c.a * uOp * vNear; if (a < 0.01) discard; gl_FragColor = vec4(c.rgb, a); \n#include <colorspace_fragment>\n }',
   });
   const mat = SMOKE_MAT.clone(); mat.uniforms.tMap.value = smokeTex();
   const grp = new THREE.Mesh(smokeGeo(), mat); grp.position.set(pos[0], pos[1], pos[2]); grp.rotation.y = Math.random() * 6.28; scene.add(grp);
-  return { grp, mat, t: 0, dur };
+  return { grp, mat, t: 0, dur, pos: [pos[0], (pos[1] || 0) + 2, pos[2]] };
+}
+const tmpSmoke = new THREE.Vector3();
+// boneco de noite (07/11): material proprio com brilho (emissive) na cor dele, pra ser visto no escuro sem luz de verdade.
+// Os materiais toon sao compartilhados com o cenario (cache por cor): por isso clona so os do boneco, e devolve de dia
+function nightChar(c, on) {
+  if (!c?.root || !!c._night === on) return;
+  c._night = on;
+  c.root.traverse(o => {
+    if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+    if (on) { if (!o.material.isMeshToonMaterial || o.userData.dayMat) return; const m = o.material.clone(); m.emissive = m.color.clone().multiplyScalar(0.42); o.userData.dayMat = o.material; o.material = m; }
+    else if (o.userData.dayMat) { o.material.dispose(); o.material = o.userData.dayMat; delete o.userData.dayMat; }
+  });
 }
 function tickNadeFx(dt) {
   for (const s of G.smokeFx || []) { s.t += dt; s.mat.uniforms.uOp.value = Math.min(0.95, s.t * 1.5) * Math.min(1, (s.dur - s.t) / 2); s.grp.rotation.y += dt * 0.05; if (s.t >= s.dur) { scene.remove(s.grp); s.mat.dispose(); } }
   if (G.smokeFx) G.smokeFx = G.smokeFx.filter(s => s.t < s.dur);
+  // dentro da nuvem: veu cinza no filtro de filme (1 passada que ja roda) em vez de dezenas de camadas transparentes na tela toda
+  let veil = 0; for (const s of G.smokeFx || []) { const d = camera.position.distanceTo(tmpSmoke.set(s.pos[0], s.pos[1], s.pos[2])); veil = Math.max(veil, Math.min(1, Math.max(0, (5.6 - d) / 2.4)) * s.mat.uniforms.uOp.value); }
+  film.uniforms.smoke.value = veil;
   for (const f of G.fires || []) { f.t -= dt; f.acc += dt; if (f.acc > 0.12) { f.acc = 0; const a = Math.random() * 6.28, r = Math.random() * 3.6; fx.puff([f.pos[0] + Math.cos(a) * r, (f.pos[1] || 0) + 0.3, f.pos[2] + Math.sin(a) * r], 2, 0.7, Math.random() < 0.5 ? 0xf08a2a : 0xffc24a, 0.5); } }
   if (G.fires) G.fires = G.fires.filter(f => f.t > 0);
 }

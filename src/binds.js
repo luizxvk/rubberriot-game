@@ -15,6 +15,7 @@ export const ACTIONS = [
   ['dance1', 'k_dance1', ['Digit1'], 'LEFT'], ['dance2', 'k_dance2', ['Digit2'], 'UP'], ['dance3', 'k_dance3', ['Digit3'], 'RIGHT'], // so valem no podio: dividem tecla e botao com a partida
   ['canted', 'k_canted', ['KeyN'], 'DOWN'], // mira de 45 graus: so vale mirando (por isso divide o direcional com inspecionar)
   ['leanL', 'k_leanL', ['KeyQ'], null], ['leanR', 'k_leanR', ['KeyE'], null], ['map', 'k_spec', ['KeyM'], null],
+  ['boost', 'k_boost', ['KeyJ'], null], // usar a proxima ficha de XP em dobro do Bolso (06/11)
 ];
 export const PAD_BTN = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, L3: 10, R3: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
 const PAD_FIXED = ['SELECT', 'START'];

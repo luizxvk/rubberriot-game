@@ -1,0 +1,326 @@
+<!doctype html><meta charset="utf-8"><title>Editor de arma</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#1b1a19;color:#eee;font:13px Nunito,system-ui,sans-serif}
+#app{display:grid;grid-template-columns:330px 1fr 1fr;height:100%}
+#side{overflow:auto;padding:10px 12px;background:#24221f;border-right:1px solid #3a3733;scrollbar-width:none}
+#side::-webkit-scrollbar{display:none}
+h2{margin:14px 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#ffb21a}
+h2:first-child{margin-top:0}
+select,input,button{font:inherit;color:#eee;background:#33302c;border:1px solid #4a4640;border-radius:6px;padding:4px 6px}
+button{cursor:pointer}button:hover{background:#3f3b36}
+button.on{background:#ffb21a;color:#111;border-color:#ffb21a}
+.row{display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap}
+.row label{min-width:86px;color:#bbb}
+.row select{flex:1;min-width:0}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:4px}
+.adj{border:1px solid #3a3733;border-radius:8px;padding:6px 8px;margin:6px 0}
+.adj b{display:block;margin-bottom:2px}
+.adj .row label{min-width:70px}
+.adj input[type=range]{flex:1;min-width:0}
+.adj input[type=number]{width:62px}
+.pane{position:relative;overflow:hidden;border-left:1px solid #3a3733}
+.pane canvas{display:block}
+.tag{position:absolute;left:8px;top:6px;background:#000a;padding:2px 8px;border-radius:6px;pointer-events:none}
+.tabs{position:absolute;right:8px;top:6px;display:flex;gap:4px}
+#hover{position:absolute;left:8px;bottom:6px;background:#000a;padding:2px 8px;border-radius:6px;pointer-events:none}
+#msg{margin-top:8px;min-height:18px;color:#9f9}
+.small{color:#999;font-size:11px;line-height:1.35}
+#save{background:#d7262e;border-color:#d7262e;font-weight:700;padding:6px 14px}
+</style>
+<div id="app">
+  <div id="side">
+    <h2>Arma</h2>
+    <div class="row"><select id="gun"></select></div>
+    <div class="row"><label>Escala</label><input id="k" type="number" step="0.01" min="0.5" max="2" style="width:70px"><span class="small" id="klen"></span></div>
+    <h2>Zonas (clique na peça)</h2>
+    <div class="row" id="brush"></div>
+    <div class="small">Escolha o pincel e clique nas peças à esquerda. Pintura = cor e camo; Destaque = madeira; Escuro = só destaque escuro; Ferro = mira de ferro (aparece só sem mira acoplada); Pente = pente separado; Apagar = some sempre.</div>
+    <h2>Pontos (clique na arma)</h2>
+    <div class="row" id="marks"></div>
+    <div class="small" id="markinfo">Escolha o ponto e clique na superfície. Largura sempre no eixo do cano.</div>
+    <h2>Peças na prévia</h2>
+    <div class="row"><label>Mira</label><select id="lo-scope"></select></div>
+    <div class="row"><label>Empunhadura</label><select id="lo-handle"></select></div>
+    <div class="row"><label>Boca</label><select id="lo-muzzle"></select></div>
+    <div class="row"><label>Laser</label><select id="lo-laser"></select></div>
+    <div class="row"><label>Pente</label><select id="lo-charger"></select></div>
+    <div class="row"><label>Camuflagem</label><select id="lo-camo"></select></div>
+    <div class="row"><label>Pintura</label><input id="lo-paint" type="color" value="#2a2724"><label style="min-width:0">Destaque</label><input id="lo-accent" type="color" value="#8a5a34"><button id="lo-cor0">sem cor</button></div>
+    <h2>Ajuste por encaixe (mm)</h2>
+    <div id="adj"></div>
+    <div class="row" style="margin-top:12px"><button id="undo">Desfazer</button><button id="reset">Zerar ajustes</button><button id="save">Salvar</button></div>
+    <div id="msg"></div>
+  </div>
+  <div class="pane" id="pL"><div class="tag">Peças (metros, cano à frente)</div><div id="hover"></div></div>
+  <div class="pane" id="pR"><div class="tag" id="tagR">Prévia</div><div class="tabs"><button data-v="orbit" class="on">Prévia 3D</button><button data-v="side">Lado 1ª pessoa</button><button data-v="ads">Visão da mira</button></div></div>
+</div>
+<script type="module">
+// Editor de arma do TastyTony (07/11, pedido dele): zonas por clique, pontos de encaixe por clique,
+// prévia ao vivo (buildGun + ttApply) com ajuste x/y/z + tamanho por encaixe, visão da mira e Salvar (grava src/tt_guns.json).
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadArsenal, scopeTarget, buildGun, defaultLoadout, DEFAULT_IRON, CATEGORY, chargerOptions, nativePart, MUZZLES, LASERS, muzzleFits, TT_LIST, ttApply, ttUnit, ttSwap } from '../src/arsenal.js';
+import { CAMOS } from '../src/camos.js';
+import { ViewModel } from '../src/viewmodel.js';
+import { handCacheClear } from '../src/handwrap.js';
+
+await loadArsenal();
+const $ = (id) => document.getElementById(id);
+const msg = (t, bad) => { $('msg').textContent = t; $('msg').style.color = bad ? '#f88' : '#9f9'; };
+
+// ---------- estado ----------
+const ZONES = { paint: ['Pintura', '#5aaa3c'], accent: ['Destaque', '#b28054'], dark: ['Escuro', '#3d3a36'], iron: ['Ferro', '#e8e2d0'], mag: ['Pente', '#3f6fe0'], del: ['Apagar', '#e03030'] };
+const MARKS = { rail0: ['Trilho tras', '#ffb21a'], rail1: ['Trilho frente', '#ffb21a'], grip: ['Punho', '#39d7ff'], fore: ['Guarda-mão', '#b6f23c'], muzzle: ['Boca', '#ff5fa2'] };
+const SLOTS = { scope: 'Mira', handle: 'Empunhadura', muzzle: 'Boca / supressor', laser: 'Laser', charger: 'Pente' };
+let cfg = null, brush = 'accent', markMode = null, view = 'orbit';
+const undo = [];
+const catOf = (id) => id.startsWith('pistol') ? 'pistol' : id.startsWith('subfusil') ? 'smg' : id.startsWith('fusil') ? 'rifle' : id.startsWith('lmg') ? 'lmg' : id.startsWith('shotgun') ? 'shotgun' : 'sniper';
+const LS = 'arma-editor-lo';
+const loAll = JSON.parse(localStorage.getItem(LS) || '{}');
+const snap = () => { undo.push(JSON.stringify(cfg)); if (undo.length > 80) undo.shift(); };
+
+// ---------- renderizadores ----------
+function mkPane(el) {
+  const r = new THREE.WebGLRenderer({ antialias: true }); r.setPixelRatio(devicePixelRatio); el.appendChild(r.domElement);
+  const cam = new THREE.PerspectiveCamera(35, 1, 0.001, 100);
+  const ctl = new OrbitControls(cam, r.domElement); ctl.enableDamping = false;
+  const fit = () => { const w = el.clientWidth, h = el.clientHeight; r.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); };
+  return { el, r, cam, ctl, fit };
+}
+const L = mkPane($('pL')), R = mkPane($('pR'));
+// enquadra a arma inteira de lado (comprimento cabe na largura do painel, com folga)
+function frame(P, box) {
+  const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), t = Math.tan(THREE.MathUtils.degToRad(P.cam.fov / 2));
+  const d = Math.max(sz.z / 2 / (t * P.cam.aspect), sz.y / 2 / t) * 1.25 + sz.x / 2;
+  P.ctl.target.copy(c); P.cam.position.set(c.x + d, c.y + d * 0.08, c.z); P.cam.near = d / 100; P.cam.far = d * 20; P.cam.updateProjectionMatrix(); P.ctl.update();
+}
+const sceneL = new THREE.Scene(); sceneL.background = new THREE.Color(0x2b2925);
+const sceneR = new THREE.Scene(); sceneR.background = new THREE.Color(0xc9c4b8);
+for (const s of [sceneL, sceneR]) { s.add(new THREE.HemisphereLight(0xffffff, 0x777777, 2)); const d = new THREE.DirectionalLight(0xffffff, 1.6); d.position.set(3, 4, 2); s.add(d); }
+// luneta: no jogo a lente recebe a camera do mundo; aqui recebe um alvo de teste (senao fica preta)
+{
+  const rt = new THREE.WebGLRenderTarget(512, 512); rt.texture.colorSpace = THREE.SRGBColorSpace; scopeTarget.texture = rt.texture;
+  const mk = new THREE.WebGLRenderTarget(64, 64); scopeTarget.mask = mk.texture;
+  const s = new THREE.Scene(); s.background = new THREE.Color(0x9cc3e6); s.add(new THREE.HemisphereLight(0xffffff, 0x556644, 2.5));
+  const gr = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x7a8a55 })); gr.rotation.x = -Math.PI / 2; gr.position.y = -2; s.add(gr);
+  for (let i = -3; i <= 3; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(1, 2 + (i & 1), 1), new THREE.MeshStandardMaterial({ color: i ? 0xb0a28a : 0xd7262e })); b.position.set(i * 2.2, -1, -30); s.add(b); }
+  const c = new THREE.PerspectiveCamera(20, 1, 0.5, 500); R.r.setRenderTarget(rt); R.r.render(s, c); R.r.setRenderTarget(mk); R.r.clear(); R.r.setRenderTarget(null);
+}
+const vm = new ViewModel(); vm.camera.fov = 58; vm.scene.background = new THREE.Color(0xc9c4b8);
+addEventListener('resize', () => { L.fit(); R.fit(); draw(); });
+L.ctl.addEventListener('change', draw); R.ctl.addEventListener('change', draw);
+
+// ---------- pecas cruas do glb (lado esquerdo) ----------
+const loader = new GLTFLoader(), raw = {};
+let pieces = [], piecesG = null, markG = null;
+async function loadRaw(id) {
+  if (!raw[id]) raw[id] = (await loader.loadAsync(import.meta.env.BASE_URL + 'models/src/tt_ready/' + id + '.glb')).scene;
+  return raw[id];
+}
+const autoZone = (o) => { const z = o.name.match(/^p\d+_([a-z]+)/)[1]; return z === 'del' ? 'iron' : z === 'cut' ? 'del' : z; }; // cut = luneta de fabrica (some sempre) // del do tt_prep = mira de ferro
+const zoneOf = (o) => { const m = o.name.match(/^p(\d+)_([a-z]+)/); return m ? cfg.zones?.['p' + m[1]] || autoZone(o) : null; };
+const pKey = (o) => 'p' + o.name.match(/^p(\d+)/)[1];
+function baseMarks(scn) { const m = {}; scn.traverse(o => { if (/^m_/.test(o.name)) m[o.name.slice(2)] = o.getWorldPosition(new THREE.Vector3()); }); return m; }
+let gunLen = 1;
+async function showPieces() {
+  const scn = await loadRaw(cfg.id); scn.updateMatrixWorld(true);
+  if (piecesG) sceneL.remove(piecesG);
+  piecesG = new THREE.Group(); pieces = [];
+  scn.traverse(o => {
+    if (!o.isMesh || !/^p\d+_/.test(o.name)) return;
+    const m = new THREE.Mesh(o.geometry.clone().applyMatrix4(o.matrixWorld), new THREE.MeshStandardMaterial({ roughness: 0.7, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+    m.name = o.name; m.geometry.computeBoundingBox(); pieces.push(m); piecesG.add(m);
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })); m.add(e);
+  });
+  sceneL.add(piecesG); paintPieces();
+  const box = new THREE.Box3().setFromObject(piecesG), c = box.getCenter(new THREE.Vector3()); gunLen = box.max.z - box.min.z;
+  frame(L, box);
+  $('klen').textContent = (gunLen * 100).toFixed(1) + ' cm no glb';
+  showMarks();
+}
+// regra dele (07/11): camuflagem na area MAIOR, destaque na menor; o jogo troca sozinho e aqui mostra trocado tambem
+function swapped() { for (const m of pieces) m.geometry.userData.zn = zoneOf(m); return ttSwap(pieces.filter(m => !['del', 'mag', 'iron', 'dark'].includes(zoneOf(m))).map(m => m.geometry)); }
+function paintPieces() {
+  const sw = swapped(); $('hover').textContent = sw ? 'Destaque cobria mais: Pintura e Destaque trocadas (camo na área maior)' : '';
+  for (const m of pieces) { let z = zoneOf(m); if (sw && (z === 'paint' || z === 'accent')) z = z === 'paint' ? 'accent' : 'paint'; m.material.color.set(ZONES[z]?.[1] || '#888'); m.material.transparent = z === 'del'; m.material.opacity = z === 'del' ? 0.45 : 1; }
+}
+function showMarks() {
+  if (markG) sceneL.remove(markG);
+  markG = new THREE.Group();
+  const all = { ...baseMarks(raw[cfg.id]) }; for (const [k, v] of Object.entries(cfg.marks || {})) all[k] = new THREE.Vector3(...v);
+  for (const [k, [nm, col]] of Object.entries(MARKS)) {
+    const p = all[k]; if (!p) continue;
+    const s = new THREE.Mesh(new THREE.SphereGeometry(gunLen * 0.012, 16, 12), new THREE.MeshBasicMaterial({ color: col, depthTest: false })); s.renderOrder = 9; s.position.copy(p);
+    if (cfg.marks?.[k]) { const ring = new THREE.Mesh(new THREE.RingGeometry(gunLen * 0.016, gunLen * 0.02, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, side: THREE.DoubleSide })); ring.renderOrder = 9; ring.rotation.y = Math.PI / 2; s.add(ring); }
+    markG.add(s);
+  }
+  // linha do trilho e eixo do cano
+  if (all.rail0 && all.rail1) markG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([all.rail0, all.rail1]), new THREE.LineBasicMaterial({ color: 0xffb21a, depthTest: false })));
+  if (all.muzzle) { const a = all.muzzle.clone(), b = a.clone(); b.z += gunLen; const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineDashedMaterial({ color: 0xff5fa2, dashSize: gunLen * 0.02, gapSize: gunLen * 0.015, depthTest: false })); ln.computeLineDistances(); markG.add(ln); }
+  sceneL.add(markG); draw();
+}
+// corte transversal em z: centro em x (eixo) e faixa em y, so das pecas que ficam
+function section(z) {
+  const tol = gunLen * 0.012, v = new THREE.Vector3(); let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const m of pieces) {
+    if (zoneOf(m) === 'del' || zoneOf(m) === 'mag') continue;
+    const b = m.geometry.boundingBox; if (z < b.min.z - tol || z > b.max.z + tol) continue;
+    const pa = m.geometry.attributes.position;
+    for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i); if (Math.abs(v.z - z) > tol) continue; x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
+  }
+  return Number.isFinite(x0) ? { x: (x0 + x1) / 2, lo: y0, hi: y1 } : null;
+}
+
+// clique: pincel de zona ou ponto
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let down = null;
+function hit(ev) {
+  const rc = L.r.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - rc.left) / rc.width) * 2 - 1, -((ev.clientY - rc.top) / rc.height) * 2 + 1);
+  ray.setFromCamera(ndc, L.cam); return ray.intersectObjects(pieces, false)[0] || null;
+}
+L.r.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+L.r.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4 || e.button !== 0) return;
+  const h = hit(e); if (!h) return;
+  snap();
+  if (markMode) {
+    const p = h.point, s = section(p.z), r4 = (x) => Math.round(x * 1e4) / 1e4;
+    let y = p.y;
+    if (s) { if (markMode === 'rail0' || markMode === 'rail1') y = s.hi; else if (markMode === 'fore') y = s.lo; else if (markMode === 'muzzle' || markMode === 'grip') y = (s.lo + s.hi) / 2; }
+    (cfg.marks ||= {})[markMode] = [r4(s ? s.x : p.x), r4(y), r4(p.z)];
+    msg(MARKS[markMode][0] + ' marcado');
+    showMarks(); rebuild();
+  } else {
+    const k = pKey(h.object), auto = autoZone(h.object);
+    cfg.zones ||= {};
+    if (brush === auto) delete cfg.zones[k]; else cfg.zones[k] = brush;
+    if (!Object.keys(cfg.zones).length) delete cfg.zones;
+    paintPieces(); draw(); rebuild();
+  }
+});
+L.r.domElement.addEventListener('pointermove', e => { const h = hit(e); $('hover').textContent = h ? h.object.name + ' → ' + ZONES[zoneOf(h.object)]?.[0] : ''; });
+
+// ---------- previa (lado direito) ----------
+let gun = null, firstFit = true;
+const lo = () => loAll[cfg.id] || (loAll[cfg.id] = {});
+function loadout() {
+  const o = { body: cfg.id, ...lo() };
+  for (const k of Object.keys(o)) if (o[k] === '' || o[k] === undefined) o[k] = null;
+  return o;
+}
+function rebuild() {
+  if (!ttApply(cfg)) { msg('arma não carregou', true); return; }
+  handCacheClear();
+  fillLoadout(); // pente e miras dependem do corpo novo
+  if (gun) sceneR.remove(gun);
+  gun = buildGun(catOf(cfg.id), loadout());
+  sceneR.add(gun);
+  const lz = gun.userData.laser, bp = lz?.beam.parent; if (lz) bp.remove(lz.beam); // feixe de 18 m estraga o enquadramento
+  const box = new THREE.Box3().setFromObject(gun);
+  if (lz) bp.add(lz.beam);
+  if (firstFit) { frame(R, box); firstFit = false; }
+  if (view !== 'orbit') renderVM();
+  draw();
+}
+let vmShot = false;
+function renderVM() {
+  vm.setWeapon(catOf(cfg.id), loadout(), true);
+  const U = vm.gun.userData.scope?.lens?.material.uniforms; if (view === 'ads' && U?.uOn) U.uOn.value = 1;
+  for (let i = 0; i < 120; i++) vm.update({ dt: 1 / 60, moving: false, speed: 0, sprint: false, firing: false, tac: false, ads: view === 'ads' ? 1 : 0, crouch: false, slide: false, air: false, lookDX: 0, lookDY: 0 });
+  if (view === 'side') { vm.camera.position.set(0.9, -0.1, -0.5); vm.camera.lookAt(0.05, -0.18, -0.5); }
+  vmShot = true;
+}
+function draw() {
+  L.r.render(sceneL, L.cam);
+  if (view === 'orbit') R.r.render(sceneR, R.cam);
+  else { vm.camera.aspect = R.el.clientWidth / R.el.clientHeight; vm.camera.updateProjectionMatrix(); R.r.render(vm.scene, vm.camera); }
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  view = b.dataset.v; R.ctl.enabled = view === 'orbit'; $('tagR').textContent = b.textContent;
+  if (view !== 'orbit') renderVM(); draw();
+});
+// camo animada: redesenha devagar so na previa orbital
+setInterval(() => { if (view === 'orbit' && lo().camo) draw(); }, 100);
+
+// ---------- painel ----------
+function opts(sel, list, cur, label = (x) => x) {
+  sel.innerHTML = list.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  sel.value = cur ?? ''; if (sel.value !== (cur ?? '')) sel.value = list[0]?.[0] ?? '';
+}
+function fillLoadout() {
+  const cat = catOf(cfg.id), C = CATEGORY[cat], o = lo();
+  const scopes = [...(cat === 'sniper' ? [] : [[DEFAULT_IRON, 'mira própria (sem peça)']]), ...C.scopes.map(s => [s, s])];
+  if (!o.scope) o.scope = defaultLoadout(cat).scope || (cat === 'sniper' ? C.scopes[0] : DEFAULT_IRON); // o que o jogo monta de fabrica
+  opts($('lo-scope'), scopes, o.scope);
+  opts($('lo-handle'), [['', 'nenhuma'], ...C.handles.filter(h => h !== 'akimbo').map(h => [h, h])], o.handle);
+  opts($('lo-muzzle'), [['', 'nenhuma'], ...(muzzleFits(cfg.id) ? Object.keys(MUZZLES) : []).map(m => [m, m])], o.muzzle);
+  opts($('lo-laser'), [['', 'nenhum'], ...LASERS.map(m => [m, m])], o.laser);
+  const nat = nativePart(cfg.id, 'charger');
+  opts($('lo-charger'), [['', nat ? 'original' : 'sem pente'], ...chargerOptions(cfg.id, cat).filter(c => c !== nat).map(c => [c, c])], o.charger);
+  opts($('lo-camo'), CAMOS.map(c => [c.id === 'none' ? '' : c.id, c.id]), o.camo);
+  if (o.paint) $('lo-paint').value = o.paint; if (o.accent) $('lo-accent').value = o.accent;
+}
+for (const k of ['scope', 'handle', 'muzzle', 'laser', 'charger', 'camo']) $('lo-' + k).onchange = (e) => { firstFit = true; lo()[k] = e.target.value || null; localStorage.setItem(LS, JSON.stringify(loAll)); rebuild(); };
+for (const k of ['paint', 'accent']) $('lo-' + k).oninput = (e) => { lo()[k] = e.target.value; localStorage.setItem(LS, JSON.stringify(loAll)); rebuild(); };
+$('lo-cor0').onclick = () => { delete lo().paint; delete lo().accent; localStorage.setItem(LS, JSON.stringify(loAll)); rebuild(); };
+
+$('brush').innerHTML = Object.entries(ZONES).map(([k, [n, c]]) => `<button data-z="${k}"><span class="sw" style="background:${c}"></span>${n}</button>`).join('');
+$('marks').innerHTML = Object.entries(MARKS).map(([k, [n, c]]) => `<button data-m="${k}"><span class="sw" style="background:${c};border-radius:50%"></span>${n}</button>`).join('') + '<button data-m="">Volta ao padrão</button>';
+function syncTools() {
+  document.querySelectorAll('#brush button').forEach(b => b.classList.toggle('on', !markMode && b.dataset.z === brush));
+  document.querySelectorAll('#marks button').forEach(b => b.classList.toggle('on', !!markMode && b.dataset.m === markMode));
+}
+document.querySelectorAll('#brush button').forEach(b => b.onclick = () => { brush = b.dataset.z; markMode = null; syncTools(); });
+document.querySelectorAll('#marks button').forEach(b => b.onclick = () => {
+  if (!b.dataset.m) { if (markMode && cfg.marks?.[markMode]) { snap(); delete cfg.marks[markMode]; if (!Object.keys(cfg.marks).length) delete cfg.marks; showMarks(); rebuild(); msg('ponto volta ao padrão do glb'); } else msg('escolha o ponto antes', true); return; }
+  markMode = markMode === b.dataset.m ? null : b.dataset.m; syncTools();
+});
+
+// ajuste por encaixe: x = largura, y = altura, z = profundidade (+ = pra tras); mm na tela, metros no json
+function fillAdj() {
+  const A = cfg.adj || {};
+  $('adj').innerHTML = Object.entries(SLOTS).map(([s, n]) => {
+    const a = A[s] || {}, mm = (v) => Math.round((v || 0) * 10000) / 10;
+    const f = (ax, lab) => `<div class="row"><label>${lab}</label><input type="range" min="-60" max="60" step="0.5" data-s="${s}" data-a="${ax}" value="${mm(a[ax])}"><input type="number" step="0.5" data-s="${s}" data-a="${ax}" value="${mm(a[ax])}"></div>`;
+    return `<div class="adj"><b>${n}</b>${f('y', 'Altura')}${f('z', 'Profund.')}${f('x', 'Largura')}<div class="row"><label>Tamanho</label><input type="range" min="0.5" max="2" step="0.01" data-s="${s}" data-a="s" value="${a.s || 1}"><input type="number" step="0.01" min="0.3" max="3" data-s="${s}" data-a="s" value="${a.s || 1}"></div></div>`;
+  }).join('');
+  $('adj').querySelectorAll('input').forEach(inp => {
+    inp.onpointerdown = inp.onfocus = () => { if (!inp._snap) { snap(); inp._snap = true; } };
+    inp.onchange = () => { inp._snap = false; };
+    inp.oninput = () => {
+      const s = inp.dataset.s, ax = inp.dataset.a, v = +inp.value;
+      $('adj').querySelectorAll(`input[data-s="${s}"][data-a="${ax}"]`).forEach(o => { if (o !== inp) o.value = inp.value; });
+      cfg.adj ||= {}; const a = cfg.adj[s] ||= {};
+      if (ax === 's') { if (v === 1) delete a.s; else a.s = v; } else { if (!v) delete a[ax]; else a[ax] = Math.round(v * 10) / 10000; }
+      if (!Object.keys(a).length) delete cfg.adj[s]; if (!Object.keys(cfg.adj).length) delete cfg.adj;
+      rebuild();
+    };
+  });
+}
+$('k').oninput = () => { const v = +$('k').value; if (!(v > 0.3)) return; snap(); if (v === 1) delete cfg.k; else cfg.k = v; rebuild(); };
+
+$('undo').onclick = () => { const s = undo.pop(); if (!s) return msg('nada pra desfazer', true); const i = TT_LIST.indexOf(cfg); const o = JSON.parse(s); for (const k of Object.keys(cfg)) delete cfg[k]; Object.assign(cfg, o); TT_LIST[i] = cfg; refreshAll(); msg('desfeito'); };
+$('reset').onclick = () => { snap(); delete cfg.adj; fillAdj(); rebuild(); msg('ajustes zerados (falta salvar)'); };
+$('save').onclick = async () => {
+  try {
+    const r = await fetch('/__tt/save', { method: 'POST', body: JSON.stringify(TT_LIST) });
+    const j = await r.json(); if (!j.ok) throw new Error(j.erro); msg('salvo em src/tt_guns.json');
+  } catch (e) { msg('não salvou: ' + e.message, true); }
+};
+
+async function refreshAll() {
+  $('k').value = cfg.k || 1; fillAdj(); syncTools();
+  await showPieces(); rebuild();
+}
+opts($('gun'), TT_LIST.map(g => [g.id, `${g.nome} (${g.id})`]), decodeURIComponent(location.hash.slice(1)) || TT_LIST[0]?.id);
+$('gun').onchange = async () => { cfg = TT_LIST.find(g => g.id === $('gun').value); location.hash = cfg.id; undo.length = 0; firstFit = true; await refreshAll(); };
+L.fit(); R.fit();
+cfg = TT_LIST.find(g => g.id === $('gun').value); location.hash = cfg.id;
+await refreshAll();
+window.__ed = { get cfg() { return cfg; }, setView: (v) => document.querySelector(`.tabs button[data-v="${v}"]`).click(), lo: (o) => { firstFit = true; Object.assign(lo(), o); fillLoadout(); rebuild(); }, ttUnit };
+document.title = 'pronto';
+</script>

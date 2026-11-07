@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><pre id="o"></pre>
+<script type="module">
+// mao que segura (06/11): mede todos os corpos e lista onde a mao cai na luva antiga
+import { loadArsenal, buildGun, CATEGORY } from '../src/arsenal.js';
+import { measureHands } from '../src/handwrap.js';
+await loadArsenal();
+const out = [], bad = [];
+for (const [w, c] of Object.entries(CATEGORY)) for (const body of c.bodies) {
+  const g = buildGun(w, { body }); const H = measureHands(g, { leftKind: w === 'pistol' ? null : 'fore' });
+  const r = (H.R ? 'R' + H.R.fingers.length : 'R-') + ' ' + (w === 'pistol' ? 'L.' : H.L ? 'L' + H.L.fingers.length : 'L-');
+  out.push(w + ' ' + body + ' ' + r); if (!H.R || (w !== 'pistol' && !H.L)) bad.push(w + ':' + body + ' ' + r);
+}
+document.getElementById('o').textContent = 'FALHAS ' + bad.length + '/' + out.length + '\n' + bad.join('\n') + '\n---\n' + out.join('\n'); document.title = 'pronto';
+</script>

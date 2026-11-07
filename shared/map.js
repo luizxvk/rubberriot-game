@@ -18,14 +18,28 @@ function openCont(box, cx, cz, w, d, h, y0, seed) {
 function builder(arena) {
   const boxes = [];
   const box = (cx, cz, w, d, h, y0 = 0, kind = 'crate', extra = {}) => {
+    // forma redonda ou em camadas (06/11, pedido dele: a colisao passava do desenho no Canyon Poeira): a colisao vira degraus
+    // DENTRO do desenho. A 1a caixa leva o tipo e as medidas do desenho (vis); as outras sao so colisao ('tier', nao desenha)
+    const T = SHAPE_TIERS[kind];
+    if (T && !extra.vis) {
+      const vis = { min: [cx - w / 2, y0, cz - d / 2], max: [cx + w / 2, y0 + h, cz + d / 2] }, thin = kind === 'cliff';
+      T.forEach(([a, b, k, k2 = k], i) => {
+        const kx = thin && w > d ? 1 : k, kz = thin && d >= w ? 1 : k2;
+        boxes.push({ min: [cx - w / 2 * kx, y0 + h * a, cz - d / 2 * kz], max: [cx + w / 2 * kx, y0 + h * b, cz + d / 2 * kz], ...(i ? { kind: 'tier' } : { kind, ...extra, vis }) });
+      });
+      return;
+    }
     boxes.push({ min: [cx - w / 2, y0, cz - d / 2], max: [cx + w / 2, y0 + h, cz + d / 2], kind, ...extra });
     // telhado pontudo tem corpo: 3 degraus em piramide acompanhando a inclinacao (antes quem subia ficava
     // de pe no topo da parede, por dentro do telhado). Mesmas medidas do desenho: base 0,877 da parede, altura 0,4h
+    // 06/11 (Vila remodelada no Blender): telhado de DUAS AGUAS, cumeeira no lado comprido, beiral de ROOF_EAVE. Degraus de
+    // colisao inscritos nas duas aguas (o canto de cima de cada degrau encosta no telhado), sempre dentro da parede
     if (kind === 'house' && extra.roof === 'peak') {
-      const rh = h * 0.4, N = 3;
-      for (let i = 0; i < N; i++) {
-        const k = 0.877 * (1 - (i + 0.5) / N);
-        boxes.push({ min: [cx - w / 2 * k, y0 + h + rh * i / N, cz - d / 2 * k], max: [cx + w / 2 * k, y0 + h + rh * (i + 1) / N, cz + d / 2 * k], kind: 'roof' });
+      const rh = h * 0.4, N = 4, alongX = w >= d, W = alongX ? d : w, L = alongX ? w : d;
+      for (let i = 0; i < N - 1; i++) {
+        const half = Math.min(W / 2, (1 - (i + 1) / N) * (W / 2 + ROOF_EAVE));
+        const hx = alongX ? L / 2 : half, hz = alongX ? half : L / 2;
+        boxes.push({ min: [cx - hx, y0 + h + rh * i / N, cz - hz], max: [cx + hx, y0 + h + rh * (i + 1) / N, cz + hz], kind: 'roof' });
       }
     }
   };
@@ -90,7 +104,8 @@ function vila() {
     box(-16, s * 46, 9, 9, 7, 0, 'house', { team, roof: 'peak', seed: 2 });
     box(16, s * 46, 9, 9, 7, 0, 'house', { team, roof: 'peak', seed: 3 });
     box(0, s * 50.5, 14, 3, 0.5, 4, 'platform');
-    stairs(8, s * 50.5, 1, 0, 3, 8, 0.5, 0.75);
+    for (const px of [-6.8, 6.8]) box(px, s * 49.15, 0.3, 0.3, 4, 0, 'post'); // 06/11: a sacada ganha esteio ate o chao (boiava presa so na parede)
+    stairs(13, s * 50.5, -1, 0, 3, 8, 0.5, 0.75); // 06/11: sobe PRA sacada (subia de costas pra ela)
     box(-6, s * 40, 2.4, 2.4, 1.6, 0, 'crate');
     box(6, s * 40, 2.4, 2.4, 1.6, 0, 'crate');
     box(6.8, s * 40.5, 1.4, 1.4, 1.2, 1.6, 'crate');
@@ -101,8 +116,7 @@ function vila() {
     box(sx * 26, -16, 10, 10, 8, 0, 'house', { roof: 'peak', seed: 4 + sx });
     box(sx * 26, 16, 10, 10, 9, 0, 'house', { roof: 'flat', seed: 6 + sx });
     box(sx * 26, 0, 4, 22, 0.5, 4, 'bridge');
-    stairs(sx * 20, -6, sx * -1, 0, 3, 8, 0.5, 0.75);
-    box(sx * 20 - sx * 0.75 * 8 - sx * 1, -6, 2.2, 3, 4, 0, 'step');
+    stairs(sx * 18, -6, sx, 0, 3, 8, 0.5, 0.75); // 06/11: sobe PRA passarela (subia de costas ate um bloco solto, que saiu)
     box(sx * 44, -26, 8, 12, 6, 0, 'house', { roof: 'peak', seed: 8 + sx });
     box(sx * 44, 26, 8, 12, 6, 0, 'house', { roof: 'peak', seed: 10 + sx });
     box(sx * 38, 0, 2, 2, 1.4, 0, 'crate');
@@ -164,7 +178,7 @@ function fabrica() {
   // passarelas altas ligando as pontas
   for (const s of [-1, 1]) {
     box(0, s * 13, 44, 2.6, 0.5, 4, 'bridge');
-    stairs(-s * 30, s * 13, s, 0, 2.6, 8, 0.5, 0.75);
+    stairs(-s * 28, s * 13, s, 0, 2.6, 8, 0.5, 0.75); // 06/11: o ultimo degrau encosta na passarela (ficava 1,6 m antes)
     for (const x of [-16, 0, 16]) box(x, s * 13, 0.5, 0.5, 4, 0, 'pillar');
     box(0, s * 30, 18, 4, 3, 0, 'machine', { team: s < 0 ? 'red' : 'blue' });
   }
@@ -209,11 +223,12 @@ function fronteira() {
     box(0, s * 72, 34, 6, 11, 0, 'house', { team, roof: 'flat', seed: 1 });
     for (const sx of [-1, 1]) {
       box(sx * 22, s * 62, 5, 5, 6, 0, 'tower', { team });
-      stairs(sx * 18.5, s * 64.5, -sx, 0, 3, 8, 0.75, 0.6);
+      stairs(sx * 14.7, s * 62, sx, 0, 3, 8, 0.75, 0.6); // 06/11: sobe PRA torre (subia de costas)
       box(sx * 9, s * 52, 8, 1.2, 1.6, 0, 'wall');
     }
     box(0, s * 66, 12, 2.4, 0.5, 4, 'platform');
-    stairs(7.5, s * 66, 1, 0, 2.4, 8, 0.5, 0.6);
+    for (const px of [-5.8, 5.8]) for (const pz of [64.95, 67.05]) box(px, s * pz, 0.3, 0.3, 4, 0, 'post'); // 06/11 (Fronteira no Blender): a varanda boiava, ganha esteio ate o chao
+    stairs(10.8, s * 66, -1, 0, 2.4, 8, 0.5, 0.6); // 06/11: sobe PRA varanda (subia de costas, pedido dele)
     box(-30, s * 48, 8, 8, 6, 0, 'house', { team, roof: 'peak', seed: 2 });
     box(30, s * 48, 8, 8, 6, 0, 'house', { team, roof: 'peak', seed: 3 });
     for (const sx of [-1, 1]) {
@@ -228,7 +243,7 @@ function fronteira() {
   for (const x of [-60, -38, -16, 16, 38, 60]) box(x, 0, 12, 1.2, 1.7, 0, 'wall');
   for (const sx of [-1, 1]) {
     box(sx * 50, 0, 5, 5, 7, 0, 'tower');
-    stairs(sx * 46, 6, sx, 0, 3, 9, 0.78, 0.5);
+    stairs(sx * 50, 7, 0, -1, 3, 9, 0.78, 0.5); // 06/11: chega de frente na torre (corria do lado dela, a 2 m)
     box(sx * 24, 8, 4, 4, 2.4, 0, 'rock');
     box(sx * 24, -8, 4, 4, 2.4, 0, 'rock');
   }
@@ -376,7 +391,7 @@ function ilha() {
   area('coreto', 0, 0, 20);
   box(0, 0, 10, 10, 1.2, 0, 'platform');
   box(0, 0, 4, 4, 7, 1.2, 'tower');
-  stairs(5.5, -3, 1, 0, 3, 3, 0.4, 0.6);
+  stairs(6.8, -3, -1, 0, 3, 3, 0.4, 0.6); // 06/11: sobe PRA praca do coreto (subia de costas)
   for (const [x, z] of [[-14, -6], [14, 6], [-6, 14], [6, -14]]) box(x, z, x === 6 || x === -6 ? 9 : 1.2, x === 6 || x === -6 ? 1.2 : 9, 1.6, 0, 'wall');
   for (const [x, z] of [[-12, 12], [12, -12], [12, 12], [-12, -12]]) box(x, z, 2.4, 2.4, 1.4, 0, 'crate');
   lootRing(0, 0, 7, 16, 10);
@@ -490,7 +505,7 @@ function bonde() {
   // viaduto sobre o trilho (entre os pontos 2 e 3): tabuleiro alto + pilares fora da rua + escadas
   put(-28, -29, 4, 16, 0.5, 5, 'bridge'); solid.pop();
   put(-28, -38.5, 4, 3, 5, 0, 'house', { roof: 'flat', seed: 41 }); put(-28, -19.5, 4, 3, 5, 0, 'house', { roof: 'flat', seed: 42 });
-  stairs(-30, -42, 0, -1, 3, 10, 0.5, 0.8); solid.push([-30, -46, 3, 8]);
+  stairs(-30, -48, 0, 1, 3, 10, 0.5, 0.8); solid.push([-30, -44, 3, 8]); // 06/11: sobe PRA laje do viaduto (subia de costas)
   // praca do chafariz (1o ponto de controle fica do lado): bacia, mureta baixa e bancos
   put(0, -38, 6, 6, 1.1, 0, 'vat'); box(-5.5, -38, 1, 5, 0.6, 0, 'crate'); box(5.5, -38, 1, 5, 0.6, 0, 'crate');
   // mirantes (plataforma alta com escada), um em cada metade
@@ -498,7 +513,7 @@ function bonde() {
     if (!free(x, z, 7, 7)) continue;
     put(x, z, 7, 7, 0.5, 3.5, 'platform');
     for (const [px, pz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) box(x + px, z + pz, 0.6, 0.6, 3.5, 0, 'pillar');
-    stairs(x + sx * 3.5, z + 2, sx, 0, 2.4, 7, 0.5, 0.75); solid.push([x + sx * 6.5, z + 2, 6, 3]);
+    stairs(x + sx * 8.75, z + 2, -sx, 0, 2.4, 7, 0.5, 0.75); // 06/11: sobe PRO mirante (subia de costas) solid.push([x + sx * 6.5, z + 2, 6, 3]);
   }
   // fileiras de casas e lojas dos dois lados da rua (uma a cada ~11 m do trilho)
   const T = []; for (let i = 1; i < track.length; i++) T.push([track[i - 1], track[i]]);
@@ -686,8 +701,9 @@ function ferradura() {
   }
   box(-9.1, -12.5, 15.8, 1, TOP, 0, 'marble'); box(9.1, -12.5, 15.8, 1, TOP, 0, 'marble');
   box(0, -12.5, 2.4, 1, TOP - 1.35, 1.35, 'marble'); // em cima do duto
-  // telhado com claraboia em cima do fosso
-  box(0, 9.5, 34, 11, 0.6, TOP, 'bankroof'); box(-13, -4, 8, 18, 0.6, TOP, 'bankroof'); box(13, -4, 8, 18, 0.6, TOP, 'bankroof');
+  // telhado inteiro (07/11, pedido dele: a claraboia em cima do fosso parecia telhado furado). UMA laje so: tres pecas
+  // encostadas davam faces no mesmo plano (pisca)
+  box(0, 1, 34, 28, 0.6, TOP, 'bankroof');
   // fachada: escadaria, colunas e frontao com o nome
   stairs(0, 21, 0, -1, 8, 6, 0.5, 1);
   for (const x of [-9, -6, 6, 9]) box(x, 16.5, 1.1, 1.1, TOP, 0, 'column');
@@ -703,7 +719,7 @@ function ferradura() {
   box(-1.35, -17, 0.3, 8, 2.6, 0, 'duct'); box(1.35, -17, 0.3, 8, 2.6, 0, 'duct'); box(0, -17, 3, 8, 1.25, 1.35, 'duct'); // alto por fora: bot nao pula em cima
   // praca com coreto
   box(0, 31, 8, 8, 0.5, 0, 'coreto');
-  for (const [x, z] of [[-3.4, 27.6], [3.4, 27.6], [-3.4, 34.4], [3.4, 34.4]]) box(x, z, 0.35, 0.35, 3.5, 0.5, 'post');
+  for (const [x, z] of [[-2.6, 28.4], [2.6, 28.4], [-2.6, 33.6], [2.6, 33.6]]) box(x, z, 0.35, 0.35, 3.5, 0.5, 'post'); // 06/11 (pedido dele): estacas DENTRO do octogono do coreto (antes ficavam pra fora da base)
   box(0, 31, 9, 9, 0.4, 4, 'coretoroof');
   for (const sx of [-1, 1]) {
     box(sx * 9, 31, 1, 3.4, 0.8, 0, 'bench');
@@ -897,7 +913,7 @@ function moeda() {
   for (const [x, z] of [[-11, 27], [11, 27]]) box(x, z, 1.2, 1.2, H, 0, 'granite');
   // praca do meio: coreto, canteiros e bancos (quebram a linha da porta da frente)
   box(0, -6, 9, 9, 0.5, 0, 'coreto'); box(0, -6, 10, 10, 0.4, 4.2, 'coretoroof');
-  for (const [x, z] of [[-3.8, -9.8], [3.8, -9.8], [-3.8, -2.2], [3.8, -2.2]]) box(x, z, 0.35, 0.35, 3.7, 0.5, 'post');
+  for (const [x, z] of [[-2.9, -8.9], [2.9, -8.9], [-2.9, -3.1], [2.9, -3.1]]) box(x, z, 0.35, 0.35, 3.7, 0.5, 'post'); // 06/11 (pedido dele): estacas DENTRO do coreto
   for (const sx of [-1, 1]) { box(sx * 9, -6, 1, 7, 1.1, 0, 'hedge'); box(sx * 6, 2.5, 6, 1, 1.1, 0, 'hedge'); box(sx * 11, -14, 1, 3.4, 0.8, 0, 'bench'); }
   // rua oeste (larga): carros parados e a parada do bonde
   box(-34, -24, 2.4, 4.6, 2.2, 0, 'car', { seed: 1 }); box(-28, 2, 2.4, 4.6, 2.2, 0, 'car', { seed: 2 }); box(-36, 24, 2.4, 4.6, 2.2, 0, 'car', { seed: 3 });
@@ -990,6 +1006,18 @@ function docas() {
   };
 }
 
+// degraus de colisao por forma: [altura de baixo, de cima, largura] em fracao da caixa. Duna = inscritos na meia esfera do desenho
+// (raio 0,62 da largura, altura 1,05); mesa e paredao = as 3 camadas do desenho (paredao afina so na espessura); pedra = dentro do icosaedro
+export const ROOF_EAVE = 0.35; // beiral do telhado de duas aguas (o desenho do Blender usa o mesmo)
+const SHAPE_TIERS = {
+  dune: [[0, 0.35, 0.82], [0.35, 0.7, 0.65], [0.7, 0.95, 0.37]],
+  mesa: [[0, 1 / 3, 1], [1 / 3, 2 / 3, 0.93], [2 / 3, 1, 0.86]],
+  cliff: [[0, 1 / 3, 1], [1 / 3, 2 / 3, 0.92], [2 / 3, 1, 0.84]],
+  rock: [[0, 0.9, 0.56]],
+  // cilindro em pe (caixa d'agua, silo): 3 caixas cruzadas, todas dentro do circulo (quina a quina = octogono)
+  tank: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92]],
+  silo: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92]],
+};
 // ---------- Canyon Poeira (04/11, pedido dele: mapa GRANDE de deserto, aberto, estilo Cold War) ----------
 // So bandeira e dominacao (normal e blitz). 260 x 260 m: bases nas pontas norte/sul, um canyon cortando o mapa de
 // leste a oeste com 3 passagens (ponte de tabua no meio, desfiladeiro a oeste, vau seco a leste), dunas soltas pra
@@ -1019,7 +1047,7 @@ function deserto() {
     box(0, s * 118, 30, 8, 7, 0, 'adobe', { team, seed: 1 });
     for (const sx of [-1, 1]) {
       box(sx * 24, s * 108, 6, 6, 8, 0, 'tower', { team });
-      stairs(sx * 20, s * 112, -sx, 0, 3, 10, 0.8, 0.5);
+      stairs(sx * 16, s * 108, sx, 0, 3, 10, 0.8, 0.5); // 06/11: sobe PRA torre (subia de costas)
       box(sx * 12, s * 98, 10, 1.4, 1.7, 0, 'adobewall');
       box(sx * 40, s * 104, 8, 8, 5, 0, 'adobe', { seed: 2 + sx });
     }
@@ -1043,7 +1071,7 @@ function deserto() {
   // posto de gasolina abandonado (leste) e caixa d'agua com escada (oeste)
   box(62, -30, 14, 10, 5, 0, 'adobe', { seed: 40, sign: 'gas' });
   box(62, -42, 16, 8, 0.4, 5, 'platform'); for (const x of [56, 68]) box(x, -42, 0.5, 0.5, 5, 0, 'post');
-  box(-62, 30, 5, 5, 9, 0, 'tank'); stairs(-58, 30, 1, 0, 2.4, 10, 0.9, 0.4);
+  box(-62, 30, 5, 5, 9, 0, 'tank'); stairs(-55.5, 30, -1, 0, 2.4, 10, 0.9, 0.4); // 06/11: sobe PRA caixa d'agua (subia de costas)
   // dunas e pedras soltas: cobertura baixa espalhada (fora dos caminhos dos pontos e das bases)
   const busy = (x, z, r) => Math.abs(z) < 14 + r || Math.abs(z) > A - 26 || boxes.some(b => x > b.min[0] - r - 3 && x < b.max[0] + r + 3 && z > b.min[2] - r - 3 && z < b.max[2] + r + 3);
   for (let k = 0; k < 140; k++) {

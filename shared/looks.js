@@ -1,3 +1,4 @@
+import { MASTERY_BODIES } from './banners.js';
 // Visual do boneco: catalogo unico (jogo e servidor). O servidor so aceita o que esta aqui.
 // A COR DO TIME nunca sai daqui: short e fita do chapeu continuam vermelho/azul; o resto e' livre.
 // pass = so do Rovex Pass (trilha grátis ou premium, src/pass.js); lvl = nivel do jogador que libera; elite = so com o Elite da Rovex; acct = so quem tem conta Rovex; rank = faixa da rankeada ja alcancada; r = raridade (0 comum, 1 raro, 2 lendario).
@@ -128,6 +129,7 @@ LOOKS.face = [
   { id: 'none', lvl: 1, r: 0 }, { id: 'curativo', lvl: 1, r: 0, pass: true }, { id: 'bigodinho', lvl: 1, r: 0, pass: true }, { id: 'sardas', lvl: 1, r: 0, pass: true },
   { id: 'bigode', lvl: 1, r: 1, pass: true }, { id: 'charuto', lvl: 1, r: 1, pass: true }, { id: 'dente', lvl: 1, r: 1, pass: true }, { id: 'cachimbo', lvl: 1, r: 1, pass: true }, { id: 'cavanhaque', lvl: 1, r: 1, pass: true }, { id: 'barba', lvl: 1, r: 2, pass: true }, { id: 'tapa', lvl: 1, r: 2, pass: true },
   { id: 'gargalhada', lvl: 1, r: 1, shop: true }, { id: 'lingua', lvl: 1, r: 1, shop: true },
+  { id: 'fantasma', lvl: 1, r: 2, shop: true }, // mascara de caveira (07/11, so na Loja)
   { id: 'olhoroxo', lvl: 1, r: 1, rank: 0 }, // rankeada, tema ringue (05/11)
 ];
 LOOKS.charm = [
@@ -136,6 +138,9 @@ LOOKS.charm = [
   { id: 'dado', lvl: 1, r: 1, shop: true }, { id: 'pato', lvl: 1, r: 1, shop: true },
   { id: 'sino', lvl: 1, r: 1, rank: 1 }, // rankeada, tema ringue (05/11)
 ];
+// chaveiro de ouro da arma (07/11, pedido dele): miniatura do modelo, dourada, de quem virou mestre dela (masteryDone).
+// Malha reduzida e leve: public/models/src/charm_mst_<corpo>.glb (tools/blender/charm_mst.py)
+for (const b of MASTERY_BODIES) if (b !== 'pistol_11') LOOKS.charm.push({ id: 'mst_' + b, lvl: 1, r: 2, mastery: b }); // Trabuquinho (modelo de producao, fora do TT): so o poster
 LOOKS.death = [
   { id: 'pancake', lvl: 1, r: 0 }, { id: 'tabua', lvl: 1, r: 0, pass: true }, { id: 'fita', lvl: 1, r: 1, pass: true }, { id: 'anjo', lvl: 1, r: 2, pass: true }, { id: 'sanfona', lvl: 1, r: 1, pass: true },
   { id: 'balao', lvl: 1, r: 2, shop: true }, { id: 'mola', lvl: 1, r: 2, shop: true }, { id: 'nocaute', lvl: 1, r: 2, rank: 2 },

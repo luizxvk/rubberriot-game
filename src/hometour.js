@@ -3,11 +3,16 @@
 import { t } from './i18n.js';
 import { audio } from './audio.js';
 
-const KEY = 'rr_home_tour';
+const KEY = 'rr_home_tour2'; // 07/11: chave nova = todo mundo ve o tour de novo com os botoes novos (Amigos, Pass, Loja, Bolso, Tela dividida)
 const STEPS = [
   ['#goSolo', 'play', 'ht_play'],
   ['#scr-home [data-go=mp]', 'multiplayer', 'ht_mp'],
+  ['#scr-home [data-go=friends]', 'friends', 'ht_friends'],
+  ['#scr-home [data-go=pass]', 'passTitle', 'ht_pass'],
+  ['#scr-home [data-go=shop]', 'shop', 'ht_shop'],
+  ['#goPocket', 'pocket', 'ht_pocket'],
   ['#goTutorial', 'tutorial', 'ht_train'],
+  ['#goSplit', 'splitGo', 'ht_split'],
   ['#scr-home [data-go=arsenal]', 'arsenal', 'ht_arsenal'],
   ['#scr-home [data-go=look]', 'look', 'ht_look'],
   ['#scr-home [data-go=skills]', 'skTab', 'ht_skills'],
@@ -17,10 +22,50 @@ const STEPS = [
 
 export function homeTourSeen() { try { return !!localStorage.getItem(KEY); } catch { return true; } }
 
-export function startHomeTour({ touch = false } = {}) {
+export function startHomeTour({ touch = false } = {}) { runTour(STEPS, { key: KEY, screen: 'scr-home', touch }); }
+
+// Tours das telas (07/11, pedido dele): na 1a vez que abre o Arsenal, o Visual, as Skills e os Desafios, o mesmo holofote
+// explica a tela por partes. Uma vez so por aparelho (rr_tour_<tela>); nunca por cima da partida.
+const SCREEN_TOURS = {
+  arsenal: [
+    ['#catTabs', 'tt_ar_cats', 'tt_ar_catsD'],
+    ['#equipBar', 'tt_ar_eq', 'tt_ar_eqD'],
+    ['#slotList', 'tt_ar_parts', 'tt_ar_partsD'],
+    ['#statBars', 'tt_ar_stats', 'tt_ar_statsD'],
+    ['#catTabs [data-c=nades]', 'tt_ar_nades', 'tt_ar_nadesD'],
+    ['#catTabs [data-c=streaks]', 'tt_ar_stk', 'tt_ar_stkD'],
+    ['#smithRange', 'tt_ar_range', 'tt_ar_rangeD'],
+  ],
+  look: [
+    ['#lookTabs', 'tt_lk_tabs', 'tt_lk_tabsD'],
+    ['#lookGrid', 'tt_lk_grid', 'tt_lk_gridD'],
+    ['#scr-look .look-team', 'tt_lk_team', 'tt_lk_teamD'],
+  ],
+  skills: [
+    ['#skillPane .sk-medals', 'tt_sk_slots', 'tt_sk_slotsD'],
+    ['#skillPane > .sk-grid', 'tt_sk_grid', 'tt_sk_gridD'],
+    ['#skillPane .sk-field', 'tt_sk_field', 'tt_sk_fieldD'],
+  ],
+  challenges: [
+    ['#chElite', 'tt_ch_elite', 'tt_ch_eliteD'],
+    ['#chDaily', 'tt_ch_daily', 'tt_ch_dailyD'],
+    ['#chCareer', 'tt_ch_career', 'tt_ch_careerD'],
+  ],
+};
+const seenKey = (name) => 'rr_tour_' + name;
+let tourOpen = false;
+export function screenTour(name, { touch = false } = {}) {
+  if (!SCREEN_TOURS[name] || tourOpen || document.body.classList.contains('in-game') || document.querySelector('.htour')) return;
+  try { if (localStorage.getItem(seenKey(name))) return; } catch { return; }
+  // espera a tela desenhar (render + transicao) antes de medir os blocos
+  setTimeout(() => { const el = document.getElementById('scr-' + name); if (el && !el.hidden && el.offsetParent && !document.querySelector('.htour')) runTour(SCREEN_TOURS[name], { key: seenKey(name), screen: 'scr-' + name, touch, done: 'htGot' }); }, 450);
+}
+
+function runTour(STEPS, { key, screen, touch = false, done = 'htDone' }) {
   const steps = STEPS.filter(([sel]) => { const e = document.querySelector(sel); return e && e.offsetParent; });
   if (!steps.length) return;
-  try { localStorage.setItem(KEY, '1'); } catch { /* sem storage */ }
+  try { localStorage.setItem(key, '1'); } catch { /* sem storage */ }
+  tourOpen = true;
   const root = document.createElement('div');
   root.className = 'htour';
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'htTitle');
@@ -70,16 +115,16 @@ export function startHomeTour({ touch = false } = {}) {
     const tk = touch && t(body + 'T') !== body + 'T' ? body + 'T' : body; // texto proprio do celular quando existe
     root.querySelector('#htBody').textContent = t(tk);
     root.querySelector('#htStep').textContent = t('htStep', { n: i + 1, m: steps.length });
-    root.querySelector('#htNext').textContent = t(i === steps.length - 1 ? 'htDone' : 'htNext');
+    root.querySelector('#htNext').textContent = t(i === steps.length - 1 ? done : 'htNext');
     place();
     root.querySelector('#htNext').focus({ preventScroll: true });
   };
-  const close = () => { clearInterval(watch); removeEventListener('resize', place); removeEventListener('keydown', key, true); root.remove(); };
-  // so existe na tela inicial (03/11: ficava aberto por cima da partida/lobby quando a pessoa saia do menu)
-  const home = document.getElementById('scr-home');
+  const close = () => { tourOpen = false; clearInterval(watch); removeEventListener('resize', place); removeEventListener('keydown', keyDown, true); root.remove(); };
+  // so existe na tela dele (03/11: ficava aberto por cima da partida/lobby quando a pessoa saia do menu)
+  const home = document.getElementById(screen);
   const watch = setInterval(() => { if (!home || home.hidden || !home.offsetParent || document.body.classList.contains('in-game')) close(); }, 200);
   const next = () => { audio.play('ui_click', { ui: true }); if (++i >= steps.length) close(); else show(); };
-  const key = (e) => {
+  const keyDown = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); audio.play('ui_back', { ui: true }); close(); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
     else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); i--; show(); }
@@ -87,7 +132,7 @@ export function startHomeTour({ touch = false } = {}) {
   root.querySelector('#htNext').onclick = next;
   root.querySelector('#htSkip').onclick = () => { audio.play('ui_back', { ui: true }); close(); };
   addEventListener('resize', place);
-  addEventListener('keydown', key, true);
+  addEventListener('keydown', keyDown, true);
   show();
   requestAnimationFrame(() => root.classList.add('in'));
 }

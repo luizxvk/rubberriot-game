@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><title>tamanhos</title><pre id="o"></pre>
+<script type="module">
+// tamanho (largura x altura x comprimento, unidade do jogo) das pecas de encaixe (07/11): base pras pecas comicas
+import { loadArsenal, debugParts, CATEGORY, LASERS } from '../src/arsenal.js';
+await loadArsenal(); const P = debugParts(), ids = new Set([...LASERS]); for (const c of Object.values(CATEGORY)) for (const k of ['scopes', 'handles']) for (const i of c[k] || []) ids.add(i);
+const r = {}; for (const id of ids) { const p = P[id]; if (!p?.box) continue; const b = p.box; r[id] = [b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z].map(v => +v.toFixed(3)).concat(p.lens ? ['lensR', +p.lens.r.toFixed(3), 'lensY', +(p.lens.c.y - b.min.y).toFixed(3)] : []); }
+r._ref = { rifleBody: P.fusil_1?.box ? +(P.fusil_1.box.max.z - P.fusil_1.box.min.z).toFixed(3) : null };
+document.getElementById('o').textContent = JSON.stringify(r, null, 0).replace(/\],/g, '],\n'); document.title = 'pronto';
+</script>

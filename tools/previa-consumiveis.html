@@ -1,0 +1,89 @@
+<!doctype html><meta charset="utf-8"><title>Prévia: consumíveis</title>
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Grandstander:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* Previa (06/11): bolso de consumiveis + selo do XP em dobro na HUD + carimbo no Pass. Nao e o jogo. */
+:root { --paper:#ece9e1; --paper-2:#dcd7cb; --ink:#141210; --graphite:#6e6a63; --red:#a83a2c; --yel:#ffd23a; --elite:#8b5cf6; --elite-2:#4f46e5; --display:'Bowlby One','Arial Black',sans-serif; --body:'Grandstander',sans-serif; }
+* { box-sizing:border-box }
+body { margin:0; background:#2a2724; font-family:var(--body); color:var(--ink) }
+#board { width:1280px; padding:28px; display:grid; grid-template-columns:1fr 1fr; gap:24px }
+.cap { grid-column:1/-1; color:var(--paper); font-family:var(--display); font-size:26px; margin:0 }
+.cap small { display:block; font-family:var(--body); font-size:15px; font-weight:700; color:var(--paper-2); margin-top:4px }
+.scene { position:relative; border-radius:18px; overflow:hidden; border:4px solid var(--ink); background:#bfb8a8 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><path d="M8 20h8M12 16v8M28 6h6M31 3v6" stroke="%23928b7c" stroke-width="2"/></svg>'); min-height:420px }
+.scene > b.tag { position:absolute; left:12px; top:10px; font-family:var(--display); font-size:13px; color:var(--paper); background:var(--ink); padding:2px 10px; border-radius:8px }
+/* ---- bolso (menu de pausa) ---- */
+.pocket { position:absolute; left:40px; right:40px; top:60px; background:var(--paper); border:4px solid var(--ink); border-radius:22px; box-shadow:7px 8px 0 rgba(20,18,16,.55); padding:20px 22px }
+.pocket h2 { font-family:var(--display); font-size:30px; margin:0 0 2px }
+.pocket > p { margin:0 0 14px; font-weight:700; color:var(--graphite) }
+.item { display:grid; grid-template-columns:86px 1fr auto; gap:16px; align-items:center; padding:14px; border:3px solid var(--ink); border-radius:16px; background:#fff8e6 }
+.item + .item { margin-top:12px }
+.token { position:relative; width:86px; height:86px; border-radius:50%; background:var(--yel); border:4px solid var(--ink); box-shadow:inset 0 -7px 0 #e0a91a, 4px 4px 0 var(--ink); display:grid; place-items:center; font-family:var(--display); font-size:30px; color:var(--red); text-shadow:2px 2px 0 var(--ink) }
+.token i { position:absolute; inset:9px; border:3px dashed rgba(20,18,16,.35); border-radius:50% }
+.token .n { position:absolute; right:-10px; bottom:-8px; font-size:17px; color:var(--paper); text-shadow:none; background:var(--ink); border-radius:12px; padding:1px 8px; border:3px solid var(--paper) }
+.item h3 { margin:0; font-family:var(--display); font-size:21px }
+.item p { margin:3px 0 0; font-weight:700; font-size:15px; line-height:1.3 }
+.item small { display:block; margin-top:6px; font-size:13px; font-weight:800; color:var(--elite-2) }
+.use { font:400 19px var(--display); padding:10px 20px; border:3px solid var(--ink); border-radius:14px; background:var(--red); color:var(--paper); box-shadow:4px 4px 0 var(--ink); cursor:pointer }
+.use[disabled] { background:var(--paper-2); color:var(--graphite); box-shadow:none }
+.item.empty { background:transparent; border-style:dashed; color:var(--graphite) }
+.item.empty .token { background:var(--paper-2); color:var(--graphite); box-shadow:none; text-shadow:none }
+/* ---- HUD ---- */
+.hudtop { position:absolute; top:48px; left:50%; transform:translateX(-50%); display:flex; gap:6px; font-family:var(--display); }
+.hudtop div { background:var(--paper); border:3px solid var(--ink); border-radius:10px; padding:2px 12px; text-align:center; font-size:20px }
+.hudtop small { display:block; font-family:var(--body); font-weight:800; font-size:10px; color:var(--graphite) }
+.xpchip { position:absolute; display:flex; align-items:center; gap:8px; padding:4px 12px 4px 4px; background:var(--ink); color:var(--paper); border-radius:999px; border:3px solid var(--yel); font-family:var(--display); font-size:17px }
+.xpchip .c { width:30px; height:30px; border-radius:50%; background:var(--yel); color:var(--red); display:grid; place-items:center; font-size:12px; border:2px solid var(--ink) }
+.xpchip .t { font-family:var(--body); font-weight:800; font-size:16px; color:var(--yel) }
+.xpchip.paused { border-color:var(--graphite) }
+.xpchip.paused .c { background:var(--paper-2) }
+.xpchip.paused .t { color:var(--paper-2); font-size:13px }
+.slot { position:absolute; right:16px; bottom:16px; width:64px; height:64px; border-radius:16px; background:var(--paper); border:3px solid var(--ink); display:grid; place-items:center; box-shadow:4px 4px 0 rgba(20,18,16,.5) }
+.slot .token { width:44px; height:44px; font-size:15px; box-shadow:inset 0 -4px 0 #e0a91a }
+.slot .token i { inset:5px; border-width:2px }
+.slot kbd { position:absolute; left:-8px; top:-8px; background:var(--ink); color:var(--paper); font:700 12px var(--body); border-radius:6px; padding:1px 6px }
+.slot em { position:absolute; right:-8px; bottom:-8px; font:400 13px var(--display); color:var(--paper); background:var(--red); border:2px solid var(--ink); border-radius:9px; padding:0 6px; font-style:normal }
+.note { position:absolute; left:14px; bottom:14px; right:110px; font-weight:800; font-size:14px; background:var(--paper); border:3px solid var(--ink); border-radius:12px; padding:8px 12px }
+/* ---- Pass ---- */
+.strip { position:absolute; left:20px; right:20px; top:64px; display:flex; gap:12px; padding:16px 12px; background:var(--ink); border-radius:12px }
+.fr { position:relative; flex:1; height:128px; border-radius:10px; background:var(--paper); border:3px solid var(--paper-2); display:grid; place-items:center; font-family:var(--display) }
+.fr b { position:absolute; left:8px; top:4px; font-size:16px }
+.fr .art { width:62px; height:62px; border-radius:12px; background:repeating-linear-gradient(45deg,#7b5a2f 0 8px,#3d3a2c 8px 16px); border:3px solid var(--ink) }
+.fr .plus { position:absolute; right:-10px; top:-14px; display:flex; align-items:center; gap:4px; transform:rotate(8deg); background:var(--yel); border:3px solid var(--ink); border-radius:12px; padding:2px 8px 2px 3px; font-size:13px; box-shadow:3px 3px 0 var(--red) }
+.fr .plus .token { width:24px; height:24px; font-size:9px; border-width:2px; box-shadow:none; text-shadow:none }
+.fr .plus .token i { display:none }
+.legend { position:absolute; left:20px; right:20px; bottom:22px; color:var(--ink); font-weight:800; font-size:15px; background:var(--paper); border:3px solid var(--ink); border-radius:12px; padding:10px 14px; line-height:1.4 }
+</style>
+<div id="board">
+  <h1 class="cap">Consumíveis: prévia<small>Bolso no menu de pausa e no lobby · selo do 2x na HUD · ficha no Rovex Pass</small></h1>
+
+  <div class="scene"><b class="tag">1 · Bolso (pausa e lobby)</b>
+    <div class="pocket">
+      <h2>Bolso</h2>
+      <p>Itens que você usa quando quiser.</p>
+      <div class="item">
+        <div class="token"><i></i>2x<span class="n">×6</span></div>
+        <div><h3>XP em dobro</h3><p>1 hora de partida. O tempo só corre jogando.</p><small>Elite: 6 fichas novas todo mês</small></div>
+        <button class="use">Usar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scene"><b class="tag">2 · HUD com a ficha ativa</b>
+    <div class="hudtop"><div>12<small>VOCÊ</small></div><div>4:12<small>TEMPO</small></div><div>30<small>META</small></div></div>
+    <div class="xpchip" style="left:16px;top:118px"><span class="c">2x</span>XP<span class="t">58:12</span></div>
+    <div class="xpchip paused" style="left:16px;top:168px"><span class="c">2x</span>XP<span class="t">pausada: fim de semana já dá 2x</span></div>
+    <div class="slot"><kbd>H</kbd><div class="token"><i></i>2x</div><em>×5</em></div>
+    <div class="note">Em cima: ativa, contando. Embaixo: pausada (fim de semana ou Blitz já dão 2x, então a ficha não gasta). Canto: atalho pra usar a próxima ficha sem abrir o menu (H no PC, botão no celular).</div>
+  </div>
+
+  <div class="scene" style="grid-column:1/-1;min-height:330px"><b class="tag">3 · Rovex Pass</b>
+    <div class="strip">
+      <div class="fr"><b>9</b><div class="art"></div></div>
+      <div class="fr"><b>10</b><div class="art" style="background:#c9e08a"></div><span class="plus"><span class="token">2x</span>+1 ficha</span></div>
+      <div class="fr"><b>11</b><div class="art" style="background:#6b4f3a"></div></div>
+      <div class="fr"><b>15</b><div class="art" style="background:#bfb6a6"></div><span class="plus"><span class="token">2x</span>+1 ficha</span></div>
+      <div class="fr"><b>20</b><div class="art" style="background:#3d3a2c"></div><span class="plus"><span class="token">2x</span>+1 ficha</span></div>
+    </div>
+    <p class="legend">Ficha a mais junto com o prêmio de hoje: trilha Elite nos níveis 10, 20, 30, 40 e 50; trilha grátis nos 15 e 35. Nenhum prêmio sai.</p>
+  </div>
+</div>
+<script>document.fonts.ready.then(() => document.title = 'pronto');</script>

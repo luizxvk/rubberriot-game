@@ -100,7 +100,7 @@ export class Core {
     this.borArt = mode === 'arte'; // Noite dos Borroes: Arte-Final (armas do Arsenal, ate a onda escolhida)
     this.mode = this.duo || this.bounce ? 'br' : this.blitz ? BLITZ_BASE[this.blitz] : this.borArt ? 'borroes' : MODES[mode] ? mode : 'ffa';
     this.cfg = MODES[this.modeId()];
-    if (this.blitz) bots = Math.max(bots | 0, BLITZ_MAX - 1); // sala rapida de blitz ja nasce cheia (12x12)
+    if (this.blitz) bots = Math.max(bots | 0, BLITZ_MAX - 1); // sala rapida de blitz ja nasce cheia (12x12 desde 07/11)
     { const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(BLITZ_BASE[mode] || mode)); if (this.blitz && !bz.includes(map)) map = bz[Math.floor(Math.random() * bz.length)]; }
     if (!this.blitz && BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
     // Noite dos Borroes so no Estudio Tinteiro (e o Tinteiro so nela)
@@ -163,6 +163,7 @@ export class Core {
     if (this.mode === 'br') brInit(this);
     this.esc = null; if (this.mode === 'escort') escInit(this);
     this.heist = null; if (this.mode === 'heist' || this.mode === 'smuggle') heistInit(this); // Contrabando (04/11): mesmo motor do Cofre
+    this.night = this.mode === 'heist' && this.tod === 'night'; // 07/11 (pedido dele): o host escolhe Dia ou Noite no lobby (linha Horario)
     if (this.bor) for (const p of [...this.players.values()]) if (p.mob) this.players.delete(p.id); // viloes da noite passada saem
     this.bor = null; if (this.mode === 'borroes') borInit(this);
     this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.talcs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; this.botBig = {}; fieldReset(this); strikeReset(this); this.rockets = [];
@@ -394,6 +395,7 @@ export class Core {
     if (!this.blitz && BLITZ_BASE[prevMode]) this.wantBots = Math.min(this.wantBots, 11); // saiu: volta pro tamanho normal
     this.wantBots = Math.max(0, Math.min(this.cap() - 1, this.wantBots));
     if (this.mode === 'borroes') this.wantBots = Math.min(3, this.wantBots); // noite: no maximo 4 no time
+    if (m.tod === 'day' || m.tod === 'night') this.tod = m.tod; // horario do Roubo ao Cofre (07/11)
     if ([0.7, 1, 1.35].includes(m.difficulty)) { this.difficulty = m.difficulty; this.skill = botSkill(m.difficulty); }
     this.limitPick = Number.isFinite(m.limit) ? Math.max(0, Math.min(500, m.limit | 0)) : 0;
     this.timePick = Number.isFinite(m.time) ? Math.max(0, Math.min(1800, m.time | 0)) : 0;
@@ -782,8 +784,8 @@ export class Core {
         // partida rolando e vivo: guarda pro proximo renascimento (arma, pecas, skills, equipamento e sequencias).
         // Campo de treino manda now (troca na hora)
         if (this.phase === 'play' && p.alive && !m.now && !this.over && p.loSig) { p.nextLo = m; this.send(id, { t: 'ev', k: 'loNext' }); break; } // loSig: a 1a montagem (entrada na partida) vale na hora
-        if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(99, Math.round(m.lvl))); // nivel de verdade (o que aparece)
-        p.ulvl = Number.isFinite(m.ul) ? Math.max(1, Math.min(99, Math.round(m.ul))) : p.lvl; // nivel de desbloqueio (prestigiado = maximo): so valida skill/equipamento
+        if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(250, Math.round(m.lvl))); // nivel de verdade (o que aparece)
+        p.ulvl = Number.isFinite(m.ul) ? Math.max(1, Math.min(250, Math.round(m.ul))) : p.lvl; // nivel de desbloqueio (prestigiado = maximo): so valida skill/equipamento
         if (typeof m.elite === 'boolean') p.elite = m.elite; // selo Elite da Rovex (so visual)
         p.rk = Number.isInteger(m.rk) && m.rk >= 0 && m.rk <= 4 ? m.rk : -1; // badge da rankeada (so visual)
         p.prest = Math.max(0, Math.min(10, m.prest | 0)); // estrelas de prestigio (so visual)
@@ -877,6 +879,23 @@ export class Core {
         if (dmg <= 0) return;
         p.budget -= dmg;
         carDamage(this, car, dmg, p);
+        break;
+      }
+      case 'hitCraft': { // 07/11 (pedido dele): biplano inimigo leva tiro; zerou, explode e o ataque acaba (mesmas travas do dirigivel)
+        const f = this.crafts?.find(x => x.id === m.id && x.k === 'plane'), w = WEAPONS[m.wpn], owner = f && this.players.get(f.owner);
+        if (!f || !w || w.melee || !p.alive || p.down > 0 || !Number.isFinite(m.dmg) || m.dmg <= 0) return;
+        if (owner && !this.enemies(p, owner)) return;
+        if (m.wpn !== p.wpn && m.wpn !== p.lastWpn) return;
+        const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
+        if (Math.sqrt(dist2(eye, f.pos)) > (w.range || 260) + 10 || !hasLOS(this.M, eye, f.pos)) return;
+        const dmg = Math.min(m.dmg, w.dmg * (w.pellets || 1) * 1.5, Math.max(0, p.budget));
+        if (dmg <= 0) return;
+        p.budget -= dmg; f.hp -= dmg;
+        if (f.hp <= 0) {
+          this.crafts = this.crafts.filter(x => x !== f); this.streakGap = 0;
+          this.event({ k: 'blimpDown', id: p.id, owner: f.owner, pos: f.pos.slice(), plane: 1 });
+          p.score += 100;
+        }
         break;
       }
       case 'hitBlimp': { // tiro no dirigivel inimigo: enche de furo ate estourar
@@ -1265,7 +1284,7 @@ export class Core {
         for (let j = 0; j < 6; j++) { const x = v.pos[0] + rnd(-7, 7), z = v.pos[2] + rnd(-7, 7); if (standable(this.M, x, z)) { list.push([x, floorAt(this.M, x, z), z]); break; } }
       }
       for (const pos of list) this.anvils.push({ owner: null, pos, t: 1.4 + Math.random() * 0.4 });
-      if (list.length) this.event({ k: 'anvilWarn', list });
+      if (list.length) this.event({ k: 'anvilWarn', list: list.map(q => this.anvilLand(q)) });
     }
     if (E.fuse) for (const p of this.players.values()) {
       if (!p.alive || !(p.fuse > 0) || p.down > 0) continue;
@@ -1397,6 +1416,12 @@ export class Core {
     }
   }
 
+  // bigorna (07/11): cai do ceu e para na 1a superficie (telhado, laje, chao) -> [x, y, z] com a altura onde parou
+  anvilLand(pos) {
+    const SKY = 60, hit = raycast(this.M, [pos[0], SKY, pos[2]], [0, -1, 0], SKY + 1);
+    return [pos[0], Number.isFinite(hit.dist) ? Math.max(0, SKY - hit.dist) : 0, pos[2]];
+  }
+
   // ---------- sequencias de abates ----------
   // uma sequencia no ar por vez na sala: enquanto dirigivel/radar/bigornas/torta estiverem ativos (e mais
   // STREAK_GAP s depois), ninguem chama outra. A sequencia fica guardada e o jogador ve o que esta no ar.
@@ -1440,7 +1465,7 @@ export class Core {
       const list = targets.map(o => [o.pos[0] + rnd(-1.2, 1.2), 0, o.pos[2] + rnd(-1.2, 1.2)]);
       if (!list.length) list.push([rnd(-A / 2, A / 2), 0, rnd(-A / 2, A / 2)]);
       for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5), streak: true });
-      this.event({ k: 'anvilWarn', list });
+      this.event({ k: 'anvilWarn', list: list.map(q => this.anvilLand(q)) });
     }
     if (kind === 'rpg') { if (p.wpn !== 'rpg') p.rpgPrev = p.wpn; p.owned.add('rpg'); p.rpgLeft = STREAKS.rpg.shots; p.rpgAim = 0; this.event({ k: 'give', id: p.id, wpn: 'rpg', force: true }); }
     if (kind === 'milk') { p.hp = p.maxHp || 100; p.armor = Math.max(p.armor || 0, STREAKS.milk.armor); } // Leite Turbinado: vida cheia + colete
@@ -1454,7 +1479,7 @@ export class Core {
       const S = STREAKS.anvline, list = [];
       for (let j = 0; j < S.n; j++) { const off = (j - (S.n - 1) / 2) * S.gap, x = cx + Math.cos(ang) * off + rnd(-0.8, 0.8), z = cz + Math.sin(ang) * off + rnd(-0.8, 0.8); if (Math.abs(x) < A - 1 && Math.abs(z) < A - 1) list.push([x, 0, z]); }
       list.forEach((pos, j) => this.anvils.push({ owner: p.id, pos, t: 1.6 + j * 0.12, streak: true })); // cai em sequencia, de uma ponta a outra
-      this.event({ k: 'anvilWarn', list });
+      this.event({ k: 'anvilWarn', list: list.map(q => this.anvilLand(q)) });
     }
     strikeUse(this, p, kind); // Biplano, Trem, Balao Bombardeiro, Mao do Animador
     if (kind === 'sentry') { // 1,3 m na frente (se a parede deixar), no chao de quem chamou
@@ -1504,11 +1529,16 @@ export class Core {
       if (a.t > 0) continue;
       this.anvils.splice(i, 1);
       const owner = this.players.get(a.owner);
+      // 07/11 (pedido dele): a bigorna cai do CEU e para na 1a coisa que encontra (telhado, laje, chao); quem esta debaixo
+      // de teto nao leva (antes passava pelo telhado e a Linha de Bigornas pegava quem estava dentro do banco)
+      const SKY = 60; a.pos = this.anvilLand(a.pos); const landY = a.pos[1];
       this.event({ k: 'anvil', pos: a.pos });
       for (const v of this.players.values()) {
         if (!v.alive || (owner && !this.enemies(owner, v) && v !== owner)) continue;
         const d = Math.hypot(v.pos[0] - a.pos[0], v.pos[2] - a.pos[2]);
-        if (d < 3.4 && v.pos[1] < 6) this.damage(v, owner || v, 260 * (1 - d / 4.5), 'anvil', false);
+        if (d >= 3.4 || Math.abs(v.pos[1] - landY) > 3) continue;
+        if (Number.isFinite(raycast(this.M, [v.pos[0], v.pos[1] + 1.75, v.pos[2]], [0, 1, 0], SKY).dist)) continue; // teto em cima da cabeca: protegido
+        this.damage(v, owner || v, 260 * (1 - d / 4.5), 'anvil', false);
       }
     }
     const A = this.M.arena;
@@ -2051,7 +2081,9 @@ export class Core {
     }
     if (heard && (!ai.heardAt || dist2(heard, ai.heardAt) > 25)) { ai.heardAt = heard; ai.route = this.routeTo(p, heard); }
     if (ai.route?.length) {
-      if (dist2(ai.route[0], p.pos) < 9) { ai.visited = [...(ai.visited || []).slice(-4), ai.route.shift()]; if (ai.role === 2 || (ai.role === 1 && Math.random() < 0.3)) ai.holdT = rnd(1.5, 3); }
+      // chegada medida NO CHAO (07/11): ponto no andar de cima de casa bem em cima do bot nunca contava (3D dava 4 m) e o
+      // movimento (2D) ja achava que tinha chegado: o bot ficava parado pra sempre (24% travado na Vila)
+      if ((ai.route[0][0] - p.pos[0]) ** 2 + (ai.route[0][2] - p.pos[2]) ** 2 < 9) { ai.visited = [...(ai.visited || []).slice(-4), ai.route.shift()]; if (ai.role === 2 || (ai.role === 1 && Math.random() < 0.3)) ai.holdT = rnd(1.5, 3); }
       if (ai.route.length) return ai.route[0];
       ai.heardAt = null;
     }
@@ -2321,7 +2353,7 @@ export class Core {
     this.lobbyT = 0.25;
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, map: this.M.id, host: this.hostId(),
-      cfg: { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, mode: this.modeId(), map: (this.mode === 'escort' || this.blitz ? this.mapRaw : this.mapPick) || 'auto', /* blitz: o lobby ve a ESCOLHA (auto mostrava o sorteado e a seta pulava) */ bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
+      cfg: { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, tod: this.tod || 'day', mode: this.modeId(), map: (this.mode === 'escort' || this.blitz ? this.mapRaw : this.mapPick) || 'auto', /* blitz: o lobby ve a ESCOLHA (auto mostrava o sorteado e a seta pulava) */ bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
       players: [...this.players.values()].filter(p => !p.mob).map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), pr: p.prest || 0, elite: !!p.elite, rk: p.rk ?? -1 })), // vilao da noite nao e do elenco (03/11)
     });
   }
@@ -2338,7 +2370,7 @@ export class Core {
     const players = [];
     for (const p of this.players.values()) {
       players.push({
-        id: p.id, name: p.name, bot: p.bot, team: p.team, hp: Math.max(0, Math.round(p.hp)), alive: p.alive, pg: p.ping || undefined,
+        id: p.id, name: p.name, bot: p.bot, team: p.team, lvl: p.lvl || botLevel(p.id) /* 07/11: banner e tela de morte com o nivel de verdade */, hp: Math.max(0, Math.round(p.hp)), alive: p.alive, pg: p.ping || undefined,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
         nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
@@ -2361,7 +2393,7 @@ export class Core {
       br: this.mode === 'br' && this.zone ? brSnap(this) : null,
       esc: this.esc ? escSnap(this) : null,
       bor: this.bor ? borSnap(this) : null,
-      heist: this.heist ? heistSnap(this) : null,
+      heist: this.heist ? heistSnap(this) : null, nt: this.night ? 1 : 0, // noite no banco (07/11)
       field: fieldSnap(this),
       players,
     });

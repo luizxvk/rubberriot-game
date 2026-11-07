@@ -7,7 +7,7 @@ import { standable, floorAt } from '../shared/nav.js';
 import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, HEIST, SMUGGLE, bodyTrait, STREAK_FREE, GADGETS, gadgetOf } from '../shared/weapons.js';
 import { EV } from '../shared/events.js';
 import { BOR } from '../shared/mobs.js';
-import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout, isSaber } from './arsenal.js';
+import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout, isSaber, meleeBody } from './arsenal.js';
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
@@ -212,7 +212,7 @@ export class Player {
     // contagem de inicio (todo mundo carregando / 3, 2, 1): da pra olhar em volta, nao da pra se mexer
     // plantando / desarmando: parado no lugar, segurando o botao
     const B = this.g.snap?.bomb, acting = (B && B.actor === this.g.myId && B.prog > 0) || this.g.pumping; // dupla: enchendo a bomba no parceiro = parado
-    if (this.g.mode === 'bomb' || this.g.mode === 'br' || this.g.mode === 'borroes') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
+    if (this.g.mode === 'bomb' || this.g.mode === 'br' || this.g.mode === 'borroes' || this.g.mode === 'heist' || this.g.mode === 'smuggle') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
     if (this.g.snap?.freeze > 0 || acting || this.g.me?.fr) inp =  { ...inp, moveX: 0, moveZ: 0, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false };
     // dupla: caido so rasteja (nada de tiro, pulo, corrida, granada, faca ou equipamento)
     // Contrabando (04/11): caixote nas maos = sem tiro, pulo, corrida, granada nem faca; atirar PASSA o caixote pro colega na mira
@@ -451,7 +451,7 @@ export class Player {
     if (inp.reloadPressed) this.startReload();
     // toque: com o pente vazio recarrega sozinho (o tiro automatico nunca "aperta" com o pente vazio,
     // entao a arma ficava parada em 0 ate achar o botao de recarregar)
-    { const am = this.ammo[this.wpn]; if (isTouch && am && am.mag === 0 && am.reserve > 0 && this.reloadT <= 0 && this.switchT <= 0) this.startReload(); }
+    { const am = this.ammo[this.wpn]; if ((this.g.settings?.autoReload ?? isTouch) && am && /* 07/11: opcao nos Ajustes (antes so no celular) */ am.mag === 0 && am.reserve > 0 && this.reloadT <= 0 && this.switchT <= 0) this.startReload(); }
     // faca rapida (V / botao): golpe com a lamina equipada, sem largar a arma
     this.meleeCd = (this.meleeCd || 0) - dt;
     if (inp.meleePressed && this.meleeCd <= 0 && this.switchT <= 0 && this.throwT <= 0) this.melee();
@@ -596,7 +596,7 @@ export class Player {
 
   // inimigo mais perto na frente (cone de ~55 graus) dentro do alcance da lamina; null se nao tem
   meleeTarget() {
-    const g = this.g, fists = this.meleeWpn() === 'fists', tr = fists ? {} : bodyTrait(this.lo('melee')?.body || 'melee_10');
+    const g = this.g, fists = this.meleeWpn() === 'fists', tr = fists ? {} : bodyTrait(meleeBody(this.lo('melee')?.body));
     const range = tr.range || WEAPONS[fists ? 'fists' : 'melee'].range;
     const eye = this.eyePos(), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     let best = null, bd = Infinity;
@@ -659,7 +659,7 @@ export class Player {
   }
   meleeWpn() { return this.owned.includes('melee') ? 'melee' : this.owned.includes('fists') ? 'fists' : 'melee'; }
   melee() {
-    const g = this.g, mw = this.meleeWpn(), MW = WEAPONS[mw], body = this.lo('melee')?.body || 'melee_10', tr = mw === 'melee' ? bodyTrait(body) : {};
+    const g = this.g, mw = this.meleeWpn(), MW = WEAPONS[mw], body = meleeBody(this.lo('melee')?.body), tr = mw === 'melee' ? bodyTrait(body) : {};
     this.meleeCd = MW.rate * (tr.rate || 1);
     this.burstLeft = 0; this.reloadT = 0;
     g.vm.meleeSwing(this.meleeCd, mw === 'fists' ? { fists: true } : this.lo('melee'));
@@ -746,7 +746,7 @@ export class Player {
     const bodyNow = this.lo(this.wpn)?.body; // som proprio de modelo: revolver, AA-12 e o laser do Bico Longo
     const laser = this.wpn === 'pistol' && bodyNow === LASER_BODY;
     const silOn = String(this.lo(this.wpn)?.muzzle || '').startsWith('silencer'), sil = silOn && !laser ? audio.silSound(this.wpn) : null; // silenciador: som proprio da categoria (sem eco)
-    audio.play(sil || (laser ? 'laser' : bodyNow === 'pistol_10' ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn)), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: silOn && !sil, dry: !!sil });
+    audio.play(sil || (laser ? 'laser' : (bodyNow === 'pistol_10' || bodyNow === 'pistol_5') ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn)), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: silOn && !sil, dry: !!sil });
     audio.duck(0.6, 0.25);
 
     // boca do cano no mundo (pra o tracer sair da arma)
@@ -786,6 +786,16 @@ export class Player {
         g.net.send({ t: 'hitCar', id: best.k.id, dmg, wpn: this.wpn });
         g.fx.impact(pt, null); g.onHitConfirm?.(pt, false, dmg, null); firstEnd = pt;
       }
+    }
+    // biplano inimigo (07/11, pedido dele): esfera de 3,2 m no aviao; o servidor confere e derruba
+    if (!victim && g.snap?.crafts?.length) {
+      const wall = raycast(g.M, o, fwd.toArray(), 250).dist; let best = null;
+      for (const f of g.snap.crafts) {
+        if (f.k !== 'plane' || f.owner === g.myId || (g.myTeam && f.team === g.myTeam)) continue;
+        const c = f.pos, ox = c[0] - o[0], oy = c[1] - o[1], oz = c[2] - o[2], tc = ox * fwd.x + oy * fwd.y + oz * fwd.z; if (tc < 0 || tc > wall) continue;
+        const d2 = ox * ox + oy * oy + oz * oz - tc * tc; if (d2 < 3.2 * 3.2 && (!best || tc < best.t)) best = { f, t: tc };
+      }
+      if (best) { const pt = [o[0] + fwd.x * best.t, o[1] + fwd.y * best.t, o[2] + fwd.z * best.t], dmg = Math.round(W.dmg * pellets * dmgK); g.net.send({ t: 'hitCraft', id: best.f.id, dmg, wpn: this.wpn }); g.fx.impact(pt, null); g.onHitConfirm?.(pt, false, dmg, null); firstEnd = pt; }
     }
     // dirigivel inimigo no caminho da bala do meio: enche de furo (o servidor confere e estoura)
     if (!victim && g.blimpMeshes?.length) {

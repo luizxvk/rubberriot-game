@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Icone: Rei Tinteiro</title>
+<!--
+  Previa do icone do jogo com o modelo REAL do Rei Tinteiro (src/villains.js).
+  ?v=a (rosto em close), ?v=b (rei inteiro), ?v=c (fundo de tinta). Tira print do #icone (1024x1024).
+-->
+<style>
+  html, body { margin: 0; background: #555; }
+  #icone { position: relative; width: 1024px; height: 1024px; overflow: hidden; }
+  #icone canvas { position: absolute; inset: 0; }
+  .papel { background: radial-gradient(circle at 50% 42%, #f3ecda 0%, #e6dcc3 55%, #c9bc9c 100%); }
+  .tinta { background: radial-gradient(circle at 50% 38%, #3b3a37 0%, #161514 60%, #070707 100%); }
+  .grao { position: absolute; inset: 0; pointer-events: none; opacity: 0.22; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  .tinta .grao { mix-blend-mode: screen; opacity: 0.12; }
+  .vinheta { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 180px 40px rgba(20,16,10,0.55); }
+  .escorre { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="icone">
+  <svg class="escorre" id="pingos" viewBox="0 0 1024 260" width="1024" height="260" style="display:none">
+    <path fill="#141311" d="M0 0H1024V58C990 58 984 120 962 122C940 124 940 70 905 70C870 70 872 196 840 198C808 200 812 84 772 84C732 84 740 132 712 134C684 136 690 64 650 64C610 64 618 236 584 238C550 240 560 92 520 92C480 92 492 150 462 152C432 154 436 70 398 70C360 70 368 178 336 180C304 182 310 76 270 76C230 76 238 128 210 130C182 132 186 60 150 60C114 60 122 206 90 208C58 210 64 72 30 72C14 72 8 60 0 58Z"/>
+  </svg>
+  <div class="grao"></div>
+  <div class="vinheta"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { BOSSES } from '../src/villains.js';
+
+const v = new URLSearchParams(location.search).get('v') || 'a';
+const box = document.getElementById('icone');
+box.classList.add(v === 'c' ? 'tinta' : 'papel');
+if (v === 'a') document.getElementById('pingos').style.display = 'block';
+
+const S = 1024;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(S, S); renderer.setClearColor(0x000000, 0);
+box.insertBefore(renderer.domElement, box.firstChild);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6e6a63, v === 'c' ? 0.9 : 1.4));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-20, 40, -30); scene.add(sun);
+if (v === 'c') { const rim = new THREE.DirectionalLight(0xfff1c8, 3.5); rim.position.set(12, 10, 14); scene.add(rim); }
+
+const rei = BOSSES.reiTinteiro();
+rei.rotation.y = -0.32;
+scene.add(rei);
+const cam = new THREE.PerspectiveCamera(34, 1, 0.1, 500);
+// Enquadramento pelo tamanho REAL do modelo (a pena sobe muito acima da coroa).
+rei.userData.anim?.(0.6);
+const caixa = new THREE.Box3().setFromObject(rei), tam = caixa.getSize(new THREE.Vector3());
+const enquadra = (fracCentro, fracAltura, dx, dy) => {
+  const cy = caixa.min.y + tam.y * fracCentro, alt = tam.y * fracAltura;
+  const d = (alt / 2) / Math.tan(THREE.MathUtils.degToRad(17));
+  cam.position.set(dx * d, cy + dy * d, -d); cam.lookAt(0, cy, 0);
+};
+if (v === 'a') enquadra(0.4, 0.8, 0.16, -0.04);         // corpo, coroa e olho; pena corta no alto
+else if (v === 'b') enquadra(0.5, 1.08, 0.22, 0.02);    // rei inteiro com a pena
+else enquadra(0.45, 0.82, 0.12, -0.18);                 // de baixo pra cima, imponente
+const T = Number(new URLSearchParams(location.search).get('t') || 0.6);
+function frame() { rei.userData.anim?.(window.__t ?? T); renderer.render(scene, cam); requestAnimationFrame(frame); }
+frame();
+window.__ready = true;
+</script>
+</body>
+</html>

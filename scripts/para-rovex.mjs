@@ -6,5 +6,8 @@ const src = resolve('dist');
 const dst = resolve('../template-magazine/client/public/rubber-riot-game');
 if (!existsSync(src)) { console.error('sem dist/: rode vite build'); process.exit(1); }
 rmSync(dst, { recursive: true, force: true });
-cpSync(src, dst, { recursive: true });
+// 07/11: modelos crus do TastyTony (models/src/tt, so a fonte do preparo no Blender; o jogo carrega o tt_ready) e os sons
+// de teste (sfx/opcoes) nao vao pra Rovex
+const SKIP = [/[\\/]models[\\/]src[\\/]tt([\\/]|$)/, /[\\/]sfx[\\/]opcoes([\\/]|$)/]; // separador do Windows (\) e do resto (/)
+cpSync(src, dst, { recursive: true, filter: (f) => !SKIP.some(r => r.test(f)) });
 console.log('copiado para', dst);

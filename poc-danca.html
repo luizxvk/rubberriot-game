@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rubber Riot: prévia das danças</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Grandstander:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #b9b2a3; color: #1b1916; font-family: Grandstander, sans-serif; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* letreiro de cinema mudo: o nome da danca e a unica coisa grande na tela */
+  #card { position: fixed; top: max(16px, env(safe-area-inset-top)); left: 0; right: 0; text-align: center; pointer-events: none; }
+  #card h1 { margin: 0; font: 400 clamp(34px, 7vw, 76px)/1 'Bowlby One', sans-serif; letter-spacing: .01em; }
+  #card p { margin: 6px 16px 0; font-size: clamp(14px, 2vw, 18px); font-weight: 600; color: #3a3632; }
+  #list { display: flex; gap: 8px; width: 100%; overflow-x: auto; padding: 2px 2px 5px; scrollbar-width: none; justify-content: safe center; }
+  #list::-webkit-scrollbar { display: none; }
+  #list button { flex: none; white-space: nowrap; }
+  #bar { position: fixed; left: 0; right: 0; bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 0 10px; }
+  button { font: 800 16px Grandstander, sans-serif; min-height: 46px; padding: 0 16px; color: #1b1916; background: #ece9e1; border: 3px solid #1b1916; border-radius: 12px; box-shadow: 0 3px 0 #1b1916; cursor: pointer; }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 #1b1916; }
+  button:focus-visible { outline: 3px solid #ffb21a; outline-offset: 2px; }
+  button[aria-pressed="true"] { background: #ffb21a; }
+  .sub { background: #6e6a63; color: #faf8f2; }
+  .sub[aria-pressed="true"] { background: #faf8f2; color: #1b1916; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="card"><h1 id="nm"></h1><p id="ds"></p></div>
+<div id="bar">
+  <div id="list"></div>
+  <button class="sub" id="slow" aria-pressed="false">Câmera lenta</button>
+  <button class="sub" id="look">Trocar visual</button>
+  <button class="sub" id="mus" aria-pressed="false">Som</button>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { Character } from '/src/character.js';
+import { DANCES } from '/src/dances.js';
+import { DanceFx } from '/src/dancefx.js';
+
+const INFO = { charleston: 'Charleston', macarrao: 'Macarrão', sapateado: 'Sapateado', lindy: 'Lindy Hop', shimmy: 'Tremidinha', cancan: 'Cancã', polichinelo: 'Polichinelo', robo: 'Boneco de Corda', deslizada: 'Deslizada', bamboleio: 'Bambolê', marcha: 'Marchinha', cossaco: 'Cossaco', galinha: 'Galinha', remador: 'Remador', palmas: 'Palminha', piao: 'Pião', mexe: 'Mexe o Panelão', reverencia: 'Reverência', volta: 'Volta Olímpica', cambalhota: 'Cambalhota', mortal: 'Mortal de Costas', ombrinho: 'Ombrinho', passinho: 'Passinho', cruzadinha: 'Cruzadinha', fiodental: 'Fio Dental', aponta: 'Aponta e Rebola', cospefogo: 'Cospe Fogo', coracao: 'Chuva de Coração', canhao: 'Canhão de Confete', raio: 'Para-raios', projetor: 'Projetor' };
+document.getElementById('list').innerHTML = Object.keys(DANCES).map(id => `<button data-d="${id}">${INFO[id]}</button>`).join('');
+const LOOKS = [
+  { hat: 'bowler' },
+  { hat: 'tophat', eyes: 'shades', glove: 'golden', gloveCol: '#f2c94c', shirt: '#4a2f4f', pattern: 'stars' },
+  { hat: 'propeller', eyes: 'stars', glove: 'boxing', gloveCol: '#ef8a5b', shirt: '#ece9e1', pattern: 'dots' },
+  { hat: 'none', eyes: 'hearts', skin: 'dragao' },
+];
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xb9b2a3);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 2.2)); const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.position.set(-3, 6, -5); scene.add(sun);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2.6, 64), new THREE.MeshBasicMaterial({ color: 0xece9e1 })); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+const edge = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.72, 64), new THREE.MeshBasicMaterial({ color: 0x1b1916 })); edge.rotation.x = -Math.PI / 2; edge.position.y = 0.002; scene.add(edge);
+const cam = new THREE.PerspectiveCamera(32, 1, 0.1, 60);
+const ctl = new OrbitControls(cam, renderer.domElement); ctl.target.set(0, 1.05, 0); ctl.enablePan = false; ctl.minDistance = 3; ctl.maxDistance = 14; ctl.maxPolarAngle = Math.PI * 0.52;
+const ch = new Character('red', '', LOOKS[0]); scene.add(ch.root); ch.shadow.visible = false;
+
+const dfx = new DanceFx(scene);
+const S = { d: 'charleston', t: 0, speed: 1, look: 0, music: false, fixed: null };
+function pick(id) { S.d = id; S.t = 0; S.loop = 0; if (window.__playIt) window.__playIt(); document.getElementById('nm').textContent = INFO[id]; document.getElementById('ds').textContent = Object.keys(DANCES).indexOf(id) + 1 + ' de ' + Object.keys(DANCES).length; document.querySelectorAll('[data-d]').forEach(b => b.setAttribute('aria-pressed', b.dataset.d === id)); }
+document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => pick(b.dataset.d));
+const slow = document.getElementById('slow'); slow.onclick = () => { S.speed = S.speed === 1 ? 0.25 : 1; slow.setAttribute('aria-pressed', S.speed !== 1); if (player) player.playbackRate = S.speed; };
+document.getElementById('look').onclick = () => { S.look = (S.look + 1) % LOOKS.length; ch.setLook(LOOKS[S.look]); };
+
+// a trilha do ElevenLabs de cada dança (public/sfx/dn_<id>.mp3), sempre recomeçando junto com ela
+let player = null;
+const playIt = () => { player?.pause(); if (!S.music) return; player = new Audio('/sfx/dn_' + S.d + '.mp3'); player.playbackRate = S.speed; player.play().catch(() => {}); };
+const mus = document.getElementById('mus'); mus.onclick = () => { S.music = !S.music; mus.setAttribute('aria-pressed', S.music); playIt(); };
+
+function size() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); const d = w / h < 1 ? 9.5 : 7.2; cam.position.copy(ctl.target).add(new THREE.Vector3(0.3, 0.2, -1).setLength(d)); ctl.update(); }
+addEventListener('resize', size); size();
+const clock = new THREE.Clock(); let now = 0;
+function frame() {
+  const dt = Math.min(0.05, clock.getDelta()); now += dt; S.t += dt * S.speed;
+  const T = S.fixed ?? S.t;
+  ch.update(dt, { anim: 'dance', dance: S.d, danceT: T, alive: true, speed: 0, t: now }); ch.tag.visible = false; dfx.tick(ch, S.d, T); dfx.update(dt);
+  { const n = Math.floor(T / (DANCES[S.d].beats * 60 / DANCES[S.d].bpm)); if (n !== S.loop) { S.loop = n; playIt(); } }
+  ctl.update(); renderer.render(scene, cam); requestAnimationFrame(frame);
+}
+window.__playIt = playIt; pick('charleston'); frame();
+window.__dance = { dfx, S, pick, ch, cam, ctl, DANCES, LOOKS };
+</script>
+</body>
+</html>

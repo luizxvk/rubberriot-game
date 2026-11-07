@@ -6,7 +6,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { toon, outline } from './toon.js';
 
 const LOAD = new Map(), loader = new GLTFLoader();
-const CHARM = { station: 0.55, high: 0.97, minL: 0.7, maxL: 1.3, cord: 0.05, size: 0.058, tilt: 0.5 }; // onde e de que tamanho: mexer so aqui
+const CHARM = { station: 0.55, high: 0.97, minL: 1, maxL: 1, cord: 0.045, size: 0.05, tilt: 0.5 }; // 07/11 noite (pedido dele): um pouco maior (0,04 -> 0,05) e traco mais fino (CHARM_INK) | 07/11: menor e do MESMO tamanho em toda arma (min = max) // onde e de que tamanho: mexer so aqui
+const CHARM_INK = 0.0035; // traco preto em volta do chaveiro (era 0,006: grosso demais, pedido dele 07/11)
 function model(id) {
   if (!LOAD.has(id)) LOAD.set(id, loader.loadAsync(import.meta.env.BASE_URL + `models/src/charm_${id}.glb`).then((gl) => {
     const meshes = []; gl.scene.traverse(o => { if (o.isMesh) meshes.push(o); }); if (!meshes.length) return null;
@@ -40,6 +41,7 @@ export function attachCharm(gun, id, side = -1) {
   if (!gun) return;
   if (gun.userData.charm) { gun.remove(gun.userData.charm.root); gun.userData.charm = null; }
   if (!id || id === 'none' || gun.userData.noCharm) return;
+  if (/^mst_/.test(id) && gun.userData.body !== id.slice(4)) return; // miniatura de ouro (07/11, pedido dele): so pendura na PROPRIA arma
   gun.updateWorldMatrix(true, true);
   // medida no espaco da propria arma, peca por peca: pela caixa do mundo, arma girada dava uma caixa inflada
   const inv = gun.matrixWorld.clone().invert(), box = new THREE.Box3(), part = new THREE.Box3(), rel = new THREE.Matrix4(); let body = null, big = 0;
@@ -70,7 +72,7 @@ export function attachCharm(gun, id, side = -1) {
   gun.add(root);
   const C = gun.userData.charm = { id, side, root, swing, tilt: side * CHARM.tilt, ax: 0, az: 0, vx: 0, vz: 0, last: null };
   swing.rotation.z = C.tilt;
-  model(id).then((M) => { if (!M || gun.userData.charm !== C) return; const m = new THREE.Mesh(M.geo, M.mat); m.position.y = -len + S * 0.006; m.scale.setScalar(S * CHARM.size); outline(m, 0.006); m.userData.noFx = true; swing.add(m); });
+  model(id).then((M) => { if (!M || gun.userData.charm !== C) return; const m = new THREE.Mesh(M.geo, M.mat); m.position.y = -len + S * 0.006; m.scale.setScalar(S * CHARM.size); outline(m, CHARM_INK); m.userData.noFx = true; swing.add(m); });
 }
 const P = new THREE.Vector3(), Q = new THREE.Quaternion(), D = new THREE.Vector3();
 // pendulo: a arma anda pra um lado, o chaveiro atrasa e volta balancando

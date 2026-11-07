@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>largura</title>
+<style>body{margin:0;background:#dcd7cb;font:12px sans-serif}.c{display:inline-block;position:relative}span{position:absolute;left:4px;top:2px;background:#fff8;padding:0 3px}</style>
+<script type="module">
+// conferencia da GROSSURA (07/11): cada arma de cima e de 3/4 por tras (?ids=a,b)
+import * as THREE from 'three';
+import { loadArsenal, buildGun, defaultLoadout, CATEGORY } from '../src/arsenal.js';
+await loadArsenal(); const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(380, 260);
+for (const id of q.get('ids').split(',')) {
+  const cat = Object.keys(CATEGORY).find(c => CATEGORY[c].bodies?.includes(id)); const g = buildGun(cat, { ...defaultLoadout(cat), body: id, ...(q.get('paint') ? { paint: '#' + q.get('paint'), accent: '#' + (q.get('acc') || q.get('paint')) } : {}), ...(q.get('ch') ? { charger: q.get('ch') } : {}), ...(q.get('mz') ? { muzzle: q.get('mz') } : {}), ...(q.get('noscope') ? { scope: null } : {}) });
+  for (const v of (q.get('v') || '3/4,cima').split(',')) {
+    const sc = new THREE.Scene(); sc.background = new THREE.Color(0xdcd7cb); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); sc.add(dl);
+    sc.add(g); const b = new THREE.Box3().setFromObject(g), c = b.getCenter(new THREE.Vector3()), L = b.getSize(new THREE.Vector3()).length();
+    const cam = new THREE.PerspectiveCamera(30, 380 / 260, 0.01, 50);
+    if (v === 'cima') cam.position.copy(c).add(new THREE.Vector3(0, L * 1.9, 0.0001)); else if (v === 'lado') cam.position.copy(c).add(new THREE.Vector3(L * 1.9, 0, 0)); else cam.position.copy(c).add(new THREE.Vector3(L * 0.9, L * 0.5, L * 1.3));
+    cam.lookAt(c); r.render(sc, cam);
+    const d = document.createElement('div'); d.className = 'c'; const im = new Image(); im.src = r.domElement.toDataURL(); d.appendChild(im); const s = document.createElement('span'); s.textContent = id + ' ' + v; d.appendChild(s); document.body.appendChild(d);
+  }
+}
+document.title = 'pronto';
+</script>

@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><pre id="o"></pre>
+<script type="module">
+import { loadArsenal, buildGun } from '../src/arsenal.js';
+import { _handDiag } from '../src/handwrap.js';
+await loadArsenal();
+const out = [];
+for (const w of new URLSearchParams(location.search).get('w').split(',')) { const [ww, bb] = w.split(':'); const g = buildGun(ww, bb ? { body: bb } : {}); out.push(w + ' R ' + JSON.stringify(_handDiag(g, 'R'))); out.push(w + ' L ' + JSON.stringify(_handDiag(g, 'L'))); }
+document.getElementById('o').textContent = out.join('\n'); document.title = 'pronto';
+</script>

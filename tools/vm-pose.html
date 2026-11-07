@@ -9,10 +9,14 @@ await loadArsenal();
 const q = new URLSearchParams(location.search), pose = q.get('pose') || 'sprint';
 const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.setClearColor(0xc9c4b8); document.body.appendChild(r.domElement);
 const vm = new ViewModel(); vm.camera.fov = +(q.get('fov') || 58); vm.camera.aspect = innerWidth / innerHeight; vm.camera.updateProjectionMatrix();
-vm.setWeapon(q.get('w') || 'rifle', { ...(q.get('scope') ? { scope: q.get('scope') } : {}), ...(q.get('laser') ? { laser: q.get('laser') } : {}) }, true);
+vm.setWeapon(q.get('w') || 'rifle', { ...(q.get('body') ? { body: q.get('body') } : {}), ...(q.get('scope') ? { scope: q.get('scope') } : {}), ...(q.get('laser') ? { laser: q.get('laser') } : {}), ...(q.get('handle') ? { handle: q.get('handle') } : {}) }, true);
 if (pose === 'ads' && vm.gun.userData.scope?.lens) vm.gun.userData.scope.lens.material.uniforms.uOn && (vm.gun.userData.scope.lens.material.uniforms.uOn.value = 1);
 const insp = q.get('t'); if (insp !== null) { if (q.get('streak')) vm.callStreak(q.get('streak')); else vm.inspect(); }
 const N = insp !== null ? Math.round(+insp * 60) : 120;
-for (let i = 0; i < N; i++) vm.update({ dt: 1 / 60, moving: false, speed: 0, sprint: pose === 'sprint', firing: false, tac: pose === 'tac', ads: pose === 'ads' ? 1 : 0, crouch: false, slide: false, air: false, lookDX: 0, lookDY: 0 });
+// &fire=k: atira k quadros antes do print; &rl=0..1: print no meio da recarga (1 s)
+const fireAt = q.get('fire') !== null ? N - +q.get('fire') : -1, rlAt = q.get('rl') !== null ? N - Math.round(+q.get('rl') * 60) : -1;
+for (let i = 0; i < N; i++) { if (i === fireAt) vm.fire(0.02); if (i === rlAt) vm.reload(1); vm.update({ dt: 1 / 60, moving: false, speed: 0, sprint: pose === 'sprint', firing: false, tac: pose === 'tac', ads: pose === 'ads' ? 1 : 0, crouch: false, slide: false, air: false, lookDX: 0, lookDY: 0 }); }
+if (q.get('side')) { const zz = +(q.get('zoom') || 1); vm.camera.position.set(0.9 / zz, -0.1, -0.5); vm.camera.lookAt(0.05, -0.18, -0.5); if (q.get('back')) { vm.camera.position.set(-0.75 / zz, -0.12, -0.5); vm.camera.lookAt(0.05, -0.18, -0.5); } }
+window.__wrap = { R: !!vm.wrapR, L: !!vm.wrapL, Rv: !!vm.wrapR?.visible, Lv: !!vm.wrapL?.visible, nR: vm.wrapR?.userData.h.fingers.length, nL: vm.wrapL?.userData.h.fingers.length };
 r.render(vm.scene, vm.camera); document.title = 'pronto';
 </script>

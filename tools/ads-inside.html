@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>ads</title><pre id="o"></pre>
+<script type="module">
+// camera no ADS (07/11, regra dele: a camera nunca entra na arma nem na mira). Pra toda arma x mira: pose de mira completa,
+// depois (a) a camera esta DENTRO de alguma malha? (paridade de raios) (b) distancia ate a malha mais perto (< 0,02 = o corte
+// da camera, near 0,01, atravessa a malha). window.__bad
+import * as THREE from 'three';
+import { loadArsenal, CATEGORY, scopeFits } from '../src/arsenal.js';
+import { ViewModel } from '../src/viewmodel.js';
+await loadArsenal(); const q = new URLSearchParams(location.search), only = q.get('cat');
+const vm = new ViewModel(); vm.camera.fov = 58; vm.camera.aspect = 16 / 9; vm.camera.updateProjectionMatrix();
+const rc = new THREE.Raycaster(), dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1]].map(d => new THREE.Vector3(...d));
+const bad = []; let n = 0;
+for (const [cat, C] of Object.entries(CATEGORY)) { if (cat === 'melee' || (only && cat !== only)) continue;
+  for (const body of C.bodies) for (const scope of [...(C.scopes || []), null]) { if (scope && !scopeFits(body, cat, scope)) continue;
+    try { vm.setWeapon(cat, { body, scope: scope || undefined, canted: false }, true); } catch (e) { continue; }
+    for (let i = 0; i < 90; i++) vm.update({ dt: 1 / 60, moving: false, speed: 0, sprint: false, firing: false, tac: false, ads: 1, crouch: false, slide: false, air: false, lookDX: 0, lookDY: 0 });
+    vm.scene.updateMatrixWorld(true); const cam = vm.camera.getWorldPosition(new THREE.Vector3()), meshes = [];
+    vm.gun.traverse(o => { if (o.isMesh && o.visible && o.geometry?.attributes.position && !o.userData.noFx && o.material && !o.material.transparent && o.geometry.type !== 'CircleGeometry') meshes.push(o); });
+    const saved = meshes.map(m => m.material.side); meshes.forEach(m => { m.material.side = THREE.DoubleSide; });
+    let inside = 0; for (const d of dirs) { rc.set(cam, d); rc.far = 5; const hits = rc.intersectObjects(meshes, false); if (hits.length % 2 === 1) inside++; }
+    // distancia minima (vertices) ate a camera
+    let dmin = Infinity; const v = new THREE.Vector3(), inv = vm.camera.matrixWorldInverse.copy(vm.camera.matrixWorld).invert(); for (const m of meshes) { const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i += 2) { v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld).applyMatrix4(inv); if (v.z > -0.001) continue; /* atras da camera: nao aparece */ if (Math.abs(v.x) > -v.z * 1.2 || Math.abs(v.y) > -v.z * 0.7) continue; /* fora da tela */ dmin = Math.min(dmin, -v.z); } }
+    meshes.forEach((m, i) => { m.material.side = saved[i]; }); n++;
+    if (inside >= 3 || dmin < 0.02) bad.push({ cat, body, scope, inside, dmin: +dmin.toFixed(3) });
+  } }
+window.__bad = bad; document.getElementById('o').textContent = n + ' miras testadas, problema: ' + bad.length + '\n' + bad.map(b => JSON.stringify(b)).join('\n'); document.title = 'pronto';
+</script>

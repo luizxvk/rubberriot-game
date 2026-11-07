@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>pecas</title><pre id="o"></pre>
+<script type="module">
+// pecas da mira de ferro TT (07/11): caixa de cada peca 'iron' em fracao do corpo (z 0 = boca, y 0 = baixo)
+import * as THREE from 'three';
+import { loadArsenal, debugParts } from '../src/arsenal.js';
+await loadArsenal(); const P = debugParts(), q = new URLSearchParams(location.search), r = {};
+for (const id of (q.get('ids') || '').split(',')) { const p = P[id]; if (!p) continue; const b = p.box, L = b.max.z - b.min.z, H = b.max.y - b.min.y;
+  const f = (v) => [((v.z - b.min.z) / L).toFixed(3), ((v.y - b.min.y) / H).toFixed(3), (v.x / L).toFixed(3)];
+  const pieces = [];
+  if (p.ironGeo) { const pos = p.ironGeo.attributes.position, seen = []; // separa por ilha grosseira: agrupa triangulos por caixa
+    const tri = []; for (let i = 0; i < pos.count; i += 3) { const bb = new THREE.Box3(); for (let k = 0; k < 3; k++) bb.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, i + k)); tri.push(bb); }
+    for (const t of tri) { let g = seen.find(s => s.clone().expandByScalar(L * 0.002).intersectsBox(t)); if (g) g.union(t); else seen.push(t.clone()); }
+    for (let pass = 0; pass < 4; pass++) for (let i = 0; i < seen.length; i++) for (let j = seen.length - 1; j > i; j--) if (seen[i].clone().expandByScalar(L * 0.002).intersectsBox(seen[j])) { seen[i].union(seen[j]); seen.splice(j, 1); }
+    for (const s of seen) pieces.push({ min: f(s.min), max: f(s.max) });
+  }
+  // topo do corpo por fatia de 2%
+  const top = []; const pos = p.geo.attributes.position; const N = 50, hi = new Array(N).fill(-1e9);
+  for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i), k = Math.min(N - 1, Math.floor((z - b.min.z) / L * N)); if (Math.abs(pos.getX(i) - (p.ironPt?.x ?? 0)) < L * 0.01) hi[k] = Math.max(hi[k], pos.getY(i)); }
+  r[id] = { L, H, pt: p.ironPt ? f(p.ironPt) : null, depth: p.ironDepth && (p.ironDepth / L).toFixed(3), tilt: p.ironTilt, yaw: p.ironYaw, pieces, top: hi.map(v => ((v - b.min.y) / H).toFixed(2)).join(' ') };
+}
+document.getElementById('o').textContent = JSON.stringify(r, null, 1); window.__r = r; document.title = 'pronto';
+</script>

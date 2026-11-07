@@ -6,7 +6,7 @@ export const WEAPONS = {
   // Metralhadora (04/11, pedido dele: categoria nova): pente enorme, recarga longa, anda e mira mais devagar
   lmg:     { name: 'Metralhadora', slot: 8, dmg: 23 /* 04/11 (hotfix, pedido dele): era 31 */, moveK: 0.72, runK: 0.62, slideK: 0.6 /* so com ela na mao: anda, corre e escorrega bem mais devagar */, heat: { shots: 45, cool: 0.42, wait: 0.35, kick: 0.8 } /* 05/11 (pedido dele): 45 tiros seguidos superaquece e trava ate esfriar; o coice cresce com o calor */, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.046 /* 05/11 (pedido dele): era 0,024 */, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
   shotgun: { name: 'Bacamarte',  slot: 4, dmg: 17, pellets: 10, rate: 0.7, mag: 6, reserve: 36, reload: 1.9, spread: 0.085, auto: false, zoom: 1.2, kick: 0.11, range: 45, recoil: [[1, 0.1]] },
-  minigun: { name: 'Moedor',     slot: 5, dmg: 16, rate: 0.028, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.05, spin: 0.35, noAds: true, range: 200, recoil: [[0.6, 0.6], [0.6, -0.6], [0.7, 0.4], [0.6, -0.5]] },
+  minigun: { name: 'Moedor',     slot: 5, dmg: 19, rate: 0.028, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.02, spin: 0.35, noAds: true, range: 200, recoil: [[0.25, 0.25], [0.25, -0.25], [0.3, 0.18], [0.25, -0.2]] }, // 07/11 (pedido dele): bem menos coice, um pouco mais de dano (era 16)
   melee:   { name: 'Lâmina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
   sniper:  { name: 'Luneta',     slot: 6, dmg: 150, rate: 1.05, mag: 5, reserve: 25, reload: 2.1, spread: 0.04, adsSpread: 0, auto: false, zoom: 4, kick: 0.16, range: 400, recoil: [[1, 0.15]] },
   // punhos (battle royale): 3 socos derrubam quem esta sem colete (34 x 3 = 102)
@@ -68,7 +68,7 @@ export const MAX_PLAYERS = 16;
 // plantar a bomba: cada lado aceita no maximo metade da sala em gente (bots completam o que faltar)
 export const TEAM_MAX = MAX_PLAYERS / 2;
 // Blitz (02/11, pedido dele): Mata-Mata 12 contra 12, so nos mapas grandes
-export const BLITZ_MAX = 24, TEAM_MAX_BLITZ = 12, BLITZ_MAPS = ['fronteira', 'vila', 'deserto']; // Canyon Poeira (04/11) entra no blitz de bandeira/dominacao
+export const BLITZ_MAX = 24, TEAM_MAX_BLITZ = 12 /* 07/11 noite (pedido dele): volta pra 12x12 (24), como era; 16x16 pesava */, BLITZ_MAPS = ['fronteira', 'deserto']; // 06/11 (pedido dele): 16x16 e sem a Vila; Canyon so na bandeira/dominacao // Canyon Poeira (04/11) entra no blitz de bandeira/dominacao
 // Blitz (02/11): 12x12 nos mapas grandes em tres regras; o id do modo diz a regra de base. Vale XP em dobro (evento fixo)
 export const BLITZ_BASE = { blitz: 'tdm', blitz_ctf: 'ctf', blitz_dom: 'dom' };
 export const BLITZ_XP = 2;
@@ -98,8 +98,9 @@ export const LETHALS = ['frag', 'tomahawk', 'thermo'], TACTICALS = ['flash', 'sm
 // (maos, borracha, lince, mola, catador, sangue) o jogo aplica no proprio jogador.
 // icon = Material Icons (desenho real, tingido no Arsenal).
 // 30/10: Cuca Dura (apelona) e Pe de Pano sairam (pedido dele)
+// 07/11 (pedido dele): so UMA skill (Maos Rapidas) e UM equipamento (Guarda-chuva) liberados no nivel 1; o resto abre pelo nivel da conta
 export const SKILLS = {
-  maos: { lvl: 3, reload: 0.75, swap: 0.7, icon: 'pan_tool' },             // recarrega e troca de arma mais rapido
+  maos: { lvl: 1, reload: 0.75, swap: 0.7, icon: 'pan_tool' },             // recarrega e troca de arma mais rapido
   mola: { lvl: 4, jump: 1.3, icon: 'height' },                              // pula mais alto
   carrinho: { lvl: 5, slide: true, icon: 'sledding' },                      // agachar correndo = desliza (so com ela equipada; pedido dele 30/10)
   borracha: { lvl: 6, move: 1.08, icon: 'directions_run' },                 // anda e corre mais rapido
@@ -140,9 +141,9 @@ export const BR = {
 // Tipos de bala (peca "Municao" do Arsenal, por arma; liberadas por desafio). Mods multiplicam os status
 // (mesma regra do arsenal). O servidor aplica fogo, respingo e parede; a marca no minimapa e do cliente.
 export const AMMO = {
-  fire: { dmg: 0.85, burn: 14, burnT: 2, icon: 'local_fire_department' },   // alvo queima: +14 de dano em 2 s
+  fire: { dmg: 0.85, burn: 9, burnT: 2, icon: 'local_fire_department' },    // alvo queima: +9 de dano em 2 s (07/11, pedido dele: nerf de 35%, era 14)
   trace: { mark: 3, icon: 'my_location' },                                   // alvo no seu minimapa por 3 s
-  boom: { mag: 0.7, kick: 1.25, splash: 2.2, splashK: 0.35, icon: 'flare' }, // respinga em quem esta perto
+  boom: { mag: 0.75, kick: 1.2, splash: 3.4, splashK: 0.6, icon: 'flare' },  // dano de AREA (07/11, pedido dele: buff; era raio 2,2 m e 35%): quem esta a 3,4 m do acerto leva ate 60% do tiro
   ap: { rate: 1.12, pierce: 0.7, wallK: 0.75, icon: 'double_arrow' },        // atravessa parede fina (ate 0,7 m)
   // balote (31/10, pedido dele): so escopeta. Um projetil so (sem espalhar), 60% do dano somado dos chumbos,
   // espalha 12% do normal, alcance 2,6x e cai devagar com a distancia
@@ -153,7 +154,7 @@ export const AMMO_IDS = Object.keys(AMMO);
 // de toque. need = pontos de partida pra encher a barra (31/10, pedido dele: estilo especialista do Black Ops 3,
 // enche so com pontuacao e abate; abate = 100); lvl = nivel que libera.
 export const FIELD = {
-  umbrella: { lvl: 2, need: 300, dur: 5, hp: 170, icon: 'beach_access' },  // escudo na frente: bloqueia tiro e soco que vem de frente; aguenta hp de dano e estoura
+  umbrella: { lvl: 1, need: 300, dur: 5, hp: 170, icon: 'beach_access' },  // escudo na frente: bloqueia tiro e soco que vem de frente; aguenta hp de dano e estoura
   spring: { lvl: 5, need: 250, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
   hole: { lvl: 9, need: 350, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
   anvil: { lvl: 13, need: 400, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
@@ -183,9 +184,9 @@ export const STREAKS = {
   sentry: { kills: 8, time: 90 /* 04/11 (hotfix, pedido dele): 1min30 e some sozinha */, dmg: 7, rate: 0.5, hit: 0.5, range: 30, hp: 850 }, // 04/11: mais vida (era 380)
   rpg: { kills: 6, shots: 1, speed: 46, radius: 7.5, dmg: 220, life: 3.5 }, // 04/11 (pedido dele): area maior e mais forte (era raio 5,5 dano 150) // Bazuca: um foguete so e volta pra arma de antes (03/11)
   // 03/11 (pedido dele): as grandes
-  plane: { kills: 11, speed: 30, h: 11, lead: 9, rate: 0.08, dmg: 30, hitR: 1.9, lane: 8, passes: 2 }, // Biplano: ida e volta metralhando a reta dos inimigos (mira em quem esta no corredor)
+  plane: { kills: 11, speed: 30, h: 11, lead: 9, rate: 0.08, dmg: 30, hitR: 1.9, lane: 8, passes: 2, hp: 600 }, // hp (07/11, pedido dele): derrubado a tiro explode e o ataque acaba // Biplano: ida e volta metralhando a reta dos inimigos (mira em quem esta no corredor)
   train: { kills: 14, warn: 2.4, speed: 34, cars: 3, car: 6, halfW: 1.9 }, // Trem Desgovernado: sai de um buraco e entra noutro
-  bomber: { kills: 18, time: 38, h: 36, hp: 4200, drop: 0.45, spread: 7, fire: 7, burn: 12, burnR: 2.4 }, // Balao Bombardeiro: enorme e devagar
+  bomber: { kills: 18, time: 38, h: 36, hp: 1200, /* 07/11: 4200 nao caia nunca */ drop: 0.45, spread: 7, fire: 7, burn: 12, burnR: 2.4 }, // Balao Bombardeiro: enorme e devagar
   hand: { kills: 20, n: 4, speed: 11, erase: 0.9, wait: 3, life: 24 }, // Mao do Animador: apaga ate 4, um por vez; telhado protege
   nuke: { kills: 25, delay: 6 }, // 25 abates sem morrer (02/11, pedido dele)
 };
@@ -209,9 +210,9 @@ export const MODES = {
   ctf:      { name: 'Captura a Bandeira', teams: true, limit: 3,   desc: 'Roube a bandeira deles e traga pra sua base. 3 capturas.' },
   // vermelho empurra o bonde (fica no circulo em volta dele), azul segura; limit = % do caminho (placar)
   escort:   { name: 'Escolta',           teams: true,  limit: 100, time: 210, desc: 'Ataque empurra o Bonde da Tinta até a garagem ficando perto dele; defesa segura até o tempo acabar.' },
-  blitz:    { name: 'Blitz',             teams: true,  limit: 75,  desc: '12 contra 12 nos mapas grandes. 75 nocautes do time vencem.' },
-  blitz_ctf: { name: 'Blitz: Bandeira',  teams: true,  limit: 3,   desc: '12 contra 12 nos mapas grandes. Captura a bandeira, 3 capturas.' },
-  blitz_dom: { name: 'Blitz: Dominação', teams: true,  limit: 200, desc: '12 contra 12 nos mapas grandes. Segure A, B e C.' },
+  blitz:    { name: 'Blitz',             teams: true,  limit: 75,  desc: '16 contra 16 na Fronteira. 75 nocautes do time vencem.' },
+  blitz_ctf: { name: 'Blitz: Bandeira',  teams: true,  limit: 3,   desc: '16 contra 16 na Fronteira ou no Canyon Poeira. Captura a bandeira, 3 capturas.' },
+  blitz_dom: { name: 'Blitz: Dominação', teams: true,  limit: 200, desc: '16 contra 16 na Fronteira ou no Canyon Poeira. Segure A, B e C.' },
   dom:      { name: 'Dominação',         teams: true,  limit: 150, desc: 'Segure os pontos A, B e C. Cada ponto rende pontos por segundo.' },
   // vermelho ataca (planta), azul defende (desarma); sem renascer na rodada; limit = rodadas pra vencer
   smuggle:  { name: 'Contrabando',       teams: true,  limit: 3,   time: 180, desc: 'Ataque leva os caixotes do armazém até o barco; defesa segura. Melhor de 4.' },
@@ -259,7 +260,7 @@ export function botSkill(d) {
 export const BODY_TRAITS = {
   pistol_1: { mode: 'semi' },
   pistol_2: { mode: 'auto', rate: 0.5, dmg: 0.62, kick: 0.7, hip: 0.9 },          // pistola automatica
-  pistol_3: { mode: 'semi', rate: 2.1, dmg: 1.8, kick: 2.2, hip: 1.2 },           // canhao de mao
+  pistol_3: { mode: 'semi', rate: 1.9, dmg: 1.8, kick: 3.4, hip: 1.2 },           // canhao de mao (07/11, pedido dele: coice de Deagle, sobe bem a cada tiro)
   pistol_4: { mode: 'burst', burst: 3, rate: 0.55, dmg: 0.8 },
   pistol_5: { mode: 'semi', rate: 1.4, dmg: 1.4, spread: 0.6, hip: 1.3 },         // cano longo, mira de longe
   pistol_6: { mode: 'auto', rate: 0.62, dmg: 0.7, hip: 0.8, kick: 0.85 },         // compacta de quadril
@@ -273,7 +274,7 @@ export const BODY_TRAITS = {
   subfusil_8: { mode: 'burst', burst: 2, rate: 0.7, dmg: 1.15 },
   subfusil_9: { mode: 'auto', rate: 1.1, dmg: 1.05, kick: 0.85, hip: 1.05 },
   subfusil_10: { mode: 'semi', rate: 1.6, dmg: 1.55, spread: 0.7, hip: 1.2 },
-  subfusil_13: { mode: 'auto', rate: 0.9, dmg: 0.95, kick: 0.8, hip: 0.95 },        // sanfona (pacote 2): rapida e controlada
+  subfusil_13: { mode: 'auto', rate: 0.9, dmg: 0.95, kick: 0.8, hip: 0.95 },
   fusil_1: { mode: 'auto' },
   fusil_2: { mode: 'burst', burst: 3, rate: 0.6, dmg: 1.05, kick: 0.9 },
   fusil_3: { mode: 'semi', rate: 2.6, dmg: 1.15, spread: 0.5, hip: 1.4, kick: 3.2 }, // de precisao (nerf leve 30/10: era rate 2.4, dmg 1.7, kick 1.4). 03/11 (pedido dele): recuo bem maior (era 1.45) e dano NERFADO 1.55 -> 1.15 (urgente)
@@ -285,7 +286,7 @@ export const BODY_TRAITS = {
   fusil_12: { mode: 'semi', rate: 2.3, dmg: 1.5, spread: 0.55, hip: 1.35, kick: 1.35, mag: 0.4 }, // bico de pena: semi de precisao (abaixo da Agulha); 12 no pente (30 x 0,4, pedido dele 05/11)
   fusil_13: { mode: 'auto', rate: 1.06, dmg: 1.1, kick: 1.2, spread: 1.05, hip: 1.05 },        // pipocadeira (pacote 3, AK-47): pipoca forte, coice de mula
   pistol_11: { mode: 'semi', pellets: 8, rate: 1.9, dmg: 0.62, spread: 6.5, hip: 1, kick: 3.2, mag: 0.1667, reload: 1.45 }, // serrada (03/11): 2 tiros de chumbo, so de perto
-  shotgun_1: { mode: 'semi' },                                                     // bomba
+  shotgun_1: { mode: 'semi', kick: 1.8 },                                          // bomba (07/11, pedido dele: mais coice)
   shotgun_2: { mode: 'semi', rate: 0.55, dmg: 0.82, kick: 0.85 },                  // semiautomatica
   shotgun_3: { mode: 'auto', rate: 0.22, dmg: 0.42, kick: 1.1, spread: 1.15, mag: 5.34, reload: 1.35 }, // AA-12: cospe chumbo (~6,5/s; era 4,8, pedido dele 01/11), dano baixo por tiro, 32 no pente (05/11: o 12 era pra Bico de Pena, voltou)
   // pacote WW2
@@ -295,7 +296,7 @@ export const BODY_TRAITS = {
   pistol_9: { mode: 'semi', rate: 0.95, dmg: 1.05 },                                  // estrelinha
   pistol_10: { mode: 'semi', rate: 1.9, dmg: 1.5, kick: 1.7, spread: 0.85, hip: 1.1, mag: 0.5, reload: 1.35 },  // Bang-Bang (revolver): forte e lento; pente de 6, recarga lenta (arsenal)
   sniper_0: { mode: 'bolt' },                                                     // ferrolho
-  sniper_1: { mode: 'semi', rate: 0.5, dmg: 0.62, kick: 0.7 },                    // semiauto, nao mata de 1
+  sniper_1: { mode: 'semi', rate: 0.36, dmg: 0.58, kick: 0.62, mag: 2, reload: 1.1 }, // SVD (07/11, pedido dele): pente de 10, ~2,6 tiros/s, 87 de dano (2 no corpo, cabeca mata de 1)
   sniper_2: { mode: 'semi', rate: 0.75, dmg: 1.1, kick: 1.45 },                  // marretao (Barrett): semi pesada, coice grande (era ferrolho; pedido dele 30/10)
   sniper_3: { mode: 'bolt', rate: 0.88, dmg: 0.95, kick: 1.1 },                  // ping velho (WW2): ferrolho mais agil que o padrao
   sniper_4: { mode: 'bolt', rate: 1, dmg: 1.05, kick: 1.05 },
@@ -356,7 +357,7 @@ export const BLUEPRINTS = {
                    mods: { rate: 0.92, kick: 1.1, mag: 1.1, spread: 1.08 } },
   bp_plasma:     { wpn: 'shotgun', lo: { body: 'shotgun_3', scope: 'subfusil_scope_9', handle: 'subfusil_handle_6', laser: 'laser_2', camo: 'hellfire', tracer: 'fire', paint: '#2a0628', accent: '#ff8a1a', retColor: 'amber' },
                    mods: { dmg: 1.05, rate: 1.08, spread: 1.1, move: 0.97 } },
-  bp_aurora:     { wpn: 'sniper',  lo: { body: 'sniper_4', scope: 'sniper_scope_0', laser: 'laser_2', camo: 'galaxy', tracer: 'ice', paint: '#020615', accent: '#3dffa0', retColor: 'green' },
+  bp_aurora:     { wpn: 'sniper',  lo: { body: 'sniper_4', scope: 'sniper_scope_1', laser: 'laser_2', camo: 'galaxy', tracer: 'ice', paint: '#020615', accent: '#3dffa0', retColor: 'green' },
                    mods: { adsTime: 0.9, dmg: 0.97, move: 1.02, reload: 1.1 } },
 };
 export const bpMods = (bp) => BLUEPRINTS[bp]?.mods || {};

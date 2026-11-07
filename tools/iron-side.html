@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>lado</title>
+<style>body{margin:0;background:#bbb}</style>
+<script type="module">
+// mira de ferro TT de lado (07/11): corpo cinza, pecas de ferro vermelhas, linha de mira (massa -> olho) em azul
+import * as THREE from 'three';
+import { loadArsenal, debugParts } from '../src/arsenal.js';
+await loadArsenal(); const q = new URLSearchParams(location.search), p = debugParts()[q.get('id')];
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.setClearColor(0xeeeeee); document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.add(new THREE.Mesh(p.geo, new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: +(q.get('op') || 1) })));
+if (p.ironGeo) sc.add(new THREE.Mesh(p.ironGeo, new THREE.MeshBasicMaterial({ color: 0xdd0000, depthTest: false })));
+const b = p.box, L = b.max.z - b.min.z, m = -Math.tan(p.ironTilt || 0), pt = p.ironPt;
+if (pt) { const e = pt.clone().add(new THREE.Vector3(0, m * L, L)); sc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([pt.clone().add(new THREE.Vector3(0, -m * L * 0.2, -L * 0.2)), e]), new THREE.LineBasicMaterial({ color: 0x0033ff, depthTest: false }))); }
+const z0 = +(q.get('z0') || 0), z1 = +(q.get('z1') || 1), zc = b.min.z + L * (z0 + z1) / 2, hw = L * (z1 - z0) / 2, ar = innerWidth / innerHeight, yc = pt ? pt.y : (b.min.y + b.max.y) / 2;
+const cam = new THREE.OrthographicCamera(-hw, hw, hw / ar, -hw / ar, -100, 100); cam.position.set(q.get('top') ? 0 : 10, q.get('top') ? 10 : yc, zc); cam.lookAt(0, yc, zc); if (q.get('top')) { cam.position.set(0, 10, zc); cam.up.set(1, 0, 0); cam.lookAt(0, 0, zc); }
+r.render(sc, cam); document.title = 'pronto';
+</script>

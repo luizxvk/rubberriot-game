@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>comicos</title>
+<style>body{margin:0;background:#dcd7cb;font:12px sans-serif}.c{display:inline-block;position:relative}span{position:absolute;left:4px;top:2px;background:#fff8;padding:0 3px}</style>
+<script type="module">
+// acessorios comicos montados (07/11): ?w=rifle&body=fusil_5&k=scope|handle|laser|muzzle
+import * as THREE from 'three';
+import { loadArsenal, buildGun, defaultLoadout, CATEGORY, LASERS, MUZZLES } from '../src/arsenal.js';
+await loadArsenal(); const q = new URLSearchParams(location.search), w = q.get('w') || 'rifle', body = q.get('body') || CATEGORY[w].bodies[0], k = q.get('k') || 'scope';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(300, 190);
+const list = k === 'scope' ? CATEGORY[w].scopes : k === 'handle' ? CATEGORY[w].handles.filter(h => h !== 'akimbo') : k === 'laser' ? LASERS : Object.keys(MUZZLES);
+for (const id of list) {
+  let g; try { g = buildGun(w, { ...defaultLoadout(w), body, scope: k === 'scope' ? id : null, ...(q.get('cant') ? { canted: true } : {}), handle: k === 'handle' ? id : null, laser: k === 'laser' ? id : null, muzzle: k === 'muzzle' ? id : null }); } catch (e) { console.warn(id, e.message); continue; }
+  if (g.userData.laser) g.userData.laser.beam.removeFromParent();
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(0xdcd7cb); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(3, 3, 2); sc.add(dl); sc.add(g);
+  const b = new THREE.Box3().setFromObject(g), c = b.getCenter(new THREE.Vector3()), L = b.getSize(new THREE.Vector3()).length(), cam = new THREE.PerspectiveCamera(30, 300 / 190, 0.01, 50);
+  if (q.get('side')) cam.position.copy(c).add(new THREE.Vector3(L * 1.6, 0, 0)); else cam.position.copy(c).add(new THREE.Vector3(L * 1.25, L * 0.35, L * 0.95)); cam.lookAt(c); r.render(sc, cam);
+  const d = document.createElement('div'); d.className = 'c'; const im = new Image(); im.src = r.domElement.toDataURL(); d.appendChild(im); const s = document.createElement('span'); s.textContent = id; d.appendChild(s); document.body.appendChild(d);
+}
+document.title = 'pronto';
+</script>

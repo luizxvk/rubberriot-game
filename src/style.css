@@ -854,6 +854,7 @@ body.gated #menu .poster { visibility: hidden; }
   font-family: var(--display); font-weight: 400; font-size: clamp(64px, 10vmin, 104px); line-height: 1; color: var(--paper); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
 .countin b:empty { display: none; }
 .countin b.go { width: auto; aspect-ratio: auto; border-radius: 22px; padding: 4px 26px; font-size: clamp(44px, 7vmin, 72px); background: var(--red); }
+.countin b.go { white-space: nowrap; max-width: 94vw; background: var(--ink); color: #ffd23a; -webkit-text-stroke: 0; text-shadow: 3px 3px 0 var(--red); padding: 6px 30px; font-size: clamp(40px, 8vmin, 92px); } /* RUBBER RIOT! na largada (06/11): letreiro do show */
 .countin b.tick { animation: countTick .35s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes countTick { from { transform: scale(1.35); } }
 .countin small { font-family: var(--body); font-weight: 800; font-size: 16px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; padding: 3px 14px; }
@@ -2863,6 +2864,10 @@ body.driving .hud-br, body.driving #cross { visibility: hidden; }
 .sup-go:disabled { opacity: .7; cursor: default; }
 .sup-note { display: block; margin-top: 10px; font-size: 12px; color: var(--graphite); }
 #picker .swatch.locked { opacity: .35; }
+/* cor da pintura trancada pelo nivel da arma (07/11): a cor fica a vista, meio apagada, e um selo de papel carimbado diz o nivel */
+.swatch.locked:has(.sw-lv) { opacity: 1; box-shadow: inset 0 0 0 60px rgba(20, 18, 16, .45); cursor: not-allowed; } /* escurece por cima da cor; o selo fica limpo */
+.swatch .sw-lv { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%) rotate(-7deg); min-width: 1.7em; padding: 1px 4px 0;
+  background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-radius: 4px; font: 800 11px/1.15 Grandstander, var(--display), sans-serif; text-align: center; pointer-events: none; }
 
 /* Rovex Pass: convite do Elite, itens de visual, aviso na partida e bloco do fim */
 .pf-look { background: #e9e4d6; } .pf-look svg { width: 36px; height: 36px; fill: var(--ink); }
@@ -3458,3 +3463,162 @@ body.has-canted #touch .tbtn.canted { display: grid; }
 .vp-next { margin: 0 0 10px; font-weight: 700; font-size: 13px; color: #5b2fc0; }
 .vp-box h4 { margin: 0 0 4px; font-family: var(--display); font-weight: 400; font-size: 17px; }
 .vp-how { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; line-height: 1.35; }
+
+/* legenda do narrador (06/11, estilo Black Ops 4): faixa escura embaixo no centro, nome do locutor em amarelo */
+.vo-sub { position: fixed; left: 50%; bottom: 10%; transform: translateX(-50%); z-index: 7; pointer-events: none; width: max-content; max-width: min(56vw, 760px); padding: 6px 14px 7px; border-radius: 8px; background: rgba(20, 18, 16, .74); color: var(--paper); font: 700 clamp(14px, 2.2vh, 19px)/1.3 var(--body); text-align: center; text-wrap: balance; transition: opacity .3s; }
+.vo-sub[hidden] { display: none; }
+.vo-sub.out { opacity: 0; }
+.vo-sub b { font-family: var(--display); font-weight: 400; color: #ffd23a; margin-right: 4px; }
+body.replay .vo-sub { bottom: calc(clamp(34px, 11vh, 120px) + 14px); } /* replay: acima da faixa preta e do letreiro */
+body.touchmode .vo-sub { left: 44%; bottom: 8px; max-width: 40vw; font-size: 13px; } /* celular: embaixo, no vao entre o joystick e os botoes (em cima ficam os avisos de bigorna, alerta e mensagem) */
+
+/* ---------- Bolso e ficha de XP em dobro (06/11, previa aprovada) ---------- */
+.pocket-ov { z-index: 40; }
+.card.small.pocket { width: min(560px, 94vw); max-width: none; text-align: left; }
+body.xp2 .tip { top: calc(max(12px, env(safe-area-inset-top)) + 100px); } /* dica do tutorial desce junto com os avisos */
+.pocket .pk-sub { margin: 0 0 12px; font-weight: 700; color: var(--graphite); }
+.pk-item { display: grid; grid-template-columns: 78px 1fr auto; gap: 14px; align-items: center; padding: 12px; border: 3px solid var(--ink); border-radius: 16px; background: #fff8e6; }
+.pk-token { position: relative; width: 74px; height: 74px; border-radius: 50%; background: #ffd23a; border: 4px solid var(--ink); box-shadow: inset 0 -6px 0 #e0a91a, 3px 3px 0 var(--ink); display: grid; place-items: center; font-family: var(--display); font-size: 26px; color: var(--red); text-shadow: 2px 2px 0 var(--ink); }
+.pk-token i { position: absolute; inset: 8px; border: 3px dashed rgba(20, 18, 16, .35); border-radius: 50%; }
+.pk-n { position: absolute; right: -10px; bottom: -8px; font-size: 15px; color: var(--paper); text-shadow: none; background: var(--ink); border-radius: 12px; padding: 1px 7px; border: 3px solid var(--paper); }
+.pk-item.none .pk-token { background: var(--paper-2); color: var(--graphite); box-shadow: none; text-shadow: none; }
+.pk-txt h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 20px; }
+.pk-txt p { margin: 3px 0 0; font-weight: 700; font-size: 14px; line-height: 1.3; }
+.pk-txt small { display: block; margin-top: 4px; font-size: 13px; font-weight: 800; color: var(--graphite); }
+.pk-txt .pk-elite { color: #4f46e5; }
+.pk-txt .pk-on { color: var(--red); }
+.pk-use { font: 400 18px var(--display); padding: 9px 18px; border: 3px solid var(--ink); border-radius: 14px; background: var(--red); color: var(--paper); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; }
+.pk-use:disabled { background: var(--paper-2); color: var(--graphite); box-shadow: none; cursor: default; }
+.pk-use:focus-visible { outline: 3px solid #ffd23a; outline-offset: 3px; }
+@media (max-width: 520px) { .pk-item { grid-template-columns: 64px 1fr; } .pk-use { grid-column: 1 / -1; } .pk-token { width: 60px; height: 60px; font-size: 21px; } }
+/* selo da ficha ativa: pendurado embaixo do placar; os avisos descem pra nao ficar por cima */
+.xp-chip { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 58px); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 2px; background: var(--ink); color: var(--paper); border-radius: 999px; border: 3px solid #ffd23a; font-family: var(--display); font-size: 14px; white-space: nowrap; pointer-events: none; z-index: 3; }
+.xp-chip[hidden] { display: none; }
+.xp-chip .c { width: 22px; height: 22px; border-radius: 50%; background: #ffd23a; color: var(--red); display: grid; place-items: center; font-size: 10px; border: 2px solid var(--ink); }
+.xp-chip .t { font-family: var(--body); font-weight: 800; font-size: 14px; color: #ffd23a; }
+.xp-chip.paused { border-color: var(--graphite); }
+.xp-chip.paused .c { background: var(--paper-2); }
+.xp-chip.paused .t { color: var(--paper-2); font-size: 12px; }
+body.touchmode .xp-chip { top: calc(max(10px, env(safe-area-inset-top)) + 50px); }
+body.mode-br .xp-chip { top: calc(max(10px, env(safe-area-inset-top)) + 112px); }
+body.xp2 .ev-stack { top: 104px; }
+body.xp2.mode-br .ev-stack { top: 154px; }
+body.xp2.touchmode .ev-stack { top: 96px; }
+body.xp2.touchmode.mode-br .ev-stack { top: 142px; }
+.pf, .pf-free { position: relative; }
+.pf-boost { position: absolute; right: 4px; top: 4px; z-index: 2; background: #ffd23a; color: var(--ink); border: 2px solid var(--ink); border-radius: 9px; padding: 0 6px; font: 400 11px var(--display); white-space: nowrap; box-shadow: 2px 2px 0 var(--red); pointer-events: none; } /* ficha extra de XP em dobro no nivel (06/11) */
+
+/* ===== novidades da remasterizacao (07/11, pedido dele): intertitulo de cinema mudo que abre em iris no meio da tela.
+   Um so momento de movimento: a iris abre e o carimbo "Em breve" cai no ingresso do Mercado Negro. Sem rolagem: cabe na tela. */
+.news-pop { position: fixed; inset: 0; z-index: 72; display: grid; place-items: center; padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); background: rgba(20, 18, 16, .78); animation: npFade .25s ease-out; }
+.news-pop[hidden] { display: none; }
+.np-card { position: relative; display: grid; grid-template-rows: auto 1fr auto auto; gap: clamp(8px, 1.6vh, 14px); width: min(720px, 100%); max-height: calc(100dvh - 20px); padding: clamp(14px, 2.6vh, 24px) clamp(14px, 3vw, 28px); background: var(--paper); color: var(--ink); border: 4px solid var(--ink); border-radius: 24px;
+  box-shadow: 0 0 0 6px var(--paper), 0 0 0 10px var(--ink), 12px 14px 0 10px rgba(0,0,0,.5); animation: npIris .7s cubic-bezier(.2, .8, .2, 1) both; }
+.np-card::before { content: ''; position: absolute; inset: 9px; border: 2px solid var(--ink); border-radius: 17px; pointer-events: none; }
+.np-card .lb-x { position: absolute; top: 14px; right: 14px; z-index: 1; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+.np-head { text-align: center; padding: 0 44px; }
+.np-head h2 { margin: 0; font-family: var(--display); font-weight: 400; line-height: .95; font-size: clamp(28px, 5.4vw, 48px); color: var(--paper); -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 var(--ink); }
+.np-head p { margin: 6px auto 0; max-width: 46ch; font-weight: 700; font-size: clamp(13px, 1.9vh, 15px); line-height: 1.3; color: #3a3631; }
+.np-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(6px, 1.2vh, 10px) 12px; min-height: 0; }
+.np-list li { display: flex; align-items: center; gap: 10px; min-width: 0; padding: clamp(6px, 1.1vh, 9px) 10px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); box-shadow: 3px 3px 0 var(--ink); }
+.np-list li > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.np-list b { font-family: var(--display); font-weight: 400; font-size: clamp(14px, 2.1vh, 17px); line-height: 1.05; }
+.np-list small { font-weight: 700; font-size: clamp(11px, 1.6vh, 12.5px); line-height: 1.25; color: #3a3631; }
+.np-ico { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--ink); }
+.np-ico svg { width: 22px; height: 22px; fill: var(--paper); }
+.np-list li.np-begin { justify-content: center; background: var(--red); box-shadow: 3px 3px 0 var(--ink); }
+.np-begin b { color: var(--paper); font-size: clamp(17px, 2.6vh, 22px); text-align: center; -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; text-shadow: 2px 2px 0 var(--ink); }
+/* ingresso do Mercado Negro: papel preto picotado nas pontas, carimbo vermelho */
+.np-ticket { position: relative; display: flex; align-items: center; gap: 12px; padding: clamp(8px, 1.5vh, 12px) 18px; background: var(--ink); color: var(--paper); border-radius: 12px;
+  -webkit-mask: radial-gradient(circle 9px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 9px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+          mask: radial-gradient(circle 9px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 9px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat; }
+.np-ticket::after { content: ''; position: absolute; inset: 5px 14px; border: 2px dashed rgba(236, 233, 225, .35); border-radius: 8px; pointer-events: none; }
+.np-ticket-ico { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--paper); }
+.np-ticket-ico svg { width: 22px; height: 22px; fill: var(--paper); }
+.np-ticket h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(17px, 2.6vh, 22px); line-height: 1; }
+.np-ticket p { margin: 3px 0 0; max-width: 52ch; font-weight: 700; font-size: clamp(11px, 1.6vh, 13px); line-height: 1.3; color: var(--silver); padding-right: 92px; }
+.np-stamp { position: absolute; right: 18px; top: 50%; padding: 4px 10px; font-family: var(--display); font-size: clamp(14px, 2.2vh, 18px); line-height: 1; color: #e2553f; border: 3px solid #e2553f; border-radius: 8px; transform: translateY(-50%) rotate(-9deg); mix-blend-mode: screen; animation: npStamp .45s .7s cubic-bezier(.3, 1.6, .5, 1) both; }
+.np-foot { display: flex; justify-content: center; min-height: 52px; align-items: center; }
+.np-gift { display: inline-flex; align-items: center; gap: 10px; padding: 11px 20px; font-family: var(--display); font-size: clamp(15px, 2.3vh, 19px); color: var(--ink); background: #ffc83d; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 5px 5px 0 var(--ink); cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.np-gift svg { width: 24px; height: 24px; fill: var(--ink); }
+.np-gift:hover, .np-gift:focus-visible { transform: translate(-2px, -2px) rotate(-1deg); box-shadow: 7px 7px 0 var(--ink); }
+.np-gift:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); }
+.np-gift:disabled { opacity: .7; cursor: progress; transform: none; }
+.np-got { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-family: var(--display); font-size: clamp(15px, 2.3vh, 19px); }
+.np-got svg { width: 24px; height: 24px; fill: var(--ink); }
+.np-got.fresh { animation: npStamp .45s cubic-bezier(.3, 1.6, .5, 1) both; }
+.np-gift-note { margin: 0; font-weight: 800; font-size: 13px; text-align: center; }
+.np-gift-note.err { color: var(--red); margin-right: 10px; }
+@keyframes npFade { from { opacity: 0; } }
+@keyframes npIris { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(100% at 50% 50%); } }
+@keyframes npStamp { from { opacity: 0; transform: translateY(-50%) rotate(-24deg) scale(2.4); } }
+.np-got.fresh { animation-name: npStampFlat; }
+@keyframes npStampFlat { from { opacity: 0; transform: rotate(-12deg) scale(2); } }
+/* celular em pe: uma coluna, so o titulo de cada novidade (nada cortado: regra do dado completo); carimbo embaixo do texto */
+@media (max-width: 560px) {
+  .np-head h2 { font-size: clamp(24px, 8vw, 34px); } .np-head p { display: none; }
+  .np-list { grid-template-columns: 1fr; gap: 6px; }
+  .np-list li { padding: 6px 10px; } .np-list small { display: none; }
+  .np-ico { width: 30px; height: 30px; } .np-ico svg { width: 18px; height: 18px; }
+  .np-ticket-ico { display: none; } .np-ticket > div { flex: 1; min-width: 0; }
+  .np-ticket h3 { padding-right: 96px; } .np-ticket p { padding-right: 0; }
+  .np-stamp { top: 8px; right: 12px; font-size: 13px; transform: rotate(-8deg); animation-name: npStampFlat; }
+  .np-card { gap: 8px; }
+}
+/* tela baixa (celular deitado): tres colunas, so os titulos; cabe tudo sem rolar */
+@media (max-height: 560px) and (min-width: 561px) {
+  .np-head { min-height: 40px; display: grid; place-items: center; padding: 0 54px; }
+  .np-head h2 { font-size: clamp(22px, 5.5vh, 30px); } .np-head p { display: none; }
+  .np-list { grid-template-columns: repeat(3, 1fr); gap: 6px 8px; }
+  .np-list li { padding: 5px 8px; } .np-list small { display: none; }
+  .np-ico { width: 28px; height: 28px; } .np-ico svg { width: 17px; height: 17px; }
+  .np-list b { font-size: 13px; }
+  .np-foot { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .news-pop, .np-card, .np-stamp, .np-got.fresh { animation: none; } }
+
+/* "Powered by Rovex" + versao (07/11, pedido dele): canto inferior direito no PC e no celular, fora da partida (la o canto e da municao) */
+#rovexMark { position: fixed; right: max(10px, env(safe-area-inset-right)); bottom: max(3px, env(safe-area-inset-bottom)); z-index: 40; pointer-events: none; font-family: var(--body); font-weight: 800; font-size: 10px; line-height: 1; color: var(--paper); text-shadow: 0 0 3px var(--ink), 1px 1px 0 var(--ink); opacity: .85; white-space: nowrap; }
+#rovexMark b { font-family: var(--display); font-weight: 400; font-size: 11px; letter-spacing: .02em; }
+#rovexMark i { font-style: normal; opacity: .8; margin-left: 4px; }
+body:has(#hud:not([hidden])) #rovexMark { display: none; }
+/* tela estreita: o cartaz deixa uma faixa embaixo pra marca da Rovex (nada sobreposto) */
+/* tela estreita: a marca vai pro fim do cartaz (no fluxo, alinhada a direita), nunca por cima do que rola */
+.poster-frame > #rovexMark { position: static; display: block; margin: 8px 4px 2px auto; width: max-content; color: var(--ink); text-shadow: none; opacity: .7; }
+
+/* 07/11 (pedido dele): botao "Proxima secao" no pe de cada aba dos Ajustes */
+.set-next { justify-self: end; margin-top: 6px; display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px 8px 16px; border: 3px solid var(--ink); border-radius: 999px; background: var(--ink); color: var(--paper); font-family: var(--display); font-size: 14px; box-shadow: 3px 3px 0 var(--red, #c8342a); cursor: pointer; transition: transform .1s cubic-bezier(.3, 1.6, .5, 1), box-shadow .1s; }
+.set-next span { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.set-next span b { font-size: 11px; opacity: .7; font-weight: normal; }
+.set-next svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
+.set-next:hover, .set-next:focus-visible { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--red, #c8342a); outline: none; }
+.set-next:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--red, #c8342a); }
+/* 07/11 (pedido dele): previa da luneta longa com vidro escuro (a reticula fina sumia no fundo claro); a reticula usa a cor escolhida */
+.ret-prev.big .rp-glass { background: #2a2622; }
+.ret-prev.big .rp-view { filter: brightness(.42) contrast(1.15); }
+.ret-prev.big .rp-ret svg { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
+.ret-prev.big.blk .rp-ret svg { filter: drop-shadow(0 0 1.6px #f2eee4) drop-shadow(0 0 1px #f2eee4); }
+
+/* 07/11 (pedido dele): cortina da troca de mapa. Fundo de tinta com grao de filme, nome do mapa e "Carregando" com 3 pontos pulando; some em fade */
+#mapCurtain { position: fixed; inset: 0; z-index: 39; display: grid; place-content: center; justify-items: center; gap: 10px; background: var(--ink); color: var(--paper); opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+#mapCurtain[hidden] { display: none; }
+#mapCurtain.in { opacity: 1; pointer-events: auto; transition-duration: .18s; }
+#mapCurtain.out { opacity: 0; }
+#mapCurtain::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, .55)); pointer-events: none; }
+#mapCurtain .mc-map { position: relative; font-family: var(--display); font-size: clamp(28px, 6vw, 64px); letter-spacing: .02em; text-align: center; padding: 0 16px; }
+#mapCurtain .mc-txt { position: relative; margin: 0; display: flex; align-items: baseline; gap: 4px; font-family: var(--display); font-size: clamp(14px, 2.2vw, 20px); opacity: .85; }
+#mapCurtain .mc-txt i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; animation: mcDot 1s infinite ease-in-out; }
+#mapCurtain .mc-txt i:nth-of-type(2) { animation-delay: .15s; } #mapCurtain .mc-txt i:nth-of-type(3) { animation-delay: .3s; }
+@keyframes mcDot { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-7px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #mapCurtain .mc-txt i { animation: none; opacity: .8; } }
+
+/* 07/11 (pedido dele): dica do modo na partida, lado esquerdo embaixo do minimapa e das teclas de granada (espaco vazio da HUD) */
+.mode-tip { position: fixed; z-index: 8; left: max(14px, env(safe-area-inset-left)); top: calc(max(12px, env(safe-area-inset-top)) + 250px); width: min(250px, 30vw); display: grid; gap: 2px; padding: 7px 10px 8px; background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); border-radius: 10px; box-shadow: 3px 3px 0 var(--ink); pointer-events: none; }
+.mode-tip[hidden] { display: none; }
+.mode-tip small { font-family: var(--display); font-size: 10.5px; letter-spacing: .03em; color: var(--red); }
+.mode-tip span { font-weight: 700; font-size: 13px; line-height: 1.3; }
+.mode-tip.in { animation: mtIn .35s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes mtIn { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+body.touchmode .mode-tip { top: calc(max(8px, env(safe-area-inset-top)) + 150px); width: min(220px, 34vw); padding: 5px 8px 6px; }
+body.touchmode .mode-tip span { font-size: 11.5px; }
+@media (prefers-reduced-motion: reduce) { .mode-tip.in { animation: none; } }

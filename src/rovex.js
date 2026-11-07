@@ -135,6 +135,18 @@ export async function redeemItem(sku) {
     return { ok: true };
   } catch { return { code: 'erro' }; }
 }
+// presente da remasterizacao (07/11, pedido dele): 1000 Zions Points uma vez por conta; valor e trava no servidor (rota /zions/presente)
+export async function claimGift() {
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/zions/presente', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: '{}' });
+    const j = await r.json().catch(() => ({}));
+    if (Number.isFinite(j.zionsPoints)) { me.zionsPoints = j.zionsPoints; me.zions = j.zions; dispatchEvent(new Event('rovex-me')); }
+    if (r.status === 409) return { code: 'ja_resgatou' };
+    if (!r.ok) return { code: 'erro' };
+    return { ok: true, total: j.total };
+  } catch { return { code: 'erro' }; }
+}
 // fim de partida: conta o que aconteceu; quem decide o valor e deposita e o servidor (zpCredit em shared/shop.js)
 export async function claimZions(won, ch) {
   if (!token() || !me) return { code: 'login' };

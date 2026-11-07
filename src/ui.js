@@ -7,12 +7,13 @@ import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
 // Devolve a variante equipada nesta montagem, ou null se ela e de outro modelo / foi apagada
 const cvOf = (cat, lo) => (lo?.cv && (getVariants()[cat] || []).find(v => v.id === lo.cv && v.lo.body === lo.body)) || null;
 import { SKILL_ICONS } from './skillicons.js';
-import { tip } from './tips.js';
+import { screenTour } from './hometour.js'; // tours das telas (07/11); a dica-balao 'skills' saiu
 import { UNLOCKS, dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState, togglePick, unlockPinned, pendingUnlocks } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
 import { renderShop, stopShop, initShop } from './shop.js';
 import { initAnn, startAnn, stopAnn, relangAnn, placePromos } from './ann.js';
+import { openNews, initNews } from './newspop.js';
 import { initElitePop } from './elitepop.js';
 import { renderPass } from './passview.js';
 import { RET_PASS } from './pass.js';
@@ -59,6 +60,7 @@ export function applyCrosshair(el, S, ctx = null) {
   el.className = 'cross x-' + shape;
   el.style.setProperty('--xc', S.xhairColor || XH_COLORS[0]);
 }
+const PAINT_LVL0 = 2, PAINT_STEP = 2, PAINT_FREE = 26; // cor i abre no nivel da arma 2 + 2i; cor livre no 26 (07/11)
 const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a', '#5b3f8a', '#c45b8f', '#ece9e1', '#6e6a63', '#2a2724'];
 
 export function initMenus(o) {
@@ -73,7 +75,7 @@ export function initMenus(o) {
     if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     el.scrollLeft += e.deltaY; e.preventDefault();
   }, { passive: false });
-  placePromos(); initAnn((g) => g === 'play' ? $('goSolo')?.click() : ui.go(g)); // anuncios do cartaz: 'play' abre a escolha do modo
+  placePromos(); initAnn((g) => g === 'play' ? $('goSolo')?.click() : g === 'news' ? openNews() : ui.go(g)); initNews(); { const v = document.getElementById('rovexVer'); if (v) v.textContent = 'v' + (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'); const mk = document.getElementById('rovexMark'), home = document.querySelector('#menu .poster-frame'), narrow = matchMedia('(max-width: 760px)'), place = () => { if (!mk || !home) return; if (narrow.matches) { if (mk.parentElement !== home) home.appendChild(mk); } else if (mk.parentElement !== document.body) document.body.appendChild(mk); }; narrow.addEventListener('change', place); place(); } // Powered by Rovex + versao (07/11) // anuncios do cartaz: 'play' abre a escolha do modo
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
@@ -94,7 +96,7 @@ export function initMenus(o) {
     $('menu').classList.toggle('smithing', name === 'arsenal' || name === 'look');
     $('menu').classList.toggle('home', name === 'home');
     if (name === 'arsenal') { picking = false; renderSmith(); }
-    if (name === 'skills') { renderSkills(); tip('skills'); }
+    if (name === 'skills') renderSkills(); // a dica-balao das Skills virou o tour da tela (07/11)
     if (name === 'mp') { ui.refreshRooms && ui.refreshRooms(); renderRanked(); }
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
     if (name === 'controls') renderKeys(); else if (binding) stopBinding();
@@ -106,6 +108,7 @@ export function initMenus(o) {
     if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); startAnn(); renderAllBal(); } else stopAnn();
     const first = $('scr-' + name).querySelector('button, input');
     first && first.focus({ preventScroll: true });
+    screenTour(name, { touch: isTouch }); // 07/11 (pedido dele): tutorial da tela na 1a vez (Arsenal, Visual, Skills, Desafios)
   };
 
   document.querySelectorAll('[data-go]').forEach(b => {
@@ -225,12 +228,15 @@ export function initMenus(o) {
     ['range', 'master', 's_master', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'music', 's_music', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'sfx', 's_sfx', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
+    ['range', 'vo', 's_vo', 0, 1, 0.05, v => v > 0 ? Math.round(v * 100) + '%' : t('s_voOff')], // narrador (06/11): 0 = desligado
+    ['toggle', 'voSubs', 's_voSubs'], // legenda do narrador (06/11): ligada por padrao
     ['range', 'grain', 's_grain', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'res', 's_res', 0.4, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['seg', 'lang', 's_lang', [['en', 'English'], ['pt', 'Portugues']]],
     ['seg', 'film', 's_film', [['full', 'film_full'], ['color', 'film_color'], ['bw', 'film_bw']]],
     ['seg', 'scopeQ', 's_scopeQ', [['fast', 'sq_fast'], ['full', 'sq_full']]], // luneta (05/11, pedido dele): otimizada ou qualidade cheia
-    // distancia de desenho saiu dos Ajustes (03/11): curta pra todos, longe so pela luneta
+    ['seg', 'draw', 's_draw', [['near', 'draw_near'], ['mid', 'draw_mid'], ['far', 'draw_far']]], // 07/11: voltou (pedido dele), com nevoa
+    ['seg', 'aa', 's_aa', [['off', 'aa_off'], ['2x', 'aa_2'], ['4x', 'aa_4'], ['8x', 'aa_8']]], // antisserrilhado (07/11, pedido dele): menos = mais leve
     ['toggle', 'invertY', 's_invert'],
     ['toggle', 'holdCrouch', 's_hold'],
     ['seg', 'leanMode', 's_leanMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]],
@@ -238,6 +244,8 @@ export function initMenus(o) {
     ['toggle', 'autoSprint', 's_auto'],
     ['toggle', 'showFps', 's_fps'],
     ['toggle', 'threatRing', 's_threat'],
+    ['toggle', 'autoReload', 's_autoReload'],
+    ['toggle', 'modeTips', 's_modeTips'], // 07/11: dicas do modo na partida // 07/11 (pedido dele): pente acabou, recarrega sozinho
     ['toggle', 'autoChute', 's_autoChute'],
     ['xhair'],
   ];
@@ -259,9 +267,9 @@ export function initMenus(o) {
     ['range', 'padAccel', 's_padAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%']);
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: isTouch ? 'touch' : 'pad', touchSens: 'touch', touchAdsSens: 'touch', holdCrouch: 'ctrl', leanMode: 'ctrl', autoSprint: 'ctrl', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
-    autoFire: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'game',
-    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', draw: 'video', showFps: 'video',
-    master: 'audio', music: 'audio', sfx: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
+    autoFire: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'game', autoReload: 'game', modeTips: 'game',
+    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', draw: 'video', aa: 'video', showFps: 'video',
+    master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
   const padOn = () => [...(navigator.getGamepads?.() || [])].some(Boolean);
@@ -275,7 +283,10 @@ export function initMenus(o) {
     if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
     if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : t(l)}</button>`).join('')}</div></div>`;
     return `<div class="toggle"><span id="lbl-${d[1]}">${t(d[2])}</span><button class="switch" role="switch" aria-labelledby="lbl-${d[1]}" data-t="${d[1]}"></button></div>`;
-  }).join('') + '</div>'; };
+  }).join('') + nextSec() + '</div>'; };
+  // 07/11 (pedido dele): botao no pe de cada aba que avanca pra proxima secao (na ultima, volta pra primeira)
+  const nextSec = () => { const i = TABS.indexOf(setTab), n = TABS[(i + 1) % TABS.length], last = i === TABS.length - 1;
+    return `<button type="button" class="set-next" data-sg="${n}"><span>${t(last ? 'set_first' : 'set_next')}<b>${t('sg_' + n)}</b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${last ? 'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z' : 'M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z'}"/></svg></button>`; };
   buildSettings();
   // Controles saiu do menu inicial (03/11, pedido dele): mora nos Ajustes, na pill "Redefinir comandos" do topo
   $('setKeys').onclick = () => { audio.play('ui_click', { ui: true }); ui.go('controls', settingsFromGame); };
@@ -295,7 +306,7 @@ export function initMenus(o) {
   sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); refresh(); o.saveSettings(); });
   sl.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); sl.querySelector(`[data-sg="${setTab}"]`)?.focus(); } return; }
+    if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); const tb = sl.querySelector(`.set-tabs [data-sg="${setTab}"]`); tb?.focus({ preventScroll: true }); tb?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } return; }
     const seg = b.parentElement.dataset.seg;
     if (seg) S[seg] = b.dataset.v;
     if (seg === 'lang') { setLang(S.lang); buildSettings(); ui.relang(); }
@@ -527,7 +538,7 @@ export function initMenus(o) {
     C.scopes.forEach((id, n) => { if (scopeFits(lo.body, cat, id) && id !== freeScope(cat, lo.body)) add('scope', id, n + 1, partReq(n + 1, id)); });
     C.handles.forEach((id, n) => { if (handleFits(lo.body, cat, id)) add('handle', id, n + 1, partReq(n + 1, id)); });
     chargerOptions(lo.body, cat).forEach((id, i) => { if (i > 0) add('charger', id, i, partReq(i, id)); });
-    if (cantedFits(cat)) add('scope', 'canted', 1, CANTED_LVL, 'canted', t('cantedOn'));
+    if (cantedFits(cat, lo.body)) add('scope', 'canted', 1, CANTED_LVL, 'canted', t('cantedOn'));
     LASERS.forEach((id, n) => add('laser', id, n + 1, partReq(n + 1, id)));
     muzzleOptions(lo.body).forEach(id => add('muzzle', id, 1, MUZZLE_LVL[id] || 1, 'mz:' + id));
     for (const id of AMMO_IDS) if (!AMMO[id].only || AMMO[id].only === cat) add('ammo', id, 1, AMMO_LVL[id] || 1, 'am:' + id, t('am_' + id));
@@ -557,7 +568,7 @@ export function initMenus(o) {
     if (lookTab === 'dance') { renderDances(); return; }
     const swatch = lookTab === 'gloveCol' || lookTab === 'shirt';
     $('lookGrid').classList.toggle('swatches', swatch);
-    $('lookGrid').innerHTML = LOOKS[lookTab].map(it => {
+    $('lookGrid').innerHTML = LOOKS[lookTab].filter(it => !it.mastery).map(it => { /* chaveiro de ouro: so no Arsenal, na propria arma */
       const open = lookOpen(lookTab, it.id), on = cur[lookTab] === it.id, peek = lookPeek === it.id;
       const lock = open ? '' : `<small class="lk-lock">${it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
       const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>` + (isNew('look|' + lookTab + '|' + it.id) ? newPill(t('chNew')) : '');
@@ -600,7 +611,7 @@ export function initMenus(o) {
   function renderBanners() {
     const lv = progressInfo().unlockLevel, cur = S.banner, who = rovex.me?.name || S.name || t('youCap');
     const g = $('lookGrid'); g.classList.remove('swatches'); g.classList.add('banners');
-    g.innerHTML = BANNERS.map(b => { const open = bannerOpen(b.id); return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
+    g.innerHTML = BANNERS.filter(b => !b.mastery || bannerOpen(b.id)).map(b => { const open = bannerOpen(b.id); /* poster de mestre so aparece liberado */ return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
     $('lookNote').textContent = t('bnNote');
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; g.classList.remove('banners'); renderLook(); });
     g.querySelectorAll('.bn-it').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } S.banner = b.dataset.b; o.saveSettings(); o.bannerChanged?.(); audio.play('swap', { ui: true, vol: 0.6 }); renderBanners(); });
@@ -689,8 +700,8 @@ export function initMenus(o) {
   function drawRetPrev(lo, who, ret, col) {
     const box = $('retPrev'); if (!box) return;
     const big = who === 'main' && sightIsBig(lo.scope), r = ret && ret !== 'auto' ? ret : big ? 'duplex' : 'dot', c = RET_COLORS[col || 'red'];
-    box.className = 'ret-prev ' + (big ? 'big' : 'near') + (who === 'canted' ? ' cant' : '');
-    box.innerHTML = `<div class="rp-glass"><svg class="rp-view" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#d9d4c7"/><path d="M0 72q20-16 44-6t40-4 36 6v52H0z" fill="#a8a296"/><path d="M0 84h120v36H0z" fill="#c9c2b2"/><path d="M50 56h20v30H50z" fill="#8c8578"/><circle cx="60" cy="48" r="9" fill="#141210"/><path d="M47 62q13-8 26 0v24H47z" fill="#141210"/></svg><span class="rp-ret">${retIcon(r, c)}</span></div><div class="rp-txt"><small>${t('retPrevTitle')}</small><b>${t(who === 'canted' ? 'retWho45' : 'retWhoMain')}</b><span>${t('ret_' + r)}</span></div>`;
+    box.className = 'ret-prev ' + (big ? 'big' : 'near') + (who === 'canted' ? ' cant' : '') + (col === 'black' ? ' blk' : '');
+    box.innerHTML = `<div class="rp-glass"><svg class="rp-view" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#d9d4c7"/><path d="M0 72q20-16 44-6t40-4 36 6v52H0z" fill="#a8a296"/><path d="M0 84h120v36H0z" fill="#c9c2b2"/><path d="M50 56h20v30H50z" fill="#8c8578"/><circle cx="60" cy="48" r="9" fill="#141210"/><path d="M47 62q13-8 26 0v24H47z" fill="#141210"/></svg><span class="rp-ret" style="color:${c}">${retIcon(r, c)}</span></div><div class="rp-txt"><small>${t('retPrevTitle')}</small><b>${t(who === 'canted' ? 'retWho45' : 'retWhoMain')}</b><span>${t('ret_' + r)}</span></div>`;
     box.hidden = false;
     requestAnimationFrame(() => {
       if (box.hidden) return;
@@ -739,7 +750,7 @@ export function initMenus(o) {
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
-    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'canted' || cantedFits(cat)) && (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
+    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'canted' || cantedFits(cat, lo.body)) && (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
       const disabled = s === 'handle' && !C.handles.length;
@@ -998,7 +1009,7 @@ export function initMenus(o) {
       if (visTab === 'charm') {
         const cur = getLook().charm || 'none';
         const lockOf = (it) => it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : t('lookLvl', { n: it.lvl });
-        p.innerHTML = tabs + LOOKS.charm.map(it => { const open = lookOpen('charm', it.id); return `<button class="opt ${cur === it.id ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'charm' && preview.v === it.id ? 'peek' : ''}" data-ch="${it.id}" ${open ? '' : 'aria-disabled="true"'}>${t('lk_charm_' + it.id)}${isNew('look|charm|' + it.id) ? newPill(t('chNew')) : ''}<br><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${open ? '' : `<br><small>${lockOf(it)}</small>`}</button>`; }).join('') + `<p class="vis-note">${t('lookCharmNote')}</p>`;
+        p.innerHTML = tabs + LOOKS.charm.filter(it => !it.mastery || (it.mastery === lo.body && lookOpen('charm', it.id))).map(it => { /* miniatura de ouro: so a do modelo aberto e so de quem e mestre dele */ const open = lookOpen('charm', it.id); return `<button class="opt ${cur === it.id ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'charm' && preview.v === it.id ? 'peek' : ''}" data-ch="${it.id}" ${open ? '' : 'aria-disabled="true"'}>${t('lk_charm_' + it.id)}${isNew('look|charm|' + it.id) ? newPill(t('chNew')) : ''}<br><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${open ? '' : `<br><small>${lockOf(it)}</small>`}</button>`; }).join('') + `<p class="vis-note">${t('lookCharmNote')}</p>`;
         p.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const id = b.dataset.ch; if (b.classList.contains('locked')) { peek('charm', id); return; } preview = null; saveLook({ ...getLook(), charm: id }); audio.play('swap', { ui: true, vol: 0.6 }); renderSmith(); });
         markSeen('look|charm|'); bind(); return;
       }
@@ -1021,11 +1032,12 @@ export function initMenus(o) {
       return;
     }
     if (slot === 'paint' || slot === 'accent') {
-      const cur = lo[slot];
+      // 07/11 (pedido dele): cores abrem pelo nivel DA ARMA (a padrao, branca, ja vem); cor livre no fim da progressao
+      const cur = lo[slot], wl = progressInfo().unlockAll ? 99 : wpnLevel(cat, lo.body), lvOf = (i) => PAINT_LVL0 + i * PAINT_STEP, freeOk = wl >= PAINT_FREE;
       p.innerHTML = `<button class="swatch none ${!cur ? 'on' : ''}" data-c="">${t('original')}</button>` +
-        PAINTS.map(c => `<button class="swatch ${cur === c ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="Cor ${c}"></button>`).join('') +
-        `<label class="swatch none" title="Cor livre" style="display:grid;place-items:center">${t('free')}<input type="color" value="${cur || '#5f8f3a'}"></label>`;
-      p.querySelectorAll('button.swatch').forEach(b => b.onclick = () => setPart(slot, b.dataset.c || null));
+        PAINTS.map((c, i) => { const ok = wl >= lvOf(i); return `<button class="swatch ${cur === c ? 'on' : ''} ${ok ? '' : 'locked'}" style="background:${c}" data-c="${c}" ${ok ? '' : `aria-disabled="true" data-lv="${lvOf(i)}" title="${t('skLvl', { n: lvOf(i) })}"`} aria-label="Cor ${c}">${ok ? '' : `<small class="sw-lv">${lvOf(i)}</small>`}</button>`; }).join('') +
+        `<label class="swatch none ${freeOk ? '' : 'locked'}" title="${freeOk ? 'Cor livre' : t('skLvl', { n: PAINT_FREE })}" style="display:grid;place-items:center">${freeOk ? t('free') : t('skLvl', { n: PAINT_FREE })}<input type="color" value="${cur || '#5f8f3a'}" ${freeOk ? '' : 'disabled'}></label>`;
+      p.querySelectorAll('button.swatch').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; } setPart(slot, b.dataset.c || null); });
       p.querySelector('input[type=color]').onchange = (e) => setPart(slot, e.target.value);
       return;
     }
@@ -1050,7 +1062,7 @@ export function initMenus(o) {
       return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : (() => { const rq = slot === 'muzzle' ? MUZZLE_LVL[id] : partReq(i, id); return `<small>${t('reqWpn', { n: rq })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: rq }) * 100)}%"></i></span>`; })()}</button>`;
     }).join('');
     // mira de 45 graus: na secao Miras, uma linha abaixo (05/11, pedido dele)
-    if (slot === 'scope' && cantedFits(cat)) {
+    if (slot === 'scope' && cantedFits(cat, loadouts[cat]?.body)) {
       const open = partUnlocked(cat, 1, 'canted');
       p.insertAdjacentHTML('beforeend', `<div class="scope-cant"><small>${t('slot_canted')}</small><button class="opt cant-opt ${lo.canted ? '' : 'on'}" data-cant="">${t('cantedOff')}</button><button class="opt cant-opt ${lo.canted ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'canted' ? 'peek' : ''}" data-cant="1" ${open ? '' : 'aria-disabled="true"'}>${t('cantedOn')}${open ? '' : `<br><small>${t('reqWpn', { n: CANTED_LVL })}</small>`}</button><p class="vis-note">${t('cantedNote')}</p></div>`);
       p.querySelectorAll('[data-cant]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek('canted', true); return; } setPart('canted', b.dataset.cant ? true : null); });

@@ -194,6 +194,15 @@ export function buildFace(id) {
     case 'barba': { const m = add(new THREE.SphereGeometry(0.29, 14, 10, 0, Math.PI * 2, Math.PI * 0.56, Math.PI * 0.44), 0x3a2a1c, 0, -0.04, -0.09, 0, 0, 0, 0.01); m.scale.set(1.02, 1.1, 0.98); break; }
     case 'tapa': add(new THREE.CircleGeometry(0.075, 14), INK, 0.1, 0.05, -0.385, 0, Math.PI, 0, 0); { const m = add(new THREE.TorusGeometry(0.37, 0.011, 5, 28), INK, 0, 0.08, 0, Math.PI / 2 + 0.2, 0, 0, 0); m.userData.detail = false; } break;
     case 'gargalhada': { add(new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), 0xfaf8f2, 0, -0.15, -0.32, -0.1, 0, 0, 0.01); break; }
+    case 'fantasma': { // 07/11 (pedido dele): mascara de caveira de pano cobrindo o rosto. Casca r 0,40 com folga da cabeca (0,36) e do
+      // rosto (ate z -0,38): nenhuma face no mesmo plano. Olhos, nariz e dentes sao pecas que ATRAVESSAM a casca (nunca coladas nela)
+      const C = new THREE.Vector3(0, -0.02, -0.05), R = 0.4, on = (x, y, out = 0) => { const dz = Math.sqrt(Math.max(0, R * R - x * x - (y - C.y) ** 2)); return C.z - dz - out; };
+      add(new THREE.SphereGeometry(R, 26, 16, Math.PI + 0.3, Math.PI - 0.6, Math.PI * 0.3, Math.PI * 0.52), 0xe4ded1, C.x, C.y, C.z, 0, 0, 0, 0.012); // abaixo da aba do chapeu, sem cobrir as laterais
+      for (const sx of [-1, 1]) { const m = add(new THREE.SphereGeometry(0.075, 12, 8), INK, sx * 0.12, 0.05, on(sx * 0.12, 0.05, -0.012), 0, 0, sx * 0.25, 0); m.scale.set(1, 1.25, 0.45); } // olheiras fundas
+      { const m = add(new THREE.SphereGeometry(0.045, 10, 6), INK, 0, -0.07, on(0, -0.07, -0.01), 0, 0, 0, 0); m.scale.set(1, 1.3, 0.5); } // buraco do nariz (o nariz do boneco sai por ele)
+      { const m = add(new THREE.CapsuleGeometry(0.03, 0.2, 4, 10), INK, 0, -0.2, on(0, -0.2, -0.008), 0, 0, Math.PI / 2, 0); m.scale.z = 0.5; } // boca
+      for (let i = -3; i <= 3; i++) { const x = i * 0.032, m = add(new THREE.BoxGeometry(0.022, 0.05, 0.03), 0xf6f2e8, x, -0.2, on(x, -0.2, 0.004), 0, -x * 2.4, 0, 0.004); m.userData.detail = true; } // dentes
+      break; }
     case 'lingua': { const m = add(new THREE.CapsuleGeometry(0.05, 0.07, 4, 10), 0xe07a8a, 0.02, -0.25, -0.34, 0.25, 0, 0, 0.006); m.scale.z = 0.5; break; }
     default: return null;
   }

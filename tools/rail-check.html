@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>trilho</title><pre id="o"></pre>
+<script type="module">
+// mira reta no trilho (07/11, regra dele): em TODA arma x mira, a lente tem que estar no eixo do cano (lado) e sem inclinar.
+// dx = lente - boca do cano no lado (mm de mundo); tilt = inclinacao do eixo optico (graus). window.__bad = fora da tolerancia
+import { loadArsenal, buildGun, defaultLoadout, CATEGORY, scopeFits } from '../src/arsenal.js';
+await loadArsenal(); const bad = [], all = [];
+for (const [cat, C] of Object.entries(CATEGORY)) { if (cat === 'melee') continue;
+  for (const body of C.bodies) for (const scope of C.scopes || []) { if (!scopeFits(body, cat, scope)) continue;
+    let g; try { g = buildGun(cat, { ...defaultLoadout(cat), body, scope, canted: false }); } catch (e) { continue; }
+    const sc = g.userData.scope, mz = g.userData.muzzle; if (!sc || !sc.eye || !mz) continue;
+    const dx = Math.round((sc.eye.x - mz.position.x) * 1000), tilt = +((sc.tilt || 0) * 57.3).toFixed(1), roll = +((sc.roll || 0) * 57.3).toFixed(0);
+    const r = { cat, body, scope, dx, tilt, roll }; all.push(r); if (!roll && (Math.abs(dx) > 4 || Math.abs(tilt) > 1.5)) bad.push(r);
+  } }
+window.__bad = bad; document.getElementById('o').textContent = all.length + ' combinacoes, fora: ' + bad.length + '\n' + bad.map(b => JSON.stringify(b)).join('\n'); document.title = 'pronto';
+</script>

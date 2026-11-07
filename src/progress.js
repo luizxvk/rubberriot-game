@@ -1,12 +1,13 @@
-// Progressao: XP do jogador (nivel 1..55) e de cada CORPO de arma (modelo, nivel 1..20; cada um o seu).
+// Progressao: XP do jogador (nivel 1..250) e de cada CORPO de arma (modelo, nivel 1..20; cada um o seu).
 // Pecas do Arsenal e camuflagens desbloqueiam por nivel. Fica salvo neste aparelho.
 import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted, wasUnlocked } from './challenges.js';
 import { shopOwned } from './shopstore.js';
 import { pushSoon, me as rovexMe } from './rovex.js';
 import { PASS, PASS_PER, PASS_MAX, PASS_FREE } from './pass.js';
+import { CAMOS } from './camos.js';
 const KEY = 'rr_progress_v1';
 export const DEBUG = !!import.meta.env.DEV;
-export const MAX_LEVEL = 55;
+export const MAX_LEVEL = 250; // 07/11 (pedido dele): conta vai ate 250, depois prestigia e volta pro 1
 export const MAX_WPN_LEVEL = 30; // 04/11 (hotfix, pedido dele): progressao mais longa (era 20)
 export const MAX_PRESTIGE = 10;
 
@@ -17,7 +18,10 @@ export const XP = { kill: 55, assist: 25, head: 20, streak: 80, flagCap: 170, fl
 // prestigio (04/11, pedido dele, igual COD): cada prestigio deixa a subida mais cara, +15% de XP por nivel (o 10o = +150%).
 // A curva fica gravada na hora de prestigiar (data.pk): quem esta no meio de um prestigio nao perde nivel com a mudanca
 export const PRESTIGE_XP = 0.15;
-export const levelXp = (n) => n <= 1 ? 0 : Math.round((600 * (n - 1) + 90 * (n - 1) ** 2) * (data?.pk || 1));
+// 07/11: ate o 55 a curva de sempre (ninguem perde nivel); do 56 ao 250 cada nivel custa LV_STEP fixo (a curva quadratica ia a 5,7 milhoes)
+export const LV_STEP = 6000;
+const lvBase = (n) => 600 * (n - 1) + 90 * (n - 1) ** 2;
+export const levelXp = (n) => n <= 1 ? 0 : Math.round((n <= 55 ? lvBase(n) : lvBase(55) + LV_STEP * (n - 55)) * (data?.pk || 1));
 export const wpnLevelXp = (n) => n <= 1 ? 0 : Math.round(550 * (n - 1) + 40 * (n - 1) ** 2);
 
 let data = load();
@@ -29,8 +33,11 @@ function load() {
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
   // meta = set Ouro da Borracha ganho (semana em que a comunidade bateu a meta); st = estatisticas do Perfil
   // lg = XP das armas na hora da progressao nova (04/11): o que ja estava aberto na regra antiga continua aberto
-  return { lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
+  return { lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, boost: boostLoad(d.boost), pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
 }
+// fichas de XP em dobro (06/11, pedido dele): n = fichas no Bolso, ms = tempo que falta da ficha ativa (so anda em partida),
+// mo = meses em que o Elite ja recebeu as 6 do mes, pg = niveis do Pass que ja pagaram a ficha extra
+function boostLoad(b) { b = b && typeof b === 'object' ? b : {}; return { n: Math.max(0, b.n | 0), ms: Math.max(0, +b.ms || 0), mo: Array.isArray(b.mo) ? b.mo.slice(-24) : [], pg: Array.isArray(b.pg) ? b.pg : [] }; }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
 
 export function level(xp = data.xp) { let n = 1; while (n < MAX_LEVEL && xp >= levelXp(n + 1)) n++; return n; }
@@ -102,7 +109,7 @@ function emit(ev) { for (const fn of listeners) fn(ev); }
 export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpnAmount = amount) {
   if (!amount && !wpnAmount) return;
   const key = wpn ? keyOf(wpn, body) : null, cBefore = wpn ? catLevel(wpn) : 0;
-  const before = level(), wBefore = wpn ? wpnLevel(wpn, body) : 0, passFrom = passLevel(), freeFrom = passTrack();
+  const before = level(), wBefore = wpn ? wpnLevel(wpn, body) : 0, passFrom = passLevel(), freeFrom = passTrack(), mBefore = key ? masteryDone(key) : true;
   data.xp += amount;
   data.passXp = (data.passXp || 0) + amount; // Rovex Pass: todo mundo sobe; o premium so abre com o Elite (e quem assina depois leva o que ja passou)
   if (key) data.wpn[key] = (data.wpn[key] || 0) + wpnAmount;
@@ -112,7 +119,7 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpn
   save();
   const after = level(), wAfter = wpn ? wpnLevel(wpn, body) : 0, cAfter = wpn ? catLevel(wpn) : 0;
   const passTo = passLevel();
-  emit({ passUp: passTo > passFrom ? passTo : 0, passFrom, freeFrom, freeTo: passTrack(), kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
+  emit({ mastery: !mBefore && masteryDone(key) ? key : null, passUp: passTo > passFrom ? passTo : 0, passFrom, freeFrom, freeTo: passTrack(), kind, amount, wpn, body: key, levelUp: after > before ? after : 0, wpnUp: wAfter > wBefore ? wAfter : 0, levelFrom: before, wpnFrom: wBefore, catUp: cAfter > cBefore ? cAfter : 0, catFrom: cBefore });
 }
 
 // ---------- desbloqueios ----------
@@ -138,7 +145,9 @@ function hadOld(wpn, i, id) {
 }
 export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
 // modelo que so abre num nivel de JOGADOR (01/11, pedido dele): Liquidificador no 40
-export const BODY_MIN_LVL = { shotgun_3: 40, melee_17: 30, melee_18: 35 }; // Katana: nivel 30 do jogador; Sabre de Neon: 35 (04/11)
+export const BODY_MIN_LVL = { shotgun_3: 40, melee_17: 30, melee_18: 35, // Katana: nivel 30 do jogador; Sabre de Neon: 35 (04/11)
+  // 07/11 (pedido dele): toda lamina com nivel do JOGADOR (o Facao, padrao, e livre; as de desafio seguem pelo desafio)
+  melee_0: 3, melee_1: 5, melee_3: 8, melee_5: 10, melee_6: 12, melee_9: 15, melee_11: 18, melee_14: 22 };
 export const CANTED_LVL = 8; // mira de 45 graus (05/11, pedido dele)
 export function partUnlocked(wpn, i, id) {
   if (id === 'canted') return !!data.unlockAll || wpnLevel(wpn) >= CANTED_LVL;
@@ -186,4 +195,44 @@ export function camoUnlocked(wpn, camo) {
   if (camo.req.wpn && wpnLevel(wpn) < camo.req.wpn) return false;
   if (camo.req.player && unlockLevel() < camo.req.player) return false;
   return true;
+}
+
+// ---------- mestre da arma (07/11, pedido dele) ----------
+// Modelo no nivel maximo + todas as camuflagens de progresso dele abertas (nivel da arma, nivel da conta e desafio; Loja, Pass,
+// Elite, rankeada, lendaria e prestigio nao contam). Premio: banner-poster com a foto da arma e o chaveiro de ouro dela
+export function masteryDone(body) {
+  if (data.unlockAll) return true;
+  if (lvOf(data.wpn[body] || 0) < MAX_WPN_LEVEL) return false;
+  for (const c of CAMOS) {
+    if (c.id === 'none' || c.acct || c.pass || c.shop || c.meta || c.legend || c.elite || c.prestige || c.rank != null) continue;
+    if (LOCKED_BY[c.id]) { if (!unlockDone(LOCKED_BY[c.id].id)) return false; continue; }
+    if (c.req?.wpn && lvOf(data.wpn[body] || 0) < c.req.wpn) return false;
+    if (c.req?.player && unlockLevel() < c.req.player) return false;
+  }
+  return true;
+}
+
+// ---------- consumiveis: ficha de XP em dobro (06/11, aprovado por ele) ----------
+// Elite: 6 fichas por mes com o Elite ativo (a Rovex so diz se esta ativo; o mes e o do aparelho). Pass: ficha EXTRA nos niveis
+// 10/20/30/40/50 da trilha Elite e 15/35 da gratis (nenhum premio sai). Cada ficha = 1 hora de PARTIDA (o relogio so anda jogando).
+export const BOOST_MS = 3600e3, BOOST_ELITE = 6, BOOST_PASS_ELITE = [10, 20, 30, 40, 50], BOOST_PASS_FREE = [15, 35];
+const monthKey = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+export function boostSync() {
+  const B = data.boost; let got = 0;
+  if (rovexMe?.elite) { const m = monthKey(); if (!B.mo.includes(m)) { B.mo.push(m); B.n += BOOST_ELITE; got += BOOST_ELITE; } }
+  const tr = passTrack();
+  for (const l of BOOST_PASS_ELITE) if (passOn() && tr >= l && !B.pg.includes('e' + l)) { B.pg.push('e' + l); B.n++; got++; }
+  for (const l of BOOST_PASS_FREE) if (tr >= l && !B.pg.includes('f' + l)) { B.pg.push('f' + l); B.n++; got++; }
+  if (got) { save(); emit({ kind: 'boost', got }); }
+  return got;
+}
+export const boostInfo = () => ({ n: data.boost.n, ms: data.boost.ms, active: data.boost.ms > 0 });
+// usar: com uma ja rodando, soma mais 1 hora (nada se perde)
+export function boostUse() { const B = data.boost; if (B.n <= 0) return false; B.n--; B.ms += BOOST_MS; save(); emit({ kind: 'boost' }); return true; }
+let boostSaved = 0;
+export function boostTick(ms) {
+  const B = data.boost; if (B.ms <= 0) return;
+  B.ms = Math.max(0, B.ms - ms);
+  if (B.ms === 0 || Math.abs(boostSaved - B.ms) > 15000) { boostSaved = B.ms; save(); } // grava de 15 em 15 s (e quando acaba)
+  if (B.ms === 0) emit({ kind: 'boost', ended: true });
 }

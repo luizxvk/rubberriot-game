@@ -8,6 +8,7 @@ import { Hose } from './character.js';
 import { buildGun } from './arsenal.js';
 import { attachCharm, tickCharm } from './charms.js';
 import { ovenTex } from './looks3d.js';
+import { measureHands, buildWrap, wristPose } from './handwrap.js';
 
 const VM_SCALE = 0.8;
 // luva em volta do cabo: X da luva = lamina, Z = pro ombro (o braco sai reto do pulso), Y fecha a base
@@ -162,6 +163,27 @@ function inspectPose(k, p) {
   }
   return out;
 }
+// estrela de tinta (arma de desenho, 06/11): no lugar do clarao, estrela amarela de traco grosso com pingos voando
+let inkStar = null;
+function inkStarTex() {
+  if (inkStar) return inkStar;
+  const n = 256, c = document.createElement('canvas'); c.width = c.height = n;
+  const g = c.getContext('2d'), cx = n / 2, cy = n / 2;
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  const star = (R, r, fill) => {
+    g.beginPath();
+    for (let i = 0; i <= 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r : R; g.lineTo(cx + Math.cos(a) * q, cy + Math.sin(a) * q); }
+    g.closePath(); g.fillStyle = fill; g.fill(); g.lineWidth = n * 0.035; g.strokeStyle = '#141210'; g.stroke();
+  };
+  star(n * 0.4, n * 0.17, '#ffd23a');
+  star(n * 0.2, n * 0.085, '#fff6d8');
+  for (const [a, d, r] of [[0.3, 0.44, 0.035], [1.9, 0.42, 0.028], [3.4, 0.45, 0.04], [4.6, 0.4, 0.024], [5.6, 0.46, 0.03]]) {
+    g.beginPath(); g.arc(cx + Math.cos(a) * n * d, cy + Math.sin(a) * n * d, n * r, 0, Math.PI * 2);
+    g.fillStyle = '#ffd23a'; g.fill(); g.lineWidth = n * 0.018; g.strokeStyle = '#141210'; g.stroke();
+  }
+  inkStar = new THREE.CanvasTexture(c); inkStar.colorSpace = THREE.SRGBColorSpace;
+  return inkStar;
+}
 const STREAK_DUR = 1.8; // chamar a sequencia: a arma sai de cena, o objeto aparece e a arma volta (01/11)
 const STIM_DUR = 1.15;
 const GRAB_DUR = 0.7;
@@ -314,7 +336,9 @@ export class ViewModel {
     this.flash = new THREE.Sprite(flashMat);
     this.flash.renderOrder = 2;
     this.flash.visible = false;
+    this.flashMap = flashMat.map;
     this.scene.add(this.flash);
+    this.bel = 0; this.belV = 0; this.magS = 1; this.magV = 0; // arma de desenho: fole do corpo e pente de borracha (molas)
 
     this.s = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
     this.kick = 0; this.kickR = 0; this.swayX = 0; this.swayY = 0; this.land = 0;
@@ -329,6 +353,14 @@ export class ViewModel {
     this.holder.clear(); this.canted = false;
     this.gun = buildGun(id, loadout);
     if (id !== 'melee' && id !== 'fists') attachCharm(this.gun, this.charm);
+    // mao que segura (06/11): mede a arma ainda sem escala e monta os dedos contornando cabo e guarda-mao
+    this.wrapR = this.wrapL = this.wrapAK = null;
+    const handKey = id + '|' + [loadout?.body, loadout?.handle, loadout?.charger, loadout?.ws, loadout?.scope, loadout?.muzzle].join('|');
+    if (id !== 'melee' && id !== 'fists') {
+      const ak = loadout?.handle === 'akimbo';
+      const H = measureHands(this.gun, { key: handKey, leftKind: id === 'pistol' || ak ? null : loadout?.handle ? 'grip' : 'fore' });
+      this.wrapR = buildWrap(this.gun, H.R); this.wrapL = buildWrap(this.gun, H.L);
+    }
     this.gun.scale.setScalar(VM_SCALE);
     // faca em pegada invertida (COD): lamina sai por baixo do punho, deitada apontando pro centro
     // espada (04/11): pegada normal, lamina pra cima e pra frente (estilo BO3)
@@ -338,11 +370,15 @@ export class ViewModel {
     // akimbo: segunda pistola na mao esquerda, espelhando a pose da direita
     if (this.akimbo) { this.scene.remove(this.akimbo); this.akimbo = null; this.gun2 = null; }
     if (loadout?.handle === 'akimbo' && id !== 'melee') { // pistola, Cuspideira e Espirro
-      this.gun2 = buildGun(id, { ...loadout, handle: null }); this.gun2.scale.setScalar(VM_SCALE);
+      this.gun2 = buildGun(id, { ...loadout, handle: null });
+      this.wrapAK = buildWrap(this.gun2, measureHands(this.gun2, { key: handKey + '|ak', akimboLeft: true }).AK); // esquerda segura a 2a de verdade
+      this.gun2.scale.setScalar(VM_SCALE);
       this.akimbo = new THREE.Group(); this.akimbo.add(this.gun2); this.scene.add(this.akimbo);
       this.kick2 = 0; this.akSide = false;
     }
     this.wpn = id;
+    const tg = this.gun.userData.toon; this.bel = this.belV = this.magV = 0; this.magS = 1;
+    this.flash.material.map = tg ? inkStarTex() : this.flashMap; this.flash.material.needsUpdate = true;
     this.isBp = !!loadout?.bp; // variante de elite: corre com a arma levantada
     this.switchT = instant ? 0 : 0.32;
   }
@@ -359,6 +395,7 @@ export class ViewModel {
     this.kickR += kick * 3.2 + Math.random() * kick;
     this.flashT = 0.05;
     this.squash = 1;
+    if (this.gun?.userData.toon) { this.belV -= 10; this.flashT = 0.07; } // fole: o corpo fecha no tiro e a mola abre de volta passando do ponto
   }
 
   reload(dur) { this.reloadT = dur; this.reloadDur = dur; }
@@ -445,7 +482,7 @@ export class ViewModel {
     this.ads = st.ads;
     if (this.gun) this.gun.userData.fxHidden = st.ads > 0.3; // efeito da camo lendaria some mirando
     // pose alvo
-    let tx = 0.19, ty = -0.19, tz = -0.4, trx = 0.02, tryy = 0.05, trz = 0;
+    let tx = 0.18, ty = -0.15, tz = -0.37, trx = 0.02, tryy = 0.05, trz = 0; // 07/11 (pedido dele): arma mais alta e perto (estava baixa e parecia pequena; era 0,19 / -0,19 / -0,4)
     // pistola de braco esticado (MW 2019): mais longe do rosto
     const pistol = this.wpn === 'pistol';
     if (pistol) { tx = 0.16; ty = -0.17; tz = -0.52; }
@@ -471,9 +508,9 @@ export class ViewModel {
       if (this.gun?.userData.sword) { tx = 0.24; ty = -0.34; tz = -0.45; trx = -0.5; tryy = 0.35; trz = 0.4; } // espada correndo: lamina pra tras
     } else if (st.sprint) {
       // corrida estilo COD: arma baixa no canto, cano caido pra esquerda (a do BO2 foi revertida 01/11, pedido dele)
-      tx = 0.15; ty = -0.23; tz = -0.4; trx = -0.42; tryy = 0.72; trz = 0.36;
+      tx = 0.15; ty = -0.18; tz = -0.4; trx = -0.42; tryy = 0.72; trz = 0.36; // 07/11: corrida mais alta (era -0,23)
       // sniper: a mesma pose, so mais pro canto direito e mais baixa (inteira tampava a tela; a de 01/11 sumia dela)
-      if (this.wpn === 'sniper') { tx = 0.22; ty = -0.27; tz = -0.42; trx = -0.38; tryy = 0.62; trz = 0.3; }
+      if (this.wpn === 'sniper') { tx = 0.22; ty = -0.21; tz = -0.42; trx = -0.38; tryy = 0.62; trz = 0.3; }
     } else if (st.ads > 0) {
       const sc = this.sight(), eye = ((sc && sc.eye) || g.iron || new THREE.Vector3(0, 0.08, -0.1)).clone().multiplyScalar(VM_SCALE), roll = sc?.roll || 0;
       // luneta: a lente ocupa ~55% da altura da tela; red dot: olho um pouco atras da janela
@@ -482,15 +519,18 @@ export class ViewModel {
       const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / (sc?.big ? 1 : this.fovK || 1); // escala de FOV afasta a mira tambem; luneta segue enchendo a tela
       let relief = sc ? sc.lensR * VM_SCALE / (half * (sc.big ? 0.62 : 0.14)) : 0.42;
       if (pistol && !sc?.big) relief = Math.max(0.6, relief * 1.9);
+      if (!sc && g.ironDepth) relief = Math.max(relief, g.ironDepth * VM_SCALE + 0.2); // ferro do TT (07/11): o olho fica atras da alca, nunca dentro da arma
+      relief = Math.max(relief, sc ? 0.09 : 0.12); // 07/11 (regra dele): a camera nunca encosta na mira/arma (perto demais o corte da camera atravessava a malha e piscava)
       // eixo optico inclinado no modelo: gira a arma pra ele ficar reto no olho
-      const tilt = -(sc?.tilt || 0);
+      const tilt = -(sc ? sc.tilt || 0 : g.ironTilt || 0); // mira de ferro do TT (07/11): inclina pra alca e massa ficarem na mesma linha
       this.adsEyeRaw = null; if (roll) eye.applyAxisAngle(new THREE.Vector3(0, 0, 1), roll); // mira de 45 graus: a arma deita e o red dot fica de pe
+      const yawI = sc ? 0 : g.ironYaw || 0; if (yawI) eye.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawI); // ferro TT: alca e massa alinhadas de lado (07/11)
       eye.applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
       const ax = -eye.x, ay = -eye.y, az = -relief - eye.z;
-      this.adsEye = eye.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), -tilt); if (roll) this.adsEye.applyAxisAngle(new THREE.Vector3(0, 0, 1), -roll);
+      this.adsEye = eye.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), -tilt); if (yawI) this.adsEye.applyAxisAngle(new THREE.Vector3(0, 1, 0), -yawI); if (roll) this.adsEye.applyAxisAngle(new THREE.Vector3(0, 0, 1), -roll);
       tx = THREE.MathUtils.lerp(tx, ax, st.ads); ty = THREE.MathUtils.lerp(ty, ay, st.ads); tz = THREE.MathUtils.lerp(tz, az, st.ads);
       // mirando: arma reta, sem inclinacao da pose de quadril
-      trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy *= 1 - st.ads; trz = THREE.MathUtils.lerp(trz, roll, st.ads);
+      trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy = THREE.MathUtils.lerp(tryy, yawI, st.ads); trz = THREE.MathUtils.lerp(trz, roll, st.ads);
     }
     // inspecionar (pose por categoria); atirar, mirar, correr, recarregar ou granada cancela na hora
     let insp = null, akL = null, spinR = 0, spinL = 0;
@@ -638,13 +678,29 @@ export class ViewModel {
     // achatado de desenho a cada tiro: so no quadril (mirando ele esticava a arma a partir do punho
     // e jogava a lente pra cima)
     const sq = this.squash * 0.12 * (1 - st.ads);
-    this.holder.scale.set(1 + sq * 0.5, 1 + sq * 0.5, 1 - sq);
+    const tg = g.toon;
+    if (tg) {
+      // fole (06/11): mola subamortecida = fecha, abre passando do ponto e balanca. Mirando, um terco (a mira nao pula)
+      this.belV += (-900 * this.bel - 16 * this.belV) * dt; this.bel = THREE.MathUtils.clamp(this.bel + this.belV * dt, -0.35, 0.35);
+      const b = this.bel * (1 - st.ads * 0.7);
+      this.gun.scale.set(VM_SCALE * (1 - b * 0.55), VM_SCALE * (1 - b * 0.55), VM_SCALE * (1 + b));
+      // pente de borracha: na recarga a mao puxa e ele estica como chiclete; solto, volta balancando
+      if (tg.mag) {
+        const rp = this.reloadT > 0 ? 1 - this.reloadT / this.reloadDur : -1, want = rp > 0.1 && rp < 0.5 ? 1.85 : 1;
+        this.magV += (-(rp > 0.1 && rp < 0.5 ? 90 : 420) * (this.magS - want) - 9 * this.magV) * dt; this.magS = Math.max(0.6, this.magS + this.magV * dt);
+        const ys = this.magS, xs = 1 / Math.sqrt(ys), m = tg.mag, c0 = tg.magC, p0 = tg.magP0;
+        m.scale.set(xs, ys, xs);
+        m.position.set(p0.x + c0.x * (1 - xs), p0.y + tg.magTop * (1 - ys), p0.z + c0.z * (1 - xs)); // a boca do pente fica presa na arma
+      }
+      this.holder.scale.set(1, 1, 1);
+    } else this.holder.scale.set(1 + sq * 0.5, 1 + sq * 0.5, 1 - sq);
 
     // braco esquerdo solta da arma na recarga e na disparada (bomba no ritmo)
     this.rig.updateMatrixWorld(true);
     const pR = new THREE.Vector3(), pL = new THREE.Vector3();
     if (g.gripR) g.gripR.getWorldPosition(pR);
     if (g.gripL) g.gripL.getWorldPosition(pL);
+    const pL0 = pL.clone(); // onde a esquerda fica quando so segura (pra saber se ela soltou)
     // bomba: a mao (e o guarda-mao junto) vai pra tras e volta; a arma da um tranco pequeno
     let pk = 0;
     if (this.pumpT > 0) { this.pumpT -= st.dt; const u = 1 - Math.min(1, Math.max(0, this.pumpT) / this.pumpDur); pk = u > 0 ? Math.sin(Math.min(1, u) * Math.PI) : 0; }
@@ -816,7 +872,22 @@ export class ViewModel {
       if (g.scope.lens.material.depthTest === over) { g.scope.lens.material.depthTest = !over; g.scope.lens.renderOrder = over ? 9 : 3; }
     }
     // 04/11 (pedido dele): a luva acompanha o braco em toda pose: a boca dela (+z) gira pro ombro e o dedo fica onde a pose mandou
+    // mao que segura (06/11): parada na arma = dedos contornando a malha (filhos da arma) e o punho atras da palma;
+    // soltou (recarga, granada, inspect, faca, ferrolho, escalada...) = luva aberta animada de sempre
+    {
+      const wR = !!this.wrapR && !fists && this.wpn !== 'melee' && !(this.knife?.visible) && bo < 0.02;
+      const akL = !!this.akimbo && !!this.wrapAK, okL = akL ? (fs < 0.01 && !(mlD > 0) && !(gr > 0)) : (pL.distanceTo(pL0) < 0.006);
+      const wL = (akL || !!this.wrapL) && okL && !fists && !two && !this.umbOn && !(this.stimD > 0.001) && this.wpn !== 'melee';
+      if (this.wrapR) this.wrapR.visible = wR && !(st.ads > 0.85 && g.ironDepth && this.wpn !== 'pistol'); // ferro do TT (07/11): mirando, a luva direita no pescoco da coronha tampava a mira
+      if (this.wrapL) this.wrapL.visible = wL && !akL;
+      if (this.wrapAK) this.wrapAK.visible = wL && akL;
+      this.gloveR.userData.wrapped = wR; this.gloveL.userData.wrapped = wL;
+      const hide = (gl) => { gl.userData.open.visible = gl.userData.fist.visible = gl.userData.grip.visible = false; };
+      if (wR) { this.gun.updateMatrixWorld(true); wristPose(this.gun, this.wrapR, this.gloveR); hide(this.gloveR); pR.copy(this.gloveR.position); }
+      if (wL) { const gg = akL ? this.gun2 : this.gun; gg.updateMatrixWorld(true); wristPose(gg, akL ? this.wrapAK : this.wrapL, this.gloveL); hide(this.gloveL); pL.copy(this.gloveL.position); }
+    }
     if (!fists) for (const [gl, sh] of [[this.gloveR, SHOULDER_R], [this.gloveL, SHOULDER_L]]) {
+      if (gl.userData.wrapped) continue;
       hZ.set(0, 0, 1).applyQuaternion(gl.quaternion); hX.copy(sh).sub(gl.position).normalize();
       gl.quaternion.premultiply(hQ.setFromUnitVectors(hZ, hX).slerp(ID_Q, 0.15));
     }
@@ -854,7 +925,7 @@ export class ViewModel {
       // um tico a frente da boca do cano, na direcao que a arma aponta
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.rig.quaternion);
       this.flash.position.addScaledVector(fwd, 0.06);
-      const sc = (0.07 + Math.random() * 0.04) * (st.ads > 0.5 ? 0.55 : 1) * (0.25 + 0.75 * (g.muzzleDev?.flash ?? 1)); // bocal: silenciador e quebra-chama abafam o clarao
+      const sc = (0.07 + Math.random() * 0.04) * (st.ads > 0.5 ? 0.55 : 1) * (0.25 + 0.75 * (g.muzzleDev?.flash ?? 1)) * (g.toon ? 1.5 : 1); // estrela de tinta: maior // bocal: silenciador e quebra-chama abafam o clarao
       this.flash.scale.set(sc, sc, 1);
       this.flash.material.rotation = Math.random() * 6;
       this.flash.visible = !(g.scope && st.ads > 0.85);

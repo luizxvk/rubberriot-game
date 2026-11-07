@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><pre id="o"></pre>
+<script type="module">
+// Conferencia das armas do pacote (06/11): caixa, pente, marcas (grip/mid/fore em fracao a partir do cano) e miras de ferro tiradas
+import { loadArsenal, _dbg } from '../src/arsenal.js';
+await loadArsenal();
+const out = [], ids = (new URLSearchParams(location.search).get('b') || Object.keys(_dbg.ironLog).join(',')).split(',');
+for (const id of ids) {
+  const P = _dbg.parts[id]; if (!P) { out.push(id + ' sem corpo'); continue; }
+  const b = P.box, L = b.max.z - b.min.z, f = (z) => z === undefined ? '-' : ((z - b.min.z) / L).toFixed(2);
+  const mag = _dbg.parts[id.replace(/_(\d+)$/, '_charger_$1')], mb = mag?.box;
+  const pr = _dbg.profile(id), inf = pr.lo.filter(v => !Number.isFinite(v)).length;
+  out.push(`${id} len=${L.toFixed(2)} h=${(b.max.y - b.min.y).toFixed(2)} grip=${f(P.grip?.zc)} mid=${f(P.mid)} fore=${f(P.fore)} mag=${mb ? f(mb.min.z) + '..' + f(mb.max.z) : '-'} buracos=${inf} ferro=${JSON.stringify(_dbg.ironLog[id] || [])}`);
+}
+document.getElementById('o').textContent = out.join('\n'); document.title = 'pronto';
+</script>

@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>pecas</title><pre id="o"></pre>
+<script type="module">
+// lista as pecas de um glb do tt_ready (07/11): nome + caixa em fracao (z 0 = boca, y 0 = baixo, x em fracao do comprimento)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search), r = {};
+for (const id of q.get('ids').split(',')) { const g = await new GLTFLoader().loadAsync('/models/src/tt_ready/' + id + '.glb'); g.scene.updateMatrixWorld(true);
+  const all = new THREE.Box3().setFromObject(g.scene), L = all.max.z - all.min.z, H = all.max.y - all.min.y, out = [];
+  g.scene.traverse(o => { if (!o.isMesh && !/^m_/.test(o.name)) return; const b = o.isMesh ? new THREE.Box3().setFromObject(o) : new THREE.Box3().setFromCenterAndSize(o.getWorldPosition(new THREE.Vector3()), new THREE.Vector3());
+    const f = (v) => [+((v.z - all.min.z) / L).toFixed(3), +((v.y - all.min.y) / H).toFixed(3), +(v.x / L).toFixed(3)]; out.push([o.name, f(b.min), f(b.max)]); });
+  r[id] = { L, H, out: out.sort((a, b) => a[1][0] - b[1][0]) }; }
+document.getElementById('o').textContent = JSON.stringify(r); window.__r = r; document.title = 'pronto';
+</script>

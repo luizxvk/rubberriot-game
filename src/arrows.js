@@ -1,6 +1,6 @@
 // Regra (05/11, pedido dele): toda fileira que passa da tela ganha a setinha pra avancar pro proximo. Basta o seletor estar aqui.
 // Os botoes sao fixos na tela e medem a fileira a cada mudanca, porque as fileiras do Arsenal moram em grid e nao tem pai posicionado.
-const SEL = '#slotList, #catTabs, .stk-cards, #picker, .elp-cols, #rkbList, .zb-list';
+const SEL = '#slotList, #catTabs, .stk-cards, #picker, .elp-cols, #rkbList, .zb-list, .set-tabs';
 const ICO = { next: 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z', prev: 'M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6z', down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z', up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z' };
 const BOX = new Map();
 function btn(k, label, on) {

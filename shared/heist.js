@@ -133,14 +133,14 @@ export function heistTick(c, dt) {
       // defensor precisa ficar em cima um tico pra devolver (encostar e sumir deixava o ataque sem chance de recuperar)
       const d = alive.find(p => p.team === def && near(p, b.pos, K.touchR));
       if (d) { if ((b.retT = (b.retT || 0) + dt) >= K.returnT) { back(); b.retT = 0; d.score += 150; c.event({ k: 'heistBag', act: 'return', id: d.id }); continue; } } else b.retT = 0;
-      const a = alive.find(p => p.team === H.atk && near(p, b.pos, K.touchR) && !carryingBag(c, p));
+      const a = alive.find(p => p.team === H.atk && near(p, b.pos, K.touchR) && !carryingBag(c, p) && (p.bot || p.using)); // 07/11 (pedido dele): humano so pega apertando o botao de acao (bot pega ao encostar)
       if (a) { b.state = 'carried'; b.carrier = a.id; b.retT = 0; c.event({ k: 'heistBag', act: 'take', id: a.id }); continue; }
       if ((b.dropT -= dt) <= 0) { back(); c.event({ k: 'heistBag', act: 'return' }); }
     }
   }
   // pegar no cofre aberto: atacante colado no cofre sem bolsa leva a proxima
   for (const p of alive) {
-    if (p.team !== H.atk || !near(p, H.vault, K.takeR) || carryingBag(c, p)) continue;
+    if (p.team !== H.atk || !near(p, H.vault, K.takeR) || carryingBag(c, p) || !(p.bot || p.using)) continue; // 07/11: botao de acao (bot pega sozinho)
     const b = H.bags.find(x => x.state === 'vault');
     if (!b) break;
     b.state = 'carried'; b.carrier = p.id; b.pos = [...p.pos];

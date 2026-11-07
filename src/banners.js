@@ -2,6 +2,8 @@
 // style.css (.bnr-*), para com prefers-reduced-motion. Nome e nivel entram num rotulo de papel, sempre no canto esquerdo.
 import { t } from './i18n.js';
 import { BANNER_DEFAULT } from '../shared/banners.js';
+import { partName } from './arsenal.js';
+import { progressInfo } from './progress.js';
 
 const INK = '#141210', PAPER = '#ece9e1';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -14,7 +16,7 @@ function gear(cx, cy, r, n, cls, fill) { // engrenagem de verdade: dentes calcul
 const bulbs = (cls) => rep(30, i => `<circle class="${cls}" style="--i:${i % 3}" cx="${10 + i * 11.7}" cy="9" r="4"/><circle class="${cls}" style="--i:${(i + 1) % 3}" cx="${10 + i * 11.7}" cy="87" r="4"/>`);
 
 const ART = {
-  ingresso: () => bg('#d9a72c') + `<path d="M14 10h332v24a14 14 0 0 0 0 28v24H14V62a14 14 0 0 0 0-28z" fill="${PAPER}" stroke="${INK}" stroke-width="3"/><path d="M262 12v72" stroke="${INK}" stroke-width="3" stroke-dasharray="6 6"/><text x="306" y="60" text-anchor="middle" font-family="Bowlby One" font-size="30" fill="#a83a2c">31</text>` + rep(4, i => `<path d="M${150 + i * 26} 40l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z" fill="#a83a2c" stroke="${INK}" stroke-width="2"/>`),
+  ingresso: () => bg('#d9a72c') + `<path d="M14 10h332v24a14 14 0 0 0 0 28v24H14V62a14 14 0 0 0 0-28z" fill="${PAPER}" stroke="${INK}" stroke-width="3"/><path d="M262 12v72" stroke="${INK}" stroke-width="3" stroke-dasharray="6 6"/><text x="306" y="60" text-anchor="middle" font-family="Bowlby One" font-size="30" fill="#a83a2c">${artLvl}</text>` + rep(4, i => `<path d="M${150 + i * 26} 40l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z" fill="#a83a2c" stroke="${INK}" stroke-width="2"/>`),
   pelicula: () => bg(INK) + rep(24, i => `<rect x="${6 + i * 15}" y="6" width="9" height="9" rx="2" fill="${PAPER}"/><rect x="${6 + i * 15}" y="81" width="9" height="9" rx="2" fill="${PAPER}"/>`) + rep(4, i => `<rect x="${12 + i * 87}" y="21" width="78" height="54" fill="${['#c8c2b4', '#e6dfcd', '#b4ad9e', '#ddd6c6'][i]}"/>`) + `<circle cx="51" cy="48" r="17" fill="${INK}"/><path d="M118 66l21-36 21 36z" fill="${INK}"/><rect x="204" y="32" width="33" height="33" fill="${INK}"/><path d="M294 33l30 30m0-30l-30 30" stroke="${INK}" stroke-width="9"/>`,
   placa: () => bg('#23506e') + `<rect x="7" y="7" width="346" height="82" rx="10" fill="none" stroke="${PAPER}" stroke-width="4"/>` + [[16, 16], [344, 16], [16, 80], [344, 80]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="${PAPER}"/>`).join('') + `<path d="M196 48h104m-30-24l32 24-32 24" fill="none" stroke="${PAPER}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>`,
   letreiro: () => bg('#6d1f2a') + `<g fill="#f3d27a" stroke="${INK}" stroke-width="1.5">${bulbs('')}</g><path d="M176 74V22h140l28 26-28 26z" fill="${PAPER}" stroke="${INK}" stroke-width="3"/>` + rep(3, i => `<rect x="192" y="${32 + i * 12}" width="${112 - i * 22}" height="6" fill="${INK}"/>`),
@@ -50,8 +52,21 @@ const ART = {
   zepelim: () => bg('#7fa8c4') + `<path d="M0 86c60-14 100 4 160-4s120-14 200 0v14H0z" fill="#ece9e1"/><g class="bnr-float"><ellipse cx="262" cy="38" rx="76" ry="24" fill="#c9cdd2" stroke="${INK}" stroke-width="3"/><path d="M186 38h152M262 14v48M222 18c-8 12-8 28 0 40M302 18c8 12 8 28 0 40" fill="none" stroke="${INK}" stroke-width="2"/><path d="M330 28l22-14v48l-22-14z" fill="#a83a2c" stroke="${INK}" stroke-width="3"/><rect x="246" y="62" width="32" height="12" rx="3" fill="${INK}"/></g>`,
 };
 
+// poster de mestre da arma (07/11, pedido dele): cartaz de estreia de 1930, raios dourados, moldura dupla de ouro, ESTRELANDO
+// e a foto da arma (public/banners/mst/<corpo>.webp, gerada por tools/mst-shots.html) com o nome dela embaixo
+const GOLD = '#e0b13a', GOLD_D = '#9a6f14';
+function mstArt(body) {
+  const nm = esc(partName('body', body)).toUpperCase(), fs = Math.min(15, Math.floor(190 / Math.max(6, nm.length) * 1.6));
+  return bg('#2a1712') + rep(12, i => `<path d="M258 48L${150 + i * 19} ${i % 2 ? -12 : 108}l9 0z" fill="#4a2a1c"/>`) +
+    `<rect x="152" y="4" width="204" height="88" fill="none" stroke="${GOLD}" stroke-width="3"/><rect x="158" y="10" width="192" height="76" fill="none" stroke="${GOLD_D}" stroke-width="1.5"/>` +
+    `<text x="254" y="23" text-anchor="middle" font-family="Bowlby One, Grandstander, sans-serif" font-size="10" letter-spacing="3" fill="${GOLD}">${esc(t('mstStarring'))}</text>` +
+    `<image href="${import.meta.env.BASE_URL}banners/mst/${body}.webp" x="166" y="25" width="176" height="46" preserveAspectRatio="xMidYMid meet"/>` +
+    `<text x="254" y="84" text-anchor="middle" font-family="Bowlby One, Grandstander, sans-serif" font-size="${fs}" fill="${PAPER}" stroke="${INK}" stroke-width="0.6">${nm}</text>`;
+}
 // plain: so o desenho (camera final, onde o nome ja esta do lado)
+let artLvl = 1; // numero do bilhete do Ingresso = nivel do dono do banner (07/11, pedido dele: estava 31 fixo)
 export function bannerHtml(id, { name = '', lvl = 0, plain = false } = {}) {
-  const k = ART[id] ? id : BANNER_DEFAULT;
-  return `<div class="bnr bnr-${k}"><svg viewBox="0 0 360 96" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[k]()}</svg>${plain ? '' : `<span class="bnr-tag" style="--n:${Math.max(1, [...String(name)].length)}"><b>${esc(name)}</b>${lvl ? `<small>${esc(t('kc_lvl', { n: lvl }))}</small>` : ''}</span>`}</div>`;
+  artLvl = lvl || progressInfo().level || 1; // sem dono (previa, Loja, Pass): o seu nivel
+  const mst = /^mst_/.test(id), k = mst ? 'mst' : ART[id] ? id : BANNER_DEFAULT;
+  return `<div class="bnr bnr-${k}"><svg viewBox="0 0 360 96" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${mst ? mstArt(id.slice(4)) : ART[k]()}</svg>${plain ? '' : `<span class="bnr-tag" style="--n:${Math.max(1, [...String(name)].length)}"><b>${esc(name)}</b>${lvl ? `<small>${esc(t('kc_lvl', { n: lvl }))}</small>` : ''}</span>`}</div>`;
 }

@@ -13,10 +13,10 @@ export const PRICE = {
   hat: { raro: 1000, epico: 1500, lendario: 1500 }, // chapeu = visual do boneco (faixa das skins, mais barato)
   bundle: { pacote: 2000 },
   wskin: { lendario: 1800 },
-  dance: { epico: 900, lendario: 1600 }, banner: { lendario: 1000 }, charm: { raro: 500 }, face: { raro: 600 }, death: { lendario: 1400 }, // dança pro podio (05/11): com efeito e mortal sao as mais caras
+  dance: { epico: 900, lendario: 1600 }, banner: { lendario: 1000 }, charm: { raro: 500 }, face: { raro: 600, lendario: 900 }, death: { lendario: 1400 }, // dança pro podio (05/11): com efeito e mortal sao as mais caras
   ret: { raro: 300, epico: 500 }, // reticula de mira (04/11): a coisa mais barata da Loja
 };
-export const RANGE = { wpack: [8000, 12000], camo: [600, 1200], skin: [1000, 2000], hat: [1000, 2000], bundle: [1600, 2400], wskin: [1200, 2400], ret: [200, 600], dance: [800, 2000], banner: [800, 1400], charm: [400, 700], face: [500, 800], death: [1000, 1800] };
+export const RANGE = { wpack: [8000, 12000], camo: [600, 1200], skin: [1000, 2000], hat: [1000, 2000], bundle: [1600, 2400], wskin: [1200, 2400], ret: [200, 600], dance: [800, 2000], banner: [800, 1400], charm: [400, 700], face: [500, 900], death: [1000, 1800] };
 export const RARITY = { raro: 1, epico: 1, lendario: 1, pacote: 1 }; // raridades validas (cor do cartao)
 // Itens de verdade (03/11): give = o que libera ('camo:<id>' em src/camos.js com shop: true; 'skin:<id>' em
 // shared/looks.js LOOKS.skin com shop: true). Nome: item de um so usa o nome da camo/skin; pacote usa si_/sid_ no i18n.
@@ -80,7 +80,7 @@ export const SHOP_ITEMS = {
   // leva de 05/11: banners animados premium, chaveiros do Tripo, rosto e morte
   bCortina: { kind: 'banner', r: 'lendario', give: ['banner:cortina'] }, bHolofote: { kind: 'banner', r: 'lendario', give: ['banner:holofote'] }, bCarrossel: { kind: 'banner', r: 'lendario', give: ['banner:carrossel'] }, bVitrola: { kind: 'banner', r: 'lendario', give: ['banner:vitrola'] }, bFoguete: { kind: 'banner', r: 'lendario', give: ['banner:foguete'] }, bZepelim: { kind: 'banner', r: 'lendario', give: ['banner:zepelim'] },
   kDado: { kind: 'charm', r: 'raro', give: ['charm:dado'] }, kPato: { kind: 'charm', r: 'raro', give: ['charm:pato'] },
-  fGargalhada: { kind: 'face', r: 'raro', give: ['face:gargalhada'] }, fLingua: { kind: 'face', r: 'raro', give: ['face:lingua'] }, mBalao: { kind: 'death', r: 'lendario', give: ['death:balao'] }, mMola: { kind: 'death', r: 'lendario', give: ['death:mola'] },
+  fGargalhada: { kind: 'face', r: 'raro', give: ['face:gargalhada'] }, fLingua: { kind: 'face', r: 'raro', give: ['face:lingua'] }, fFantasma: { kind: 'face', r: 'lendario', give: ['face:fantasma'] }, mBalao: { kind: 'death', r: 'lendario', give: ['death:balao'] }, mMola: { kind: 'death', r: 'lendario', give: ['death:mola'] },
   // pacotes: skin + a camo que combina, mais barato que separado (8k a 12k)
   pDragao: { kind: 'bundle', r: 'pacote', give: ['skin:dragao', 'camo:lava'], price: 2400, feat: 1 },
   pTormenta: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:darkaether'], price: 2000, feat: 1 },

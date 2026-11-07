@@ -254,7 +254,7 @@ export function dancePose(id, t) {
 
 // Braco fora do corpo (05/11, pedido dele: mao no peito, braco curto, braco sumindo no corpo). Correcao geral, vale pra toda dança,
 // inclusive as futuras. Tudo no espaco do corpo; toda conta e continua, pra nao criar tremida (danca-test.mjs mede).
-const SH = { R: [0.36, 1.32, 0], L: [-0.36, 1.32, 0] };
+const SH = { R: [0.26, 1.32, 0], L: [-0.26, 1.32, 0] }; // ombro dentro do tronco (07/11)
 const BODY = [{ c: [0, 1.05, 0], r: [0.42, 0.483, 0.378] }, { c: [0, 1.62, 0], r: [0.36, 0.36, 0.36] }]; // tronco e cabeca, medidas de Character
 const HAND_GAP = 0.125, HOSE_GAP = 0.08, MIN_REACH = 0.385, MIN_CURVE = 0.085, TUBE_U = [0.3, 0.4, 0.5, 0.6, 0.7, 0.85];
 // devolve em out quanto falta pra p sair do elipsoide E (mais a folga m). Sai do centro em linha reta. Fora dele: out zerado
@@ -322,7 +322,7 @@ const mixAny = (a, b, k) => (Array.isArray(a) ? a.map((v, i) => mix(v, b[i] ?? v
 // mistura duas poses inteiras
 export function mixPose(A, B, k) { const out = {}; for (const n of ['x', 'z', 'y', 'tuck', 'tilt', 'hatLift', 'head', 'hR', 'cR', 'hL', 'cL', 'fR', 'kR', 'sR', 'fL', 'kL', 'sL']) out[n] = mixAny(A[n], B[n], k); out.sq = mix(A.sq ?? 1, B.sq ?? 1, k); out.lean = mixTurn(A.lean, B.lean, k); out.turn = mixTurn(A.turn, B.turn, k); out.footTurn = mixTurn(A.footTurn, B.footTurn, k); return out; }
 
-const SH_R = new THREE.Vector3(0.36, 1.32, 0), SH_L = new THREE.Vector3(-0.36, 1.32, 0), HIP = 0.72;
+const SH_R = new THREE.Vector3(0.26, 1.32, 0), SH_L = new THREE.Vector3(-0.26, 1.32, 0), HIP = 0.72;
 const inv = new THREE.Matrix4(), a = new THREE.Vector3(), c = new THREE.Vector3(), f = new THREE.Vector3(), cE = new THREE.Vector3();
 
 // coloca o boneco na pose. gun = { pos, quat } da arma na mao ou nas costas; sem gun a arma some (previa da dança)

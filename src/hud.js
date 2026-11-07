@@ -188,12 +188,16 @@ export class Hud {
   countIn(snap) {
     const el = this.cin || (this.cin = { box: $('countIn'), num: $('countNum'), sub: $('countSub') });
     const now = performance.now(), f = snap?.freeze || 0;
-    if (this.lastFreeze > 0 && f <= 0 && !snap?.loading) this.goUntil = now + 800;
+    if (this.lastFreeze > 0 && f <= 0 && !snap?.loading) this.goUntil = now + 1500; // RUBBER RIOT! fica o tempo do grito
     this.lastFreeze = f;
     let num = '', sub = '', go = false;
     if (snap?.loading) sub = t('countWait');
     else if (f > 0.05 && f < 4) { num = String(Math.max(1, Math.min(3, Math.ceil(f - 0.5)))); sub = t('countReady'); }
-    else if (now < (this.goUntil || 0)) { num = t('countGo'); go = true; }
+    else if (now < (this.goUntil || 0)) { num = 'RUBBER RIOT!'; go = true; } // 06/11 (pedido dele): a partida abre com o nome do jogo, junto com o grito do narrador
+    // narrador (06/11): "Ladies and gentlemen, lights, camera..." durante a contagem (3,3 s, termina antes do 1) e "RUBBER RIOT!" cravado na largada
+    const quietVo = !!(this.g?.range || this.g?.tutorial);
+    if (f > 0.05 && f <= 3.4 && !snap?.loading && !this.voIntro) { this.voIntro = true; if (!quietVo) audio.voice('start_a'); }
+    if (f <= 0) this.voIntro = false;
     el.box.hidden = !num && !sub;
     // Bate-Volta: tela escura durante a contagem (ninguem fica vendo os outros parados no ar)
     const dark = !!this.g?.bounce && (f > 0 || !!snap?.loading) && !!this.g?.player?.air;
@@ -203,7 +207,7 @@ export class Hud {
       el.num.classList.toggle('go', go);
       el.num.classList.remove('tick'); void el.num.offsetWidth; if (num) el.num.classList.add('tick');
       // 3, 2, 1 = tique de relogio subindo o tom; Ja! = apito
-      if (go) audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 });
+      if (go) { audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 }); if (!(this.g?.range || this.g?.tutorial)) audio.voice('start_b'); }
       else if (num) audio.play('tick', { ui: true, vol: 0.45, rate: 0.9 + (3 - Number(num)) * 0.08, jitter: 0, key: 'count', max: 1 });
     }
     if (el.sub.textContent !== sub) el.sub.textContent = sub;

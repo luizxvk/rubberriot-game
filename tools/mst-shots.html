@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><title>Fotos de mestre</title>
+<script type="module">
+// Foto de lado de cada arma pro poster de mestre (07/11): fundo transparente, 352x92 (o poster mostra 176x46).
+// node tools/mst-shots.cjs salva em public/banners/mst/<corpo>.webp
+import * as THREE from 'three';
+import { loadArsenal, buildGun } from '../src/arsenal.js';
+import { MASTERY_BODIES } from '../shared/banners.js';
+await loadArsenal();
+const cat = (b) => b.startsWith('pistol') ? 'pistol' : b.startsWith('subfusil') ? 'smg' : b.startsWith('fusil') ? 'rifle' : b.startsWith('shotgun') ? 'shotgun' : b.startsWith('lmg') ? 'lmg' : 'sniper';
+const W = 352, H = 92, r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.setSize(W, H); r.setClearColor(0, 0);
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(3, 3, 2); sc.add(dl);
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 20); cam.position.set(5, 0, 0); cam.lookAt(0, 0, 0);
+const out = {};
+for (const b of MASTERY_BODIES) {
+  const g = buildGun(cat(b), { body: b, scope: cat(b) === 'sniper' ? undefined : 'iron_own' });
+  if (g.userData.laser) g.userData.laser.beam.removeFromParent();
+  const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  g.position.sub(c); sc.add(g);
+  const k = Math.max(s.z / 2 / (W / H), s.y / 2) * 1.04; cam.left = -k * W / H; cam.right = k * W / H; cam.top = k; cam.bottom = -k; cam.updateProjectionMatrix();
+  r.render(sc, cam); out[b] = r.domElement.toDataURL('image/webp', 0.9); sc.remove(g);
+}
+window.__shots = out; document.title = 'pronto';
+</script>

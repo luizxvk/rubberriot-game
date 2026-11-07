@@ -39,7 +39,7 @@ if (new Set(PASS.map(p => p.k + (p.slot || '') + p.id)).size !== PASS.length) fa
 for (const k of ['src/style.css', 'src/split.css']) if (/text-overflow:\s*ellipsis/.test(fs.readFileSync(k, 'utf8'))) falta.push('reticencias no CSS: ' + k);
 // banners (05/11): nome nos dois idiomas e desenho
 const { BANNERS } = await import('../shared/banners.js'), bnSrc = fs.readFileSync('src/banners.js', 'utf8');
-for (const b of BANNERS) { if (!both('bn_' + b.id)) falta.push('bn_' + b.id); if (!new RegExp(String.raw`^\s*${b.id}: \(\)`, 'm').test(bnSrc)) falta.push('desenho do banner ' + b.id); }
+for (const b of BANNERS) { if (b.mastery) { if (!both('mstStarring')) falta.push('mstStarring'); continue; } /* poster de mestre: desenho mstArt e nome montados em codigo (07/11) */ if (!both('bn_' + b.id)) falta.push('bn_' + b.id); if (!new RegExp(String.raw`^\s*${b.id}: \(\)`, 'm').test(bnSrc)) falta.push('desenho do banner ' + b.id); }
 // miras (04/11): nome proprio nos dois idiomas
 for (const m of fs.readFileSync('src/arsenal.js', 'utf8').match(/SCOPE_NAMED = \[[^\]]+/)[0].matchAll(/'(\w+)'/g)) if (!both('scn_' + m[1])) falta.push('scn_' + m[1]);
 // mapa e vilao da noite (03/11): nome nos dois idiomas; sala que abre por porta tambem

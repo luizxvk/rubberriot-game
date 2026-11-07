@@ -29,7 +29,7 @@ class Audio {
     this.ctx = null;
     this.buf = {};
     this.voices = new Map();
-    this.vol = { master: 0.8, music: 0.45, sfx: 1 };
+    this.vol = { master: 0.8, music: 0.45, sfx: 1, vo: 0.7 };
   }
 
   init() {
@@ -51,6 +51,8 @@ class Audio {
     const elp = ctx.createBiquadFilter(); elp.type = 'lowpass'; elp.frequency.value = 1700;
     this.echoIn.connect(ed); ed.connect(elp); elp.connect(efb); efb.connect(ed); elp.connect(this.master);
     this.uiBus = ctx.createGain(); this.uiBus.gain.value = 0.7; this.uiBus.connect(this.master);
+    // narrador (06/11, Callum): canal proprio com volume nos Ajustes; fala por cima da musica sem gritar
+    this.voBus = ctx.createGain(); this.voBus.gain.value = this.vol.vo; this.voBus.connect(this.master);
     // musica passa por um "gramofone": passa-faixa + chiado de vinil
     this.musicBus = ctx.createGain(); this.musicBus.gain.value = this.vol.music;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
@@ -94,7 +96,7 @@ class Audio {
       const r = await fetch(`./sfx/${name}.mp3`);
       if (!r.ok) { (this.failed ||= new Set()).add(name); this.loading.delete(name); return; }
       const raw = await this.ctx.decodeAudioData(await r.arrayBuffer());
-      const pol = name.startsWith('music') || name.startsWith('dn_') ? raw : this.polish(raw); // trilha nao passa pelo tratamento de efeito curto
+      const pol = name.startsWith('music') || name.startsWith('dn_') || name.startsWith('vo_') ? raw : this.polish(raw); // trilha nao passa pelo tratamento de efeito curto
       // arquivo mudo (veio vazio do gerador) = usa o sintetizado
       if (pol) this.buf[name] = pol;
       if (name === (this.track || 'music') && this.wantMusic) this.music(true);
@@ -151,6 +153,25 @@ class Audio {
     const t = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(this.vol.master, t, 0.05);
     this.musicBus.gain.setTargetAtTime(this.vol.music, t, 0.05);
+    this.voBus?.gain.setTargetAtTime(this.vol.vo ?? 0.7, t, 0.05);
+  }
+
+  // narrador (06/11): uma fala por vez, nivel constante; a musica so abaixa um pouco enquanto ele fala (cruza com ela).
+  // Fala nova durante outra: a de agora termina e a nova entra em seguida (fila de 1; a mais velha da fila cai).
+  voice(key, o = {}) {
+    if (!this.ctx || !(this.vol.vo > 0) || this.voBlock?.()) return; // voBlock: main.js cala ele no Campo de treino (regra dele 06/11)
+    const n = 'vo_' + key, now = this.ctx.currentTime;
+    if (this.voLast?.[key] > now - 6) return;           // mesma fala repetida em seguida nao
+    if (!this.buf[n]) { this.load(n).then(() => this.buf[n] && this.voice(key, o)); return; }
+    if (this.voUntil > now + 0.05) { this.voNext = key; return; }
+    (this.voLast ||= {})[key] = now;
+    const src = this.ctx.createBufferSource(), g = this.ctx.createGain();
+    src.buffer = this.buf[n]; g.gain.value = o.vol ?? 0.85;
+    src.connect(g).connect(this.voBus); src.start(now + 0.03);
+    const dur = this.buf[n].duration; this.voUntil = now + 0.03 + dur;
+    this.onVoice?.(key, dur); // legenda (06/11)
+    this.duck(0.62, dur + 0.1);
+    src.onended = () => { const k = this.voNext; this.voNext = null; if (k) this.voice(k); };
   }
 
   setListener(pos, fwd, up) {

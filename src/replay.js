@@ -83,7 +83,7 @@ export class Replay {
     if (!this.on || !this.fpVm) return null;
     const s = this.sample(this.rt, this.kill.a); if (!s) return null;
     const sp = s.speed || 0, run = s.anim === 'sprint' || s.anim === 'tac';
-    return { dt: this.dt, moving: sp > 1.5 && s.anim !== 'jump', speed: sp, sprint: run, tac: s.anim === 'tac', ads: this.bigScope && !s.ca ? 0 : s.ad || 0, crouch: s.anim === 'crouch', air: s.anim === 'jump', pistolSprint: run && s.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false };
+    return { dt: this.dt, moving: sp > 1.5 && s.anim !== 'jump', speed: sp, sprint: run, tac: s.anim === 'tac', ads: s.ad || 0, /* 07/11: luneta tambem mira (a lente desenha o zoom e a reticula dele) */ crouch: s.anim === 'crouch', air: s.anim === 'jump', pistolSprint: run && s.wpn === 'pistol', lookDX: 0, lookDY: 0, firing: false };
   }
 
   // comeca o replay; devolve false se nao tem o que repassar (abate velho demais, sem gravacao)
@@ -234,15 +234,15 @@ export class Replay {
         camera.position.lerp(tmpP.set(e.pos[0], e.pos[1] + e.eye, e.pos[2]), w);
         camera.quaternion.slerp(tmpQ.setFromEuler(tmpE.set(e.pitch, e.yaw, 0, 'YXZ')), w);
         const ad = a.ad || 0, big = !!vm?.gun?.userData.scope?.big;
-        this.bigScope = big && ad > 0.5; // luneta na cara: nao tem a imagem dela aqui, so fecha o quadro
-        fov = 48 + (this.fov0 / (1 + ad * (big ? 1.4 : 0.25)) - 48) * w;
+        this.bigScope = big && ad > 0.3 && !a.ca; // 07/11 (pedido dele): luneta de verdade na tela de morte: lente com o zoom e a reticula equipada de quem matou
+        fov = 48 + (this.fov0 / (1 + ad * (big ? 0.2 : 0.25)) - 48) * w; // fora da lente so 1,2x, igual a partida
         if (camera.position.distanceTo(tmpP) < 1.4) { // chegando na cabeca: o corpo dele some antes da camera entrar nele
           const r = G.remotes.get(K.a); if (r) r.char.root.visible = false; if (K.a === G.myId && this.ghost) this.ghost.root.visible = false;
         }
         if (w > 0.55 && a.wpn) {
           const key = K.a + '|' + a.wpn;
           if (this.fpKey !== key) { this.fpKey = key; G.specVm = 'replay'; vm?.setWeapon(a.wpn, K.a === G.myId ? G.player?.lo?.(a.wpn) : G.remoteLo?.get(K.a)?.[a.wpn] || null); vm?.setGloves(G.lookOfId?.(K.a)); }
-          this.fpVm = !this.bigScope || !!a.ca; // mira 45 graus: a luneta sai e a troca aparece na tela de morte (05/11)
+          this.fpVm = true; // 07/11: a arma aparece sempre (antes a luneta sumia e so fechava o quadro)
           if (vm) vm.canted = !!a.ca && !!vm.gun?.userData.canted;
         }
       }

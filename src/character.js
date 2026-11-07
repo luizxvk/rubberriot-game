@@ -546,7 +546,7 @@ export class Character {
       }
     }
     if (climb && !this.gun2h) this.handL.position.lerp(new THREE.Vector3(-0.22, 1.72, -0.5), climb);
-    const shR = new THREE.Vector3(0.36, 1.32, 0), shL = new THREE.Vector3(-0.36, 1.32, 0);
+    const shR = new THREE.Vector3(0.26, 1.32, 0), shL = new THREE.Vector3(-0.26, 1.32, 0); // 07/11 (pedido dele: ombro vazado): o braco nasce DENTRO do tronco (borda em x 0,348 nessa altura; em 0,36 a ponta aberta da mangueira aparecia)
     if (anim === 'dance' && applyDance(this, s.dance, s.danceT || 0, dt)) return; // danca de vitoria (05/11): src/dances.js
     if (anim === 'posed') { applyPose(this, s.pose, s.gunPose, dt); return; } // podio: dança, descanso e a volta pra arma
     if (anim === 'pose') { // vitrine (Visual e Loja, 03/11): sem arma. Ciclo de 8 s com transicao suave:

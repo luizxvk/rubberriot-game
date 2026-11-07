@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>m</title><script type="module">
+import { loadArsenal, debugParts } from '../src/arsenal.js';
+await loadArsenal(); const P = debugParts(), r = {};
+for (const k of Object.keys(P).filter(k => /scope/.test(k))) { const p = P[k], pa = p.geo.attributes.position; let nan = 0; for (let i = 0; i < pa.array.length; i++) if (!Number.isFinite(pa.array[i])) nan++; r[k] = { nan, box: [p.box.min.toArray().map(v => +v.toFixed(3)), p.box.max.toArray().map(v => +v.toFixed(3))], lens: p.lens && [p.lens.c.toArray().map(v => +v.toFixed(3)), +p.lens.r.toFixed(3)] }; }
+window.__r = r; document.title = 'pronto';
+</script>
