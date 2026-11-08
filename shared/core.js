@@ -1,8 +1,8 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
 import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS } from './weapons.js';
-import { getMap, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena, headroom } from './map.js';
-import { navPath, floorAt, standable, hop, lowAt, freeNear } from './nav.js';
+import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena, headroom } from './map.js';
+import { navPath, floorAt, standable, hop, lowAt, freeNear, warmNav } from './nav.js';
 import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
 import { cleanLook, DANCE_IDS } from './looks.js';
 // fim da partida em segundos: 0,9 + camera final ~3,5 + podio ~14 (3 s da camera chegando); sala sem lobby ainda mostra OVER_STATS de placar
@@ -708,6 +708,7 @@ export class Core {
 
   // ---------- mensagens do cliente ----------
   handle(id, m) {
+    if (this._dyn) this.M.dyn = this._dyn; // 08/11: obstaculos moveis DESTA sala (o mapa e dividido entre salas no servidor)
     const p = this.players.get(id);
     if (!p || !m || typeof m !== 'object') return;
     if (m.t !== 'state' && m.t !== 'ping' && m.t !== 'lat') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
@@ -2213,6 +2214,9 @@ export class Core {
 
   // ---------- loop ----------
   tick(dt) {
+    // 08/11 (producao: "buga com 3-5 jogadores"): salas no MESMO mapa dividem o objeto do mapa no servidor, e o M.dyn (bonde,
+    // van, sentinela, carro) gravado por uma sala valia na outra: parede invisivel, bala barrada no nada. Cada sala recoloca o seu
+    if (this._dyn) this.M.dyn = this._dyn;
     this.pathBudget = PATHS_PER_TICK; // rotas novas por tick (espalha o custo: 15 bots refazendo juntos travava a sala)
     if (this.noises) for (const [id, n] of this.noises) if ((n.t -= dt) <= 0) this.noises.delete(id);
     this.clock = (this.clock || 0) + dt;
@@ -2331,6 +2335,7 @@ export class Core {
     if (this.heist && !this.over && !(this.freezeT > 0)) heistTick(this, dt);
     if (this.bor && !this.over && !(this.freezeT > 0)) borTick(this, dt);
     this.M.dyn = [...(this.esc ? [trainBox(this.M, this.esc.d)] : this.heist ? heistBoxes(this.heist) : this.bor ? borBoxes(this) : []), ...propBoxes(this.blimps, this.cars)]; // bonde (01/11), cofre e van (03/11) solidos pros bots e pras balas; portas fechadas da noite; sentinela, sinalizador e carro parado
+    this._dyn = this.M.dyn;
     this.snapshot(dt);
   }
 
@@ -2442,3 +2447,6 @@ function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l
 export const RANKED_MODES = ['ctf', 'dom', 'escort', 'heist', 'blitz_ctf', 'blitz_dom'];
 export const QUICK_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'escort', 'heist', 'smuggle', 'gungame', 'infect', 'bomb', 'br', 'bounce'];
 export const QUICK_BOTS = 11;
+
+// 08/11 (desempenho): servidor do multiplayer chama ao ligar; um mapa por vez com folga entre eles (nao trava quem ja chegou)
+export function warmMaps(gap = 150) { ALL_MAPS.forEach((id, i) => setTimeout(() => { try { warmNav(getMap(id)); } catch { /* mapa com erro: monta na hora, como antes */ } }, i * gap)); }

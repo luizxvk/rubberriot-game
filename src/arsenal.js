@@ -24,6 +24,10 @@ const S = 0.32; // unidade do glb -> metros
 const parts = {};  // nome -> { geo, box }
 if (import.meta.env?.DEV) window.__parts = parts; // depuracao local (lente fora do lugar etc.)
 let ready = null;
+let allLoaded = false;
+// 08/11 (bug em producao, iPad/Edge): o arsenal fica 'pronto' com o 1o pacote, mas metralhadora e pacotes extras chegam
+// depois. Corpo que ainda nao chegou nao pode quebrar a montagem: entra outro corpo da categoria ou a arma provisoria
+export const arsenalLoaded = () => allLoaded;
 let gunTex = null;
 
 // Armas brancas (melee.glb): ordem dos meshes do arquivo; comprimento real em metros por peca
@@ -188,6 +192,9 @@ function ownerBody(part) {
 export function loadArsenal() {
   if (ready) return ready;
   const loader = new GLTFLoader();
+  // 08/11 (desempenho): dois pacotes eram baixados e decodificados DUAS vezes (minigun + armas; bazuca + armas). Mesmo
+  // endereco = mesma promessa; quem le so clona a geometria, entao compartilhar e seguro
+  { const raw = loader.loadAsync.bind(loader), memo = new Map(); loader.loadAsync = (u, onP) => { if (!memo.has(u)) memo.set(u, raw(u, onP)); return memo.get(u); }; }
   ready = Promise.all([
     loader.loadAsync(import.meta.env.BASE_URL + 'models/src/low_poly_guns.glb').then(g => {
       g.scene.updateMatrixWorld(true);
@@ -230,7 +237,7 @@ export function loadArsenal() {
       mg.traverse(o => { if (o.isMesh) geos.push({ geo: o.geometry.clone().applyMatrix4(o.matrixWorld), color: o.material.color.getHex(), front: /Front/.test(o.name) }); });
       parts.__minigun = geos;
     }).catch(e => console.warn('weapon pack nao carregou', e)),
-  ]);
+  ]).finally(() => { allLoaded = true; }); // 08/11: todos os pacotes chegaram (arma provisoria pode ser trocada)
   return ready;
 }
 
@@ -352,7 +359,13 @@ function loadRevolver(loader) {
 }
 const nodeName = (s) => s.replace(/\s/g, '_').replace(/[[\].:/]/g, ''); // como o GLTFLoader renomeia
 // celula da paleta mais perto da cor pedida (amostra so o miolo de areas lisas, longe das bordas)
+const UV_CACHE = new WeakMap();
 function paletteUV(pal, rgb) {
+  let m = UV_CACHE.get(pal); if (!m) UV_CACHE.set(pal, m = new Map());
+  const key = rgb.join(','); if (m.has(key)) return m.get(key).slice();
+  const r = paletteUVRaw(pal, rgb); m.set(key, r); return r.slice();
+}
+function paletteUVRaw(pal, rgb) {
   let best = null, bd = Infinity;
   const N = 96, dist = (c) => (c[0] - rgb[0]) ** 2 + (c[1] - rgb[1]) ** 2 + (c[2] - rgb[2]) ** 2;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
@@ -1280,9 +1293,16 @@ export function arsenalReady() { return !!parts.fusil_1; }
 export const debugParts = () => parts; // depuracao (window.__A)
 export const meleeReady = () => !!parts.melee_0;
 
+// 08/11 (desempenho na carga): cada chamada desenhava a textura num canvas e lia todos os pixels de novo (614 ms na carga,
+// varias vezes isso no celular). A leitura fica guardada por textura; a cor achada fica guardada por (leitor, cor) no paletteUV
+const PAL_CACHE = new WeakMap();
 function paletteReader(tex) {
   const img = tex && tex.image;
   if (!img) return null;
+  const hit = PAL_CACHE.get(img); if (hit) return hit;
+  const fn = paletteReaderRaw(img); PAL_CACHE.set(img, fn); return fn;
+}
+function paletteReaderRaw(img) {
   const c = document.createElement('canvas');
   c.width = img.width; c.height = img.height;
   const g = c.getContext('2d');
@@ -1938,6 +1958,7 @@ export function buildSight(ret, color = 'red', id = SIGHT_SHOW) {
 }
 export function buildGun(wpn, lo) {
   const g = buildGunParts(wpn, lo), fx = g?.userData.saber ? null : camoById(lo?.camo).fx; // sabre nao leva camo
+  if (g && !allLoaded && CATEGORY[wpn]) g.userData.provisional = true; // montada antes de tudo chegar: pode ter saido com outro corpo
   // 05/11 (pedido dele): sem chama, estrela e faisca em volta da arma; a camo fica so na superficie
   return g;
 }
@@ -1949,7 +1970,8 @@ function buildGunParts(wpn, lo) {
   const cat = CATEGORY[wpn];
   if (!cat || !arsenalReady()) return makeGun(wpn);
   lo = { ...defaultLoadout(wpn), ...(lo || {}) };
-  if (!parts[lo.body]) lo.body = cat.bodies[0];
+  if (!parts[lo.body]) lo.body = cat.bodies.find(b => parts[b]); // corpo pedido ainda nao chegou: o 1o da categoria que ja chegou
+  if (!lo.body) { const g = makeGun(wpn); g.userData.provisional = true; return g; } // categoria inteira ainda baixando
   const WS = lo.ws && WSKINS[lo.ws];
   if (WS && WS.of === lo.body && parts[WS.body]) lo = { ...lo, body: WS.body, charger: null }; // pente ja vem no modelo da skin
   if (lo.scope === 'sniper_scope_0') lo.scope = null; // Luneta Convencional saiu do jogo (07/11): montagem salva com ela cai na de fabrica
@@ -2466,7 +2488,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
   // corpo maior = mais preciso, um pouco mais lento (lamina fora: cada arquivo tem a sua escala, e o golpe usa a ficha)
   const cat = CATEGORY[wpn];
   const bl = parts[lo.body].box.max.z - parts[lo.body].box.min.z;
-  const ref = parts[cat.bodies[0]].box.max.z - parts[cat.bodies[0]].box.min.z;
+  const rb = parts[cat.bodies[0]]?.box || parts[lo.body].box, ref = rb.max.z - rb.min.z; // 1o corpo ainda baixando: compara consigo mesmo
   const k = wpn === 'melee' ? 1 : bl / ref;
   st.spread *= 1 / Math.sqrt(k);
   st.rate *= Math.sqrt(k);

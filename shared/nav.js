@@ -11,6 +11,8 @@
 // celula de 0,5 m: com 1 m a grade pulava degrau (escada de 0,67 m virava desnivel de 1 m)
 const CELL = 0.5, RAD = 0.45, STEP = 0.6, BODY = 1.7, DUCK = 1.15; // DUCK: altura agachado (duto do banco)
 
+// 08/11 (desempenho): monta a grade de um mapa antes de alguem jogar nele (no servidor, a 1a montagem congelava todas as salas ~70 ms)
+export const warmNav = (M) => { grid(M); };
 function grid(M) {
   if (M._nav) return M._nav;
   const A = M.arena + 2, N = Math.ceil((A * 2) / CELL);

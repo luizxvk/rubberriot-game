@@ -142,7 +142,7 @@ async function snapshot(id) { // uma foto por peca (pacote = varias, o cartao de
   for (const m of buildModels(id)) {
     if (m.ready) await m.ready;
     // compila em paralelo ANTES de desenhar: compilar no render travava a tela ate 2 s por camo nova (Direct3D)
-    scene.add(m.obj); if (R.compileAsync) await R.compileAsync(scene, cam); scene.remove(m.obj);
+    scene.add(m.obj); if (R.compileAsync) await Promise.race([R.compileAsync(scene, cam).catch(() => {}), new Promise(r => setTimeout(r, 4000))]); scene.remove(m.obj); // 08/11: o compileAsync do three pode nunca terminar (material trocado no meio)
     if (live) continue; // popup aberto usa o mesmo renderizador: nao mexe no tamanho dele agora
     R.setSize(W, H, false);
     if (m.death) deathPhoto(m.ch);

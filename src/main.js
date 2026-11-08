@@ -78,7 +78,7 @@ import { BorView } from './borview.js';
 import { SKILL_ICONS } from './skillicons.js';
 import { bannerHtml } from './banners.js';
 import { BANNERS, bannerOk, BANNER_DEFAULT } from '../shared/banners.js';
-import { isSaber, CATEGORY, LASERS, partName, unlockedLoadout, buildGun, disposeGun, buildPartPreview, bpLoadout, defaultLoadout, infectLoadout } from './arsenal.js';
+import { isSaber, CATEGORY, LASERS, partName, unlockedLoadout, buildGun, disposeGun, buildPartPreview, bpLoadout, defaultLoadout, infectLoadout, arsenalLoaded } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -103,7 +103,10 @@ function saveSettings() { try { localStorage.setItem('rr_settings', JSON.stringi
 
 // ---------- render ----------
 const canvas = $('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); // 07/11: antisserrilhado so no composer (Ajustes > Video)
+// 08/11 (log: 14x "Error creating WebGL context"): placa fraca/sem memoria recusa o modo de alto desempenho. Tenta de novo
+// no modo padrao do navegador antes de desistir (o boot.js mostra o aviso se as duas falharem)
+const renderer = (() => { try { return new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); } catch (e) { reportaErro(e, 'gl alto desempenho'); return new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'default' }); } })(); // 07/11: antisserrilhado so no composer (Ajustes > Video)
+if (import.meta.env.PROD) renderer.debug.checkShaderErrors = false; // 08/11 (desempenho): a checagem lia o resultado do shader na hora e a linha principal esperava a GPU a cada material novo
 // celular sem memoria de video perde o contexto do WebGL (tela fica branca/preta): segura o contexto pro
 // navegador devolver (o three refaz tudo na volta) e manda o aviso pro servidor
 // log 02/11: 3 celulares Android perderam o contexto no meio da partida = a "tela branca" que relataram. Agora: aviso
@@ -513,6 +516,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('pocPodio'))
   const c = G.net.core; let i = 1; for (const x of c.players.values()) x.score = i++ * 10; c.players.get(G.myId).score = 9000; c.end(G.myName); c.overT = 180;
 })();
 window.__smithShow = (cat, lo, charm = 'none') => { smithHolder.clear(); const gun = ARS.buildGun(cat, lo); const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; smithHolder.add(gun); if (charm !== 'none' && cat !== 'melee') attachCharm(gun, charm, 1); };
+if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Teste'); // teste de desempenho (08/11): partida solo por script
 window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
@@ -586,11 +590,27 @@ function setMap(id) {
   if (swap) { // a cortina so abre com o modelo no lugar, os shaders prontos e 2 quadros desenhados (nada de peca surgindo do nada)
     const w = world, t0 = performance.now();
     Promise.race([w.ready, new Promise(r => setTimeout(r, 12000))])
-      .then(() => renderer.compileAsync ? renderer.compileAsync(scene, camera) : renderer.compile(scene, camera)).catch(() => {})
+      .then(() => compileSafe(scene, camera)).catch(() => {})
       .then(() => new Promise(r => setTimeout(r, Math.max(0, 650 - (performance.now() - t0)))))
       .then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
       .then(() => { if (world === w) mapCurtain(false); });
   }
+}
+// 08/11 (producao: carregamento INFINITO): o compileAsync do three 0.169 estoura dentro do proprio setTimeout quando um
+// material e trocado/descartado no meio (currentProgram undefined -> "reading 'isReady'") e a promessa NUNCA termina.
+// Este faz o mesmo (compila e espera o navegador terminar), mas material sem programa conta como pronto e tem teto de tempo.
+function compileSafe(sc, cam, target = null, maxMs = 5000) {
+  let mats = null;
+  try { mats = renderer.compile(sc, cam, target); } catch (e) { console.warn('compile falhou', e); return Promise.resolve(); }
+  if (!(mats instanceof Set) || !mats.size) return Promise.resolve();
+  const t0 = performance.now();
+  return new Promise((res) => {
+    const chk = () => {
+      for (const m of mats) { let ok = true; try { const pr = renderer.properties.get(m)?.currentProgram; ok = !pr || typeof pr.isReady !== 'function' || pr.isReady(); } catch { ok = true; } if (ok) mats.delete(m); }
+      if (!mats.size || performance.now() - t0 > maxMs) res(); else setTimeout(chk, 16);
+    };
+    setTimeout(chk, 0);
+  });
 }
 // cortina da troca de mapa (07/11, pedido dele): tela escura com o nome do mapa e "Carregando" animado; some em fade
 function mapCurtain(on, id) {
@@ -626,7 +646,7 @@ function warmLater(obj) {
   if (!obj || !renderer.compileAsync || G.state !== 'game') return; // borrao (modo Borroes) nao tem suporte de arma (06/11: erro a cada quadro)
   const n = (obj.userData.warmN = (obj.userData.warmN || 0) + 1);
   const show = () => { if (obj.userData.warmN === n) obj.visible = true; };
-  const p = renderer.compileAsync(obj, camera, scene); // pega os materiais agora (so percorre o que esta visivel)...
+  const p = compileSafe(obj, camera, scene); // pega os materiais agora (so percorre o que esta visivel)...
   obj.visible = false; // ...e esconde ate o shader ficar pronto
   p.then(show, show);
 }
@@ -729,6 +749,7 @@ function onSnap(s) {
     const lo = G.mode === 'gungame' ? { body: G.ladder[Math.min(p.gunLvl || 0, G.ladder.length - 1)].body } : ras ? ((G.rasLo ||= {})[p.wpn + rb] ||= infectLoadout(p.wpn, rb ? { body: rb } : undefined)) : rbp ? bpLoadout(rbp) : G.remoteLo.get(p.id)?.[p.wpn] || null;
     const loKey = p.wpn + JSON.stringify(lo);
     r.lo = lo; r.ad = p.ad || 0; r.ca = p.ca || 0;
+    if (r.char.gun?.userData.provisional && arsenalLoaded()) r.loKey = null; // 08/11: arma montada com pacote faltando: remonta a certa
     if (r.loKey !== loKey) { const was = r.wpn; r.loKey = loKey; r.wpn = p.wpn; r.char.setWeapon(p.wpn, lo); warmLater(r.char.gunHolder); if (was && was !== p.wpn && r.char.gun?.userData.saber) { r.char.gun.userData.saber.ignite(); audio.play('saber_on', { pos: r.pos, vol: 0.6, key: 'sbo' + p.id, max: 1 }); } }
   }
   for (const [id, r] of G.remotes) if (!seen.has(id)) { scene.remove(r.char.root); disposeGun(r.char.gun); G.remotes.delete(id); }
@@ -1392,6 +1413,7 @@ function onEvent(e) {
         if (G.snap?.ranked && G.mode !== 'br') rankEnd(iWon);
         // repassa o abate final de cinema e so depois o placar
         G.endInfo = { winner: e.winner, top: e.top || [], lob: !!G.snap?.lob };
+        if (document.body.classList.contains('hudedit')) { closeHudEditor(true); $('pause').hidden = true; G.paused = false; } // 08/11: acabou com o editor da HUD aberto: salva o que ajustou e fecha antes do podio
         setTimeout(() => { if (G.state !== 'game' || !G.endInfo) return; if (!replay.play(G, scene, fx, audio, wornLook(), () => { document.body.classList.remove('replay'); showPodium(); })) { showPodium(); return; } cineTag(); document.body.classList.add('replay'); }, 900);
       }
       break;
@@ -1871,7 +1893,7 @@ async function warmGuns() {
     const grp = new THREE.Group(); grp.position.set(0, 0, -1);
     for (const [w, lo] of list) { const gun = buildGun(w, lo); if (gun) grp.add(gun); }
     vm.scene.add(grp);
-    if (renderer.compileAsync) await renderer.compileAsync(vm.scene, vm.camera); else renderer.compile(vm.scene, vm.camera);
+    await compileSafe(vm.scene, vm.camera);
     vm.scene.remove(grp);
     // 03/11 (bateria de desempenho): a cena da partida tambem (mapa, bonecos e armas de quem ja esta na sala) + as
     // 8 skins animadas. Sem isso a 1a imagem compilava tudo junto: 0,5 s (contra todos) a 1 s (noite) de tela parada.
@@ -1879,7 +1901,7 @@ async function warmGuns() {
     const skins = new THREE.Group(), tiny = new THREE.BoxGeometry(0.01, 0.01, 0.01);
     for (const id of Object.keys(SKIN_CODE)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
     skins.position.copy(camera.position); scene.add(skins);
-    if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera);
+    await compileSafe(scene, camera);
     scene.remove(skins); tiny.dispose();
   } catch (e) { console.warn('aquecimento das armas falhou', e); }
 }
@@ -2376,7 +2398,7 @@ function frameBody(now, realDt) {
     tickCharm(smithHolder.children[0], realDt);
     // camuflagem reativa na vitrine: passa pelos 4 estagios (na partida sobe a cada 2 abates)
     smithHolder.traverse(o => { const u = o.material?.userData?.u?.uReact; if (u) u.value = Math.floor(menuT / 1.6) % 4; });
-    const narrow = innerWidth < 760, cod = !narrow && innerHeight > 520;
+    const narrow = innerWidth < 760 && !(innerHeight <= 620 && innerWidth >= 560 && innerWidth > innerHeight) /* deitado = layout compacto (08/11) */, cod = !narrow && innerHeight > 520;
     if (narrow) { smithCam.position.set(0, -0.42, 2.9); smithCam.lookAt(0, -0.44, 0); }
     else if (cod) {
       // estilo COD (04/11): a arma grande no vao entre o nome e as fileiras de baixo, a esquerda dos status
@@ -2971,6 +2993,8 @@ const BOOT_T = performance.now();
   const B = window.__rrBoot;
   B?.set(0.6);
   await Promise.race([loadArsenal(), new Promise(r => setTimeout(r, 6000))]);
+  // 08/11: rede lenta passou dos 6 s: a sua arma pode ter saido provisoria; quando tudo chegar ela e remontada
+  loadArsenal().then(() => { const p = G.player; if (p?.alive && vm.gun?.userData.provisional && !G.specVm) vm.setWeapon(p.wpn, p.lo(p.wpn), true); }).catch(() => {});
   await document.fonts.ready.catch(() => {});
   // celular: o pavio chega na bomba e a tela de entrada espera o toque em Jogar (o toque ja pediu tela cheia
   // e deitado); so ai sai e a abertura de sempre continua

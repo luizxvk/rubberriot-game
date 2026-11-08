@@ -768,7 +768,7 @@ export function initMenus(o) {
     $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
     // blocos de pecas OU a lista de opcoes do slot escolhido (o painel troca, nao empilha)
     $('slotList').hidden = picking; $('pickWrap').hidden = !picking;
-    { let seen = false; try { seen = !!localStorage.getItem('rr_smith_hint'); } catch { /* */ } $('smithHint').hidden = picking || seen; }
+    { let seen = false; try { seen = !!localStorage.getItem('rr_smith_hint'); } catch { /* */ } const hn = $('smithHint'); if (hn.parentElement !== document.body) document.body.appendChild(hn); /* 08/11: dentro do cartao (com transform) o 'fixed' caia em cima das pecas no celular deitado */ hn.hidden = picking || seen; }
     $('smith').classList.toggle('picking', picking);
     $('pickTitle').textContent = t(SLOT_LABEL[slot]);
     $('pickBack').onclick = () => { picking = false; preview = null; audio.play('ui_back', { ui: true, vol: 0.6 }); renderSmith(); };

@@ -29,9 +29,17 @@ function run() {
     void cy;
   });
 }
+// 08/11 (producao: jogo travando): o observador pegava TODA mudanca do body; na partida a HUD muda todo quadro (municao,
+// placar, relogio) e cada uma medida as fileiras com getBoundingClientRect/getComputedStyle = layout recalculado TODO
+// quadro (~11% do tempo na tela inicial, bem pior no celular). Agora: ignora o que muda dentro da HUD/toque/placar, nao
+// roda na partida com o menu fechado e junta tudo em no maximo ~8 medidas por segundo.
 let pending = 0;
-function later() { pending ||= requestAnimationFrame(run); }
+const QUIET = '#hud, #touch, #board, #killfeed, #comic, #dead, #xpChip, #mapCurtain, #rovexMark, .h-arrow';
+const inGame = () => { const h = document.getElementById('hud'), m = document.getElementById('menu'); return !!h && !h.hidden && (!m || m.hidden); };
+function later() { if (pending || inGame()) return; pending = setTimeout(() => requestAnimationFrame(run), 120); }
 export function startArrows() {
-  new MutationObserver(later).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  new MutationObserver((recs) => {
+    for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (el && !el.closest(QUIET)) { later(); return; } }
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class'] });
   addEventListener('resize', later); later();
 }
