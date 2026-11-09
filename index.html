@@ -339,6 +339,7 @@ html.touch-boot .boot { display: grid; }
     <!-- 08/11 (pedido dele): Missoes = aba de missoes diarias + aba de desafios (como era) -->
     <div class="mis-tabs" role="tablist"><button role="tab" data-mtab="mis" aria-selected="true" data-i18n="misTab">Missões diárias</button><button role="tab" data-mtab="ch" aria-selected="false" data-i18n="challenges">Desafios</button></div>
     <div id="misPane">
+      <ul class="ch-list" id="eliteChBox" hidden></ul>
       <div class="ch-head"><h3 data-i18n="misTab">Missões diárias</h3><small id="misReset"></small></div>
       <ul class="ch-list mis-list" id="misList"></ul>
       <p class="shop-note" id="misNote"></p>

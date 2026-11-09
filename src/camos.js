@@ -77,6 +77,9 @@ export const CAMOS = [
   // leva da Loja (04/11): animadas e reativas novas, so comprando
   { id: 'oilslick', code: 45, anim: true, shop: true }, { id: 'tvstatic', code: 46, anim: true, shop: true }, { id: 'honey', code: 47, anim: true, shop: true },
   { id: 'confetti', code: 48, anim: true, shop: true }, { id: 'vinyl', code: 49, anim: true, shop: true },
+  // leva de 09/11 (pedido dele: animadas com cara 3D, nada de estampa chapada): relevo e luz andando
+  { id: 'mercurio', code: 62, anim: true, shop: true }, { id: 'ferrofluido', code: 63, anim: true, shop: true }, { id: 'couraca', code: 64, anim: true, shop: true }, { id: 'geodo', code: 65, anim: true, shop: true },
+  { id: 'relojoaria', code: 66, anim: true, shop: true }, { id: 'madreperola', code: 67, anim: true, shop: true }, { id: 'abissal', code: 68, anim: true, shop: true }, { id: 'cotamalha', code: 69, anim: true, shop: true },
   { id: 'frost', code: 50, anim: true, react: true, shop: true }, { id: 'ivy', code: 51, anim: true, react: true, shop: true }, { id: 'stormcell', code: 52, anim: true, react: true, shop: true },
 ];
 CAMOS.push(...BM_CAMOS); // Mercado Negro (08/11): exclusivas da variante (bm: true), nunca na lista de camos
@@ -92,7 +95,7 @@ const BM_PAT_CSS = [
 ];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
 // uniforms do desenho do Mercado Negro (cores e parametros por material: um programa so pras 84)
-export function bmUniforms(id) { const c = camoById(id); return c.bm ? { uBmA: { value: new THREE.Vector3(...c.c[0]) }, uBmB: { value: new THREE.Vector3(...c.c[1]) }, uBmC: { value: new THREE.Vector3(...c.c[2]) }, uBmP: { value: new THREE.Vector4(...c.p) }, uBmM: { value: new THREE.Vector4(...c.m) } } : {}; }
+export function bmUniforms(id) { const c = camoById(id); return c.bm ? { uBmA: { value: new THREE.Vector3(...c.c[0]) }, uBmB: { value: new THREE.Vector3(...c.c[1]) }, uBmC: { value: new THREE.Vector3(...c.c[2]) }, uBmP: { value: new THREE.Vector4(...c.p) }, uBmM: { value: new THREE.Vector4(...c.m) }, uBmR: { value: c.react ? 1 : 0 } } : {}; }
 
 // cor de amostra pra lista do arsenal (css)
 export const CAMO_SWATCH = {
@@ -112,6 +115,8 @@ export const CAMO_SWATCH = {
   frost: 'radial-gradient(circle at 30% 35%,#fff 8%,#a8e4ff 26%,transparent 44%),radial-gradient(circle at 72% 68%,#fff 6%,#7fd0ff 22%,transparent 40%),#3a4654',
   ivy: 'radial-gradient(circle at 34% 38%,#ff7ab0 7%,#3c8a3a 9% 30%,transparent 32%),radial-gradient(circle at 70% 66%,#58a848 24%,transparent 26%),#4a3628',
   stormcell: 'linear-gradient(115deg,transparent 46%,#dff3ff 48% 51%,transparent 53%),radial-gradient(circle at 40% 40%,#70788a,#1c2038 75%)',
+  mercurio: 'radial-gradient(circle at 35% 30%,#fff 0 8%,transparent 24%),linear-gradient(135deg,#2a2e38,#c9d0da 45%,#3a3f4a 70%,#e8ecf2)', ferrofluido: 'radial-gradient(circle,#3a56c8 0 18%,#0a0a10 34%) 0 0/9px 9px,#050507', couraca: 'radial-gradient(circle at 50% 0,#c9952b 0 42%,#0d4a44 48%,transparent 52%) 0 0/12px 10px,#072a28', geodo: 'radial-gradient(circle,#f0e6f8 0 12%,#6a24b8 22%,#1a0638 36%,#d8c8ec 48%,#6a24b8 62%,#1a0638 80%)',
+  relojoaria: 'radial-gradient(circle,#100c0a 0 14%,#d8a848 16% 46%,transparent 48%) 0 0/15px 15px,#14100c', madreperola: 'conic-gradient(from 60deg,#f6e8ee,#d8f0e4,#e4e0f8,#f8efd8,#f6e8ee)', abissal: 'radial-gradient(circle at 30% 40%,#2ff0e0 0 5%,transparent 16%),radial-gradient(circle at 70% 65%,#a040ff 0 5%,transparent 16%),#031026', cotamalha: 'radial-gradient(circle,transparent 26%,#8a92a0 30% 44%,transparent 48%) 0 0/8px 8px,#0a0a0e',
   tiger: 'repeating-linear-gradient(115deg,#d9822b 0 7px,#1b1916 7px 11px)',
   digital: 'conic-gradient(#5d6b4e 25%,#8a937a 0 50%,#3f4a32 0 75%,#b5b89f 0)',
   forest: 'radial-gradient(circle at 30% 30%,#4f6b33 30%,transparent 31%),radial-gradient(circle at 70% 60%,#6b5235 28%,transparent 29%),#2f4226',
@@ -181,6 +186,8 @@ vec2 c_vor(vec3 p) {
   }
   return vec2(d, id);
 }
+// relevo (09/11, pedido dele: animadas com cara 3D): luz andando sobre a normal do desenho; devolve o quanto acende e o brilho especular
+vec2 c_lit(vec3 n, float t) { n = normalize(n); vec3 L = normalize(vec3(cos(t * 0.7) * 0.7, sin(t * 0.7) * 0.5 + 0.35, 0.75)), H = normalize(L + vec3(0.0, 0.0, 1.0)); return vec2(max(dot(n, L), 0.0), pow(max(dot(n, H), 0.0), 32.0)); }
 vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
   glow = vec3(0.0);
   float sh = clamp(lum * 2.6, 0.45, 1.25); // sombreado original da arma
@@ -569,7 +576,10 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     else if (pat == 5) { float w = sin(q.z * 2.2 + sin(q.y * 1.4) * 1.6); col = w < -0.3 ? uBmA : w < 0.45 ? uBmB : uBmC; }
     else if (pat == 6) { vec2 v = c_vor(q * 0.7 + vec3(0.0, 0.0, tt * 0.05)); float e = smoothstep(0.08, 0.0, v.x); col = mix(mix(uBmA, uBmB, c_fbm(q * 0.6)), uBmC, e); glow = uBmC * e * (0.55 + 0.45 * sin(tt * 3.0 + v.y * 6.0)); }
     else { float s = sin(q.y * 1.3 + tt * 0.8 + sin(q.z * 1.1 - tt * 0.6) * 2.0) * 0.5 + 0.5; col = s < 0.5 ? mix(uBmA, uBmB, s * 2.0) : mix(uBmB, uBmC, (s - 0.5) * 2.0); glow = uBmC * smoothstep(0.85, 1.0, s) * 0.5; }
-    float ga = uBmM.w;
+    float ga = uBmM.w, rk = uReact * uBmR; // lendaria (09/11): 1 = faixa correndo, 2 = veias acesas, 3 = a arma inteira pulsando
+    if (rk > 0.5) { float rb = fract(p.z * 0.5 - t * (0.3 + rk * 0.2)), ra = smoothstep(0.0, 0.05, rb) * (1.0 - smoothstep(0.05, 0.16, rb)); col = mix(col, uBmC, ra * 0.7); glow += uBmC * ra * (0.5 + rk * 0.2); }
+    if (rk > 1.5) { float rv = 1.0 - smoothstep(0.0, 0.03, abs(c_fbm(p * 3.0 + vec3(0.0, t * 0.2, 0.0)) - 0.5)); col = mix(col, uBmC, rv); glow += uBmC * rv * 1.1; }
+    if (rk > 2.5) { float rp = 0.5 + 0.5 * sin(t * 5.0); glow += mix(uBmB, uBmC, rp) * (0.25 + 0.3 * rp); }
     if (mv == 1) glow += uBmC * ga * (0.5 + 0.5 * sin(tt * 2.6)) * step(0.5, dot(col, vec3(0.33)) - dot(uBmA, vec3(0.33)) + 0.5); // pulso
     if (mv == 2) { float b = fract(p.z * 0.35 - tt * 0.25 * dir); float band = smoothstep(0.0, 0.06, b) * (1.0 - smoothstep(0.06, 0.14, b)); col = mix(col, vec3(1.0), band * 0.55); glow += vec3(band) * ga; } // faixa de luz
     if (mv == 5) { vec3 cell = floor(q * 1.6); float r = c_h(cell), on = step(0.86, fract(r * 13.0 + tt * 0.4)); glow += uBmC * on * ga * 1.4; } // celulas piscando
@@ -720,6 +730,75 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     if (uReact > 2.5) { c = mix(c, vec3(0.1, 0.16, 0.4), 0.55); glow += vec3(0.25, 0.45, 1.0) * (0.25 + 0.4 * step(0.8, c_h(vec3(bt, 3.0, 9.0)))); }
     return c;
   }
+  if (k == 62) { // mercurio: metal liquido ondulando, com relevo de verdade
+    vec2 q = vec2(p.z, p.y + p.x * 0.35); float e = 0.015;
+    float h0 = sin(q.x * 5.0 + sin(q.y * 6.0 + t * 0.9) * 1.4 + t * 0.7) * 0.5 + sin(length(q * vec2(1.0, 1.7)) * 9.0 - t * 1.6) * 0.35;
+    vec2 qx = q + vec2(e, 0.0), qy = q + vec2(0.0, e);
+    float hx = sin(qx.x * 5.0 + sin(qx.y * 6.0 + t * 0.9) * 1.4 + t * 0.7) * 0.5 + sin(length(qx * vec2(1.0, 1.7)) * 9.0 - t * 1.6) * 0.35;
+    float hy = sin(qy.x * 5.0 + sin(qy.y * 6.0 + t * 0.9) * 1.4 + t * 0.7) * 0.5 + sin(length(qy * vec2(1.0, 1.7)) * 9.0 - t * 1.6) * 0.35;
+    vec3 n = vec3((h0 - hx) / e * 0.09, (h0 - hy) / e * 0.09, 1.0); vec2 l = c_lit(n, t);
+    vec3 env = mix(vec3(0.16, 0.18, 0.24), vec3(0.92, 0.95, 1.0), smoothstep(-0.25, 0.4, n.y + n.x * 0.5));
+    glow = vec3(0.9, 0.95, 1.0) * l.y * 0.7;
+    return env * (0.45 + l.x * 0.75) + l.y * 0.5;
+  }
+  if (k == 63) { // ferrofluido: espinhos pretos que crescem em ondas, como imã embaixo do líquido
+    vec2 q = vec2(p.z, p.y + p.x * 0.35) * 9.0; q.x += 0.5 * mod(floor(q.y), 2.0);
+    vec2 f = fract(q) - 0.5; float w = 0.5 + 0.5 * sin(p.z * 3.2 - t * 2.0 + sin(p.y * 5.0 + t * 0.6) * 1.3), rad = 0.16 + 0.3 * w, r = length(f), m = 1.0 - smoothstep(rad - 0.02, rad + 0.01, r);
+    vec3 n = vec3(f / max(r, 0.001) * m * (0.5 + w), 1.0); vec2 l = c_lit(n, t * 1.4);
+    vec3 tip = mix(vec3(0.05, 0.3, 0.75), vec3(0.75, 0.25, 0.95), w);
+    glow = tip * l.y * m * 1.4;
+    return mix(vec3(0.015, 0.015, 0.025), vec3(0.06, 0.06, 0.09) * (0.4 + l.x), m) + tip * l.y * 0.6 * m;
+  }
+  if (k == 64) { // couraca: escamas sobrepostas em relevo, furta-cor passando em onda
+    vec2 g = vec2(p.z, p.y + p.x * 0.35) * vec2(7.0, 10.0); float row = floor(g.y), odd = mod(row, 2.0); vec2 f = vec2(fract(g.x + odd * 0.5) - 0.5, fract(g.y));
+    float r = length(f * vec2(1.0, 0.72)), m = 1.0 - smoothstep(0.46, 0.5, r); vec2 id = vec2(floor(g.x + odd * 0.5), row);
+    if (m < 0.5) { f = vec2(fract(g.x + (1.0 - odd) * 0.5) - 0.5, fract(g.y) + 1.0); r = length(f * vec2(1.0, 0.72)); id = vec2(floor(g.x + (1.0 - odd) * 0.5), row - 1.0); m = 1.0 - smoothstep(0.86, 0.9, r); }
+    vec3 n = vec3(f.x * 1.3, (f.y - 0.45) * 0.9, 1.0); vec2 l = c_lit(n, t);
+    float w = 0.5 + 0.5 * sin(id.x * 0.55 + id.y * 0.4 - t * 1.6);
+    vec3 c = mix(vec3(0.05, 0.3, 0.28), vec3(0.72, 0.5, 0.12), w);
+    glow = c * pow(w, 4.0) * 0.5 + vec3(1.0, 0.9, 0.6) * l.y * 0.5;
+    return c * (0.3 + l.x * 0.95) * (0.45 + 0.55 * smoothstep(0.1, 0.4, r)) + l.y * 0.35;
+  }
+  if (k == 65) { // geodo: aneis de ametista abrindo devagar, cristais piscando
+    vec2 q = vec2(p.z, p.y + p.x * 0.35); float nz = c_fbm(vec3(q * 2.0, 3.0)), r = length(q * vec2(0.7, 1.5)) + nz * 0.55, b = fract(r * 3.2 - t * 0.12);
+    vec3 c = b < 0.34 ? mix(vec3(0.09, 0.02, 0.2), vec3(0.42, 0.14, 0.72), b / 0.34) : b < 0.68 ? mix(vec3(0.42, 0.14, 0.72), vec3(0.88, 0.76, 0.98), (b - 0.34) / 0.34) : mix(vec3(0.95, 0.92, 0.9), vec3(0.09, 0.02, 0.2), (b - 0.68) / 0.32);
+    float ridge = sin(b * 6.2832); vec2 l = c_lit(vec3(q / max(length(q), 0.01) * ridge * 0.5, 1.0), t);
+    vec3 sq = p * 26.0, sp = floor(sq); float st = step(0.93, c_h(sp)) * smoothstep(0.3, 0.0, length(fract(sq) - 0.5)) * pow(0.5 + 0.5 * sin(t * 3.0 + c_h(sp + 4.0) * 40.0), 3.0);
+    glow = vec3(0.85, 0.65, 1.0) * st * 1.4 + c * 0.12;
+    return c * (0.5 + l.x * 0.7) + l.y * 0.4 + st;
+  }
+  if (k == 66) { // relojoaria: engrenagens de latao girando, cada uma contra a vizinha
+    vec2 g = vec2(p.z, p.y + p.x * 0.35) * 7.0, c = floor(g), f = fract(g) - 0.5; float dir = mod(c.x + c.y, 2.0) * 2.0 - 1.0, sp = 0.7 + c_h(vec3(c, 1.0)) * 0.3, r = length(f), a = atan(f.y, f.x) + dir * t * sp;
+    float R = 0.37 + 0.055 * smoothstep(-0.25, 0.25, sin(a * 10.0)), m = 1.0 - smoothstep(R - 0.012, R + 0.012, r), hole = smoothstep(0.075, 0.095, r);
+    float spokes = max(smoothstep(0.1, 0.16, abs(sin(a * 2.0)) * r * 3.0) * smoothstep(0.26, 0.24, r) * -1.0 + 1.0, smoothstep(0.24, 0.26, r));
+    m *= hole * spokes;
+    vec2 l = c_lit(vec3(f / max(r, 0.001) * (smoothstep(R - 0.07, R, r) - smoothstep(0.08, 0.14, r) * 0.0) * 0.8, 1.0), t);
+    vec3 brass = mix(vec3(0.5, 0.33, 0.1), vec3(0.98, 0.78, 0.36), c_h(vec3(c, 5.0)) * 0.5 + l.x * 0.6);
+    glow = vec3(1.0, 0.8, 0.45) * l.y * m * 0.8;
+    return mix(vec3(0.06, 0.045, 0.04), brass, m) + l.y * m * 0.4;
+  }
+  if (k == 67) { // madreperola: concha clara com rosa e verde correndo por baixo das camadas
+    float f = c_fbm(p * 3.0 + vec3(t * 0.06, 0.0, -t * 0.05)), lay = sin(f * 34.0);
+    vec2 l = c_lit(vec3(cos(f * 34.0) * 0.28, sin(f * 21.0) * 0.28, 1.0), t);
+    vec3 film = 0.72 + 0.28 * cos(6.2832 * (f * 1.7 + vec3(0.0, 0.3, 0.62)) + t * 0.45);
+    glow = film * l.y * 0.45;
+    return film * (0.62 + l.x * 0.42 + lay * 0.05) + l.y * 0.4;
+  }
+  if (k == 68) { // abissal: fundo do mar escuro, veias vivas pulsando e luzinhas boiando
+    float v = abs(c_fbm(p * 2.2 + vec3(0.0, t * 0.13, 0.0)) - 0.5), vein = 1.0 - smoothstep(0.0, 0.035, v), pulse = pow(0.5 + 0.5 * sin(p.z * 3.0 - t * 2.2 + p.y * 2.0), 3.0);
+    vec2 w = c_vor(p * 4.5 + vec3(0.0, -t * 0.28, t * 0.1)); float dot_ = (1.0 - smoothstep(0.05, 0.12, w.x)) * step(0.62, w.y) * (0.55 + 0.45 * sin(t * 2.5 + w.y * 40.0));
+    vec3 tint = mix(vec3(0.05, 0.9, 0.8), vec3(0.65, 0.25, 1.0), smoothstep(0.3, 0.7, c_n(p * 1.4 + t * 0.1)));
+    glow = tint * (vein * (0.25 + pulse * 1.3) + dot_ * 1.4);
+    return mix(vec3(0.01, 0.025, 0.06), vec3(0.02, 0.07, 0.13), lum * 1.8) + tint * vein * (0.2 + pulse * 0.6) + tint * dot_;
+  }
+  if (k == 69) { // cota de malha: argolas de aco em relevo com um brilho varrendo
+    vec2 g = vec2(p.z, p.y + p.x * 0.35) * 15.0; g.x += 0.5 * mod(floor(g.y), 2.0); vec2 f = fract(g) - 0.5; float r = length(f), ring = 1.0 - smoothstep(0.1, 0.16, abs(r - 0.33));
+    vec2 l = c_lit(vec3(f / max(r, 0.001) * (0.33 - r) * 6.0 * ring, 1.0), t);
+    float sweep = pow(0.5 + 0.5 * sin((p.z + p.y * 0.6) * 2.3 - t * 1.8), 10.0);
+    vec3 c = mix(vec3(0.035, 0.035, 0.05), vec3(0.42, 0.45, 0.52) * (0.4 + l.x), ring);
+    glow = vec3(0.75, 0.85, 1.0) * ring * (sweep * 0.8 + l.y * 0.6);
+    return c + ring * (sweep * 0.5 + l.y * 0.4);
+  }
   return vec3(1.0);
 }
 `;
@@ -748,7 +827,7 @@ export function camoGlsl(code) {
     }
     if (keep) out.push(ln);
   }
-  const g = (code === 60 ? 'uniform sampler2D uRovexLogo;\n' : '') + (code === 70 ? 'uniform vec3 uBmA; uniform vec3 uBmB; uniform vec3 uBmC; uniform vec4 uBmP; uniform vec4 uBmM;\n' : '') + out.join('\n'); // so a camo Rovex paga a textura
+  const g = (code === 60 ? 'uniform sampler2D uRovexLogo;\n' : '') + (code === 70 ? 'uniform vec3 uBmA; uniform vec3 uBmB; uniform vec3 uBmC; uniform vec4 uBmP; uniform vec4 uBmM; uniform float uBmR;\n' : '') + out.join('\n'); // so a camo Rovex paga a textura
   camoCache.set(code, g);
   return g;
 }

@@ -1423,8 +1423,13 @@ function pushDyn(B, pos, vel, rad, height) {
   return false;
 }
 
+// 09/11 (mapas novos pesados): so as pecas perto de quem se move entram na conta. Margem folgada: cobre o passo do tick, subir degrau e peca redonda
+const NEAR_BOXES = [], NEAR_MARGIN = 2;
 export function moveBody(M, pos, vel, dt, rad, height) {
-  const boxes = M.boxes;
+  const reachX = rad + Math.abs(vel[0] * dt) + NEAR_MARGIN, reachZ = rad + Math.abs(vel[2] * dt) + NEAR_MARGIN, px = pos[0], pz = pos[2];
+  let boxes = NEAR_BOXES; boxes.length = 0;
+  for (const b of M.boxes) if (px + reachX > b.min[0] && px - reachX < b.max[0] && pz + reachZ > b.min[2] && pz - reachZ < b.max[2]) boxes.push(b);
+  for (const b of boxes) if (overlap(pos, rad, height, b)) { boxes = M.boxes; break; } // ja nasceu dentro de uma peca: o empurrao pode ser longo, confere o mapa inteiro
   let onGround = false;
   const stepAxis = (ax) => {
     const prev = pos[ax];

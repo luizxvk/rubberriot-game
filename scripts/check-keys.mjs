@@ -22,7 +22,7 @@ for (const k of Object.keys(BODY_TRAITS)) if (k.startsWith('melee_') && !both('m
 // Rovex Pass (04/11): toda recompensa com nome nos dois idiomas
 const { PASS } = await import('../src/pass.js');
 const { PASS_FREE } = await import('../src/pass.js');
-for (const p of [...PASS, ...Object.values(PASS_FREE)]) if (!both(p.k === 'banner' ? 'bn_' + p.id : p.k === 'dance' ? 'dn_' + p.id : p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id)) falta.push('pass ' + p.id);
+for (const p of [...PASS, ...Object.values(PASS_FREE)]) if (!both(p.k === 'stamp' ? 'stamp_' + p.id : p.k === 'banner' ? 'bn_' + p.id : p.k === 'dance' ? 'dn_' + p.id : p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id)) falta.push('pass ' + p.id);
 if (new Set(PASS.map(p => p.k + (p.slot || '') + p.id)).size !== PASS.length) falta.push('item repetido no Pass');
 // todo item marcado como do Pass precisa estar em alguma trilha, senao ninguem consegue
 { const { LOOKS: LK, DANCE_INFO } = await import('../shared/looks.js'), { BANNERS: BN } = await import('../shared/banners.js'), all = [...PASS, ...Object.values(PASS_FREE)];
@@ -64,6 +64,7 @@ for (const [k, it] of Object.entries(SHOP_ITEMS)) {
     else if (slot === 'dance') { const { DANCE_INFO } = await import('../shared/looks.js'); if (!DANCE_INFO[id]?.shop) falta.push(`dança ${id} sem shop: true (${k})`); if (!both('dn_' + id)) falta.push('dn_' + id); }
     else if (slot === 'ret') { if (!both('ret_' + id)) falta.push('ret_' + id); } // reticula da Loja (04/11)
     else if (slot === 'wskin') { if (!WSKINS[id]) falta.push(`skin de modelo ${id} nao existe (${k})`); if (!both('ws_' + id)) falta.push('ws_' + id); } // skin de modelo (04/11)
+    else if (slot === 'stamp') { if (!both('stamp_' + id)) falta.push('stamp_' + id); } // estampa de pintura (09/11)
     else falta.push(`item ${k}: give desconhecido ${g}`);
   }
 }

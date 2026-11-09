@@ -541,8 +541,10 @@ export class Hud {
     }
     const p = G.player, M = this.M, snap = G.snap;
     if (!p || !M || !this.radarBg) return;
-    const g = cv.getContext('2d'), R = 90, span = Math.min(M.arena, 46), k = R / span, wk = 128 / (M.arena + 2);
     const uav = (snap.uavs || []).some(u => u.owner === G.myId || (u.team && u.team === G.myTeam));
+    const spanWant = uav ? Math.min(M.arena * 1.08, 140) : Math.min(M.arena, 64); // 08/11 (pedido dele): mapa enxerga mais e o Radar Espiao abre o mapa inteiro
+    this.radarSpan = this.radarSpan ? this.radarSpan + (spanWant - this.radarSpan) * 0.12 : spanWant;
+    const g = cv.getContext('2d'), R = 90, span = this.radarSpan, k = R / span, wk = 128 / (M.arena + 2);
     const enemyUav = (snap.uavs || []).some(u => u.owner !== G.myId && !(u.team && u.team === G.myTeam));
     // Nuvem de Talco do inimigo: minimapa vira poeira (so voce no meio e o aviso), ate acabar
     const jam = (snap.talcs || []).some(u => u.owner !== G.myId && !(u.team && u.team === G.myTeam));
@@ -563,7 +565,7 @@ export class Hud {
     for (const o of snap.players) {
       if (o.id === G.myId || !o.alive) continue;
       if (!G.isEnemy(o)) { dot(o.pos[0], o.pos[2], o.team === 'red' ? '#a83a2c' : '#2f5b8a', 4.5); continue; }
-      if (uav || (G.seen.get(o.id) || 0) > G.t) dot(o.pos[0], o.pos[2], '#e0301e', 5.5);
+      if (uav || (G.seen.get(o.id) || 0) > G.t) dot(o.pos[0], o.pos[2], o.team === 'blue' ? '#2f5b8a' : '#e0301e', 5.5); // 09/11 (pedido dele): inimigo na cor do time dele, nunca igual ao seu
       else if ((G.marked?.get(o.id) || 0) > G.t) { dot(o.pos[0], o.pos[2], '#ffb21a', 5.5); } // bala tracante
     }
     if (snap.mode === 'dom') { for (const z of M.zones) { const s = snap.zones.find(q => q.id === z.id); dot(z.pos[0], z.pos[2], s?.owner === 'red' ? '#a83a2c' : s?.owner === 'blue' ? '#2f5b8a' : '#ece9e1', 6); } const bz = snap.zones.find(q => q.bonus); if (bz) dot(bz.pos[0], bz.pos[2], bz.owner === 'red' ? '#a83a2c' : bz.owner === 'blue' ? '#2f5b8a' : '#e3b23c', 8); }
@@ -574,7 +576,7 @@ export class Hud {
     }
     g.restore();
     // voce no centro, olhando pra cima
-    g.fillStyle = '#faf8f2'; g.strokeStyle = '#141210'; g.lineWidth = 2.5;
+    g.fillStyle = G.myTeam === 'blue' ? '#2f5b8a' : G.myTeam === 'red' ? '#a83a2c' : '#faf8f2'; g.strokeStyle = '#141210'; g.lineWidth = 2.5;
     g.beginPath(); g.moveTo(R, R - 9); g.lineTo(R + 6.5, R + 7); g.lineTo(R, R + 3); g.lineTo(R - 6.5, R + 7); g.closePath(); g.fill(); g.stroke();
     g.lineWidth = 5; g.strokeStyle = enemyUav ? '#e0301e' : '#141210';
     g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.stroke();
@@ -781,7 +783,7 @@ export class Hud {
   domCap(snap, want, D) {
     const E = (this.dcEl ||= { box: document.getElementById('domCap'), pin: document.getElementById('dcPin'), fill: document.getElementById('dcFill'), st: document.getElementById('dcState') });
     const fly = (leaving) => {
-      const r = E.pin.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, dx = D.at ? D.at[0] - cx : 0, dy = D.at ? D.at[1] - cy : -90;
+      const r = E.pin.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, hk = parseFloat(getComputedStyle(document.body).getPropertyValue('--hud-k')) || 1, dx = (D.at ? D.at[0] - cx : 0) / hk, dy = (D.at ? D.at[1] - cy : -90) / hk;
       const far = { transform: `translate(${dx}px, ${dy}px) scale(.72)`, opacity: 0.85 }, home = { transform: 'translate(0, 0) scale(1)', opacity: 1 };
       D.anim?.cancel();
       D.anim = E.pin.animate(leaving ? [home, far] : [far, home], { duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : leaving ? 260 : 360, easing: 'cubic-bezier(.22, .8, .24, 1)', fill: 'forwards' });

@@ -26,15 +26,15 @@ export class MatchVote {
   }
   closeEditor(back = true) { if (!this.ed || this.ed.hidden) return; this.ed.hidden = true; if (back) this.onCloseEditor?.(); }
   drawEditor() {
-    const d = this.draft, rows = cfgRows(d).filter(r => r[0] !== 'ranked');
+    const d = this.draft, now = this.G.M?.id, rows = cfgRows(d, now).filter(r => r[0] !== 'ranked');
     const changed = !same(pick(d), pick(this.base)), alone = (this.G.lobbyHumans || 1) < 2;
     this.ed.innerHTML = `<div class="mv-sheet"><header><h2 id="mvEdT">${t('mvTitle')}</h2><p>${t(alone ? 'mvSubSolo' : 'mvSub')}</p></header>
-      <ul class="mv-rows">${rows.map(([k, list, cur, fmt]) => { const i = Math.max(0, list.indexOf(cur)), one = list.length < 2; return `<li data-k="${k}"><span class="k">${t('cfg_' + k)}</span>${one ? '<i></i>' : `<button class="ar" data-d="-1" aria-label="${t('cfgPrev')} ${t('cfg_' + k)}">${ARROW(-1)}</button>`}<b class="v" aria-live="polite">${esc(fmt(list[i]))}</b>${one ? '<i></i>' : `<button class="ar" data-d="1" aria-label="${t('cfgNext')} ${t('cfg_' + k)}">${ARROW(1)}</button>`}</li>`; }).join('')}</ul>
+      <ul class="mv-rows">${rows.map(([k, list, cur, fmt, html]) => { const i = Math.max(0, list.indexOf(cur)), one = list.length < 2; return `<li data-k="${k}"><span class="k">${t('cfg_' + k)}</span>${one ? '<i></i>' : `<button class="ar" data-d="-1" aria-label="${t('cfgPrev')} ${t('cfg_' + k)}">${ARROW(-1)}</button>`}<b class="v" aria-live="polite">${html ? fmt(list[i]) : esc(fmt(list[i]))}</b>${one ? '<i></i>' : `<button class="ar" data-d="1" aria-label="${t('cfgNext')} ${t('cfg_' + k)}">${ARROW(1)}</button>`}</li>`; }).join('')}</ul>
       <footer><button class="plain" id="mvEdClose">${t('mvClose')}</button><button class="big" id="mvEdSend" ${changed ? '' : 'disabled'}>${t(alone ? 'mvApply' : 'mvSend')}</button></footer></div>`;
     for (const b of this.ed.querySelectorAll('.ar')) b.onclick = () => {
       const k = b.closest('li').dataset.k, dir = +b.dataset.d, r = rows.find(x => x[0] === k), list = r[1], v = list[(Math.max(0, list.indexOf(r[2])) + dir + list.length) % list.length];
       if (k === 'players') d.bots = v - 1; else if (k === 'wave') d.limit = v; else d[k] = v;
-      if (k === 'mode') { d.limit = 0; d.time = 0; const maps = cfgRows(d).find(x => x[0] === 'map')[1]; if (!maps.includes(d.map)) d.map = maps[0]; }
+      if (k === 'mode') { d.limit = 0; d.time = 0; const maps = cfgRows(d, now).find(x => x[0] === 'map')[1]; if (!maps.includes(d.map)) d.map = maps[0]; }
       audio.play('ui_click', { ui: true, vol: 0.6 }); this.drawEditor();
       this.ed.querySelector(`li[data-k="${k}"] .ar[data-d="${dir}"]`)?.focus();
     };
@@ -45,8 +45,8 @@ export class MatchVote {
   // ---------- votacao ----------
   // o que muda, em texto: valor antigo riscado e o novo
   changes(cfg) {
-    const base = this.G.lobbyCfg || {}, now = cfgRows(base), next = cfgRows({ ...base, ...cfg }), out = [];
-    const val = (rows, k) => { const r = rows.find(x => x[0] === k); return r ? r[3](r[2]) : null; };
+    const base = this.G.lobbyCfg || {}, m = this.G.M?.id, now = cfgRows(base, m), next = cfgRows({ ...base, ...cfg }, m), out = [];
+    const val = (rows, k) => { const r = rows.find(x => x[0] === k); return r ? String(r[3](r[2])).replace(/<[^>]+>/g, '') : null; }; // o valor do mapa vem em HTML
     for (const r of next) {
       const k = r[0]; if (k === 'ranked') continue;
       const a = val(now, k), b = val(next, k);

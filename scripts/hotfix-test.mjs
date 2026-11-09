@@ -4,7 +4,7 @@ import { STREAKS, FIELD, WEAPONS, SKILLS } from '../shared/weapons.js';
 import { CAR, carEnter } from '../shared/cars.js';
 import { hasLOS } from '../shared/map.js';
 let f = 0; const ok = (c, m) => { console.log((c ? 'OK    ' : 'FALHA ') + m); if (!c) f++; };
-const mk = (o) => { const out = []; const c = new Core({ lobby: false, send: (to, m) => out.push([to, m]), ...o }); c.local = true; c.out = out; return c; };
+const mk = (o) => { const out = []; const c = new Core({ lobby: false, send: (to, m) => out.push([to, m]), ...o }); c.local = true; { const u = c.useStreak.bind(c); c.useStreak = (p, k) => { p.streakCallAt = -99; return u(p, k); }; } /* o intervalo de 1 s tem teste proprio abaixo */ c.out = out; return c; };
 // dois baloes no deserto
 { const c = mk({ mode: 'ctf', map: 'deserto', bots: 5 }); c.join('me', 'Eu'); const p = c.players.get('me'), o = [...c.players.values()].find(x => x.bot && c.enemies(p, x));
   c.phase = 'play'; c.streakGap = 0; p.ready = ['bomber', 'bomber', 'bomber']; c.useStreak(p, 'bomber'); c.useStreak(p, 'bomber'); c.useStreak(p, 'bomber');

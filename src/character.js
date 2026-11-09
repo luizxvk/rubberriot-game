@@ -9,6 +9,14 @@ import { eyeTex, buildEyewear, buildHat, buildFace, styleGlove, patternTex, buil
 import { attachCharm, tickCharm } from './charms.js';
 import { applyDance, applyPose } from './dances.js';
 import { ring as fxRing, column as fxColumn, burst as fxBurst, play as fxPlay, disposeFx } from './deathfx.js';
+// morte em borrao e renascer no lapis (09/11, aprovado por ele 06/11; ver tools/previa-borrao-lapis.html). Materiais e formas compartilhados
+const BLOT = { ink: new THREE.MeshBasicMaterial({ color: 0x141210 }), paper: new THREE.MeshBasicMaterial({ color: 0xf6efdc }), pool: new THREE.MeshBasicMaterial({ color: 0x141210, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), drop: new THREE.SphereGeometry(1, 8, 6), disc: null, pencil: null };
+function blotDisc() { if (BLOT.disc) return BLOT.disc; const s = new THREE.Shape(), n = 40; for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2, r = 1 + Math.sin(a * 5) * 0.12 + Math.sin(a * 3 + 1) * 0.08, x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) s.lineTo(x, y); else s.moveTo(x, y); } return (BLOT.disc = new THREE.ShapeGeometry(s, 1)); }
+function pencilMesh() {
+  if (!BLOT.pencil) { const g = new THREE.Group(), body = ink(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), 0xffd23a, 0.012); body.position.y = 0.36; g.add(body); const wood = ink(new THREE.ConeGeometry(0.05, 0.11, 6), 0xe8c38a, 0.01); wood.rotation.x = Math.PI; wood.position.y = 0.055; g.add(wood); const er = ink(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 10), 0xf08aa0, 0.01); er.position.y = 0.65; g.add(er); g.rotation.z = -0.5; BLOT.pencil = g; }
+  return BLOT.pencil.clone();
+}
+
 
 const SEG = 10, RAD = 6;
 
@@ -143,7 +151,7 @@ function koNum(n) { if (!KO_NUM.has(n)) KO_NUM.set(n, wordTexture(String(n), { b
 const wX = new THREE.Vector3(), wY = new THREE.Vector3(), wZ = new THREE.Vector3(), wM = new THREE.Matrix4(), WRIST_RATE = 12, WRIST_MAX = 24;
 // Volta pro Caixao (08/11, pedido dele): caixao de desenho animado (oco: paredes + fundo de cetim + tampa com cruz)
 // e lapide. Geometria feita uma vez so; cada morte so cria as malhas. Frente do boneco = -Z, caixao fica atras (+Z).
-export const DEATH_DUR = { caixao: 2.35 }; // quanto tempo o boneco morto fica na tela (padrao 1,4 s)
+export const DEATH_DUR = { pancake: 2.25, caixao: 2.35 }; // quanto tempo o boneco morto fica na tela (padrao 1,4 s)
 let COF = null;
 function coffinGeo() {
   if (COF) return COF;
@@ -414,11 +422,45 @@ export class Character {
   }
 
   // animacao de morte (05/11, pedido dele): dura ate 1,4 s (depois o boneco some). So desenho, igual pra todo mundo ver
+  // morreu: estica de susto, amolece, vira tinta e fica a poca
+  blotDeath(T, B, sm) {
+    const a = sm(T / 0.16), b = sm((T - 0.16) / 0.7), c = sm((T - 1.7) / 0.5), sy = (1 + 0.12 * a * (1 - b)) * (1 - 0.94 * b), sx = 1 + 0.5 * b;
+    B.scale.set(sx, Math.max(0.04, sy), sx); B.rotation.set(0, 0, 0); B.position.y = -0.03 * b;
+    if (b > 0.3 && !this.blotMats) { this.blotMats = new Map(); B.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) { this.blotMats.set(o, o.material); o.material = BLOT.ink; } }); }
+    B.visible = b < 0.97;
+    if (!this.blot) { const g = this.blot = new THREE.Group(), d = new THREE.Mesh(blotDisc(), BLOT.pool); d.rotation.x = -Math.PI / 2; d.position.y = 0.02; g.add(d); g.userData.disc = d; g.userData.drops = [0, 1, 2, 3].map(i => { const m = new THREE.Mesh(BLOT.drop, BLOT.ink), an = i * 1.7 + 0.4; m.userData = { an, h: 0.7 + i * 0.28 }; g.add(m); return m; }); this.root.add(g); }
+    const f = this.blot.userData; f.disc.scale.setScalar(0.001 + 0.85 * sm((T - 0.45) / 0.8) * (1 - c));
+    f.drops.forEach((m, i) => { const k = (T - 0.3 - i * 0.08) / 0.55; m.visible = k > 0 && k < 1; if (!m.visible) return; const r = 0.2 + 0.25 * k; m.position.set(Math.cos(m.userData.an) * r, Math.max(0.03, m.userData.h * (1 - k * k)), Math.sin(m.userData.an) * r); m.scale.setScalar(0.07 - 0.02 * i * 0.5); });
+  }
+  endBlot() {
+    if (this.blotMats) { for (const [o, m] of this.blotMats) o.material = m; this.blotMats = null; }
+    if (this.blot) { this.root.remove(this.blot); this.blot = null; }
+    this.body.visible = true;
+  }
+  // renasceu: o lapis desenha de baixo pra cima (traco no papel) e a cor sobe atras. Curto: quem renasce ja pode levar tiro
+  startDraw() {
+    const B = this.body; B.scale.set(1, 1, 1); B.position.y = 0; B.rotation.set(0, 0, 0); this.root.updateMatrixWorld(true);
+    const v = new THREE.Vector3(), y0 = this.root.getWorldPosition(new THREE.Vector3()).y, list = [];
+    B.traverse(o => { if (!o.isMesh || !o.visible || !o.material) return; o.getWorldPosition(v); list.push({ o, y: v.y - y0, m: o.material, line: o.material.side === THREE.BackSide }); });
+    if (!list.length) return;
+    this.pencil ||= pencilMesh(); this.root.add(this.pencil);
+    this.draw = { t: 0, list, top: Math.max(...list.map(p => p.y)) + 0.2 };
+  }
+  tickDraw(dt) {
+    const D = this.draw, sm = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }; D.t += dt;
+    const k = D.t / 0.85;
+    if (k >= 1) { this.endDraw(); return; }
+    const h = D.top * sm(k / 0.65), fill = D.top * sm((k - 0.4) / 0.6);
+    for (const p of D.list) { p.o.visible = p.y <= h; if (!p.line) p.o.material = p.y <= fill ? p.m : BLOT.paper; }
+    const w = D.t * 26; this.pencil.visible = k < 0.72; this.pencil.position.set(Math.cos(w) * 0.25 + 0.12, h, Math.sin(w) * 0.25 + 0.12);
+  }
+  endDraw() { const D = this.draw; if (!D) return; for (const p of D.list) { p.o.visible = true; p.o.material = p.m; } this.draw = null; if (this.pencil) this.root.remove(this.pencil); }
   deathAnim(dt) {
     const T = this.deadT, B = this.body, id = this.look?.death || 'pancake', sm = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, end = sm((T - 1.05) / 0.3);
     // efeitos 3D das lendarias (08/11): malhas de shader presas no root (nao giram nem encolhem com o corpo)
     const FX = this.deathFxFor(id);
     if (id === 'caixao') { this.coffinDeath(T, B, FX, sm); return; }
+    if (id === 'pancake') { this.blotDeath(T, B, sm); return; }
     if (FX) {
       const f = FX.userData;
       if (id === 'anjo') { fxPlay(f.col, T, 0, 1.4); fxPlay(f.ring, T, 0, 0.7); }
@@ -547,11 +589,14 @@ export class Character {
 
     if (!alive) {
       this.deadT += dt;
+      this.endDraw();
       this.deathAnim(dt);
       this.tag.visible = false;
-      this.root.visible = this.deadT < (DEATH_DUR[this.look?.death] || 1.4);
+      this.root.visible = this.deadT < (DEATH_DUR[this.look?.death || 'pancake'] || 1.4);
       return;
     }
+    if (this.deadT > 0) { this.endBlot(); if ((this.look?.death || 'pancake') === 'pancake') this.startDraw(); } // voltou da morte
+    if (this.draw) this.tickDraw(dt);
     this.deadT = 0; if (this.deathProp) { this.body.remove(this.deathProp); this.deathProp = null; }
     if (this.deathFx) { this.root.remove(this.deathFx); disposeFx(this.deathFx); this.deathFx = null; this.body.position.z = 0; } // efeitos da lendaria (08/11)
     this.root.visible = true;

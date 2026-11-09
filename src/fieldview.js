@@ -65,7 +65,9 @@ export class FieldView {
       for (const [id, m] of map) if (!seen.has(id)) { this.root.remove(m); map.delete(id); }
     };
     sync(this.springs, F?.springs, springMesh, (m, s) => m.position.set(s[1], s[2], s[3]));
-    sync(this.holes, F?.holes, () => { const g = new THREE.Group(); g.add(holeMesh()); return g; }, (m, h) => m.children[0].position.set(h[1], h[2], h[3]));
+    sync(this.holes, F?.holes, () => { const g = new THREE.Group(); g.add(holeMesh(), holeMesh()); g.children[1].visible = false; return g; }, (m, h) => m.children[0].position.set(h[1], h[2], h[3]));
+    // saida (09/11, pedido dele): mesmo desenho da entrada; muda de lugar quando alguem passa pelo buraco
+    for (const h of F?.holes || []) { const o = this.holes.get(h[0])?.children[1]; if (!o) continue; o.visible = h.length > 7; if (o.visible) o.position.set(h[5], h[6], h[7]); }
     for (const [id, m] of this.springs) {
       // mola respira e da um salto quando alguem pisa
       let b = this.boing.get(id) || 0; if (b > 0) { b -= dt; this.boing.set(id, b); }

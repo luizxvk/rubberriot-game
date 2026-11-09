@@ -24,13 +24,13 @@ const MODE_CATS = [
 const HOT_MODES = ['ctf']; // selo "HOT" no cartao
 
 // linhas de opcao da partida: as mesmas no lobby e no "Alterar partida" (matchvote.js)
-export function cfgRows(c) {
+export function cfgRows(c, mapNow = c.map) {
     const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce', night = raw === 'borroes' || raw === 'arte';
     const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     return [
       ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && x !== 'cortejo' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && x !== 'cortejo' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + mapNow))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
       // horario (07/11, pedido dele): Roubo ao Cofre de dia ou de noite
       ...(!night ? [['tod', ['day', 'night'], c.tod || 'day', (v) => t(v === 'night' ? 'todNight' : 'todDay')]] : []),
@@ -197,14 +197,33 @@ export class Lobby {
     audio.play('ui_click', { ui: true, vol: 0.6 });
     g.querySelector('[aria-checked="true"]')?.focus();
   }
-  closeModes() { $('lbModes').hidden = true; }
+  closeModes() { $('lbModes').hidden = true; this.closeMaps(); }
+  // seletor de mapas (08/11, pedido dele): fotos em slide; a lista e a mesma da linha Mapa (respeita modo, blitz, escolta)
+  openMaps(c, row) {
+    audio.play('ui_click', { ui: true, vol: 0.6 });
+    const [, list, cur] = row;
+    let el = $('lbMaps');
+    if (!el) { el = document.createElement('div'); el.id = 'lbMaps'; el.className = 'lb-maps'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'lbMapsT'); document.body.appendChild(el); el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeMaps(true); return; } if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return; /* 09/11 (pedido dele): teclado anda pelos cartoes; o controle ja anda pelo foco do gamepad.js */ const cards = [...el.querySelectorAll('.lm-card')], i = cards.indexOf(document.activeElement), n = e.key === 'Home' ? 0 : e.key === 'End' ? cards.length - 1 : i < 0 ? 0 : Math.max(0, Math.min(cards.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1))); e.preventDefault(); e.stopPropagation(); if (n === i) return; cards[n].focus({ preventScroll: true }); cards[n].scrollIntoView({ inline: 'center', block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); audio.play('ui_hover', { ui: true, vol: 0.5 }); }); el.addEventListener('click', (e) => { if (e.target === el) this.closeMaps(true); }); }
+    el.innerHTML = `<div class="lm-box"><header><h3 id="lbMapsT">${t('cfgPickMap')}</h3><button class="lb-x" id="lbMapsClose" aria-label="${t('close')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></header><div class="lm-track" role="radiogroup" aria-labelledby="lbMapsT">${list.map(v => `<button role="radio" class="lm-card" aria-checked="${v === cur}" data-v="${v}">${v === 'auto' ? `<span class="lm-ph lm-auto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></span>` : `<img class="lm-ph" src="${import.meta.env.BASE_URL}maps/${v}.jpg" alt="" width="640" height="360" loading="lazy">`}<b>${v === 'auto' ? esc(t('cfgAutoTag')) : esc(t('map_' + v))}</b></button>`).join('')}</div></div>`;
+    el.hidden = false;
+    $('lbMapsClose').onclick = () => this.closeMaps(true);
+    for (const b of el.querySelectorAll('.lm-card')) b.onclick = () => {
+      const v = b.dataset.v; this.closeMaps(); $('lbMapBtn')?.focus();
+      if (v === c.map) return;
+      audio.play('ui_click', { ui: true, vol: 0.6 });
+      this.onCfg?.({ mode: c.mode, map: v, bots: c.bots, difficulty: c.difficulty, limit: c.limit || 0, time: c.time || 0, mut: c.mut || '', ranked: !!c.ranked, tod: c.tod || 'day' });
+    };
+    const on = el.querySelector('.lm-card[aria-checked="true"]') || el.querySelector('.lm-card');
+    const tr = el.querySelector('.lm-track'); tr.scrollLeft = on.offsetLeft - (tr.clientWidth - on.offsetWidth) / 2; on.focus({ preventScroll: true });
+  }
+  closeMaps(back) { const el = $('lbMaps'); if (!el || el.hidden) return; el.hidden = true; if (back) $('lbMapBtn')?.focus(); }
 
   // painel da partida (estilo lista de opcoes com setas): host muda, a sala toda ve na hora
   renderCfg(m, host) {
     const c = m.cfg, el = $('lbCfg');
     el.hidden = !c || m.phase !== 'lobby';
     if (el.hidden) return;
-    const rows = cfgRows(c);
+    const rows = cfgRows(c, m.map); // m.map: o mapa sorteado, mostrado na linha quando a escolha e Automatico
     // so redesenha quando muda alguma coisa (o lobby chega 4x/s; redesenhar sempre cortava o carimbo)
     const sig = JSON.stringify(c) + host + m.map;
     if (sig === this.cfgSig) return;
@@ -212,7 +231,7 @@ export class Lobby {
     const prev = this.cfgPrev; this.cfgPrev = { ...c };
     // virou Plantar a Bomba: o popup de escolher o lado abre pra todo mundo da sala
     if (prev && prev.mode !== c.mode && c.mode === 'bomb') queueMicrotask(() => this.lastMsg && this.renderSide(this.lastMsg, this.myId));
-    if (!host) this.closeModes();
+    if (!host) this.closeModes(); else this.closeMaps();
     $('lbCfgWho').textContent = host ? t('cfgYouHost') : t('cfgHostOnly');
     el.classList.toggle('host', host);
     $('lbCfgList').innerHTML = rows.map(([k, list, cur, fmt, html]) => {
@@ -221,6 +240,8 @@ export class Lobby {
       const val = html ? fmt(list[i]) : esc(fmt(list[i]));
       // modo: o valor e um botao que abre o popup com todos (sem setas)
       if (k === 'mode' && host) return `<li class="${chg ? 'chg' : ''} wide" data-k="mode"><span class="k">${t('cfg_mode')}</span><button class="v pick" id="lbModeBtn" aria-haspopup="dialog">${val}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg></button></li>`;
+      // mapa (08/11, pedido dele): o valor abre o popup com a foto de cada mapa
+      if (k === 'map' && host && list.length > 1) return `<li class="${chg ? 'chg' : ''} wide" data-k="map"><span class="k">${t('cfg_map')}</span><button class="v pick" id="lbMapBtn" aria-haspopup="dialog" aria-label="${t('cfgPickMap')}: ${val}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16V4c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2zm-11-4l2.03 2.71L16 11l4 5H8l3-4zM2 6v14c0 1.1.9 2 2 2h14v-2H4V6H2z"/></svg>${val}</button></li>`;
       // travado (sem setas): o valor ocupa a linha toda (antes caia na coluna da seta e quebrava letra por letra)
       if (lock) return `<li class="${chg ? 'chg' : ''} wide" data-k="${k}"><span class="k">${t('cfg_' + k)}</span><b class="v" aria-live="polite">${val}</b></li>`;
       return `<li class="${chg ? 'chg' : ''}" data-k="${k}"><span class="k">${t('cfg_' + k)}</span>`
@@ -230,6 +251,8 @@ export class Lobby {
     }).join('');
     if (!host) return;
     $('lbModeBtn').onclick = () => this.openModes(c);
+    const mapRow = rows.find(r => r[0] === 'map');
+    if ($('lbMapBtn')) $('lbMapBtn').onclick = () => this.openMaps(c, mapRow);
     for (const b of $('lbCfgList').querySelectorAll('.ar')) b.onclick = () => {
       const k = b.closest('li').dataset.k, row = rows.find(r => r[0] === k), list = row[1];
       const v = list[(Math.max(0, list.indexOf(row[2])) + Number(b.dataset.d) + list.length) % list.length];

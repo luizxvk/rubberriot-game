@@ -5,6 +5,7 @@ import { passInfo, BOOST_PASS_ELITE, BOOST_PASS_FREE } from './progress.js';
 import { PASS, PASS_MAX, PASS_FREE } from './pass.js';
 import { bannerHtml } from './banners.js';
 import { CAMO_SWATCH } from './camos.js';
+import { stampThumb } from './stamps.js';
 import { RET_COLORS } from './arsenal.js';
 import { openElite } from './elitepop.js';
 import { pieceShot } from './shop.js';
@@ -21,13 +22,14 @@ const DANCE_ICO = 'M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9
 const swatchOf = (p) => (p.slot === 'gloveCol' || p.slot === 'shirt' ? p.id : null);
 export const passArt = (p) => (p.k === 'banner' ? `<i class="pf-art pf-bnr">${bannerHtml(p.id, { plain: true })}</i>`
   : p.k === 'dance' ? `<i class="pf-art pf-look"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${DANCE_ICO}"/></svg></i>`
+  : p.k === 'stamp' ? `<i class="pf-art" style="background:url(${stampThumb(p.id)}) center/cover"></i>`
   : swatchOf(p) ? `<i class="pf-art" style="background:${p.id}"></i>`
   : p.k === 'camo'
   ? `<i class="pf-art" style="background:${CAMO_SWATCH[p.id] || '#999'}"></i>`
   : p.k === 'ret' ? `<i class="pf-art pf-ret"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="${RET_COLORS[p.id]}" stroke-width="2.4"/><circle cx="12" cy="12" r="2.2" fill="${RET_COLORS[p.id]}"/></svg></i>`
     : `<i class="pf-art pf-look"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${LOOK_ICO[p.slot] || LOOK_ICO.fx}"/></svg></i>`);
-export const passName = (p) => t(p.k === 'banner' ? 'bn_' + p.id : p.k === 'dance' ? 'dn_' + p.id : p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id);
-const kindOf = (p) => t(p.k === 'banner' ? 'passBanner' : p.k === 'dance' ? 'passDance' : p.k === 'look' ? 'lkt_' + p.slot : p.k === 'camo' ? 'passCamo' : p.k === 'ret' ? 'passRet' : 'passLook');
+export const passName = (p) => t(p.k === 'stamp' ? 'stamp_' + p.id : p.k === 'banner' ? 'bn_' + p.id : p.k === 'dance' ? 'dn_' + p.id : p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id);
+const kindOf = (p) => t(p.k === 'stamp' ? 'shk_stamp' : p.k === 'banner' ? 'passBanner' : p.k === 'dance' ? 'passDance' : p.k === 'look' ? 'lkt_' + p.slot : p.k === 'camo' ? 'passCamo' : p.k === 'ret' ? 'passRet' : 'passLook');
 
 // 08/11 (pedido dele): aba da Loja, no layout da Loja e no padrao de passe do Fortnite: premio grande a esquerda, nivel e progresso ao lado e a trilha
 // de niveis embaixo (Elite em cima, gratis embaixo). Fotos so do que esta na tela, igual a vitrine.

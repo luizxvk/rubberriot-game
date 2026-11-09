@@ -37,7 +37,7 @@ export function fieldUse(c, p, m) {
   }
   if (p.field === 'umbrella') { p.shieldT = F.dur; p.umbHp = F.hp; }
   else if (p.field === 'spring') c.springs.push({ id: ++seq, pos: at && Math.hypot(at[0] - p.pos[0], at[2] - p.pos[2]) < 5 ? at : [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], t: F.dur });
-  else if (p.field === 'hole') c.holes.push({ id: ++seq, a: [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]], t: F.dur, owner: p.id });
+  else if (p.field === 'hole') { const a = [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]]; c.holes.push({ id: ++seq, a, b: holeExit(c.M, a), t: F.dur, owner: p.id }); } // b = saida ja sorteada (09/11): fica desenhada no chao
   else if (p.field === 'stim') { if (p.hp >= (p.maxHp || 100) && !(p.burn)) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } p.stimT = F.dur; p.burn = null; }
   else if (p.field === 'vest') { if ((p.armor || 0) >= F.armor) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } p.armor = F.armor; }
   else if (p.field === 'anvil') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.anvils.push({ owner: p.id, pos: at, t: F.fall }); c.event({ k: 'anvilWarn', list: [at] }); }
@@ -58,6 +58,13 @@ export function fieldBlocks(c, v, a, wpn, dmg = 0) {
   return true;
 }
 
+// alguem passou pelo buraco: a saida usada da lugar a outra sorteada (cada entrada continua indo pra um ponto diferente)
+const holeNext = (c, h) => { h.b = holeExit(c.M, h.a) || h.b; };
+export function fieldHoleUsed(c, p, m) {
+  const h = c.holes.find(q => q.id === m.id);
+  if (h && p.alive && near(p.pos, h.a, 2.5)) holeNext(c, h);
+}
+
 export function fieldTick(c, dt) {
   for (const p of c.players.values()) {
     // pontos novos desde a ultima conferida viram barra (nunca passa de cheia); encheu = aviso
@@ -76,8 +83,8 @@ export function fieldTick(c, dt) {
     if ((p.holeCd || 0) > 0) { p.holeCd -= dt; continue; }
     for (const h of c.holes) {
       if (!near(p.pos, h.a, 0.9)) continue;
-      const to = holeExit(c.M, h.a); if (!to) continue;
-      p.pos = to; p.holeCd = 1.5; p.ai.path = null;
+      const to = h.b; if (!to) continue;
+      p.pos = [...to]; p.holeCd = 1.5; p.ai.path = null; holeNext(c, h);
       c.event({ k: 'slurp', id: p.id, from: h.a, to });
       break;
     }
@@ -86,7 +93,7 @@ export function fieldTick(c, dt) {
 
 export function fieldSnap(c) {
   const r = (v) => Math.round(v * 100) / 100;
-  return { springs: c.springs.map(s => [s.id, ...s.pos.map(r)]), holes: c.holes.map(h => [h.id, ...h.a.map(r), h.owner]) };
+  return { springs: c.springs.map(s => [s.id, ...s.pos.map(r)]), holes: c.holes.map(h => [h.id, ...h.a.map(r), h.owner, ...(h.b || []).map(r)]) };
 }
 
 // bots: cada um sai com um equipamento sorteado e usa com criterio, so com a barra cheia (como todo mundo)
@@ -102,5 +109,5 @@ export function botField(c, p, t) {
   else if (p.field === 'hole') go = !!t && hpK < 0.45 && Math.random() < 0.5; // apanhando: foge pelo buraco
   if (!go) return;
   fieldUse(c, p, { kind: p.field, at });
-  if (p.field === 'hole' && !fieldReady(p)) { const h = c.holes[c.holes.length - 1], to = holeExit(c.M, h.a); if (to) { p.pos = to; p.holeCd = 1.5; p.ai.path = null; c.event({ k: 'slurp', id: p.id, from: h.a, to }); } } // entra na hora
+  if (p.field === 'hole' && !fieldReady(p)) { const h = c.holes[c.holes.length - 1], to = h.b; if (to) { p.pos = [...to]; p.holeCd = 1.5; p.ai.path = null; holeNext(c, h); c.event({ k: 'slurp', id: p.id, from: h.a, to }); } } // entra na hora
 }

@@ -192,6 +192,15 @@ function movingMaterial(mat, uT) {
   return m;
 }
 // items: [{ obj, phase, amp }] (amp < 0 = nuvem). uT = { value: segundos } atualizado pelo mapa.
+// contorno das arvores juntadas (09/11): mesmos pontos e o mesmo balanco do corpo; so a normal e dele. Divide os dados em vez de guardar duas vezes
+function shareOutline(pairs) {
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const bodies = pairs.filter(g => !g.isOutline), lines = pairs.filter(g => g.isOutline);
+  for (const { geo } of lines) for (const { geo: body } of bodies) {
+    if (geo.attributes.position.count !== body.attributes.position.count || !same(geo.attributes.position.array, body.attributes.position.array)) continue;
+    geo.setAttribute('position', body.attributes.position); if (body.attributes.aMove) geo.setAttribute('aMove', body.attributes.aMove); geo.deleteAttribute('uv'); break;
+  }
+}
 export function mergeMoving(root, items, uT) {
   root.updateMatrixWorld(true);
   const inv = root.matrixWorld.clone().invert();
@@ -204,6 +213,7 @@ export function mergeMoving(root, items, uT) {
       g.push({ o, it, base });
     });
   }
+  const built = [];
   for (const [mat, list] of groups) {
     const hasUv = list.every(({ o }) => o.geometry.attributes.uv);
     const geos = list.map(({ o, it, base }) => {
@@ -218,11 +228,13 @@ export function mergeMoving(root, items, uT) {
     });
     const merged = mergeGeometries(geos, false);
     if (!merged) continue;
+    built.push({ geo: merged, isOutline: !!mat.isShaderMaterial });
     const mesh = new THREE.Mesh(merged, movingMaterial(mat, uT));
     mesh.raycast = () => {};
     mesh.frustumCulled = false;
     root.add(mesh);
   }
+  shareOutline(built);
   for (const it of items) it.obj.parent?.remove(it.obj);
 }
 
@@ -241,6 +253,24 @@ export function geo(Ctor, ...args) {
 // tirou um pedaco grande da cena pra sempre (mapa da partida que acabou, arma largada): libera a geometria na placa.
 // Antes o mapa velho ficava inteiro na memoria de video a cada partida nova (02/11). As compartilhadas (geo()) ficam.
 const sharedSet = new WeakSet();
+// 09/11 (mapas novos pesados): separa uma malha por celula do chao (pelo centro de cada triangulo), pra o que esta fora da tela nao ser desenhado
+export function splitByCell(g, cell) {
+  const s = g.index ? g.toNonIndexed() : g, P = s.attributes.position, n = P.count / 3, cells = new Map();
+  for (let i = 0; i < n; i++) { const a = i * 3, key = Math.floor((P.getX(a) + P.getX(a + 1) + P.getX(a + 2)) / 3 / cell) + '|' + Math.floor((P.getZ(a) + P.getZ(a + 1) + P.getZ(a + 2)) / 3 / cell); let l = cells.get(key); if (!l) cells.set(key, l = []); l.push(i); }
+  const out = new Map();
+  for (const [key, list] of cells) {
+    const c = new THREE.BufferGeometry();
+    for (const [name, A] of Object.entries(s.attributes)) { const k = A.itemSize, src = A.array, dst = new src.constructor(list.length * 3 * k); list.forEach((t, j) => dst.set(src.subarray(t * 3 * k, (t + 1) * 3 * k), j * 3 * k)); c.setAttribute(name, new THREE.BufferAttribute(dst, k, A.normalized)); }
+    out.set(key, c);
+  }
+  return out;
+}
+// malha do mapa ja cortada: cada pedaco com o seu pedaco de contorno (o casco e calculado inteiro antes de cortar: sem fresta entre celulas)
+export function outlineCells(meshes, whole, th, cell) {
+  const hull = splitByCell(smoothGeo(whole), cell);
+  for (const [key, m] of meshes) { const o = new THREE.Mesh(hull.get(key), getOutlineMat(th)); o.raycast = () => {}; o.renderOrder = m.renderOrder; o.userData.keep = true; o.userData.cellHull = true; m.add(o); }
+}
+
 export function freeGeos(root) {
   root?.traverse(o => { if (o.geometry && !sharedSet.has(o.geometry)) o.geometry.dispose(); });
 }

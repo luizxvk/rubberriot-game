@@ -1,9 +1,10 @@
 // Vila Borracha: cena, cidade que danca, ceu, objetivos, pickups e efeitos.
 import { podiumClear } from '../shared/podiumspot.js';
 import * as THREE from 'three';
+import { TracerFx, TRACER_GLOW } from './tracerfx.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
+import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving, splitByCell, outlineCells } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { standable, floorAt } from '../shared/nav.js';
 import { buildGun, rocketMesh } from './arsenal.js';
@@ -473,6 +474,9 @@ export function buildWorld(scene, M) {
       else if (/marble/.test(o.name)) o.material.emissive.copy(on ? o.material.color : BLACK).multiplyScalar(on ? 0.42 : 1);
     });
   }
+  // 09/11: celular nao desenha o contorno fino das molduras longe (o PC continua igual)
+  let thinHulls = null, thinTick = 0;
+  if (matchMedia('(pointer: coarse)').matches) ready.then(() => { const l = []; root.traverse(o => { if (!o.userData.cellHull || !/trim|glass/.test(o.parent?.name || '')) return; o.geometry.computeBoundingSphere(); o.userData.cx = o.geometry.boundingSphere.center.x; o.userData.cz = o.geometry.boundingSphere.center.z; l.push(o); }); if (l.length) thinHulls = l; });
   paintNight(false); ready.then(() => paintNight(nightOn)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
     root, ready, setNight,
@@ -480,6 +484,7 @@ export function buildWorld(scene, M) {
     // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
     cull(p) {
       sunSpr.position.set(p.x + sunOff.x, p.y + sunOff.y + sunBob, p.z + sunOff.z); // sol/lua sempre dentro do desenho
+      if (thinHulls && ++thinTick % 12 === 0) for (const o of thinHulls) o.visible = Math.hypot(p.x - o.userData.cx, p.z - o.userData.cz) < MAP_THIN_FAR + MAP_CELL * 0.7;
       if (!inner) return;
       inner.visible = Math.max(Math.abs(p.x), Math.abs(p.z)) < M.studio + 0.6 || !fdoor || Math.hypot(p.x - fdoor.x, p.z - fdoor.z) < 18 || p.y > 13;
     },
@@ -926,11 +931,13 @@ export class FX {
     if (len < 0.5) return;
     // bala do tamanho de bala (pedido dele: fina e curta); o contorno de tinta e o que faz ela aparecer
     // chega quase na hora como o acerto (03/11: a bala lenta chegava depois da bolinha do impacto); o risco estica com a velocidade
-    const B = style === 'laser' ? LASER_BOLT : BULLET[wpn] || BULLET.rifle, fly = Math.min(len / B.speed, BULLET_MAX_FLY), speed = len / fly;
+    const B = style === 'laser' || style === 'plasma' ? LASER_BOLT : BULLET[wpn] || BULLET.rifle, fly = Math.min(len / B.speed, BULLET_MAX_FLY), speed = len / fly;
     const seg = Math.min(len, Math.max(B.seg, speed * 0.008)), tail = 0.06;
     const dir = b.clone().sub(a).normalize();
-    const T = TRACERS[style], w = (T ? T.w : 1) * 0.6;
+    const T = TRACERS[style], w = (T ? T.w : style === 'plasma' ? 2.2 : 1) * 0.6;
     const mat = T ? tracerMaterial(style, seg) : this.tracerMat.clone();
+    if (style === 'plasma') mat.color.setHex(0xbffcff); // pack futurista (09/11): miolo claro, halo ciano
+    (this.tfx ||= new TracerFx(this.scene)).emit(style, a, b); // pedacinhos 3D do tipo do tracado
     const m = new THREE.Mesh(this.tracerGeo, mat);
     m.position.copy(a); m.lookAt(b); m.scale.set(w, w, 0.01);
     m.renderOrder = 3;
@@ -939,6 +946,7 @@ export class FX {
     const ink = new THREE.Mesh(this.tracerGeo, style === 'laser' ? (this.laserInk ??= new THREE.MeshBasicMaterial({ color: 0x8a0a06, side: THREE.BackSide, transparent: true, opacity: 0.9, depthWrite: false }))
       : (this.bulletInk ??= new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.BackSide, transparent: true, opacity: 0.85, depthWrite: false })));
     ink.scale.set(1.6, 1.6, 1); m.add(ink);
+    if (TRACER_GLOW[style]) { const halo = new THREE.Mesh(this.tracerGeo, (this.haloMat ||= {})[style] ||= new THREE.MeshBasicMaterial({ color: TRACER_GLOW[style], side: THREE.DoubleSide, transparent: true, opacity: 0.3, depthWrite: false })); halo.scale.set(2.8, 2.8, 1); halo.renderOrder = 2; m.add(halo); } // brilho em mistura normal (somar luz estoura no papel claro)
     const life = fly + tail;
     this.add(m, life, (f, k) => {
       const t = k * life, d = Math.min(len, t * speed), s = Math.max(0, d - seg);
@@ -1166,6 +1174,7 @@ export class FX {
   }
 
   update(dt) {
+    this.tfx?.update(dt);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const f = this.list[i];
       f.t += dt;
@@ -1647,6 +1656,8 @@ function tripoModel(file) {
 // pecas que o .glb NAO desenha (ficam as do jogo): carro do Tripo (chega depois) e o frontao com a placa pintada em canvas
 const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
 const MAP_GLB = { vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
+const MAP_CELL = 40, MAP_SPLIT_MIN = 12000; // so malha pesada de verdade e dividida (celula de 40 m): dividir as leves gastava mais em chamadas de desenho do que economizava em triangulos (ver mapModel)
+const MAP_THIN_FAR = 42; // celular: contorno de acabamento (moldura e vidro) so ate aqui; numa tela pequena nem da pra ver e sao centenas de milhares de triangulos
 const MAPM = new Map(), MAPG = new Map(); // MAPG: modelo ja pronto (o mapa monta direto com ele, sem as caixas antes)
 // mapas comprimidos com Draco (06/11, pedido dele: PC e celular; ~15x menor). Decoder em public/draco (copia do three)
 let draco = null;
@@ -1667,8 +1678,15 @@ function mapModel(file) {
       const geo = o.geometry.clone().applyMatrix4(o.matrixWorld); geo.computeVertexNormals();
       const col = o.material?.color ? o.material.color.getHex() : 0xffffff;
       const glass = /glass/.test(o.name);
+      const th = glass ? 0.02 : 0.045, tris = (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
+      if (tris > MAP_SPLIT_MIN) { // 09/11: malha grande vira pedacos por celula: so entra no desenho o que a camera enxerga (o Largo desenhava 500 mil triangulos olhando pra uma parede)
+        const mat = toon(col, { unique: true }), parts = new Map();
+        for (const [key, c] of splitByCell(geo, MAP_CELL)) { const m = new THREE.Mesh(c, mat); m.name = o.name; m.userData.keep = true; parts.set(key, m); g.add(m); }
+        outlineCells(parts, geo, th, MAP_CELL);
+        return;
+      }
       const m = new THREE.Mesh(geo, toon(col, { unique: true })); m.name = o.name; // nome do material do Blender (a noite acende vidro e marmore por ele)
-      outline(m, glass ? 0.02 : 0.045);
+      outline(m, th);
       g.add(m);
     });
     if (g.children.length) MAPG.set(file, g);

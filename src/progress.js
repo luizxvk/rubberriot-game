@@ -33,7 +33,7 @@ function load() {
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
   // meta = set Ouro da Borracha ganho (semana em que a comunidade bateu a meta); st = estatisticas do Perfil
   // lg = XP das armas na hora da progressao nova (04/11): o que ja estava aberto na regra antiga continua aberto
-  return { lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, boost: boostLoad(d.boost), pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
+  return { ws: d.ws && typeof d.ws === 'object' ? d.ws : {}, lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, boost: boostLoad(d.boost), pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
 }
 // fichas de XP em dobro (06/11, pedido dele): n = fichas no Bolso, ms = tempo que falta da ficha ativa (so anda em partida),
 // mo = meses em que o Elite ja recebeu as 6 do mes, pg = niveis do Pass que ja pagaram a ficha extra
@@ -65,6 +65,9 @@ export const metaOwned = () => !!data.meta || !!data.unlockAll;
 export function grantMeta(week) { if (data.meta) return false; data.meta = { week, at: Date.now() }; save(); return true; }
 
 // estatisticas do Perfil (31/10): soma (statAdd) e recorde (statMax)
+// estatistica de cada arma (08/11, pedido dele), por modelo: k abates, hk de cabeca, d mortes com ela na mao, s tiros, h tiros que acertaram, dmg dano
+export function wpnTrack(w, body, patch) { const key = keyOf(w, body); if (!key) return; const e = ((data.ws ||= {})[key] ||= {}); for (const k in patch) if (patch[k]) e[k] = (e[k] || 0) + patch[k]; save(); }
+export const wpnTracked = (w, body) => ({ ...(data.ws?.[keyOf(w, body)] || {}), xp: data.wpn[keyOf(w, body)] || 0 });
 export function statAdd(k, n = 1) { if (!n) return; data.st[k] = (data.st[k] || 0) + n; save(); }
 export function statMax(k, v) { if (v > (data.st[k] || 0)) { data.st[k] = v; save(); } }
 export function stats() {
@@ -178,6 +181,7 @@ export const passHasDance = (id) => { const i = PASS.findIndex(x => x.k === 'dan
 const freeHas = (test) => Object.entries(PASS_FREE).some(([n, p]) => test(p) && passTrack() >= +n);
 export const passHasBanner = (id) => { const i = PASS.findIndex(x => x.k === 'banner' && x.id === id); return !!data.unlockAll || (i >= 0 && passLevel() > i) || freeHas(p => p.k === 'banner' && p.id === id); };
 export const passHasLook = (slot, id) => { const i = PASS.findIndex(x => x.k === 'look' && x.slot === slot && x.id === id); return !!data.unlockAll || (i >= 0 && passLevel() > i) || freeHas(p => p.k === 'look' && p.slot === slot && p.id === id); };
+export const passHasStamp = (id) => !!data.unlockAll || freeHas(p => p.k === 'stamp' && p.id === id);
 export function camoUnlocked(wpn, camo) {
   if (camo.acct) return !!data.unlockAll || !!rovexMe; // so de quem tem conta Rovex: nem presente, nem desafio, nem Loja
   if (camo.pass) return !!data.unlockAll || passLevel() >= camo.pass; // so do Rovex Pass

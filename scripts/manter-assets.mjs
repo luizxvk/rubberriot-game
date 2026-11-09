@@ -4,7 +4,7 @@
 // guarda os desta build pra proxima vez. Fica sempre a build atual + a anterior no ar (site e Rovex).
 import { readdirSync, copyFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-const dist = resolve('dist/assets');
+const dist = resolve((process.env.RR_DIST || 'dist') + '/assets'); // RR_DIST: build em outra pasta
 const keep = resolve('.assets-anteriores');
 if (!existsSync(dist)) { console.error('sem dist/assets: rode vite build'); process.exit(1); }
 const atuais = readdirSync(dist); // o vite limpa o dist: aqui so tem a build nova

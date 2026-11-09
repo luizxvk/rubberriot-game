@@ -8,7 +8,7 @@ import { cleanLook, DANCE_IDS } from './looks.js';
 // fim da partida em segundos: 0,9 + camera final ~3,5 + podio ~14 (3 s da camera chegando); sala sem lobby ainda mostra OVER_STATS de placar
 export const OVER_STATS = 8.5, OVER_LOBBY = 18.5, OVER_NEXT = OVER_LOBBY + OVER_STATS;
 import { bannerOk, botBanner, BANNER_DEFAULT } from './banners.js';
-import { fieldReset, fieldUse, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
+import { fieldReset, fieldUse, fieldHoleUsed, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
 import { escInit, escTick, escSpawn, escGoal, escSnap, escPos, escTimeout, trainBox } from './escort.js';
 import { EVENTS, EV } from './events.js';
 import { carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, heistPass, heistBotPass, heistCfg, HEIST_MAPS } from './heist.js';
@@ -816,6 +816,7 @@ export class Core {
         break;
       }
       case 'field': fieldUse(this, p, m); break;
+      case 'holeUse': fieldHoleUsed(this, p, m); break;
       case 'respawn': {
         if (!p.alive && p.respawnT <= 0) p.wantSpawn = true;
         break;
@@ -1483,6 +1484,9 @@ export class Core {
     if (this.bor) return; // Noite dos Borroes (PvE): sem sequencias (pedido dele 03/11)
     const i = p.ready.indexOf(kind);
     if (i < 0) return;
+    // 09/11 (pedido dele, contra flood): 1 s entre uma chamada e a proxima do mesmo jogador
+    if ((this.clock || 0) - (p.streakCallAt ?? -99) < STREAK_CALL_GAP) { if (!p.bot) this.send(p.id, { t: 'ev', k: 'streakWait', kind: 'gap', n: 1 }); return; }
+    p.streakCallAt = this.clock || 0;
     if (kind === 'uav') {
       p.ready.splice(i, 1);
       const mine = this.uavs.find(u => (this.cfg.teams ? u.team === p.team : u.owner === p.id) && this.players.has(u.owner));
@@ -2464,7 +2468,7 @@ function cleanLoadouts(los) {
     const l = los[w];
     if (!l || typeof l !== 'object') continue;
     const o = {};
-    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'ret', 'retColor', 'camo', 'bp', 'ammo', 'conv']) {
+    for (const k of ['body', 'scope', 'charger', 'handle', 'laser', 'tracer', 'paint', 'accent', 'pat', 'pat2', 'ret', 'retColor', 'camo', 'bp', 'ammo', 'conv']) {
       const v = l[k];
       o[k] = typeof v === 'string' && v.length <= 24 && /^[#\w-]+$/.test(v) ? v : null;
     }
@@ -2479,6 +2483,7 @@ function cleanLoadouts(los) {
 }
 
 const COUNTDOWN = 5;
+const STREAK_CALL_GAP = 1; // segundos entre duas chamadas de sequencia do mesmo jogador
 const MV_TIME = 20, MV_CD = 20; // votacao pra alterar a partida: tempo pra responder e espera depois de uma recusa
 const COUNT_IN = 3.5;   // contagem 3, 2, 1 antes de soltar todo mundo
 const LOAD_WAIT = 15;   // espera maxima pelo carregamento do mais lento

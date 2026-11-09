@@ -13,6 +13,8 @@ import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
 import { tpSqueeze } from './tpfx.js';
 import { holeExit } from '../shared/field.js';
+import { tracerOf } from './tracerfx.js';
+import { wpnTrack } from './progress.js';
 import { LASER_BODY } from './world.js';
 import { t } from './i18n.js';
 import { isTouch } from './input.js';
@@ -657,8 +659,9 @@ export class Player {
     for (const h of F.holes) {
       const A = [h[1], h[2], h[3]];
       if ((this.pos[0] - A[0]) ** 2 + (this.pos[2] - A[2]) ** 2 >= 0.8 || Math.abs(this.pos[1] - A[1]) >= 0.6) continue;
-      const to = holeExit(g.M, A), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw); // 08/11 (pedido dele): cada entrada joga num ponto aleatorio em raio medio
+      const to = h.length > 7 ? [h[5], h[6], h[7]] : holeExit(g.M, A), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw); // 08/11 (pedido dele): cada entrada joga num ponto aleatorio em raio medio; 09/11: a saida vem do servidor e fica desenhada no chao
       if (!to) continue;
+      g.net.send({ t: 'holeUse', id: h[0] }); // o servidor sorteia a proxima saida
       g.fx.puff([this.pos[0], this.pos[1] + 0.5, this.pos[2]], 6, 0.6, 0x141210, 0.5);
       audio.play('hole', { vol: 0.7 }); this.holeCd = 1.5;
       tpSqueeze(() => { // 08/11 (pedido dele): muda de lugar com a tela fechada; abre ja no outro buraco
@@ -795,7 +798,7 @@ export class Player {
         const fall = slug ? Math.max(0.55, 1 - hit.dist / 110) * (W.pellets || 1) * AMMO.slug.slugK : this.wpn === 'shotgun' || st.pellets ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'pistol' && this.lo(this.wpn)?.handle === 'akimbo' ? Math.max(0.7, 1 - hit.dist / 140) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
         if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
-      if (i < (this.wpn === 'shotgun' || st.pellets ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : this.lo(this.wpn)?.tracer || 'chalk', this.wpn); // uma bala por tiro (escopeta: os chumbos)
+      if (i < (this.wpn === 'shotgun' || st.pellets ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : tracerOf(this.lo(this.wpn)), this.wpn); // uma bala por tiro (escopeta: os chumbos)
     }
     // carro inimigo no caminho (04/11): lataria leva o tiro (o servidor confere e explode)
     if (!victim && g.snap?.cars) {
@@ -859,8 +862,9 @@ export class Player {
         }
       }
     }
+    if (!g.tutorial && !g.range) wpnTrack(this.wpn, this.lo(this.wpn)?.body, { s: 1, h: victim ? 1 : 0 }); // precisao da arma no Arsenal
     g.net.send({ t: 'shot', o: muzzleWorld.toArray(), e: firstEnd, wpn: this.wpn });
-    g.replay?.shot(performance.now() / 1000, { id: g.myId, o: muzzleWorld.toArray(), e: firstEnd, tracer: this.lo(this.wpn)?.tracer || 'chalk', wpn: this.wpn, snd: audio.gunSound(this.lo(this.wpn)?.body, this.wpn) }); // a camera final repassa os meus tiros tambem
+    g.replay?.shot(performance.now() / 1000, { id: g.myId, o: muzzleWorld.toArray(), e: firstEnd, tracer: tracerOf(this.lo(this.wpn)), wpn: this.wpn, snd: audio.gunSound(this.lo(this.wpn)?.body, this.wpn) }); // a camera final repassa os meus tiros tambem
   }
 
   // escalada: procura a borda na frente (topo entre 0,5 e 2,4 m do pe), com lugar pra ficar em pe la em cima

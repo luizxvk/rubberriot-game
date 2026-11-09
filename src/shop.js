@@ -34,6 +34,7 @@ const ICON = {
   ret: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   camo: 'M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
   hat: 'M7 3h10v10H7zM3 14h18v3.5H3z',
+  stamp: 'M18 4V3c0-.55-.45-1-1-1H5c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V6h1v4H9v11c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-9h8V4h-3z',
   banner: 'M3 6h18v12H3zM6 9v6h7V9z', charm: 'M7 11c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5c0-.9-.24-1.75-.66-2.48L18 6.83V9h2V3h-6v2h2.17l-6.65 6.66A4.96 4.96 0 0 0 7 11zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z', face: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM8.5 8a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM12 18c-2.3 0-4.3-1.5-5-3.5h10c-.7 2-2.7 3.5-5 3.5z', death: 'M12 2C7 2 3 5.6 3 10c0 2.8 1.6 5.2 4 6.6V20c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2v-3.4c2.4-1.4 4-3.8 4-6.6 0-4.4-4-8-9-8zM8.5 12a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm7 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4z',
   dance: 'M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7',
   skin: 'M12 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z',
@@ -49,6 +50,7 @@ export function itemName(id) {
   const [slot, v] = gives(id)[0];
   if (slot === 'dance') return t('dn_' + v);
   if (slot === 'banner') return t('bn_' + v);
+  if (slot === 'stamp') return t('stamp_' + v);
   return slot === 'camo' ? t('camo_' + v) : slot === 'wskin' ? t('ws_' + v) : slot === 'ret' ? t('ret_' + v) : t('lk_' + slot + '_' + v);
 }
 const itemDesc = (id) => { const it = SHOP_ITEMS[id]; return it.kind === 'bundle' ? t('sid_' + id) : t(it.react ? 'shd_react' : 'shd_' + it.kind); }; // shd_camo / shd_skin / shd_hat
@@ -75,10 +77,11 @@ function stage() {
 const WPN = 'rifle';
 // monta o que o item mostra (03/11): so camo = a arma sozinha; skin = o boneco PADRAO so com a skin (nada do que o
 // jogador veste), sem arma, na pose de vitrine; pacote = o boneco com a skin e a arma com a camo flutuando do lado
-function gunModel(camo, ws = null) {
+function gunModel(camo, ws = null, stamp = null) {
   const W = ws && WSKINS[ws], wpn = W ? W.wpn : WPN;
   const lo = W ? { body: W.of, ws, scope: null, laser: null } : { ...(getLoadouts()[WPN] || {}), scope: null, laser: null }; // so na Loja: arma limpa, sem mira red dot nem laser (pedido dele)
   if (camo) lo.camo = camo;
+  if (stamp) Object.assign(lo, { camo: null, pat: stamp, pat2: stamp, paint: '#2f5b8a', accent: '#d9822b' }); // vitrine da estampa: na Pintura e no Destaque
   const gun = buildGun(wpn, lo);
   const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();
   const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
@@ -120,6 +123,7 @@ function pieceModel(slot, v) { // uma peca so: camo = a arma; skin/chapeu = o bo
   if (slot === 'charm') { const g = gunModel(null); attachCharm(g.holder.children[0], v, 1); return { obj: g.holder, gun: true, r: g.r }; }
   if (slot === 'ret') return retModel(v);
   if (slot === 'camo') { const g = gunModel(v); return { obj: g.holder, gun: true, r: g.r }; }
+  if (slot === 'stamp') { const g = gunModel(null, null, v); return { obj: g.holder, gun: true, r: g.r }; }
   if (slot === 'bp') { // variante montada (Mercado Negro, 08/11). Foto antes do pacote de armas chegar saia com OUTRO corpo (provisorio): espera e remonta
     const h = new THREE.Group(), m = { obj: h, gun: true, r: 0.5 };
     const put = () => { h.clear(); const gun = buildGun(BLUEPRINTS[v].wpn, bpLoadout(v)); const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent(); const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()); gun.position.sub(c); h.add(gun); m.fitLen = Math.max(sz.x, sz.z) * 0.5; m.fitH = sz.y * 0.5; m.r = sz.length() * 0.5; }; // esfera que envolve a caixa inteira (com o maior lado so a pistola saia rente a borda)
@@ -386,7 +390,7 @@ function openItem(id, from) {
   $('shopPopDesc').textContent = itemDesc(id);
   // pills do que vem na compra (item unico = 1; pacote = cada peca), cada uma com o tipo
   $('shopPopGives').setAttribute('aria-label', t('shopIncl'));
-  $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill ${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'banner' ? t('bn_' + v) : s === 'dance' ? t('dn_' + v) : s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
+  $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill ${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'stamp' ? t('stamp_' + v) : s === 'banner' ? t('bn_' + v) : s === 'dance' ? t('dn_' + v) : s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
   $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : coin + fmt(price(id));
   $('shopBuy').textContent = t(mine ? 'shopOwned' : canRedeem(id) ? 'shopRedeem' : 'shopBuy');
   $('shopBuy').disabled = mine;

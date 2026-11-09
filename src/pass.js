@@ -9,6 +9,7 @@ export const passDaysLeft = (now = Date.now()) => Math.ceil((PASS_ENDS - now) / 
 export const PASS_PER = 1200;
 const L = (slot, id) => ({ k: 'look', slot, id });
 const B = (id) => ({ k: 'banner', id });
+const S = (id) => ({ k: 'stamp', id });
 export const PASS = [
   { k: 'camo', id: 'ps_jornal' }, { k: 'ret', id: 'pink' }, { k: 'camo', id: 'ps_zebra' }, { k: 'ret', id: 'cyan' },
   { k: 'camo', id: 'ps_circo' }, { k: 'ret', id: 'violet' }, { k: 'camo', id: 'ps_filme' }, { k: 'ret', id: 'lime' },
@@ -26,6 +27,8 @@ export const PASS_MAX = PASS.length;
 export const PASS_FREE = {
   5: L('face', 'curativo'), 10: L('charm', 'bilhete'), 15: B('bilheteria'), 20: L('shirt', '#7b5a2f'), 25: L('face', 'bigodinho'),
   30: L('gloveCol', '#bfb6a6'), 35: L('charm', 'estatueta'), 40: B('fila'), 45: L('face', 'sardas'), 50: L('death', 'tabua'),
+  // estampas de pintura (09/11, pedido dele): nos niveis que estavam vazios, pra nao trocar premio de temporada em andamento
+  3: S('raios'), 8: S('alvo'), 13: S('zigue'), 18: S('mare'), 23: S('losangos'), 28: S('espiral'), 33: S('divisas'), 38: S('bolhas'), 43: S('escamas'), 48: S('catavento'),
 };
 // cor de reticula -> nivel do Pass que abre
 export const RET_PASS = Object.fromEntries(PASS.flatMap((p, i) => (p.k === 'ret' ? [[p.id, i + 1]] : [])));

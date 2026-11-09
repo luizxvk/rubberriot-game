@@ -13,12 +13,13 @@ for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)
 MAT = bpy.data.materials.new('body')
 N_RING = 18
 
-def ring(cx, cy, cz, hw, hd, n=3.2):  # contorno superelipse (canto bem redondo); gl -> blender: (x, -z, y)
+def ring(cx, cy, cz, hw, hd, n=3.2, axis='y', ny=0.0, nz=1.0):  # contorno superelipse (canto bem redondo); gl -> blender: (x, -z, y). axis 'x' = pente de lado (09/11)
     pts = []
     for i in range(N_RING):
         a = i / N_RING * math.tau
         c, s = math.cos(a), math.sin(a)
-        pts.append((cx + hw * math.copysign(abs(c) ** (2 / n), c), -(cz + hd * math.copysign(abs(s) ** (2 / n), s)), cy))
+        u, v = hw * math.copysign(abs(c) ** (2 / n), c), hd * math.copysign(abs(s) ** (2 / n), s)
+        pts.append((cx, -(cz + v), cy + u) if axis == 'x' else (cx + u, -(cz + v * nz), cy + v * ny))  # 09/11: anel de lado com a inclinacao do pente
     return pts
 
 def center(M, t):  # linha central do original (t = 0 boca, 1 fundo do original; passa de 1 no pente longo seguindo a tangente)
@@ -27,8 +28,8 @@ def center(M, t):  # linha central do original (t = 0 boca, 1 fundo do original;
         a, b, c = (1 - t) ** 2, 2 * t * (1 - t), t * t
         ctrl = [2 * t1[k] - 0.5 * (t0[k] + t2[k]) for k in range(3)]
         return [a * t0[k] + b * ctrl[k] + c * t2[k] for k in range(3)]
-    d = [t2[k] - t1[k] for k in range(3)]
-    return [t2[k] + d[k] * (t - 1) * 2 for k in range(3)]
+    d = [3 * t2[k] - 4 * t1[k] + t0[k] for k in range(3)]  # 09/11: tangente real da curva em t=1 (a antiga fazia uma dobra na malha)
+    return [t2[k] + d[k] * (t - 1) for k in range(3)]
 
 # 6 modelos por arma, todos nascem da linha central e da boca do pente ORIGINAL daquela arma (mags-input.json):
 # 1 curto, 2 estendido com frisos, 3 sapata (base larga e reforcada), 4 garrafa (barriga no meio), 5 costelado (frisos fundos), 6 cunha (afunila pra baixo, bem longo)
@@ -64,7 +65,13 @@ def build(body, M, kind):
         if 0.86 <= s < 0.9: k = (1 + (taper - 1) * s)
         kw, kd = k, k
         if S.get('shoe') and s >= 0.86: kw, kd = k * 1.0, k * 1.08  # sapata: mais funda que larga, pra nao bater no cabo
-        vs = [bm.verts.new(p) for p in ring(c[0], c[1], c[2], hw0 * kw, hd0 * kd, S['n'])]
+        # 09/11 (print dele: precisa de pente angulado): o anel fica perpendicular a linha do pente, igual ao original
+        a0, b0 = center(M, max(0, s * span - 0.02)), center(M, s * span + 0.02)
+        ty, tz = b0[1] - a0[1], b0[2] - a0[2]; L = math.hypot(ty, tz) or 1.0
+        ny, nz = -tz / L, ty / L
+        if nz < 0: ny, nz = -ny, -nz
+        if M.get('axis', 'y') == 'x': ny, nz = 0.0, 1.0
+        vs = [bm.verts.new(p) for p in ring(c[0], c[1], c[2], hw0 * kw, hd0 * kd * max(0.6, nz), S['n'], M.get('axis', 'y'), ny, nz)]
         if prev:
             for i in range(N_RING): bm.faces.new((prev[i], prev[(i + 1) % N_RING], vs[(i + 1) % N_RING], vs[i]))
         else: first = vs
@@ -77,9 +84,40 @@ def build(body, M, kind):
     o = bpy.data.objects.new(me.name, me); bpy.context.scene.collection.objects.link(o)
     return o
 
+# tambor de 40 da Pipoqueira (09/11, pedido dele): gargalo que entra no poco do original + tambor redondo deitado, uma malha so
+def drum(M):
+    bm = bmesh.new()
+    t, b = M['top'], M['bot']
+    r, half = M['w'] * 1.9, M['w'] * 0.62
+    cy, cz, cx = b[1] - r * 0.72, b[2] + M['d'] * 0.08, t[0]
+    neck = [(t[0], t[1], t[2]), (b[0], (b[1] + cy) / 2, (t[2] + cz) / 2), (cx, cy, cz)]
+    prev = first = None
+    for c in neck:
+        vs = [bm.verts.new(p) for p in ring(c[0], c[1], c[2], M['w'] * 0.46, M['d'] * 0.46, 3.0)]
+        if prev:
+            for i in range(N_RING): bm.faces.new((prev[i], prev[(i + 1) % N_RING], vs[(i + 1) % N_RING], vs[i]))
+        else: first = vs
+        prev = vs
+    bm.faces.new(list(reversed(first))); bm.faces.new(prev)
+    SEG = 28
+    prof = [(-half, 0.0), (-half, 0.5), (-half * 0.86, 0.56), (-half * 0.86, 0.84), (-half, 0.9), (-half * 0.94, 1.0), (half * 0.94, 1.0), (half, 0.9), (half * 0.86, 0.84), (half * 0.86, 0.56), (half, 0.5), (half, 0.0)]
+    rings = []
+    for x, k in prof[1:-1]:
+        rings.append([bm.verts.new((cx + x, -(cz + r * k * math.sin(i / SEG * math.tau)), cy + r * k * math.cos(i / SEG * math.tau))) for i in range(SEG)])
+    for a, b2 in zip(rings, rings[1:]):
+        for i in range(SEG): bm.faces.new((a[i], a[(i + 1) % SEG], b2[(i + 1) % SEG], b2[i]))
+    c0, c1 = bm.verts.new((cx - half, -cz, cy)), bm.verts.new((cx + half, -cz, cy))
+    for i in range(SEG):
+        bm.faces.new((c0, rings[0][(i + 1) % SEG], rings[0][i])); bm.faces.new((c1, rings[-1][i], rings[-1][(i + 1) % SEG]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new('pdrum'); bm.to_mesh(me); bm.free(); me.materials.append(MAT)
+    for p in me.polygons: p.use_smooth = True
+    bpy.context.scene.collection.objects.link(bpy.data.objects.new('pdrum', me))
+
 n = 0
 for body, M in DATA.items():
     for kd in STYLES: build(body, M, kd); n += 1
+if 'pistol_2' in DATA: drum(DATA['pistol_2'])
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', export_apply=True, export_yup=True)
 print('PENTES', n, os.path.getsize(OUT))

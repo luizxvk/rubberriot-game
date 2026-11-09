@@ -3,6 +3,7 @@ import { BM_IDS } from '../shared/blackmarket.js';
 import { LETHALS, TACTICALS, NADES } from '../shared/weapons.js';
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
 import { STREAK_SVG, NADE_SVG } from './hud.js';
+import { openHudScale } from './hudscale.js';
 import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
 // variante do jogador vale SO no modelo em que foi salva (02/11: aparecia em todas as armas da categoria).
 // Devolve a variante equipada nesta montagem, ou null se ela e de outro modelo / foi apagada
@@ -24,7 +25,7 @@ import { renderAllBal } from './zbal.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
-import { masteryInfo, stats as pStats } from './progress.js';
+import { masteryInfo, stats as pStats , wpnTracked } from './progress.js';
 import { BANNERS } from '../shared/banners.js';
 import { DANCE_IDS, DANCE_INFO } from '../shared/looks.js';
 import { DANCES } from './dances.js';
@@ -40,7 +41,8 @@ import { syncOpen, isNew, anyNew, markSeen, newPill } from './newstuff.js';
 import { TIERS, badgeSvg, myTier, peakTier, tierOf as tierFor } from './rank.js';
 import { prizePreview } from './shop.js';
 import { rankData } from './progress.js';
-import { sightIsBig, RET_ROW_SHORT, RET_ROW_LONG, cantedFits, isSaber, RET_PATH, retOwned, retColorOwned, handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits, wsOwned, wsFor } from './arsenal.js';
+import { STAMPS, stampThumb } from './stamps.js';
+import { stampOpen, sightIsBig, RET_ROW_SHORT, RET_ROW_LONG, cantedFits, isSaber, RET_PATH, retOwned, retColorOwned, handleFits, convOptions, muzzleOptions, ironOptions, IRONS, freeScope, CATEGORY, LASERS, RETICLES, RET_COLORS, unlockedLoadout, chargerOptions, partEffects, partName, buildGun, getLoadouts, saveLoadouts, loadoutStats, defaultLoadout, nativePart, arsenalReady, bpLoadout, scopeFits, wsOwned, wsFor } from './arsenal.js';
 
 const $ = (id) => document.getElementById(id);
 // mira (crosshair): formatos e cores; o mesmo desenho vale pra previa dos ajustes e pra partida
@@ -239,6 +241,7 @@ export function initMenus(o) {
     ['seg', 'draw', 's_draw', [['near', 'draw_near'], ['mid', 'draw_mid'], ['far', 'draw_far']]], // 07/11: voltou (pedido dele), com nevoa
     ['seg', 'aa', 's_aa', [['off', 'aa_off'], ['2x', 'aa_2'], ['4x', 'aa_4'], ['8x', 'aa_8']]], // antisserrilhado (07/11, pedido dele): menos = mais leve
     ['toggle', 'invertY', 's_invert'],
+    ['seg', 'adsMode', 's_adsMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]], // 09/11 (pedido dele): segurar pra mirar ou alternar
     ['toggle', 'holdCrouch', 's_hold'],
     ['seg', 'leanMode', 's_leanMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]],
     ['seg', 'hudMode', 's_hudMode', [['simple', 'hm_simple'], ['full', 'hm_full']]],
@@ -248,6 +251,7 @@ export function initMenus(o) {
     ['toggle', 'autoReload', 's_autoReload'],
     ['toggle', 'modeTips', 's_modeTips'], // 07/11: dicas do modo na partida // 07/11 (pedido dele): pente acabou, recarrega sozinho
     ['toggle', 'autoChute', 's_autoChute'],
+    ['hudscale'],
     ['xhair'],
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
@@ -267,20 +271,21 @@ export function initMenus(o) {
     ['seg', 'padSmooth', 's_padSmooth', [['off', 'ms_off'], ['low', 'ms_low'], ['high', 'ms_high']]],
     ['range', 'padAccel', 's_padAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%']);
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
-  const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: isTouch ? 'touch' : 'pad', touchSens: 'touch', touchAdsSens: 'touch', holdCrouch: 'ctrl', leanMode: 'ctrl', autoSprint: 'ctrl', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
-    autoFire: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'game', autoReload: 'game', modeTips: 'game',
+  const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
+    autoFire: 'play', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', modeTips: 'game',
     fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
-  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
+  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
   const padOn = () => [...(navigator.getGamepads?.() || [])].some(Boolean);
-  const TABS = isTouch ? ['touch', ...(padOn() ? ['pad'] : []), 'video', 'audio', 'game'] : ['ctrl', 'pad', 'video', 'audio', 'game'];
+  const TABS = isTouch ? ['touch', ...(padOn() ? ['pad'] : []), 'play', 'video', 'audio', 'game'] : ['ctrl', 'pad', 'play', 'video', 'audio', 'game']; // play: Jogabilidade (09/11, pedido dele)
   let setTab = TABS[0];
   const sl = $('settingsList');
   S.lang = getLang();
   S.unlockAll = progressInfo().unlockAll;
   const buildSettings = () => { sl.innerHTML = `<nav class="set-tabs" role="tablist">${TABS.map(g => `<button role="tab" data-sg="${g}" aria-selected="${g === setTab}">${t('sg_' + g)}</button>`).join('')}</nav><div class="set-body">` + defs.filter(d => grp(d) === setTab).map(d => {
     if (d[0] === 'range') return `<label class="field"><span>${t(d[2])} <b data-out="${d[1]}"></b></span><input type="range" data-k="${d[1]}" min="${d[3]}" max="${d[4]}" step="${d[5]}"></label>`;
+    if (d[0] === 'hudscale') return `<div class="field"><span>${t('s_hudScale')} <b id="hsOut">${Math.round((S.hudScale || 1) * 100)}%</b></span><button type="button" class="hs-open" id="hsOpen">${t('hsPreview')}</button></div>`;
     if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
     if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : t(l)}</button>`).join('')}</div></div>`;
     return `<div class="toggle"><span id="lbl-${d[1]}">${t(d[2])}</span><button class="switch" role="switch" aria-labelledby="lbl-${d[1]}" data-t="${d[1]}"></button></div>`;
@@ -306,6 +311,7 @@ export function initMenus(o) {
   };
   sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); refresh(); o.saveSettings(); });
   sl.addEventListener('click', (e) => {
+    if (e.target.closest('#hsOpen')) { audio.play('ui_click', { ui: true }); openHudScale({ value: S.hudScale || 1, onDone: (k, save) => { if (save) { S.hudScale = k; o.saveSettings(); } const out = sl.querySelector('#hsOut'); if (out) out.textContent = Math.round((S.hudScale || 1) * 100) + '%'; } }); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); const tb = sl.querySelector(`.set-tabs [data-sg="${setTab}"]`); tb?.focus({ preventScroll: true }); tb?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } return; }
     const seg = b.parentElement.dataset.seg;
@@ -323,7 +329,7 @@ export function initMenus(o) {
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee'];
-  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint'];
+  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
   const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', visual: 'slot_visual', canted: 'slot_canted', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
@@ -339,7 +345,11 @@ export function initMenus(o) {
     document.querySelectorAll('[data-mtab]').forEach(b => { b.setAttribute('aria-selected', String(b.dataset.mtab === misTab)); b.onclick = () => { misTab = b.dataset.mtab; audio.play('ui_click', { ui: true }); renderChallenges(); }; });
     $('misPane').hidden = misTab !== 'mis'; $('chPane').hidden = misTab !== 'ch';
   }
+  function drawEliteCh() { // Desafio Elite (09/11): so aparece pra conta que ainda pode ganhar
+    const el = $('eliteChBox'); rovex.eliteDesafio().then(j => { if (!el) return; el.hidden = !j?.elegivel; if (!j?.elegivel) return; el.innerHTML = `<li><div class="ch-txt"><b>${t('ann_t_eliteCh')}</b><small>${t('ech_d')}</small><span class="ch-bar"><i style="width:${Math.round(j.min / j.meta * 100)}%"></i></span></div><div class="ch-side"><em>${j.min}/${j.meta} min</em></div></li>`; });
+  }
   function renderChallenges() {
+    drawEliteCh();
     renderMissions();
     const h = Math.ceil(msToReset() / 3600000);
     $('chReset').textContent = t('chReset', { n: h });
@@ -778,7 +788,7 @@ export function initMenus(o) {
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
       else if (s === 'visual') val = t('lk_charm_' + (getLook().charm || 'none'));
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
-      else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s]}` : t('original');
+      else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s === 'paint' ? 'pat' : 'pat2'] ? t('stamp_' + lo[s === 'paint' ? 'pat' : 'pat2']) : lo[s]}` : lo[s === 'paint' ? 'pat' : 'pat2'] ? t('stamp_' + lo[s === 'paint' ? 'pat' : 'pat2']) : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
       return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew(s === 'visual' ? 'look|charm|' : 'arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
     }).join('');
@@ -850,7 +860,7 @@ export function initMenus(o) {
 
   // cada modelo guarda a propria montagem (pecas, camo, cores, bala, tracado, reticula): trocar de corpo salva a
   // do modelo atual e traz a do novo; modelo nunca montado comeca limpo (antes herdava tudo, ate a camo da variante)
-  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'cv', 'cvName', 'ws']; // cv: a variante do jogador volta junto quando ele volta pro modelo
+  const PER_BODY = ['scope', 'charger', 'handle', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'pat', 'pat2', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'cv', 'cvName', 'ws']; // cv: a variante do jogador volta junto quando ele volta pro modelo
   function stashBody(lo) {
     if (!lo.body) return;
     lo.saved ||= {};
@@ -887,7 +897,7 @@ export function initMenus(o) {
 
   // ---------- variantes do jogador (02/11) ----------
   // campos da montagem que entram na variante (tudo que muda a arma; o 'saved' por modelo nao)
-  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'ws'];
+  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'pat', 'pat2', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'ws'];
   const cvPick = (lo) => Object.fromEntries(CV_KEYS.filter(k => lo[k] != null).map(k => [k, lo[k]]));
   // skins de MODELO da Loja (04/11): aparecem como variante com o nome delas, so no modelo que elas trocam
   function wsHtml(lo) {
@@ -1050,11 +1060,13 @@ export function initMenus(o) {
     }
     if (slot === 'paint' || slot === 'accent') {
       // 07/11 (pedido dele): cores abrem pelo nivel DA ARMA (a padrao, branca, ja vem); cor livre no fim da progressao
-      const cur = lo[slot], wl = progressInfo().unlockAll ? 99 : wpnLevel(cat, lo.body), lvOf = (i) => PAINT_LVL0 + i * PAINT_STEP, freeOk = wl >= PAINT_FREE;
+      const stK = slot === 'paint' ? 'pat' : 'pat2', cur = lo[slot], wl = progressInfo().unlockAll ? 99 : wpnLevel(cat, lo.body), lvOf = (i) => PAINT_LVL0 + i * PAINT_STEP, freeOk = wl >= PAINT_FREE;
       p.innerHTML = `<button class="swatch none ${!cur ? 'on' : ''}" data-c="">${t('original')}</button>` +
         PAINTS.map((c, i) => { const ok = wl >= lvOf(i); return `<button class="swatch ${cur === c ? 'on' : ''} ${ok ? '' : 'locked'}" style="background:${c}" data-c="${c}" ${ok ? '' : `aria-disabled="true" data-lv="${lvOf(i)}" title="${t('skLvl', { n: lvOf(i) })}"`} aria-label="Cor ${c}">${ok ? '' : `<small class="sw-lv">${lvOf(i)}</small>`}</button>`; }).join('') +
-        `<label class="swatch none ${freeOk ? '' : 'locked'}" title="${freeOk ? 'Cor livre' : t('skLvl', { n: PAINT_FREE })}" style="display:grid;place-items:center">${freeOk ? t('free') : t('skLvl', { n: PAINT_FREE })}<input type="color" value="${cur || '#5f8f3a'}" ${freeOk ? '' : 'disabled'}></label>`;
-      p.querySelectorAll('button.swatch').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; } setPart(slot, b.dataset.c || null); });
+        `<label class="swatch none ${freeOk ? '' : 'locked'}" title="${freeOk ? 'Cor livre' : t('skLvl', { n: PAINT_FREE })}" style="display:grid;place-items:center">${freeOk ? t('free') : t('skLvl', { n: PAINT_FREE })}<input type="color" value="${cur || '#5f8f3a'}" ${freeOk ? '' : 'disabled'}></label>` +
+        `<div class="ret-cols st-cols"><small>${t('stampTitle')}</small><button class="swatch none st-solid ${!lo[stK] ? 'on' : ''}" data-st="">${t('stampNone')}</button>` + STAMPS.map(s => { const open = stampOpen(s.id), peeked = preview?.k === stK && preview.v === s.id; return `<button class="swatch st ${lo[stK] === s.id ? 'on' : ''} ${open ? '' : 'locked'} ${peeked ? 'peek' : ''}" style="background-image:url(${stampThumb(s.id)})" data-st="${s.id}" ${open ? '' : 'aria-disabled="true"'} title="${t('stamp_' + s.id)}${open ? '' : ' (' + t(s.pass ? 'stampPass' : 'stampShop') + ')'}" aria-label="${t('stamp_' + s.id)}"></button>`; }).join('') + '</div>';
+      p.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek(stK, b.dataset.st); return; } setPart(stK, b.dataset.st || null); });
+      p.querySelectorAll('button.swatch:not([data-st])').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; } setPart(slot, b.dataset.c || null); });
       p.querySelector('input[type=color]').onchange = (e) => setPart(slot, e.target.value);
       return;
     }
@@ -1147,8 +1159,10 @@ export function initMenus(o) {
       [t('st_zoom'), st.zoom || W.zoom, base.zoom || W.zoom, 7],
       ...(W.heat ? [[t('st_heat'), W.heat.shots / (st.heatK ?? 1), W.heat.shots / (base.heatK ?? 1), 100]] : []),
     ];
-    $('statBars').classList.toggle('dense', picking || rows.length > 10); // lista aberta ou linha a mais (Metralhadora): compacta, nada de cortar a ultima
-    $('statBars').innerHTML = `<div class="fmrow">${modePill(lo.body)}</div>` + rows.map(([n, v, b, max]) => {
+    $('statBars').classList.toggle('dense', picking || rows.length > 10 || innerHeight < 520); // lista aberta ou linha a mais (Metralhadora): compacta, nada de cortar a ultima
+    const W_S = wpnTracked(cat, lo.body), wsCell = (k, v) => `<li><b>${v}</b><span>${t(k)}</span></li>`, wsN = (n) => Number(n || 0).toLocaleString(getLang() === 'pt' ? 'pt-BR' : 'en-US');
+    const wsHtml = `<ul class="wstats">${wsCell('ws_kills', wsN(W_S.k))}${wsCell('ws_acc', W_S.s ? Math.round(W_S.h / W_S.s * 100) + '%' : '0%')}${wsCell('ws_head', wsN(W_S.hk))}${wsCell('ws_kd', W_S.d ? ((W_S.k || 0) / W_S.d).toFixed(2) : wsN(W_S.k))}${wsCell('ws_dmg', wsN(W_S.dmg))}${wsCell('ws_xp', wsN(W_S.xp))}</ul>`;
+    $('statBars').innerHTML = `<div class="fmrow">${modePill(lo.body)}</div>${wsHtml}` + rows.map(([n, v, b, max]) => {
       const pct = Math.min(100, v / max * 100);
       const d = v - b, rel = b ? d / b : 0;
       const cls = Math.abs(rel) < 0.01 ? '' : rel > 0 ? 'up' : 'down';

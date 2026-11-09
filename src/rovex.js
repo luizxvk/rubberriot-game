@@ -159,6 +159,15 @@ export async function claimGift() {
   } catch { return { code: 'erro' }; }
 }
 // fim de partida: conta o que aconteceu; quem decide o valor e deposita e o servidor (zpCredit em shared/shop.js)
+// Desafio Elite (09/11): progresso e pulso de 1 minuto em partida; quem conta e o servidor
+export async function eliteDesafio() {
+  if (!token() || !me || (import.meta.env.DEV && FAKE)) return null;
+  try { const r = await fetch(API + '/games/rubber-riot/elite-desafio', { headers: { Authorization: 'Bearer ' + token() } }); return r.ok ? await r.json() : null; } catch { return null; }
+}
+export async function elitePulso() {
+  if (!token() || !me || (import.meta.env.DEV && FAKE)) return null;
+  try { const r = await fetch(API + '/games/rubber-riot/elite-desafio/pulso', { method: 'POST', headers: { Authorization: 'Bearer ' + token() } }); return r.ok ? await r.json() : null; } catch { return null; }
+}
 export async function claimZions(won, ch) {
   if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).partida(won, ch));
   if (!token() || !me) return { code: 'login' };

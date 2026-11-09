@@ -13,5 +13,6 @@ const v = (s, d) => (s || d).split(',').map(Number);
 cam.position.set(...v(q.get('c'), '0,30,60')); cam.lookAt(...v(q.get('t'), '0,0,0'));
 // &dd=75|110|160: distancia de desenho do jogo (07/11), com a nevoa do mesmo jeito que o main.js faz
 if (q.get('dd')) { const dd = +q.get('dd'), b = [scene.fog.near, scene.fog.far], ff = Math.min(b[1], dd * 0.94); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.45); cam.far = dd; cam.updateProjectionMatrix(); }
+if (q.get('b')) r.domElement.style.filter = `brightness(${q.get('b')})`; // &b=4: mapa escuro (foto do seletor)
 setTimeout(() => { r.render(scene, cam); document.title = 'pronto'; }, +(q.get('w') || 6) * 1000);
 </script>

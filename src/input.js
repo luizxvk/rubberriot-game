@@ -90,7 +90,7 @@ export class Input {
       if (m) this.slotReq = Number(m[1]) - 1;
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => { this.keys.clear(); this.mouse.fire = this.mouse.ads = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.mouse.fire = this.mouse.ads = false; this.adsLatch = false; });
     // mouse travado: o Chrome no Windows as vezes manda um salto falso enorme (mais no 1o evento depois de
     // travar) e a mira "puxava pro chao do nada". Pula o 1o evento e qualquer salto impossivel num evento so.
     let skipNext = false;
@@ -131,11 +131,14 @@ export class Input {
     let smx = this.mx, smy = this.my;
     if (sm > 1) { smx = 0; smy = 0; for (const [a, b] of this.mHist) { smx += a / this.mHist.length; smy += b / this.mHist.length; } }
     this.mx = this.my = 0;
+    // mirar (09/11, pedido dele): segurar ou alternar. O botao de toque cuida do proprio estado; aqui so teclado, mouse e controle
+    if (E('ads') || (edge('ADS') && pd.ads)) this.adsLatch = !this.adsLatch;
+    const ads = t.ads || (this.settings?.adsMode === 'toggle' ? !!this.adsLatch : A('ads') || !!pd.ads);
     const s = {
       moveX: mx, moveZ: mz,
       lookX: this.lookX + smx, lookY: this.lookY + smy, padLookX: this.padLookX, padLookY: this.padLookY, touchLookX: this.touchLookX, touchLookY: this.touchLookY,
       fire: A('fire') || t.fire || t.fireL || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
-      ads: A('ads') || t.ads || !!pd.ads, adsPressed: E('ads') || edge('ADS'),
+      ads: ads, adsPressed: E('ads') || edge('ADS'),
       sprint: A('sprint') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
       tacPressed: edge('TAC'),
       jumpPressed: E('jump') || edge('JUMP'),
@@ -236,7 +239,7 @@ export function buildTouch(input, root) {
   let fireId = null, fx = 0, fy = 0;
   const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; fx = e.clientX; fy = e.clientY; }, () => { input.touch.fire = false; fireId = null; });
   fire.addEventListener('pointermove', (e) => { if (e.pointerId !== fireId) return; { const dx = (e.clientX - fx) * 1.4, dy = (e.clientY - fy) * 1.4; input.lookX += dx; input.lookY += dy; input.touchLookX += dx; input.touchLookY += dy; } fx = e.clientX; fy = e.clientY; });
-  input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); });
+  input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = input.settings?.adsMode === 'hold' ? true : !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); }, () => { if (input.settings?.adsMode !== 'hold') return; input.touch.ads = false; input.adsBtn?.classList.remove('on'); });
   btn(t('t_jump'), 'jump', at(0, 12, 66), () => input.edges.add('JUMP'));
   btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
   btn(t('t_reload'), 'reload', at(94, 96, 58), () => input.edges.add('RELOAD'));
