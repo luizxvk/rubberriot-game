@@ -86,6 +86,7 @@ export class Pad {
       if (-ly < 0.3) this.sprintLatch = false;
       I.pad = { mx: lx, mz: -ly, fire: now[bi('fire')], ads: now[bi('ads')], sprint: this.sprintLatch, crouchHeld: now[bi('crouch')], board: now[B.SELECT], use: now[bi('reload')], frag: now[bi('frag')], flash: now[bi('flash')], gadget: now[bi('gadget')] };
       for (const [id, ev] of [['fire', 'FIRE'], ['ads', 'ADS'], ['jump', 'JUMP'], ['crouch', 'CROUCH'], ['reload', 'RELOAD'], ['cycle', 'NEXT'], ['frag', 'FRAG'], ['flash', 'FLASH'], ['melee', 'MELEE'], ['streak', 'STREAK'], ['inspect', 'INSPECT'], ['field', 'FIELD'], ['ping', 'PING'], ['gadget', 'GADGET']]) if (down(bi(id))) I.edges.add(ev);
+      if (document.body.classList.contains('mv-voting') && (down(B.LEFT) || down(B.RIGHT))) { I.edges.delete('FIELD'); dispatchEvent(new CustomEvent('mv-pad', { detail: down(B.LEFT) })); } // votar a alteracao da partida (08/11)
       if (down(B.START)) I.edges.add('Escape');
     } else {
       if (document.body.classList.contains('binding')) { this.prev = now; return; } // tela de comandos esperando um botao

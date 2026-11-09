@@ -19,6 +19,8 @@ function holeMesh() {
   // buraco de desenho animado: disco preto achatado com borda de tinta e um redemoinho claro girando
   HOLE ||= {
     disc: new THREE.CircleGeometry(0.95, 28), rim: new THREE.RingGeometry(0.95, 1.08, 28), swirl: new THREE.RingGeometry(0.25, 0.32, 20, 1, 0, Math.PI * 1.3),
+    glow: new THREE.RingGeometry(1.08, 1.34, 32), pulse: new THREE.RingGeometry(0.92, 1.0, 32), beam: new THREE.CylinderGeometry(0.34, 1.0, 3.4, 20, 1, true).translate(0, 1.7, 0),
+    glowM: new THREE.MeshBasicMaterial({ color: 0xf2c94c, side: THREE.DoubleSide }), pulseM: new THREE.MeshBasicMaterial({ color: 0xf2c94c, side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), beamM: new THREE.MeshBasicMaterial({ color: 0xf2c94c, side: THREE.DoubleSide, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending }),
     discM: new THREE.MeshBasicMaterial({ color: 0x0b0a09 }), rimM: new THREE.MeshBasicMaterial({ color: PAL.ink, side: THREE.DoubleSide }), swirlM: new THREE.MeshBasicMaterial({ color: PAL.paper, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }),
   };
   const g = new THREE.Group();
@@ -28,7 +30,11 @@ function holeMesh() {
   rim.rotation.x = -Math.PI / 2; rim.scale.set(1, 0.75, 1); rim.position.y = 0.045; g.add(rim);
   const swirl = new THREE.Mesh(HOLE.swirl, HOLE.swirlM);
   swirl.rotation.x = -Math.PI / 2; swirl.position.y = 0.05; g.add(swirl);
-  g.userData = { swirl };
+  // 08/11 (pedido dele: o buraco preto sumia no chao): aro amarelo, onda saindo e coluna de luz pra achar de longe
+  const glow = new THREE.Mesh(HOLE.glow, HOLE.glowM); glow.rotation.x = -Math.PI / 2; glow.scale.set(1, 0.75, 1); glow.position.y = 0.045; g.add(glow);
+  const pulse = new THREE.Mesh(HOLE.pulse, HOLE.pulseM); pulse.rotation.x = -Math.PI / 2; pulse.position.y = 0.09; g.add(pulse);
+  const beam = new THREE.Mesh(HOLE.beam, HOLE.beamM); beam.scale.set(1, 1, 0.75); g.add(beam);
+  g.userData = { swirl, pulse };
   return g;
 }
 export function umbrellaMesh() {
@@ -59,15 +65,15 @@ export class FieldView {
       for (const [id, m] of map) if (!seen.has(id)) { this.root.remove(m); map.delete(id); }
     };
     sync(this.springs, F?.springs, springMesh, (m, s) => m.position.set(s[1], s[2], s[3]));
-    sync(this.holes, F?.holes, () => { const g = new THREE.Group(); g.add(holeMesh()); const b = holeMesh(); g.add(b); return g; },
-      (m, h) => { m.children[0].position.set(h[1], h[2], h[3]); m.children[1].position.set(h[4], h[5], h[6]); });
+    sync(this.holes, F?.holes, () => { const g = new THREE.Group(); g.add(holeMesh()); return g; }, (m, h) => m.children[0].position.set(h[1], h[2], h[3]));
     for (const [id, m] of this.springs) {
       // mola respira e da um salto quando alguem pisa
       let b = this.boing.get(id) || 0; if (b > 0) { b -= dt; this.boing.set(id, b); }
       const s = 1 + Math.sin(t * 4) * 0.04 + (b > 0 ? Math.sin(b * 30) * b * 0.8 : 0);
       m.userData.coil.scale.y = s; m.userData.top.position.y = 0.8 * s;
     }
-    for (const m of this.holes.values()) for (const h of m.children) h.userData.swirl.rotation.z = -t * 3;
+    for (const m of this.holes.values()) for (const h of m.children) { h.userData.swirl.rotation.z = -t * 3; const k = (t * 0.9) % 1; h.userData.pulse.scale.set(1 + k * 1.1, (1 + k * 1.1) * 0.75, 1); }
+    if (HOLE && this.holes.size) { HOLE.pulseM.opacity = 1 - (t * 0.9) % 1; HOLE.beamM.opacity = 0.18 + Math.sin(t * 4) * 0.05; }
     // guarda-chuva aberto nos outros: preso na frente do personagem
     const on = new Set();
     for (const p of snap?.players || []) {

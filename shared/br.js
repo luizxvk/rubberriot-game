@@ -49,7 +49,7 @@ function lootGun() {
   return 'pistol';
 }
 // variante de elite sorteada (caixote do dirigivel)
-function randomBp() { const ids = Object.keys(BLUEPRINTS); return ids[Math.floor(Math.random() * ids.length)]; }
+function randomBp() { const ids = Object.keys(BLUEPRINTS).filter(id => !BLUEPRINTS[id].bm); return ids[Math.floor(Math.random() * ids.length)]; }
 // larga a arma no chao levando a variante junto (se era variante)
 function dropGun(c, p, wpn, pos) {
   const bp = p.brBp?.[wpn] || null, body = p.brGun?.[wpn];

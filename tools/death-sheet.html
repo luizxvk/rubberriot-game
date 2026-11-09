@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>mortes</title><style>body{margin:0;background:#dcd7cb}</style>
+<script type="module">
+// folha das mortes (08/11): ?death=caixao&t=0.1,0.4,... quadros da animacao lado a lado (de 3/4 e de frente)
+import * as THREE from 'three';
+import { Character } from '../src/character.js';
+const q = new URLSearchParams(location.search), id = q.get('death') || 'caixao', ts = (q.get('t') || '0.1,0.3,0.5,0.7,0.9,1.2,1.5,1.8,2.1').split(',').map(Number);
+const W = 220, H = 300, r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(W * ts.length, H); r.setClearColor(0xdcd7cb); document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(2, 3, -3); sc.add(dl);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshLambertMaterial({ color: 0xbdb6a6 })); floor.rotation.x = -Math.PI / 2; sc.add(floor);
+r.setScissorTest(true);
+ts.forEach((T, i) => {
+  const ch = new Character('red', '', { death: id }); sc.add(ch.root);
+  for (let k = 0; k < 20; k++) ch.update(0.016, { anim: 'idle', alive: true, speed: 0, t: k * 0.016, pitch: 0 });
+  const n = Math.round(T / 0.016); for (let k = 0; k < n; k++) ch.update(0.016, { anim: 'idle', alive: false, speed: 0, t: 1 + k * 0.016, pitch: 0 });
+  const a = 0.75, cam = new THREE.PerspectiveCamera(34, W / H, 0.1, 80); cam.position.set(Math.sin(a) * -6.5, 2.6, -Math.cos(a) * 6.5); cam.lookAt(0, 1.2, 0);
+  r.setViewport(i * W, 0, W, H); r.setScissor(i * W, 0, W, H); r.render(sc, cam); sc.remove(ch.root);
+});
+document.title = 'pronto';
+</script>

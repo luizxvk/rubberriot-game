@@ -46,12 +46,8 @@ export const UNLOCKS = [
   { id: 'u_lk_knockout', n: 15, xp: 1250, ok: (e) => e.type === 'kill' && e.wpn === 'frag', reward: { slot: 'look', id: 'eyes:knockout' } },
   { id: 'u_lk_oven', n: 5, xp: 1250, ok: (e) => e.type === 'win', reward: { slot: 'look', id: 'glove:oven' } },
   { id: 'u_lk_stink', n: 8, xp: 1250, ok: (e) => e.type === 'streak', reward: { slot: 'look', id: 'fx:stink' } },
-  // akimbo (30/10): so sai daqui; duas pistolas, pente dobrado, sem mirar
+  // akimbo saiu daqui (08/11, pedido dele): abre no ultimo nivel da arma (progress.js); quem fechou o desafio antigo mantem (hadAkimbo)
   // revolver Bang-Bang (30/10): so sai daqui
-  { id: 'u_akimbo', n: 50, xp: 2000, ok: K('pistol'), reward: { slot: 'handle', id: 'akimbo', wpn: 'pistol' } },
-  // akimbo nas armas compridas (01/11, pedido dele): so na Cuspideira (submetralhadora) e na Espirro (escopeta)
-  { id: 'u_akimbo_smg', n: 75, xp: 2500, ok: K('smg'), reward: { slot: 'handle', id: 'akimbo', wpn: 'smg' } },
-  { id: 'u_akimbo_sg', n: 40, xp: 2500, ok: K('shotgun'), reward: { slot: 'handle', id: 'akimbo', wpn: 'shotgun' } },
   // gadgets de baixo do cano (03/11): abates com o proprio modelo
   { id: 'u_gd_flame', n: 40, xp: 2500, ok: (e) => e.type === 'kill' && e.wpn === 'rifle' && e.body === 'fusil_6', reward: { slot: 'handle', id: 'gd_flame', wpn: 'rifle' } },
   { id: 'u_gd_shot', n: 40, xp: 2500, ok: (e) => e.type === 'kill' && e.wpn === 'rifle' && e.body === 'fusil_7', reward: { slot: 'handle', id: 'gd_shot', wpn: 'rifle' } },
@@ -85,7 +81,7 @@ export const ELITE = [
   { id: 'e_nuke', n: 1, xp: 5000, ok: (e) => e.type === 'streak' && e.kind === 'nuke' },
   { id: 'e_kills', n: 120, xp: 4000, ok: K() },
 ];
-export const BP_ORDER = Object.keys(BLUEPRINTS);
+export const BP_ORDER = Object.keys(BLUEPRINTS).filter(id => !BLUEPRINTS[id].bm); // Mercado Negro fica fora do desafio de elite
 export const bpOwned = (id) => !!data.bps[id];
 // camo lendaria: vem junto com a variante que a usa
 export const legendOwned = (camoId) => BP_ORDER.some(id => BLUEPRINTS[id].lo.camo === camoId && bpOwned(id));
@@ -105,14 +101,16 @@ export function eliteToday() {
 // desafio antigo continua com o modelo aberto
 const WAS_CH = { 'am:fire': ['u_am_fire', 40], 'am:trace': ['u_am_trace', 15], 'am:boom': ['u_am_boom', 8], 'am:ap': ['u_am_ap', 35], pistol_10: ['u_revolver', 30], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
 export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
+// akimbo era desafio por arma (ate 08/11): a contagem antiga segue no save e mantem aberto pra quem fechou
+const WAS_AKIMBO = { pistol: ['u_akimbo', 50], smg: ['u_akimbo_smg', 75], shotgun: ['u_akimbo_sg', 40] };
+export const hadAkimbo = (wpn) => !!WAS_AKIMBO[wpn] && (data.career[WAS_AKIMBO[wpn][0]] || 0) >= WAS_AKIMBO[wpn][1];
 // item -> desafio que libera (o arsenal consulta isso)
-// a mesma peca em outra arma (akimbo da pistola x da submetralhadora) tem desafio proprio: chave 'arma:peca'
-export const LOCKED_BY = Object.fromEntries(UNLOCKS.map(u => [u.reward.id === 'akimbo' && u.reward.wpn !== 'pistol' ? u.reward.wpn + ':akimbo' : u.reward.id, u]));
+export const LOCKED_BY = Object.fromEntries(UNLOCKS.map(u => [u.reward.id, u]));
 export const unlockDone = (id) => (data.career[id] || 0) >= (UNLOCKS.find(u => u.id === id)?.n ?? Infinity);
 // rotacao: so ACTIVE desafios de desbloqueio contam por vez; fechou um, entra o proximo da fila.
 // Ordem intercalada (camo, tracado, arma, faca...) pra variar.
 const ACTIVE = 4;
-const ORDER = ['u_am_fire', 'u_akimbo', 'u_lk_plunger', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_sscope', 'u_spitter',
+const ORDER = ['u_am_fire', 'u_lk_plunger', 'u_ember', 'u_ww_1911', 'u_lk_oven', 'u_am_trace', 'u_tr_fire', 'u_handcannon', 'u_lk_knockout', 'u_ww_stg', 'u_splitter', 'u_lk_stink', 'u_tr_ink', 'u_sscope', 'u_spitter',
   'u_ww_garand', 'u_am_boom', 'u_tr_spark', 'u_inkreact', 'u_ww_c96', 'u_heavy', 'u_tr_void', 'u_am_ap', 'u_fang', 'u_fscope', 'u_pk_cuca', 'u_ww_tt', 'u_tr_toxic', 'u_bolt', 'u_pk_dmr',
   'u_tr_rainbow', 'u_sword', 'u_tr_gold', 'u_tr_ice']; // WW2 (u_ww_*) intercaladas pra aparecer cedo
 const ordered = () => [...ORDER.map(id => UNLOCKS.find(u => u.id === id)).filter(Boolean), ...UNLOCKS.filter(u => !ORDER.includes(u.id))];
@@ -142,7 +140,7 @@ let data = load();
 function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* sem storage */ }
-  const out = { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {}, tut: d.tut || null, pick: Array.isArray(d.pick) ? d.pick : [] };
+  const out = { day: d.day || '', daily: d.daily || {}, done: d.done || {}, career: d.career || {}, elite: d.elite || {}, bps: d.bps || {}, tut: d.tut || null, pick: Array.isArray(d.pick) ? d.pick : [], mis: d.mis && typeof d.mis === 'object' ? d.mis : null };
   // desafios e modelos que sairam do jogo: some todo rastro deles do save (e da nuvem, no proximo envio)
   let gone = false;
   for (const id of GONE_CH) {
@@ -187,9 +185,76 @@ export function unlockState() {
 // tempo ate os diarios trocarem (ms)
 export function msToReset() { const d = new Date(), m = new Date(d); m.setHours(24, 0, 0, 0); return m - d; }
 
+// ---------- Missoes diarias (08/11, pedido dele) ----------
+// 5 por dia, em rodizio num banco grande (familia x quantidade x arma): 3 de combate, 1 de progresso (peca, arma, nivel) e 1 de
+// partidas (jogar, mapas, vitorias); nunca 2 da mesma familia no dia.
+// Dao XP alto e Zions Points (o valor e do servidor: ZP.mission em shared/shop.js). Progresso no mesmo save dos desafios.
+export const MIS_ZP = 30; // so pra mostrar; quem paga e o servidor
+const CATS6 = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg'];
+export const MISSIONS = [];
+const fam = (f, grp, ns, xp, ok, wpn) => ns.forEach(n => MISSIONS.push({ id: `m_${f}${wpn ? '_' + wpn : ''}_${n}`, key: 'mi_' + f, fam: f + (wpn || ''), grp, n, wpn, xp: Math.round(xp(n) / 50) * 50, ok }));
+const KO = (e) => e.type === 'kill';
+// combate
+fam('kills', 'combat', [15, 20, 25, 30, 35, 40, 45, 60], n => 1200 + n * 30, KO);
+fam('head', 'combat', [5, 8, 10, 12, 15, 20], n => 1200 + n * 80, e => KO(e) && e.head);
+fam('double', 'combat', [1, 2, 3, 4, 5], n => 1300 + n * 300, e => e.type === 'double');
+fam('triple', 'combat', [1, 2, 3], n => 2200 + n * 500, e => e.type === 'multi');
+fam('streak', 'combat', [1, 2, 3, 4], n => 1400 + n * 400, e => e.type === 'streak');
+fam('assist', 'combat', [4, 6, 8, 10, 12, 15], n => 1100 + n * 60, e => e.type === 'assist');
+fam('melee', 'combat', [1, 2, 3, 4, 6], n => 1500 + n * 300, e => KO(e) && e.wpn === 'melee');
+fam('nade', 'combat', [1, 2, 3, 4], n => 1500 + n * 350, e => KO(e) && e.wpn === 'frag');
+fam('life5', 'combat', [1, 2, 3], n => 2000 + n * 500, e => KO(e) && e.streak === 5); // 5 derrubados sem morrer
+for (const w of CATS6) fam('kw', 'combat', [6, 10, 14, 18, 25], n => 1200 + n * 50, e => KO(e) && e.wpn === w, w);
+for (const w of ['pistol', 'smg', 'rifle', 'sniper']) fam('hw', 'combat', [2, 4, 6, 8], n => 1400 + n * 150, e => KO(e) && e.head && e.wpn === w, w);
+// progresso
+fam('part', 'prog', [1, 2, 3, 4], n => 1500 + n * 400, e => e.type === 'unlock' && e.slot !== 'body' && e.slot !== 'camo');
+for (const w of CATS6) fam('pw', 'prog', [1, 2], n => 1700 + n * 400, e => e.type === 'unlock' && e.slot !== 'body' && e.slot !== 'camo' && e.wpn === w, w);
+fam('body', 'prog', [1], () => 3000, e => e.type === 'unlock' && e.slot === 'body');
+fam('camo', 'prog', [1, 2, 3], n => 1800 + n * 400, e => e.type === 'unlock' && e.slot === 'camo');
+fam('wlvl', 'prog', [1, 2, 3, 4, 5], n => 1400 + n * 350, e => e.type === 'wpnUp');
+for (const w of CATS6) fam('lw', 'prog', [1, 2, 3], n => 1500 + n * 400, e => e.type === 'wpnUp' && e.wpn === w, w);
+// jogar
+fam('match', 'play', [2, 3, 4, 5, 6, 8], n => 1100 + n * 250, e => e.type === 'match');
+fam('maps', 'play', [2, 3, 4, 5], n => 1300 + n * 350, null); // mapas DIFERENTES (contado a parte)
+fam('win', 'play', [1, 2, 3, 4, 5], n => 1300 + n * 450, e => e.type === 'win');
+fam('flag', 'play', [1, 2, 3, 4], n => 1500 + n * 400, e => e.type === 'flagCap');
+const MIS_BY = Object.fromEntries(MISSIONS.map(m => [m.id, m]));
+// Rodizio sem repetir (08/11, pedido dele: repetir com probabilidade baixissima). Cada grupo tem uma ordem embaralhada fixa, com
+// familias diferentes em vizinhas; o dia anda por ela (3 de combate, 1 de progresso, 1 de partidas). Uma missao so volta depois de
+// o grupo inteiro passar (sorteio por dia repetia a de ontem em 15% dos dias).
+const MIS_PER = { combat: 3, prog: 1, play: 1 };
+const MIS_ORDER = Object.fromEntries(Object.keys(MIS_PER).map(g => {
+  const rnd = seeded('rr-missoes-' + g), bag = MISSIONS.filter(m => m.grp === g);
+  for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+  const out = [], gap = MIS_PER[g] - 1;
+  while (bag.length) { // proxima que nao repete a familia das ultimas do mesmo dia; no fim da fila aceita a que sobrou
+    const i = bag.findIndex(m => !out.slice(-gap || out.length).some(x => gap && x.fam === m.fam));
+    out.push(bag.splice(Math.max(0, i), 1)[0]);
+  }
+  return [g, out];
+}));
+function misPick(d) {
+  const idx = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
+  return Object.entries(MIS_PER).flatMap(([g, c]) => { const L = MIS_ORDER[g]; return Array.from({ length: c }, (_, k) => L[(idx * c + k) % L.length]); });
+}
+export function missionsToday() {
+  const day = today();
+  if (!data.mis || data.mis.day !== day) { data.mis = { day, prog: {}, done: {}, maps: {} }; save(); }
+  return misPick(new Date()).map(m => ({ ...m, prog: Math.min(m.n, data.mis.prog[m.id] || 0), done: !!data.mis.done[m.id] }));
+}
+export const missionById = (id) => MIS_BY[id];
+const SING = new Set(['double', 'melee', 'nade', 'triple', 'streak', 'life5', 'part', 'pw', 'camo', 'wlvl', 'lw', 'win', 'flag', 'body']);
+export const misKey = (m) => m.key + (m.n === 1 && SING.has(m.key.slice(3)) ? '1' : ''); // singular de verdade (nada de 'peca(s)')
+
 // registra um evento; devolve [{ kind: 'daily'|'career', id, tier, xp }] do que completou agora
 export function track(e) {
   const got = [];
+  for (const m of missionsToday()) {
+    if (m.done) continue;
+    if (m.fam === 'maps') { if (e.type !== 'match' || !e.map) continue; const L = (data.mis.maps[m.id] ||= []); if (L.includes(e.map)) continue; L.push(e.map); data.mis.prog[m.id] = L.length; }
+    else if (m.ok(e)) data.mis.prog[m.id] = (data.mis.prog[m.id] || 0) + 1; else continue;
+    if (data.mis.prog[m.id] >= m.n) { data.mis.done[m.id] = true; got.push({ kind: 'mission', id: m.id, xp: m.xp, wpn: m.wpn }); }
+  }
   for (const c of dailyToday()) {
     if (c.done || !c.ok(e)) continue;
     data.daily[c.id] = (data.daily[c.id] || 0) + 1;

@@ -158,6 +158,7 @@ export class Input {
       fieldPressed: E('field') || edge('FIELD'), // equipamento de campo
       lastPressed: E('last'),
       // inclinar (plantar a bomba): segurando; no toque, os dois botoes de inclinar
+      breath: A('breath') || performance.now() < (t.breathUntil || 0), // celular: um toque liga por um tempo; PC: segurar
       leanL: A('leanL') || !!t.leanL, leanR: A('leanR') || !!t.leanR,
       leanLPressed: E('leanL') || edge('LEANL'), leanRPressed: E('leanR') || edge('LEANR'),
       slot: this.slotReq,
@@ -178,6 +179,7 @@ const NADE_ICON = {
   flash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M10.5 1h3v4.2h-3zM3.6 3.3l2.1-2.1 3 3-2.1 2.1zM15.3 4.2l3-3 2.1 2.1-3 3zM9 7h6c1.1 0 2 .9 2 2v11c0 1.7-1.3 3-3 3h-4c-1.7 0-3-1.3-3-3V9c0-1.1.9-2 2-2zM9 11v2h6v-2zM9 16v2h6v-2z"/></svg>',
 };
 const ICON = {
+  breath: 'M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z',
   gadget: 'M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z', // peca encaixada (Material Icons 'extension', Apache 2.0): a granada ja usa fogo
   more: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z', // + (Material Icons): abre os botoes extras
   field: 'm13.127 14.56 1.43-1.43 6.44 6.443L19.57 21zm4.293-5.73 2.86-2.86c-3.95-3.95-10.35-3.96-14.3-.02 3.93-1.3 8.31-.25 11.44 2.88zM5.95 5.98c-3.94 3.95-3.93 10.35.02 14.3l2.86-2.86C5.7 14.29 4.65 9.91 5.95 5.98zm.02-.02-.01.01c-.38 3.01 1.17 6.88 4.3 10.02l5.73-5.73c-3.13-3.13-7.01-4.68-10.02-4.3z',
@@ -222,7 +224,7 @@ export function buildTouch(input, root) {
     b.dataset.hid = cls.split(' ')[0];
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.setPointerCapture(e.pointerId); b.classList.add('on'); down(e, b); });
     const end = (e) => { b.classList.remove('on'); up && up(e, b); };
-    b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end);
+    b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end); b.addEventListener('lostpointercapture', end);
     root.appendChild(b);
     return b;
   };
@@ -261,6 +263,7 @@ export function buildTouch(input, root) {
   // marcar (so no battle royale): acima do equipamento de campo
   input.pingBtn = btn(t('t_ping'), 'ping', at(214, 206, 44), () => input.edges.add('PING'));
   // HUD simples (01/11): granadas, faca, sequencia, inspecionar, equipamento e marcar ficam guardados aqui; toca e abre, toca de novo e fecha
+  btn(t('t_breath'), 'breath', at(150, 248, 46), (e, b) => { input.touch.breathUntil = performance.now() + 3500; b.classList.add('lit'); setTimeout(() => b.classList.remove('lit'), 3500); });
   btn(t('t_more'), 'more', at(96, 248, 46), (e, b) => { const on = document.body.classList.toggle('hud-more'); b.classList.toggle('lit', on); });
 
   // analogico: empurrar ate a borda = corre
@@ -286,12 +289,18 @@ export function buildTouch(input, root) {
   // resto da tela direita = olhar
   let lid = null, lx = 0, ly = 0;
   root.addEventListener('pointerdown', (e) => {
-    if (e.target !== root || e.clientX < innerWidth * 0.4 || lid !== null) return;
+    if (e.target !== root || e.clientX < innerWidth * 0.4) return; // 08/11 (pedido dele: a camera travava): dedo novo sempre assume o olhar, mesmo com um antigo perdido
     lid = e.pointerId; lx = e.clientX; ly = e.clientY;
   });
   root.addEventListener('pointermove', (e) => { if (e.pointerId !== lid) return; { const dx = (e.clientX - lx) * 1.4, dy = (e.clientY - ly) * 1.4; input.lookX += dx; input.lookY += dy; input.touchLookX += dx; input.touchLookY += dy; } lx = e.clientX; ly = e.clientY; });
   const lend = (e) => { if (e.pointerId === lid) lid = null; };
   root.addEventListener('pointerup', lend); root.addEventListener('pointercancel', lend);
+  // dedo perdido (fim do toque que nunca chegou aqui): primeiro dedo de um toque novo = os antigos ja sairam; a janela ve todo fim de toque
+  input.touchAbort?.abort(); const AC = input.touchAbort = new AbortController(), O = { capture: true, signal: AC.signal };
+  const lost = () => { lid = null; fireId = null; input.touch.fire = false; if (sid !== null) end({ pointerId: sid }); };
+  addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && e.isPrimary) lost(); }, O);
+  addEventListener('pointerup', lend, O); addEventListener('pointercancel', lend, O);
+  addEventListener('blur', lost, { signal: AC.signal }); document.addEventListener('visibilitychange', lost, { signal: AC.signal });
   // pausa
   const p = btn(t('t_pause'), 'pause', { left: 'max(12px, env(safe-area-inset-left))', top: 'max(12px, env(safe-area-inset-top))', width: '48px', height: '40px', borderRadius: '12px' }, () => input.edges.add('Escape'));
   void p;
@@ -323,12 +332,14 @@ export function setFireButton(input) {
   }
 }
 
-// layout do HUD de toque salvo nos ajustes: { pos: { id: [x%, y%] }, scale, alpha }
+// layout do HUD de toque salvo nos ajustes: { pos: { id: [x%, y%] }, size: { id: k }, scale, alpha }
 export function applyHudLayout(root, S) {
   const L = S?.hudLayout || {};
   root.style.setProperty('--tb-scale', L.scale || 1);
   root.style.setProperty('--tb-alpha', L.alpha ?? 1);
   for (const elx of root.querySelectorAll('[data-hid]')) {
+    const sz = L.size?.[elx.dataset.hid]; // tamanho proprio de cada botao (08/11, pedido dele); sem ele, vale o geral antigo
+    if (sz) elx.style.setProperty('--tb-scale', sz); else elx.style.removeProperty('--tb-scale');
     const pos = L.pos?.[elx.dataset.hid];
     if (!pos) continue;
     Object.assign(elx.style, { left: pos[0] + '%', top: pos[1] + '%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' });

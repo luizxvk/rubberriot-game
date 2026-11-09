@@ -1,3 +1,5 @@
+import { BM_CAMOS } from '../shared/blackmarket.js';
+const BM_PAT_CSS_LATE = (c) => BM_PAT_CSS[c.p[0]](...c.css);
 import * as THREE from 'three';
 // Camuflagens procedurais (estaticas e animadas). Nomes originais, nada de marca de outro jogo.
 // O desenho roda no shader da arma, em espaco do objeto (fica preso na arma, nao na tela).
@@ -77,10 +79,24 @@ export const CAMOS = [
   { id: 'confetti', code: 48, anim: true, shop: true }, { id: 'vinyl', code: 49, anim: true, shop: true },
   { id: 'frost', code: 50, anim: true, react: true, shop: true }, { id: 'ivy', code: 51, anim: true, react: true, shop: true }, { id: 'stormcell', code: 52, anim: true, react: true, shop: true },
 ];
+CAMOS.push(...BM_CAMOS); // Mercado Negro (08/11): exclusivas da variante (bm: true), nunca na lista de camos
+const BM_PAT_CSS = [
+  (a, b, c) => `repeating-linear-gradient(45deg,${a} 0 5px,${b} 5px 10px,${c} 10px 13px)`,
+  (a, b, c) => `radial-gradient(circle at 30% 35%,${b} 0 22%,transparent 24%),radial-gradient(circle at 70% 70%,${c} 0 18%,transparent 20%),${a}`,
+  (a, b, c) => `conic-gradient(${a} 0 90deg,${b} 0 200deg,${c} 0 260deg,${a} 0) 0 0/12px 12px`,
+  (a, b, c) => `conic-gradient(${a} 25%,${b} 0 50%,${a} 0 75%,${b} 0) 0 0/10px 10px,${c}`,
+  (a, b, c) => `radial-gradient(circle,${b} 30%,${c} 34% 40%,transparent 42%) 0 0/9px 9px,${a}`,
+  (a, b, c) => `repeating-radial-gradient(circle at 0 100%,${a} 0 4px,${b} 4px 8px,${c} 8px 10px)`,
+  (a, b, c) => `linear-gradient(115deg,transparent 46%,${c} 47% 50%,transparent 51%),linear-gradient(40deg,transparent 60%,${c} 61% 63%,transparent 64%),linear-gradient(${a},${b})`,
+  (a, b, c) => `conic-gradient(from 30deg,${a},${b},${c},${a})`,
+];
 export const camoById = (id) => CAMOS.find(c => c.id === id) || CAMOS[0];
+// uniforms do desenho do Mercado Negro (cores e parametros por material: um programa so pras 84)
+export function bmUniforms(id) { const c = camoById(id); return c.bm ? { uBmA: { value: new THREE.Vector3(...c.c[0]) }, uBmB: { value: new THREE.Vector3(...c.c[1]) }, uBmC: { value: new THREE.Vector3(...c.c[2]) }, uBmP: { value: new THREE.Vector4(...c.p) }, uBmM: { value: new THREE.Vector4(...c.m) } } : {}; }
 
 // cor de amostra pra lista do arsenal (css)
 export const CAMO_SWATCH = {
+  ...Object.fromEntries(BM_CAMOS.map(c => [c.id, BM_PAT_CSS_LATE(c)])),
   cinturao: 'radial-gradient(circle at 50% 50%,#f6d15a 0 26%,transparent 28%),repeating-linear-gradient(90deg,#7a1712 0 6px,#5a0f0c 6px 8px)',
   rovex: 'radial-gradient(circle at 70% 30%,#b06bff,transparent 55%),linear-gradient(135deg,#1a0b3a,#4b1fa3)',
   ps_jornal: 'repeating-linear-gradient(0deg,#d8d2c2 0 3px,#8d8778 3px 4px),linear-gradient(#5d7f9c,#2f4b63)', ps_zebra: 'repeating-linear-gradient(60deg,#141210 0 7px,#f4efe2 7px 14px)', ps_circo: 'repeating-linear-gradient(90deg,#c63a2c 0 9px,#f4d9a0 9px 18px)',
@@ -538,6 +554,29 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     glow = gold * sweep * 0.8 + burst * star * 0.15 * (0.5 + 0.5 * sin(t * 4.0 + rnd * 6.0));
     return col * (0.6 + lum * 0.55) + sweep * 0.35;
   }
+  if (k == 70) { // Mercado Negro (08/11): um desenho por variante, escolhido por uBmP.x, nas 3 cores dela (uBmA/B/C); y = escala, z = angulo, w = anima
+    int pat = int(uBmP.x + 0.5), mv = int(uBmM.x + 0.5); float tt = t * uBmM.y, dir = uBmM.z;
+    float an = uBmP.z + (mv == 3 ? tt * 0.35 * dir : 0.0), sc = uBmP.y * 4.0, ca = cos(an), sa = sin(an);
+    vec3 q = vec3(p.x, p.y * ca - p.z * sa, p.y * sa + p.z * ca) * sc;
+    if (mv == 0) q.z += tt * 0.9 * dir;                                   // fluxo pelo cano
+    if (mv == 4) q += vec3(0.0, sin(q.z * 1.3 + tt * 2.0), cos(q.y * 1.1 - tt * 1.7)) * 0.35; // ondulacao
+    vec3 col = uBmA;
+    if (pat == 0) { float s = fract((q.y + q.z) * 0.9); col = s < 0.45 ? uBmA : s < 0.85 ? uBmB : uBmC; }
+    else if (pat == 1) { float n = c_fbm(q * 0.9); col = n < 0.42 ? uBmA : n < 0.58 ? uBmB : uBmC; }
+    else if (pat == 2) { vec2 v = c_vor(q * 0.8); float id = fract(v.y * 7.31); col = id < 0.4 ? uBmA : id < 0.75 ? uBmB : uBmC; col *= mix(0.8, 1.0, smoothstep(0.0, 0.25, v.x)); }
+    else if (pat == 3) { float c = mod(floor(q.y * 1.2) + floor(q.z * 1.2), 2.0); float l = step(0.85, fract(q.y * 1.2)) + step(0.85, fract(q.z * 1.2)); col = l > 0.5 ? uBmC : c > 0.5 ? uBmB : uBmA; }
+    else if (pat == 4) { vec3 g = fract(q * 1.1) - 0.5; float d = length(g.yz); col = d < 0.22 ? uBmB : d < 0.3 ? uBmC : uBmA; }
+    else if (pat == 5) { float w = sin(q.z * 2.2 + sin(q.y * 1.4) * 1.6); col = w < -0.3 ? uBmA : w < 0.45 ? uBmB : uBmC; }
+    else if (pat == 6) { vec2 v = c_vor(q * 0.7 + vec3(0.0, 0.0, tt * 0.05)); float e = smoothstep(0.08, 0.0, v.x); col = mix(mix(uBmA, uBmB, c_fbm(q * 0.6)), uBmC, e); glow = uBmC * e * (0.55 + 0.45 * sin(tt * 3.0 + v.y * 6.0)); }
+    else { float s = sin(q.y * 1.3 + tt * 0.8 + sin(q.z * 1.1 - tt * 0.6) * 2.0) * 0.5 + 0.5; col = s < 0.5 ? mix(uBmA, uBmB, s * 2.0) : mix(uBmB, uBmC, (s - 0.5) * 2.0); glow = uBmC * smoothstep(0.85, 1.0, s) * 0.5; }
+    float ga = uBmM.w;
+    if (mv == 1) glow += uBmC * ga * (0.5 + 0.5 * sin(tt * 2.6)) * step(0.5, dot(col, vec3(0.33)) - dot(uBmA, vec3(0.33)) + 0.5); // pulso
+    if (mv == 2) { float b = fract(p.z * 0.35 - tt * 0.25 * dir); float band = smoothstep(0.0, 0.06, b) * (1.0 - smoothstep(0.06, 0.14, b)); col = mix(col, vec3(1.0), band * 0.55); glow += vec3(band) * ga; } // faixa de luz
+    if (mv == 5) { vec3 cell = floor(q * 1.6); float r = c_h(cell), on = step(0.86, fract(r * 13.0 + tt * 0.4)); glow += uBmC * on * ga * 1.4; } // celulas piscando
+    if (mv == 6) { col = mix(col, col.gbr, 0.5 + 0.5 * sin(tt * 0.7 + p.z)); glow += col * ga * 0.15; } // deriva de cor
+    if (mv == 7) { float l = step(0.92, fract(q.y * 3.0 + tt * 0.6 * dir)); col = mix(col, uBmC, l); glow += uBmC * l * ga; } // varredura
+    return col * sh;
+  }
   if (k == 61) { // Cinturao de campeao: couro vermelho costurado, placas de ouro com rebite e estrela, e o brilho do flash dos fotografos passando
     float along = p.z * 2.1, cell = fract(along) - 0.5, band = abs(fract(p.y * 1.5) - 0.5);
     float plate = (1.0 - smoothstep(0.3, 0.33, abs(cell))) * (1.0 - smoothstep(0.34, 0.38, band));
@@ -709,7 +748,7 @@ export function camoGlsl(code) {
     }
     if (keep) out.push(ln);
   }
-  const g = (code === 60 ? 'uniform sampler2D uRovexLogo;\n' : '') + out.join('\n'); // so a camo Rovex paga a textura
+  const g = (code === 60 ? 'uniform sampler2D uRovexLogo;\n' : '') + (code === 70 ? 'uniform vec3 uBmA; uniform vec3 uBmB; uniform vec3 uBmC; uniform vec4 uBmP; uniform vec4 uBmM;\n' : '') + out.join('\n'); // so a camo Rovex paga a textura
   camoCache.set(code, g);
   return g;
 }

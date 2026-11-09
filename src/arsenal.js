@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { makeGun } from './guns.js';
 import { SIGHT_KIND, sightGeoFor, loadComic, comicGeo, hasComic } from './sights.js';
 import { t, wName } from './i18n.js';
-import { camoGlsl, camoTime, camoById, rovexLogoU } from './camos.js';
+import { camoGlsl, camoTime, camoById, rovexLogoU, bmUniforms } from './camos.js';
 import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS, GADGETS, WSKINS, baseBody } from '../shared/weapons.js';
 import { bpUnlocked, progressInfo, passLevel } from './progress.js';
 import { RET_PASS } from './pass.js';
@@ -46,7 +46,7 @@ export const SWORDS = [
   { node: 'Katana', id: 'melee_17', blade: /Blade|Sharp/i, flipEdge: true }, // fio vinha virado pra tras (04/11)
 ];
 export const CATEGORY = {
-  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10', 'pistol_11'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (sai de desafio)
+  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10', 'pistol_11'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (abre no ultimo nivel da arma)
   smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_13'] /* Tamborzao saiu (04/11) */, scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
   rifle: { bodies: [...range('fusil_', 1, 7), /* Trovao de Lata (fusil_9) saiu 04/11 */ 'fusil_11', 'fusil_12', 'fusil_13'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'gd_flame', 'gd_shot'] },
   // escopeta: as 3 lunetas do fim da lista so cabem no Bacamarte (LONG_SCOPE)
@@ -113,17 +113,18 @@ export function partName(slot, id) {
   if (slot === 'scope' && IRONS[id]) return t('ir_' + id);
   if (slot === 'scope' && SNIPER_SCOPE_NAME[id]) return t(SNIPER_SCOPE_NAME[id]); // lunetas com nome do que fazem (01/11)
   if (slot === 'scope') { const big = !!parts[id] && sightLen(parts[id]) >= 0.6; return (big ? t('scopeBig') : t('scopeDot')) + ' ' + n + (id.startsWith('sniper') ? ' ' + t('long') : ''); }
+  if (slot === 'charger' && id.startsWith('cmag_')) return t(['bmMagSmall', 'extMag', 'magShoe', 'magBottle', 'magRibbed', 'magWedge'][Number(id.slice(-1)) - 1] || 'extMag');
   if (slot === 'charger' && DRUM_MAGS[id]?.heatK) return t('coolMag');
   if (slot === 'charger' && DRUM_MAGS[id]?.ext) return t(id.endsWith('_2') ? 'extMag2' : 'extMag');
   if (slot === 'charger' && DRUM_MAGS[id]) return t('drumMag');
   if (slot === 'charger' && id.startsWith('lmg_')) return t('lmgBox'); // metralhadora: caixa de fita (04/11)
-  if (slot === 'charger') return t('mag') + ' ' + n;
+  if (slot === 'charger') return t('mgn_' + n); // 08/11 (pedido dele): nome proprio, nada de "Pente 2"
   if (slot === 'conv') return t('conv_' + id);
   if (slot === 'muzzle') return t('mz_' + id);
   if (slot === 'laser') return t(id === 'light_1' ? 'lightTac' : id === 'laser_2' ? 'laserTac' : 'laserDot');
   if (id === 'akimbo') return t('akimbo');
   if (GADGETS[id]) return t(id);
-  return t('grip') + ' ' + n;
+  return t('gpn_' + id);
 }
 function catOf(id) { return id.startsWith('lmg') ? 'lmg' : id.startsWith('melee') ? 'melee' : id.startsWith('subfusil') ? 'smg' : id.startsWith('fusil') ? 'rifle' : id.startsWith('pistol') ? 'pistol' : id.startsWith('shotgun') ? 'shotgun' : 'sniper'; }
 
@@ -194,7 +195,7 @@ export function loadArsenal() {
   const loader = new GLTFLoader();
   // 08/11 (desempenho): dois pacotes eram baixados e decodificados DUAS vezes (minigun + armas; bazuca + armas). Mesmo
   // endereco = mesma promessa; quem le so clona a geometria, entao compartilhar e seguro
-  { const raw = loader.loadAsync.bind(loader), memo = new Map(); loader.loadAsync = (u, onP) => { if (!memo.has(u)) memo.set(u, raw(u, onP)); return memo.get(u); }; }
+  const rawLoad = loader.loadAsync.bind(loader), memo = new Map(); loader.loadAsync = (u, onP) => { if (!memo.has(u)) memo.set(u, rawLoad(u, onP)); return memo.get(u); };
   ready = Promise.all([
     loader.loadAsync(import.meta.env.BASE_URL + 'models/src/low_poly_guns.glb').then(g => {
       g.scene.updateMatrixWorld(true);
@@ -237,7 +238,7 @@ export function loadArsenal() {
       mg.traverse(o => { if (o.isMesh) geos.push({ geo: o.geometry.clone().applyMatrix4(o.matrixWorld), color: o.material.color.getHex(), front: /Front/.test(o.name) }); });
       parts.__minigun = geos;
     }).catch(e => console.warn('weapon pack nao carregou', e)),
-  ]).finally(() => { allLoaded = true; }); // 08/11: todos os pacotes chegaram (arma provisoria pode ser trocada)
+  ]).then(() => loadCmags(loader).catch(e => console.warn('pentes por modelo', e))).finally(() => { allLoaded = true; memo.clear(); if (!/arma-editor/.test(location.pathname)) for (const k in TT_SCN) delete TT_SCN[k]; }); // 08/11: todos os pacotes chegaram; os arquivos originais saem da memoria (as pecas ja viraram geometria propria; o editor de armas precisa deles) (arma provisoria pode ser trocada)
   return ready;
 }
 
@@ -553,7 +554,7 @@ function geoTake(ge, tris) { const o = new THREE.BufferGeometry(); for (const [n
 const SCOPE_FWD = { sniper_0: 0.16 }; // fracao do comprimento que a mira anda pra frente nesse corpo
 const SNIPER_SCOPE_NAME = { sniper_scope_0: 'scNormal', sniper_scope_1: 'scMil', sniper_scope_2: 'scThermal', fusil_scope_6: 'scZoom' }; // pelo SCOPE_KIND: hunt, mil, thermal, vari
 // o resto das miras (04/11, pedido dele): nome pelo que cada uma e, nada de 'Ponto vermelho 7' (scn_<id> no i18n)
-const SCOPE_ZOOM = { fusil_scope_4: 1.4, fusil_scope_5: 1.4, fusil_scope_2: 1.4, subfusil_scope_7: 3 }; // 04/11: Holografica Longa, Poste, Rampa e Combate
+const SCOPE_ZOOM = { fusil_scope_4: 1.4, fusil_scope_5: 1.4, fusil_scope_2: 1.4, subfusil_scope_7: 3, subfusil_scope_10: 3.9, subfusil_scope_5: 1.4 }; // 04/11: Holografica Longa, Poste, Rampa e Combate
 const SCOPE_NAMED = ['pistol_scope_5','subfusil_scope_2','subfusil_scope_6','subfusil_scope_9','subfusil_scope_1','subfusil_scope_5','subfusil_scope_7','subfusil_scope_8','subfusil_scope_10','fusil_scope_1','fusil_scope_7','fusil_scope_2','fusil_scope_4','fusil_scope_5'];
 for (const id of SCOPE_NAMED) SNIPER_SCOPE_NAME[id] = 'scn_' + id;
 export const IRONS = {
@@ -610,7 +611,7 @@ function barrelTip(body) {
     if (cur.length) groups.push(cur);
     if (groups.length > 1) {
       const wid = (g) => Math.max(...g.map(p => p[0])) - Math.min(...g.map(p => p[0]));
-      const best = groups.reduce((a, g) => (wid(g) > wid(a) ? g : a)); // o mais largo = o cano (massa de mira e haste sao finas)
+      const best = body === 'shotgun_2' ? groups[groups.length - 1] : groups.reduce((a, g) => (wid(g) > wid(a) ? g : a)); // o mais largo = o cano (massa de mira e haste sao finas); Sneeze (08/11): o tubo de baixo e o carregador, o cano e o de cima
       const y0 = best[0][1], y1 = best[best.length - 1][1];
       c.y = (y0 + y1) / 2; sz.y = Math.min(y1 - y0, wid(best) * 1.2); /* meio do cano */ sz.x = wid(best);
     }
@@ -1418,6 +1419,7 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false, hat
     uAccent: { value: new THREE.Color(accent || '#ffffff') }, uAccentOn: { value: accent ? 1 : 0 },
     uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 }, uCamoGreen: { value: camoGreen ? 1 : 0 },
     ...(glslCode === 60 ? { uRovexLogo: rovexLogoU() } : {}),
+    ...(glslCode === 70 ? bmUniforms(camo) : {}), // Mercado Negro: cores/desenho da variante
   };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, m.userData.u);
@@ -1426,7 +1428,7 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false, hat
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position * 1.8;'); // estampa menor (01/11): a arma mostrava so um pedaco da camo
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn; uniform float uPart; uniform float uCamoGreen;\n' + camoGlsl(glslCode) + '\nvec3 gCamoGlow = vec3(0.0);')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;' + (glslCode === 70 ? '\n/* bloom levissimo (08/11, pedido dele): camo ANIMADA do Mercado Negro ganha halo na borda da silhueta e o brilho dela vaza um tico (sem pos-processo: nao pesa no celular) */ if (uBmP.w > 0.5 && uPart < 0.5) { float fr = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.6); totalEmissiveRadiance += uBmC * fr * 0.32 + gCamoGlow * 0.35; }' : ''))
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
           vec3 tc = diffuseColor.rgb;
@@ -1823,7 +1825,20 @@ export function gripInfo(body) {
 // e, encaixado no poco, sem invadir o cabo. Sem pente original = so o padrao.
 const MAG_LOCK = ['sniper_2']; // Marretao: so o pente dele, sem troca (pedido dele 01/11)
 const magCompat = {};
+// pentes por modelo (08/11, Blender: tools/blender/comic_mags.py): curto e longo de cada arma, na curva e na boca do pente original
+const CMAGS = {};
+async function loadCmags(loader) {
+  const g = await loader.loadAsync(import.meta.env.BASE_URL + 'models/src/comic/mags.glb'); g.scene.updateMatrixWorld(true);
+  const pal = paletteReader(gunTex), uv = pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5];
+  g.scene.traverse(o => { if (!o.isMesh || !o.name.startsWith('cmag_')) return; const ge = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); setUV(ge, uv); ge.computeVertexNormals(); ge.computeBoundingBox(); parts[o.name] = { geo: ge, box: ge.boundingBox.clone(), cmag: true }; const m = o.name.match(/^cmag_(.+)_\d$/); (CMAGS[m[1]] ||= []).push(o.name); });
+  for (const k of Object.keys(CMAGS)) CMAGS[k].sort();
+  for (const k of Object.keys(magCompat)) delete magCompat[k];
+}
 export function chargerOptions(body, cat) {
+  const key0 = body + '|' + cat, listed = chargerOptions0(body, cat);
+  return CMAGS[body] && listed.length ? (magCompat[key0 + '|c'] ||= [listed[0], ...CMAGS[body], ...listed.slice(1).filter(x => DRUM_MAGS[x])]) : listed;
+}
+function chargerOptions0(body, cat) {
   const key = body + '|' + cat;
   if (magCompat[key]) return magCompat[key];
   const native = nativePart(body, 'charger');
@@ -1875,8 +1890,30 @@ function hiUnder(body, xc, halfW, z0, z1) {
 
 // eixo do cano em X: o centro da caixa, a nao ser que o modelo tenha peca saindo de um lado (alavanca do ferrolho)
 const axisX = (body) => parts[body].axisX ?? (parts[body].box.min.x + parts[body].box.max.x) / 2;
+// 08/11 (print dele, Buzzer sem empunhadura): arma remodelada guarda a peca do modelo antigo, em outro lugar. Medindo, a empunhadura
+// nascia 3 unidades acima de Buzzer, Sapateado, Quadril e Trovoada. Peca nativa so vale se estiver encostada no corpo
+// 08/11 (print dele): Twister e Hipshot tem punho dianteiro modelado junto com o corpo; a empunhadura entrava embaixo dele. Acha o trecho que
+// desce abaixo da linha do cano na metade da frente e monta uma malha sem ele (a mesma ideia do FORE_MOUNTS, medida na hora)
+const AUTO_FORE = { subfusil_4: 0.55, subfusil_6: 0.4, subfusil_5: 0.26 }; // ate onde procurar, em fracao do comprimento a partir da boca (Spitter: o corpo baixo comeca logo atras; Hipshot, 08/11: em 0,55 pegava o punho do gatilho, mais fundo que o da frente)
+function ensureNoFore(body) {
+  const P = parts[body]; if (!P || P.geoNoFore || P.noForeTried || !AUTO_FORE[body]) return;
+  P.noForeTried = true;
+  const pr = profile(body), b = P.box, len = b.max.z - b.min.z, h = b.max.y - b.min.y, s0 = sliceOf(pr, b.min.z + len * 0.05), s1 = sliceOf(pr, b.min.z + len * AUTO_FORE[body]), vals = [];
+  for (let s = s0; s <= s1; s++) if (Number.isFinite(pr.lo[s])) vals.push(pr.lo[s]);
+  if (!vals.length) return;
+  const sorted = [...vals].sort((x, y) => x - y), base = sorted[sorted.length >> 1], deep = sorted[0]; if (deep > base - h * 0.12) return;
+  let a = s0; for (let s = s0; s <= s1; s++) if (pr.lo[s] === deep) { a = s; break; }
+  let z = a; while (a > s0 && pr.lo[a - 1] < base - h * 0.05) a--; while (z < s1 && pr.lo[z + 1] < base - h * 0.05) z++;
+  const z0 = pr.z0 + (a - 1) * pr.dz, z1 = pr.z0 + (z + 2) * pr.dz, g = P.geo.index ? P.geo.toNonIndexed() : P.geo, pos = g.attributes.position, keep = [];
+  for (let i = 0; i < pos.count; i += 3) { let y = 0, w = 0; for (let k = 0; k < 3; k++) { y += pos.getY(i + k) / 3; w += pos.getZ(i + k) / 3; } if (!(w > z0 && w < z1 && y < base - h * 0.02)) keep.push(i, i + 1, i + 2); }
+  const out = new THREE.BufferGeometry();
+  for (const [k, at] of Object.entries(g.attributes)) { const arr = new at.array.constructor(keep.length * at.itemSize); keep.forEach((v, j) => { for (let c = 0; c < at.itemSize; c++) arr[j * at.itemSize + c] = at.array[v * at.itemSize + c]; }); out.setAttribute(k, new THREE.BufferAttribute(arr, at.itemSize, at.normalized)); }
+  out.computeBoundingBox(); P.geoNoFore = out; P.fore = (z0 + z1) / 2; P.foreY = base + 0.005;
+}
+function handleInBody(body, id) { const B = parts[body].box, h = parts[id]?.box; return !!h && h.min.y < B.max.y && h.max.y > B.min.y - (B.max.y - B.min.y) && h.max.z > B.min.z && h.min.z < B.max.z; }
 function bodySlot(body, slot) {
-  const nat = nativePart(body, slot);
+  let nat = nativePart(body, slot);
+  if (nat && slot === 'handle' && !handleInBody(body, nat)) nat = null;
   if (nat) return slot === 'charger' ? magMouth(nat) : anchor(slot, parts[nat].box);
   const b = parts[body].box, len = b.max.z - b.min.z, cx = axisX(body);
   const pr = profile(body);
@@ -1926,8 +1963,18 @@ export function bpLoadout(id) {
   const lo = { scope: null, charger: null, handle: null, laser: null, ...B.lo, bp: id };
   if (B.mag && parts[lo.body]) {
     const vol = (c) => { const s = parts[c].box.getSize(new THREE.Vector3()); return s.x * s.y * s.z; };
-    const opts = chargerOptions(lo.body, B.wpn).filter(c => parts[c]).sort((a, b) => vol(a) - vol(b));
+    const opts = chargerOptions(lo.body, B.wpn).filter(c => parts[c] && !(B.bm && DRUM_MAGS[c])).sort((a, b) => vol(a) - vol(b)); // Mercado Negro: tambor nao (tem balas fixas)
     if (opts.length > 1) lo.charger = B.mag === 'big' ? opts[opts.length - 1] : opts[0];
+  }
+  // Mercado Negro (08/11, pedido dele): a variante vem MONTADA. O kit (shared/blackmarket.js) diz o que usa; a peca concreta
+  // sai das que CABEM nesse modelo, sempre a mesma pelo seed. Tudo passa pelo loadoutStats, entao zoom, empunhadura, laser e bocal valem
+  if (B.bm && B.kit && parts[lo.body]) {
+    const C = CATEGORY[B.wpn], K = B.kit, pick = (arr, salt = 0) => (arr.length ? arr[(K.seed + salt) % arr.length] : null);
+    if (K.scope) lo.scope = pick(C.scopes.filter(x => parts[x] && scopeFits(lo.body, B.wpn, x)));
+    if (B.wpn === 'sniper' && !lo.scope) lo.scope = nativePart(lo.body, 'scope') || C.scopes[0];
+    if (K.handle) lo.handle = pick((C.handles || []).filter(x => x !== 'akimbo' && !GADGETS[x] && parts[x] && handleFits(lo.body, B.wpn, x)), 3);
+    if (K.muzzle) lo.muzzle = pick(muzzleOptions(lo.body), 5);
+    lo.laser = K.laser && LASERS.includes(K.laser) ? K.laser : null;
   }
   return lo;
 }
@@ -2018,6 +2065,7 @@ function buildGunParts(wpn, lo) {
     inner.add(m);
     return m;
   };
+  if (lo.handle && parts[lo.handle] && !GADGETS[lo.handle] && lo.handle !== 'akimbo') ensureNoFore(lo.body);
   add(lo.body, null, mat, lo.handle && parts[lo.handle] && parts[lo.body].geoNoFore || null); // com empunhadura: suporte de fabrica sai, o punho entra reto
   const ironUp = !!parts[lo.body].ironGeo && (!lo.scope || !!IRONS[lo.scope]); // TT: ferro so aparece sem mira acoplada (com mira ele sai pra nao atrapalhar)
   if (ironUp) { const im = new THREE.Mesh(parts[lo.body].ironGeo, mat); /* 07/11 (pedido dele): mira de ferro SEM traco preto (perto do olho entupia o entalhe) */ im.position.copy(origin).multiplyScalar(-1); inner.add(im); }
@@ -2033,12 +2081,19 @@ function buildGunParts(wpn, lo) {
   let scopeInfo = null, scopeBack = (bodyBox.min.z + bodyBox.max.z) / 2, mainSight = null, gunSightGap = null;
   // frente do pente montado (z minimo, espaco do corpo): gadget de baixo do cano nunca encosta nele (03/11)
   let magFrontZ = null, gadgetShift = null, magMesh = null;
+  // 08/11 (pedido dele): Luneta de Zoom sem a estaca e a bolinha soltas na ponta (duas ilhas da malha, a frente do tubo). Caixa fica igual: nao mexe no encaixe
+  if (lo.scope === 'fusil_scope_6' && parts.fusil_scope_6?.comic && !parts.fusil_scope_6.tidy) { const P6 = parts.fusil_scope_6, ng = P6.geo.index ? P6.geo.toNonIndexed() : P6.geo, keep = geoIslands(ng).filter(i => !(i.tris.length < 300 && i.box.min.z < -3.68)).flatMap(i => i.tris); P6.geo = geoTake(ng, keep); P6.geo.computeBoundingBox(); P6.geo.computeVertexNormals(); P6.tidy = true; }
   const noteMag = (mm) => { if (!mm) return; magMesh = mm; mm.geometry.computeBoundingBox(); const z = mm.geometry.boundingBox.min.z + mm.position.z + origin.z; magFrontZ = magFrontZ == null ? z : Math.min(magFrontZ, z); };
   for (const slot of ['charger', 'scope', 'handle']) {
     const id = lo[slot];
     if (!id || !parts[id]) continue;
-    const nat = ownerBody(id) === lo.body;
+    const nat = ownerBody(id) === lo.body && (slot !== 'handle' || handleInBody(lo.body, id));
     if (slot === 'charger' && !nat) {
+      if (parts[id].cmag) { // 08/11 (pedido dele, pistolas): pente do Blender ja nasce na posicao do original, na coordenada do corpo; entra sem deslocar (antes caia no poco calculado, longe do cabo)
+        const at = magMouth(id), mm = add(id, { self: at, target: at.clone().add(adjV('charger')) }, partMat);
+        if (mm && adjS('charger') !== 1) { mm.scale.setScalar(adjS('charger')); mm.position.copy(at).sub(origin).sub(at.clone().multiplyScalar(adjS('charger'))); }
+        noteMag(mm); continue;
+      }
       const self = magMouth(id), target = bodySlot(lo.body, 'charger'), F = MAG_FIT[lo.body + '|' + id] || MAG_FIT[id] || {};
       if (F.back) target.z += (parts[id].box.max.z - parts[id].box.min.z) * F.back; // +z = pra tras (coronha)
       // assenta pela ENTRADA do poco (fundo do corpo ali): entra o mesmo tanto que o original, mas no maximo 25%
@@ -2153,7 +2208,7 @@ function buildGunParts(wpn, lo) {
   }
   const muzzle = new THREE.Object3D();
   muzzle.position.set(cx, bodyBox.max.y - h * 0.28, bodyBox.min.z).sub(origin).multiplyScalar(S);
-  let mzInfo = null;
+  let mzInfo = null, mzFit = null;
   if (lo.muzzle && MUZZLES[lo.muzzle] && muzzleFits(lo.body)) {
     // bocal no lugar da ponta: encaixa um pouco pra tras da boca (cobre o bico original) e sai pra frente (-z)
     const T = barrelTip(lo.body), pal = paletteReader(gunTex);
@@ -2165,6 +2220,7 @@ function buildGunParts(wpn, lo) {
     // varias bocas (skin Fictional, 04/11): um bocal em cada (mesma peca, mesmo tamanho), a 1a e a de cima
     for (const mz of parts[lo.body].muzzles?.slice(1) || []) { const m2 = new THREE.Mesh(ge, partMat); outline(m2, 0.0045); m2.position.set(mz.x, mz.y, T.z + back).sub(origin); inner.add(m2); }
     const reach = -ge.boundingBox.min.z * msc - back; // quanto passou da boca original
+    mzFit = { m, list: inner.children.slice(-((parts[lo.body].muzzles?.length || 1))), ge, msc, back, reach, axisY: (T.c.y + mad.y - origin.y) * S };
     muzzle.position.set(T.c.x, T.c.y, T.z - reach).add(mad).sub(origin).multiplyScalar(S);
     mzInfo = { id: lo.muzzle, flash: MUZZLES[lo.muzzle].flash ?? 1, quiet: !!MUZZLES[lo.muzzle].quiet };
   }
@@ -2184,7 +2240,7 @@ function buildGunParts(wpn, lo) {
   const gripL = new THREE.Object3D();
   let hs;
   if (lo.handle && parts[lo.handle]) {
-    const hb = parts[lo.handle].box, nat = ownerBody(lo.handle) === lo.body;
+    const hb = parts[lo.handle].box, nat = ownerBody(lo.handle) === lo.body && handleInBody(lo.body, lo.handle);
     const shift = gadgetShift || (nat ? new THREE.Vector3() : bodySlot(lo.body, 'handle').sub(anchor('handle', hb)));
     const ha = anchor('handle', hb); hs = hb.getCenter(new THREE.Vector3()).sub(ha).multiplyScalar(gadgetShift ? 1 : adjS('handle')).add(ha).add(shift); if (!gadgetShift) hs.add(adjV('handle'));
   } else {
@@ -2224,8 +2280,17 @@ function buildGunParts(wpn, lo) {
   // skin de modelo: o neon e uma malha a parte que nunca pega camo nem pintura (04/11)
   if (parts[lo.body].neon) { const nm = new THREE.Mesh(parts[lo.body].neon, NEON_MAT); nm.position.copy(origin).multiplyScalar(-1); inner.add(nm); }
   holder.add(muzzle, gripR, gripL);
-  const laser = lo.laser && LASER_DEF[lo.laser] ? addLaser(holder, lo, origin, isPistol) : null;
+  const laser = lo.laser && LASER_DEF[lo.laser] ? addLaser(holder, lo, origin, isPistol, magMesh, partMat) : null;
   holder.userData = { sightGap: gunSightGap, body: lo.body, id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, canted: cantedInfo, iron, ironTilt: ironUp && lo.scope === IRON_OWN ? parts[lo.body].ironTilt || 0 : 0, ironDepth: ironUp && lo.scope === IRON_OWN ? (parts[lo.body].ironDepth || 0) * S : 0, ironYaw: ironUp && lo.scope === IRON_OWN ? parts[lo.body].ironYaw || 0 : 0, mat, laser, stats: loadoutStats(wpn, statsLo), drum: anim.drum || null, hammer: anim.hammer || null, sawed: !!parts[lo.body]?.sawed, gripCol: gi ? { z0: (gi.z0 - origin.z) * S, z1: (gi.z1 - origin.z) * S, lo: (gi.lo - origin.y) * S, top: (bodyBox.min.y + h * 0.42 - origin.y) * S } : null /* cabo detectado (mao que segura, 06/11) */, toon: toonGun ? { mag: magMesh, magTop: magMesh?.geometry.boundingBox.max.y ?? 0, magC: magMesh ? magMesh.geometry.boundingBox.getCenter(new THREE.Vector3()) : null, magP0: magMesh?.position.clone() || null, bell } : null, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
+  // 08/11 (print dele: compensador gigante tampando o ADS): em arma de boca larga o bocal chegava a 11% do comprimento e em 8 armas
+  // subia acima da linha de mira. Limita o diametro e, se ainda passar, encolhe ate ficar abaixo da linha do olho
+  if (mzFit) {
+    const { ge, msc, back, reach, axisY, list } = mzFit, bb = ge.boundingBox, Rg = Math.max(-bb.min.x, bb.max.x, -bb.min.y, bb.max.y) * msc;
+    const eyeY = holder.userData.scope?.eye?.y ?? holder.userData.iron?.y, maxR = (isPistol ? 0.055 : 0.03) * (bodyBox.max.z - bodyBox.min.z);
+    let k = Math.min(1, maxR / Rg);
+    if (eyeY != null) k = Math.min(k, Math.max(0.35, (eyeY - 0.012 - axisY) / (bb.max.y * msc * k * S) * k));
+    if (k < 1) { for (const x of list) x.scale.setScalar(msc * k); const nr = -bb.min.z * msc * k - back; muzzle.position.z += (reach - nr) * S; }
+  }
   return holder;
 }
 
@@ -2307,6 +2372,8 @@ const styleOf = (id, list) => {
 };
 
 // akimbo nas compridas: duas na mao, o dobro de bala, recarga bem mais lenta (troca os dois pentes), sem mirar
+// fator sobre a cadencia do akimbo: pistola pesada ganha mais com as duas maos, a automatica ja dispara rapido e ganha menos
+const AKIMBO_PISTOL_RATE = { pistol_1: 0.95, pistol_2: 1.06, pistol_3: 0.8, pistol_4: 1, pistol_5: 0.86, pistol_6: 1.03, pistol_7: 0.92, pistol_8: 0.88, pistol_9: 0.97, pistol_10: 0.9, pistol_11: 0.84 };
 const AKIMBO_LONG = {
   smg: { mag: 2, rate: 0.78, dmg: 0.82, spread: 1.35, kick: 1.15, reload: 2.1, move: 0.95 },
   shotgun: { mag: 2, rate: 0.85, dmg: 0.9, spread: 1.2, kick: 1.1, reload: 1.9, move: 0.95 },
@@ -2402,33 +2469,68 @@ function sideAt(body, z) {
   let mn = Infinity; for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - z) < tol) mn = Math.min(mn, pos.getX(i));
   return Number.isFinite(mn) ? mn : P.box.min.x;
 }
-function addLaser(holder, lo, origin, isPistol) {
+// superficie real do corpo na lateral (raio contra os triangulos). Medir por vertice falhava no cano fino, que so tem vertice nas pontas:
+// sem achar nada caia na largura da arma inteira e o laser ficava pendurado longe (print dele, 08/11). dir -1 = lado esquerdo
+const SURF = new Map(), _ray = new THREE.Ray(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _h = new THREE.Vector3();
+function surfaceX(body, y, z, hy, hz, dir) {
+  const key = [body, y.toFixed(3), z.toFixed(3), dir].join('|'); if (SURF.has(key)) return SURF.get(key);
+  const P = parts[body], g = P.geo, pos = g.attributes.position, idx = g.index, n = idx ? idx.count : pos.count, far = dir < 0 ? P.box.min.x - 1 : P.box.max.x + 1;
+  let best = null;
+  for (const [dy, dz] of [[0, 0], [hy, 0], [-hy, 0], [0, hz], [0, -hz]]) {
+    _ray.origin.set(far, y + dy, z + dz); _ray.direction.set(dir < 0 ? 1 : -1, 0, 0);
+    for (let i = 0; i < n; i += 3) {
+      const ia = idx ? idx.getX(i) : i, ib = idx ? idx.getX(i + 1) : i + 1, ic = idx ? idx.getX(i + 2) : i + 2;
+      _a.fromBufferAttribute(pos, ia); _b.fromBufferAttribute(pos, ib); _c.fromBufferAttribute(pos, ic);
+      if (_ray.intersectTriangle(_a, _b, _c, false, _h)) best = best == null ? _h.x : dir < 0 ? Math.min(best, _h.x) : Math.max(best, _h.x);
+    }
+  }
+  SURF.set(key, best); return best;
+}
+function addLaser(holder, lo, origin, isPistol, magMesh, partMat) {
   const D = LASER_DEF[lo.laser], [w, h, d] = D.size;
   const b = parts[lo.body].box, pr = profile(lo.body), len = b.max.z - b.min.z, cx = axisX(lo.body);
   const z = b.min.z + len * (isPistol ? 0.16 : 0.27), sl = pr.lo[sliceOf(pr, z)], sh = pr.hi[sliceOf(pr, z)];
+  // pente saindo de lado (Sten): o laser vai pro lado oposto, nunca em cima dele
+  let side = -1;
+  if (magMesh && !isPistol) { holder.updateMatrixWorld(true); const mb = new THREE.Box3().setFromObject(magMesh), mc = (mb.min.x + mb.max.x) / 2, ax = (cx - origin.x) * S; if (mc < ax - (mb.max.x - mb.min.x) * 0.6) side = 1; }
+  // 08/11 (Twister): punho de fabrica puxava o fundo do trecho pra baixo e o laser descia junto; fica na faixa de cima, a do trilho lateral
+  const slTop = isPistol ? sl : Math.max(sl, sh - (b.max.y - b.min.y) * 0.3);
+  let y = (slTop + sh) / 2, surf = null;
+  if (!isPistol) for (const k of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+    const yy = slTop + (sh - slTop) * k, hy = h / S * 0.3, hz = d / S * 0.3; let x = surfaceX(lo.body, yy, z, hy, hz, side); if (x == null) continue;
+    // pente lateral modelado junto com o corpo (Sten): esse lado fica bem mais longe do eixo que o outro; troca de lado
+    const o = surfaceX(lo.body, yy, z, hy, hz, -side);
+    if (o != null && Math.abs(x - cx) * S > 0.05 && Math.abs(x - cx) > Math.abs(o - cx) * 1.6) { side = -side; x = o; }
+    y = yy; surf = x; break;
+  }
+  if (surf == null) surf = side < 0 ? sideAt(lo.body, z) : 2 * cx - sideAt(lo.body, z);
   const at = isPistol
     ? new THREE.Vector3(cx, sl, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(0, -h / 2 - 0.004, 0))
-    : new THREE.Vector3(sideAt(lo.body, z), (sl + sh) / 2, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(-w / 2 - 0.004, 0, 0)); // encosta na lateral DAQUELE trecho (alavanca do ferrolho afastava)
+    : new THREE.Vector3(surf, y, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(side * (w / 2 + 0.004), 0, 0)); // encosta na lateral DAQUELE trecho
   const g = new THREE.Group(), LA = parts[lo.body].adj?.laser; g.position.copy(at);
   if (LA) g.position.add(new THREE.Vector3(LA.x || 0, LA.y || 0, LA.z || 0).multiplyScalar((parts[lo.body].u || 1) * S)); // ajuste do editor (TT)
   let box;
   // laser comico (07/11, aprovado): pe (presilha) virado pro corpo: de lado no fuzil, pra cima na pistola
   const pal = paletteReader(gunTex), CL = hasComic(lo.laser) ? comicGeo(lo.laser, pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5], pal ? paletteUV(pal, [128, 125, 118]) : [0.5, 0.5]) : null; // destaque cinza (padrao 07/11)
-  if (CL) { CL.translate(0, -(CL.boundingBox.min.y + CL.boundingBox.max.y) / 2, 0); CL.rotateZ(isPistol ? Math.PI : Math.PI / 2); }
+  if (CL) { CL.translate(0, -(CL.boundingBox.min.y + CL.boundingBox.max.y) / 2, 0); CL.rotateZ(isPistol ? Math.PI : side * -Math.PI / 2); }
   const AG = CL || ATT[D.model];
   if (AG) { // peca do pacote de acessorios no tamanho do slot (comprimento manda, proporcao do modelo)
     const ge = AG.clone(); ge.computeBoundingBox(); const sz = ge.boundingBox.getSize(new THREE.Vector3()), k = Math.min(d / sz.z, w * 1.25 / sz.x, h * 1.6 / sz.y);
-    ge.scale(k, k, k); box = new THREE.Mesh(ge, ATT_MAT ||= toon(0xffffff, { map: gunTex }));
+    ge.scale(k, k, k); box = new THREE.Mesh(ge, CL && partMat ? partMat : (ATT_MAT ||= toon(0xffffff, { map: gunTex }))); // 08/11 (pedido dele): laser pintado na cor de destaque, como as outras pecas
   } else box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(0x2a2724));
+  // 08/11: a peca encosta de verdade no corpo, medido pela propria malha (o tamanho do slot deixava um vao e sobrava so a haste)
+  if (CL) { box.geometry.computeBoundingBox(); const bb = box.geometry.boundingBox, q = LA?.s || 1;
+    if (isPistol) box.position.y = h / 2 + 0.004 - bb.max.y * q + 0.002;
+    else box.position.x = side < 0 ? w / 2 + 0.004 - bb.max.x * q + 0.002 : -w / 2 - 0.004 - bb.min.x * q - 0.002; }
   outline(box, 0.004); g.add(box); if (LA?.s) box.scale.setScalar(LA.s);
   const rail = new THREE.Mesh(new THREE.BoxGeometry(isPistol ? w * 0.7 : 0.008, isPistol ? 0.008 : h * 0.7, d * 0.7), toon(0x1c1a18));
-  rail.position.set(isPistol ? 0 : w / 2 + 0.004, isPistol ? h / 2 + 0.004 : 0, 0); g.add(rail);
+  rail.position.set(isPistol ? 0 : -side * (w / 2 + 0.004), isPistol ? h / 2 + 0.004 : 0, 0); if (!CL) g.add(rail); // o laser comico ja tem o pe dele
   const eye = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.3, h * 0.3, 0.006, 12), new THREE.MeshBasicMaterial({ color: D.color }));
-  eye.rotation.x = Math.PI / 2; eye.position.z = -d / 2 - 0.002; g.add(eye);
+  eye.rotation.x = Math.PI / 2; eye.position.set(box.position.x, box.position.y, -d / 2 - 0.002); g.add(eye);
   // feixe: vT = 1 na boca do laser e 0 na ponta (some ao longe)
   const geo = new THREE.CylinderGeometry(0.003, 0.005, 1, 8, 1, true); geo.rotateX(-Math.PI / 2); geo.translate(0, 0, -0.5);
   const beam = new THREE.Mesh(geo, beamMaterial(D.color));
-  beam.position.z = -d / 2 - 0.004; beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
+  beam.position.set(box.position.x, box.position.y, -d / 2 - 0.004); beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
   beam.userData.noFx = true; // feixe de 18 m nao conta como superficie da arma (efeito da camo lendaria)
   g.add(beam);
   holder.add(g);
@@ -2450,7 +2552,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
     if (drum.magK) st.mag *= drum.magK; else st.mag = drum.rounds / (WEAPONS[wpn]?.mag || drum.rounds);
     for (const k of ['reload', 'adsTime', 'move', 'kick']) st[k] *= drum[k];
     if (drum.heatK) st.heatK = drum.heatK;
-  } else if (lo.charger && nat && parts[lo.charger] && lo.charger !== nat) {
+  } else if (lo.charger && nat && parts[lo.charger] && lo.charger !== nat && !BLUEPRINTS[lo.bp]?.bm) { // Mercado Negro: o numero do pente vem do perfil da variante (shared/blackmarket.js)
     const vol = (b) => { const s = b.getSize(new THREE.Vector3()); return s.x * s.y * s.z; };
     const m = st.mag = Math.max(0.7, Math.min(1.6, vol(parts[lo.charger].box) / vol(parts[nat].box)));
     // pente maior: mais balas, mas pesa (mira, recarga e passo mais lentos); menor: o contrario
@@ -2466,6 +2568,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
     for (const k in g) st[k] *= g[k];
     // 04/11 (hotfix, pedido dele): empunhadura de verdade segura o tranco, mais ainda na Metralhadora (era so -30%: 12 tiros/s subiam igual)
     if (lo.handle !== 'akimbo' && !GADGETS[lo.handle]) st.kick *= GRIP_HOLD[wpn] ?? 0.75;
+    if (lo.handle === 'akimbo' && wpn === 'pistol') st.rate *= AKIMBO_PISTOL_RATE[lo.body] ?? 1; // 08/11 (pedido dele): cada pistola acelera do seu jeito
   }
   if (IRONS[lo.scope]) for (const [k, v] of Object.entries(IRONS[lo.scope])) st[k] *= v; // mira de ferro: entra rapido, sem zoom
   const mz = lo.muzzle && muzzleFits(lo.body) && MUZZLES[lo.muzzle];
@@ -2570,7 +2673,9 @@ export function unlockedLoadout(cat, lo, partOpen, camoOpen, camoList) {
   if (out.retColor45 && !retColorOwned(out.retColor45)) delete out.retColor45;
   // variante de elite liberada: a montagem dela vale mesmo com peca que o nivel ainda nao abriu
   const B = out.bp && BLUEPRINTS[out.bp];
+  // 08/11 (2a ordem dele): variante do Mercado Negro vem MONTADA como as de elite (kit fixo + pente), nao com as pecas do jogador
   if (B && B.wpn === cat && bpUnlocked(out.bp)) {
+    if (B.bm) return { ...out, ...bpLoadout(out.bp), camo: B.lo.camo, canted: null, conv: null }; // camo exclusiva sempre
     const cm = camoList.find(c => c.id === out.camo);
     return { ...out, ...bpLoadout(out.bp), camo: cm && !camoOpen(cat, cm) ? B.lo.camo : out.camo };
   }

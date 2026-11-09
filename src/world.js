@@ -5,12 +5,18 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { standable, floorAt } from '../shared/nav.js';
 import { buildGun, rocketMesh } from './arsenal.js';
 
 export const BEAT = 2.2; // batidas por segundo da danca da cidade
 
 const THEME = {
   bonde: { sky: 0xd6d2c6, ground: ['#cdc6b6', '#7a7366'], trees: [] }, // Ladeira do Bonde: a rua vem do trilho (escortview)
+  // bairros grandes e avenida (08/11): as ruas vem do proprio mapa (M.roads)
+  becos: { sky: 0xcfc8ba, ground: ['#b8b0a0', '#6a6458'], fog: [70, 230], trees: [] },
+  feira: { sky: 0xe4dac0, ground: ['#d3c7a8', '#8d8064'], fog: [80, 250], trees: [] },
+  largo: { sky: 0xd2d6d0, ground: ['#bcbfb4', '#686c62'], fog: [80, 260], trees: [] },
+  cortejo: { sky: 0xdcd6c6, ground: ['#cdc6b6', '#7a7366'], fog: [80, 260], trees: [] },
   vila: { sky: 0xd8d4ca, ground: ['#cfc9bd', '#7e786e'], roads: true, trees: [[-12, -12], [12, 12], [-40, 14], [40, -14], [-30, 30], [30, -30]] },
   fabrica: { sky: 0xc9c4ba, ground: ['#bdb7ab', '#6e6a63'], hazard: true, trees: [] },
   fronteira: { sky: 0xdcd8cc, ground: ['#d3cdb8', '#8a8470'], paths: true, trees: [[-40, -36], [40, 36], [-62, 10], [62, -10], [-14, 50], [14, -50], [-56, -50], [56, 50]] },
@@ -73,7 +79,7 @@ export function buildWorld(scene, M) {
   const roadTex = hatchTexture('#e8e4da', '#a8a196', { density: 10 });
   roadTex.repeat.set(2, 24);
   const roads = TH.roads ? [[8, ARENA * 2, 0, 0], [ARENA * 2, 8, 0, 0], [6, ARENA * 2, -36, 0], [6, ARENA * 2, 36, 0]]
-    : TH.paths ? [[7, ARENA * 2, 0, 0], [6, ARENA * 2, -44, 0], [6, ARENA * 2, 44, 0]] : TH.roadList || [];
+    : TH.paths ? [[7, ARENA * 2, 0, 0], [6, ARENA * 2, -44, 0], [6, ARENA * 2, 44, 0]] : M.roads || TH.roadList || [];
   if (TH.hazard) {
     // faixas de seguranca da fabrica no chao
     const hz = hazardTexture();
@@ -397,9 +403,10 @@ export function buildWorld(scene, M) {
     swayers.push({ obj: t, base: 0, amp: 0.12, speed: 2.4, phase: i, tree: true });
   }
   for (const [x, z] of TH.trees) {
-    if (M.boxes.some(b => x > b.min[0] - 2 && x < b.max[0] + 2 && z > b.min[2] - 2 && z < b.max[2] + 2)) continue; // arvore nunca dentro de casa/pedra
+    if (M.boxes.some(b => b.kind !== 'trunk' && x > b.min[0] - 2 && x < b.max[0] + 2 && z > b.min[2] - 2 && z < b.max[2] + 2)) continue; // arvore nunca dentro de casa/pedra
     if (podiumClear(M, x, z)) continue; // nem entre a camera e o podio (REGRA: enfeite novo do mapa passa por aqui)
     const t = makeTree(0.8);
+    M.boxes.push({ min: [x - 0.3, 0, z - 0.3], max: [x + 0.3, 4.4, z + 0.3], kind: 'trunk' }); // 08/11 (pedido dele): tronco tem corpo; sai no dispose
     t.position.set(x, 0, z);
     root.add(t);
     swayers.push({ obj: t, base: 0, amp: 0.1, speed: 2.4, phase: x, tree: true });
@@ -450,6 +457,9 @@ export function buildWorld(scene, M) {
     for (const c of clouds) c.visible = !on;
     if (on && !nightG) { nightG = nightLights(M); root.add(nightG); }
     if (nightG) nightG.visible = on;
+    // postes extras da noite tem colisao (08/11, pedido dele: passava por dentro); so existem enquanto e noite
+    M.boxes = M.boxes.filter(b => !b.nightPost);
+    if (on && nightG) for (const [x, y, z] of nightG.userData.posts) M.boxes.push({ min: [x - 0.12, y, z - 0.12], max: [x + 0.12, y + 4.6, z + 0.12], kind: 'post', nightPost: true });
     paintNight(on);
   }
   // janelas acesas e banco iluminado (07/11, pedido dele: sem pesar na memoria): so liga o brilho (emissive) dos materiais
@@ -458,14 +468,15 @@ export function buildWorld(scene, M) {
   function paintNight(on) {
     root.traverse(o => {
       if (!o.isMesh || !/^(map|vila)_/.test(o.name) || !o.material?.emissive) return;
-      if (/glass/.test(o.name)) o.material.emissive.set(on ? 0xd8963a : 0);
+      if (/glass|adobe_hole|lamp_glow/.test(o.name)) o.material.emissive.set(on ? 0xd8963a : 0); // adobe_hole: as janelas e portas do Deserto, que nao tem vidro (08/11)
+      else if (/lamp_red/.test(o.name)) o.material.emissive.set(on ? 0xd8402e : 0);
       else if (/marble/.test(o.name)) o.material.emissive.copy(on ? o.material.color : BLACK).multiplyScalar(on ? 0.42 : 1);
     });
   }
   paintNight(false); ready.then(() => paintNight(nightOn)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
     root, ready, setNight,
-    dispose() { scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
+    dispose() { M.boxes = M.boxes.filter(b => !b.nightPost && b.kind !== 'trunk'); scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
     // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
     cull(p) {
       sunSpr.position.set(p.x + sunOff.x, p.y + sunOff.y + sunBob, p.z + sunOff.z); // sol/lua sempre dentro do desenho
@@ -623,7 +634,23 @@ function nightLights(M) {
   const poolMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const pool = (x, y, z, r) => { const m = new THREE.Mesh(new THREE.CircleGeometry(r, 28), poolMat); m.rotation.x = -Math.PI / 2; m.position.set(x, y + 0.04, z); G.add(m); };
   const glowPlane = (x, y, z, w, h, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: 0xffc46a, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); m.position.set(x, y, z); m.rotation.y = ry; G.add(m); };
-  for (const b of M.boxes) if (b.kind === 'lamp') { const x = (b.min[0] + b.max[0]) / 2, z = (b.min[2] + b.max[2]) / 2; halo(x, b.max[1] + 0.25, z, 2.8); pool(x, b.min[1], z, 4.2); }
+  // 08/11 (pedido dele: todo mapa a noite, reciclando): acende os postes que o mapa ja tem; mapa sem poste ganha uns de mentira (uma malha, copias) nas zonas, bases e nascimentos
+  const spots = [], extra = [];
+  for (const b of M.boxes) { const h = b.max[1] - b.min[1]; if (b.kind === 'lamp' || (b.kind === 'post' && h >= 3.5 && h <= 6)) spots.push([(b.min[0] + b.max[0]) / 2, b.max[1], (b.min[2] + b.max[2]) / 2, b.min[1]]); }
+  if (spots.length < 16) {
+    const add = (x, z) => { if (!standable(M, x, z) || !spots.every(s => Math.hypot(s[0] - x, s[2] - z) > 7)) return; const y = floorAt(M, x, z); spots.push([x, y + 4.2, z, y]); extra.push([x, y, z]); };
+    for (const q of M.zones || []) for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add(q.pos[0] + a * (q.r + 1.5), q.pos[2] + b * (q.r + 1.5));
+    for (const p of Object.values(M.flagBase || {})) for (const [a, b] of [[-1, -1], [1, 1]]) add(p[0] + a * 5, p[2] + b * 5);
+    for (const s of M.spawns?.ffa || []) add(s[0] + 2.5, s[1] + 2.5);
+    if (extra.length) {
+      const g = mergeGeometries([new THREE.CylinderGeometry(0.07, 0.1, 4.2, 6).translate(0, 2.1, 0), new THREE.BoxGeometry(0.42, 0.42, 0.42).translate(0, 4.4, 0)]), inst = new THREE.InstancedMesh(g, toon(0x1f1d1a), extra.length), d = new THREE.Object3D();
+      extra.forEach(([x, y, z], i) => { d.position.set(x, y, z); d.updateMatrix(); inst.setMatrixAt(i, d.matrix); });
+      inst.frustumCulled = false; G.add(inst);
+    }
+  }
+  G.userData.posts = extra;
+  const every = Math.max(1, spots.length / 40); // no maximo 40 luzes por mapa: cada halo e uma chamada de desenho
+  for (let i = 0; i < spots.length; i += every) { const [x, top, z, y0] = spots[Math.floor(i)]; halo(x, top + 0.25, z, 2.8); pool(x, y0, z, 4.2); }
   if (M.id === 'ferradura') {
     glowPlane(0, 5, 14.5, 5.6, 3.8, 0); // porta da frente (no vao, longe das faces da parede)
     for (const sx of [-1, 1]) glowPlane(sx * 16.5, 4.5, 0, 3.6, 2.8, Math.PI / 2); // portas dos lados
@@ -724,7 +751,7 @@ export function buildObjectives(scene, M) {
     flags, zones: zoneObjs, pickups, root,
     dispose() { scene.remove(root); freeGeos(root); },
     // carrier(id): { me } pra quem carrega sou eu, { pos, yaw } pro boneco suavizado dos outros
-    update(t, snap, mode, carrier) {
+    update(t, snap, mode, carrier, hideZone) { // hideZone: letra da zona que esta na HUD de quem esta dentro
       for (const team of ['red', 'blue']) {
         const f = flags[team];
         f.g.visible = f.pad.visible = mode === 'ctf';
@@ -744,7 +771,7 @@ export function buildObjectives(scene, M) {
       }
       const bz = mode === 'dom' && snap?.zones.find(q => q.bonus);
       if (bz && !bonusObj) { bonusObj = mkZone({ id: 'D', pos: bz.pos, r: 4 }); bonusObj.ring.material.color.setHex(0xd9a520); bonusObj.letter.scale.set(3, 3, 1); }
-      if (bonusObj) { bonusObj.g.visible = !!bz; if (bz) { bonusObj.g.position.set(bz.pos[0], bz.pos[1] + 0.03, bz.pos[2]); bonusObj.fill.material.color.setHex(bz.owner === 'red' ? PAL.red : bz.owner === 'blue' ? PAL.blue : 0xf2d27a); bonusObj.fill.material.opacity = 0.3 + Math.abs(bz.prog) * 0.35; bonusObj.ring.rotation.z = -t; bonusObj.letter.position.y = 4.6 + Math.sin(t * BEAT * Math.PI * 2) * 0.35; } }
+      if (bonusObj) { bonusObj.g.visible = !!bz; if (bz) { bonusObj.g.position.set(bz.pos[0], bz.pos[1] + 0.03, bz.pos[2]); bonusObj.fill.material.color.setHex(bz.owner === 'red' ? PAL.red : bz.owner === 'blue' ? PAL.blue : 0xf2d27a); bonusObj.fill.material.opacity = 0.3 + Math.abs(bz.prog) * 0.35; bonusObj.ring.rotation.z = -t; bonusObj.letter.visible = hideZone !== bz.id; bonusObj.letter.position.y = 4.6 + Math.sin(t * BEAT * Math.PI * 2) * 0.35; } }
       zoneObjs.forEach((z, i) => {
         z.g.visible = mode === 'dom';
         if (!snap || mode !== 'dom') return;
@@ -752,6 +779,7 @@ export function buildObjectives(scene, M) {
         z.fill.material.color.setHex(s.owner === 'red' ? PAL.red : s.owner === 'blue' ? PAL.blue : PAL.paper);
         z.fill.material.opacity = 0.25 + Math.abs(s.prog) * 0.35;
         z.ring.rotation.z = t * 0.5;
+        z.letter.visible = hideZone !== s.id;
         z.letter.position.y = 4.2 + Math.sin(t * BEAT * Math.PI) * 0.25;
       });
       pickups.forEach((p, i) => {
@@ -1117,6 +1145,16 @@ export class FX {
   }
 
   blimpMesh(team) {
+    const D = DG?.[team === 'blue' ? 'blue' : 'red'];
+    if (D) { // modelo do Blender (08/11): helices, leme e metralhadora sao pecas soltas e se mexem de verdade
+      const part = (geom, pos, th, parent) => { const m = new THREE.Mesh(geom, DG.mat); if (pos) m.position.copy(pos); outline(m, th); parent.add(m); return m; };
+      const g = new THREE.Group(); part(D.body, null, 0.04, g);
+      const rudder = part(D.rudder, DG.pv.rudder, 0.015, g), gun = part(DG.gun, DG.pv.gun, 0.012, g), props = [part(DG.prop, DG.pv.propL, 0.01, g), part(DG.prop, DG.pv.propR, 0.01, g)];
+      const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -1.45); gun.add(muzzle);
+      const v = new THREE.Vector3(), q = new THREE.Quaternion(), F = new THREE.Vector3(0, 0, -1);
+      g.userData.dg = { props, rudder, gun, muzzle, aim(t, k) { g.updateWorldMatrix(true, false); g.worldToLocal(v.fromArray(t)).sub(gun.position).normalize(); v.y = Math.min(v.y, -0.04); q.setFromUnitVectors(F, v.normalize()); gun.quaternion.slerp(q, k); } };
+      return g;
+    }
     const g = new THREE.Group();
     const body = ink(geo(THREE.SphereGeometry, 3, 18, 12), PAL.light, 0.15); body.scale.set(1, 0.8, 2.3); g.add(body);
     const band = ink(geo(THREE.CylinderGeometry, 2.45, 2.45, 0.8, 18), team === 'blue' ? PAL.blue : PAL.red, 0); band.rotation.x = Math.PI / 2; g.add(band);
@@ -1607,8 +1645,8 @@ function tripoModel(file) {
 
 // ---------- mapas modelados no Blender (06/11) ----------
 // pecas que o .glb NAO desenha (ficam as do jogo): carro do Tripo (chega depois) e o frontao com a placa pintada em canvas
-const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'] }; // tinteiro: a floresta fica a do jogo
-const MAP_GLB = { vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
+const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
+const MAP_GLB = { vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
 const MAPM = new Map(), MAPG = new Map(); // MAPG: modelo ja pronto (o mapa monta direto com ele, sem as caixas antes)
 // mapas comprimidos com Draco (06/11, pedido dele: PC e celular; ~15x menor). Decoder em public/draco (copia do three)
 let draco = null;
@@ -1639,3 +1677,24 @@ function mapModel(file) {
   MAPM.set(file, p);
   return p;
 }
+
+// Dirigivel novo (08/11, pedido dele): feito no Blender (tools/blender/dirigivel.py). Cor nos vertices: uma chamada de desenho
+// por casco, e cada time tem sua copia com os gomos e o leme na propria cor. Enquanto nao carrega, fica o desenho antigo.
+let DG = null;
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/dirigivel2.glb').then((gl) => {
+  gl.scene.updateMatrixWorld(true);
+  const flat = (name, team) => {
+    const node = gl.scene.getObjectByName(name), inv = node.matrixWorld.clone().invert(), parts = [];
+    node.traverse(o => {
+      if (!o.isMesh) return;
+      const g = o.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+      g.applyMatrix4(inv.clone().multiply(o.matrixWorld));
+      const c = team && /team/.test(o.material.name) ? new THREE.Color(team) : o.material.color, n = g.attributes.position.count, a = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(a, 3)); parts.push(g);
+    });
+    return mergeGeometries(parts);
+  };
+  const pos = (name) => gl.scene.getObjectByName(name).position.clone();
+  DG = { mat: toon(0xffffff, { unique: true, vertexColors: true }), red: { body: flat('dg_body', PAL.red), rudder: flat('rudder', PAL.red) }, blue: { body: flat('dg_body', PAL.blue), rudder: flat('rudder', PAL.blue) }, prop: flat('prop_L'), gun: flat('gun'), pv: { propL: pos('prop_L'), propR: pos('prop_R'), rudder: pos('rudder'), gun: pos('gun') } };
+}).catch(e => console.warn('dirigivel2.glb nao carregou (fica o desenho antigo)', e));

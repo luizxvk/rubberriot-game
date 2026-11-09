@@ -5,6 +5,7 @@
 //   anvilRain: s entre bigornas caindo no mapa | bigHead: tamanho da cabeca | headMul: dano na cuca
 //   killHeal: vida que o abate devolve | ice: chao de sabao | fuse/fuseKill: bomba-relogio no peito
 //   oneHead: tiro na cuca derruba | tiny: boneco nanico | boost: correria (velocidade)
+//   hp: vida ao nascer (x100) | regen/regenAfter: vida que volta por segundo depois de N s sem dano (08/11)
 export const EVENTS = {
   lua: { grav: 0.35, jump: 1.15, icon: 'nightlight' },                     // Gravidade de Borracha: pulos de astronauta
   faca: { kit: ['melee'], icon: 'content_cut' },                         // Faca na Boca: so lamina
@@ -16,6 +17,15 @@ export const EVENTS = {
   relogio: { fuse: 45, fuseKill: 15, icon: 'timer' },                     // Bomba-Relogio: abate da mais pavio, zerou = KABUM
   bangbang: { kit: ['pistol', 'melee'], oneHead: true, icon: 'gps_fixed' }, // Duelo ao Meio-Dia: pistola, cuca derruba
   pulapula: { jump: 2.1, boost: 1.25, icon: 'keyboard_double_arrow_up' },   // Pula-Pula: pulo de mola e correria
+  // 08/11 (pedido dele: mais eventos tematicos e divertidos)
+  bacamarte: { kit: ['shotgun', 'melee'], icon: 'adjust' },               // Bacamarte de Bolso: so escopeta, briga de perto
+  aguia: { kit: ['sniper', 'pistol'], icon: 'visibility' },               // Olho de Aguia: so luneta e pistola
+  alfinete: { bigHead: 0.5, headMul: 3.2, icon: 'my_location' },          // Cabeca de Alfinete: cabecinha minuscula, mas a cuca vale o triplo
+  rush: { boost: 1.5, jump: 1.15, icon: 'directions_run' },               // Hora do Rush: todo mundo com pressa
+  tanque: { hp: 2, icon: 'shield' },                                      // Tanque de Borracha: vida em dobro, tiroteio longo
+  casca: { hp: 0.4, icon: 'egg' },                                        // Casca de Ovo: qualquer tiro derruba
+  elastico: { regen: 30, regenAfter: 1.5, icon: 'favorite' },             // Pele de Elastico: a vida volta rapidinho
+  circo: { anvilRain: 2.4, jump: 1.6, grav: 0.6, icon: 'flare' },         // Circo Voador: pulo de trapezista e bigorna caindo
 };
 export const EVENT_IDS = Object.keys(EVENTS);
 

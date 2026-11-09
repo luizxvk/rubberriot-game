@@ -3,6 +3,9 @@
 // Duas trilhas: PASS (premium, um premio por nivel, so com o Elite da Rovex) e PASS_FREE (de 5 em 5, pra todo mundo, coisas mais comuns).
 // Nada daqui e vendido na Loja nem sai por desafio. Nao tem import pra poder entrar em progress.js e nas ferramentas.
 export const PASS_SEASON = 1;
+// fim da temporada (08/11, pedido dele: 1 mes e meio a partir de hoje). Usado na pilula da aba da Loja
+export const PASS_ENDS = new Date(2026, 11, 23, 23, 59, 59).getTime();
+export const passDaysLeft = (now = Date.now()) => Math.ceil((PASS_ENDS - now) / 864e5);
 export const PASS_PER = 1200;
 const L = (slot, id) => ({ k: 'look', slot, id });
 const B = (id) => ({ k: 'banner', id });

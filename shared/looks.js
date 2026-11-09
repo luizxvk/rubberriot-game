@@ -130,6 +130,7 @@ LOOKS.face = [
   { id: 'bigode', lvl: 1, r: 1, pass: true }, { id: 'charuto', lvl: 1, r: 1, pass: true }, { id: 'dente', lvl: 1, r: 1, pass: true }, { id: 'cachimbo', lvl: 1, r: 1, pass: true }, { id: 'cavanhaque', lvl: 1, r: 1, pass: true }, { id: 'barba', lvl: 1, r: 2, pass: true }, { id: 'tapa', lvl: 1, r: 2, pass: true },
   { id: 'gargalhada', lvl: 1, r: 1, shop: true }, { id: 'lingua', lvl: 1, r: 1, shop: true },
   { id: 'fantasma', lvl: 1, r: 2, shop: true }, // mascara de caveira (07/11, so na Loja)
+  { id: 'bandido', lvl: 1, r: 1, shop: true }, { id: 'mocinho', lvl: 1, r: 1, shop: true }, { id: 'palhaco', lvl: 1, r: 1, shop: true }, { id: 'gas', lvl: 1, r: 2, shop: true }, { id: 'luchador', lvl: 1, r: 2, shop: true }, // 08/11 (pedido dele): mais mascaras, so na Loja
   { id: 'olhoroxo', lvl: 1, r: 1, rank: 0 }, // rankeada, tema ringue (05/11)
 ];
 LOOKS.charm = [
@@ -144,6 +145,7 @@ for (const b of MASTERY_BODIES) if (b !== 'pistol_11') LOOKS.charm.push({ id: 'm
 LOOKS.death = [
   { id: 'pancake', lvl: 1, r: 0 }, { id: 'tabua', lvl: 1, r: 0, pass: true }, { id: 'fita', lvl: 1, r: 1, pass: true }, { id: 'anjo', lvl: 1, r: 2, pass: true }, { id: 'sanfona', lvl: 1, r: 1, pass: true },
   { id: 'balao', lvl: 1, r: 2, shop: true }, { id: 'mola', lvl: 1, r: 2, shop: true }, { id: 'nocaute', lvl: 1, r: 2, rank: 2 },
+  { id: 'caixao', lvl: 1, r: 2, shop: true }, // Volta pro Caixao (08/11, pedido dele): lendaria da Loja
 ];
 export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none', skin: 'none', face: 'none', charm: 'none', death: 'pancake' };
 

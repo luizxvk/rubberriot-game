@@ -90,10 +90,10 @@ export class Hud {
     if (on) $('armorBar').style.width = Math.max(0, Math.min(100, v)) + '%';
   }
 
-  hp(v) {
+  hp(v, max = 100) { // max: evento Tanque de Borracha/Casca de Ovo (08/11) muda a vida cheia
     this.el.hp.textContent = Math.max(0, Math.round(v));
-    this.el.hpBar.style.width = Math.max(0, v) + '%';
-    this.el.hpBox.classList.toggle('low', v <= 35);
+    this.el.hpBar.style.width = Math.max(0, Math.min(100, v / (max || 100) * 100)) + '%';
+    this.el.hpBox.classList.toggle('low', v <= 35 * (max || 100) / 100);
   }
 
   frame(p, dt, settings) {
@@ -196,7 +196,8 @@ export class Hud {
     else if (now < (this.goUntil || 0)) { num = 'RUBBER RIOT!'; go = true; } // 06/11 (pedido dele): a partida abre com o nome do jogo, junto com o grito do narrador
     // narrador (06/11): "Ladies and gentlemen, lights, camera..." durante a contagem (3,3 s, termina antes do 1) e "RUBBER RIOT!" cravado na largada
     const quietVo = !!(this.g?.range || this.g?.tutorial);
-    if (f > 0.05 && f <= 3.4 && !snap?.loading && !this.voIntro) { this.voIntro = true; if (!quietVo) audio.voice('start_a'); }
+    const laterRound = (snap?.round?.n ?? snap?.esc?.round ?? 1) >= 2; // 08/11: abertura so no 1o round; do 2o em diante, "Next round"
+    if (f > 0.05 && f <= 3.4 && !snap?.loading && !this.voIntro) { this.voIntro = true; if (!quietVo) audio.voice(laterRound ? 'round_next' : 'start_a'); }
     if (f <= 0) this.voIntro = false;
     el.box.hidden = !num && !sub;
     // Bate-Volta: tela escura durante a contagem (ninguem fica vendo os outros parados no ar)
@@ -207,7 +208,7 @@ export class Hud {
       el.num.classList.toggle('go', go);
       el.num.classList.remove('tick'); void el.num.offsetWidth; if (num) el.num.classList.add('tick');
       // 3, 2, 1 = tique de relogio subindo o tom; Ja! = apito
-      if (go) { audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 }); if (!(this.g?.range || this.g?.tutorial)) audio.voice('start_b'); }
+      if (go) { audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 }); if (!quietVo && !laterRound) audio.voice('start_b'); }
       else if (num) audio.play('tick', { ui: true, vol: 0.45, rate: 0.9 + (3 - Number(num)) * 0.08, jitter: 0, key: 'count', max: 1 });
     }
     if (el.sub.textContent !== sub) el.sub.textContent = sub;
@@ -310,8 +311,8 @@ export class Hud {
     const it = this.evQ.shift(), el = document.createElement('div');
     el.className = 'ev ' + it.cls; el.innerHTML = it.html;
     box.prepend(el);
-    while (box.children.length > 2) box.lastChild.remove();
-    const ms = Math.max(1100, it.ms * Math.max(0.5, 1 - this.evQ.length * 0.12));
+    while (box.children.length > (document.body.classList.contains('touchmode') ? 1 : 2)) box.lastChild.remove(); // celular: um aviso por vez (08/11)
+    const ms = Math.max(1100, it.ms * Math.max(0.5, 1 - this.evQ.length * 0.12) * (document.body.classList.contains('touchmode') ? 0.75 : 1));
     const cur = this.evCur = { el, key: it.key };
     cur.t = setTimeout(() => this.evOut(cur), ms);
   }
@@ -350,8 +351,23 @@ export class Hud {
   }
 
   // desbloqueios e desafios em FILA (01/11, pedido dele): um depois do outro, nunca empilhados (no celular enchia a tela)
+  // desbloqueio na partida (08/11, pedido dele): bilhete que DESCE do topo, mostra o item com holofote girando atras e a
+  // arte crescendo com brilho, e SOBE de volta. Fila propria (um por vez); as mensagens do canto descem enquanto ele esta na tela
   unlockBanner({ kind, name, img, more = 0 }) {
-    this.push(`${img ? `<img src="${img}" alt="">` : ''}<span><small>${kind}</small><b>${name}</b></span>${more ? `<em>+${more}</em>` : ''}`, 'ev-unl', document.body.classList.contains('touchmode') ? 2400 : 2900);
+    (this.dropQ ||= []).push({ kind, name, img, more });
+    if (this.dropQ.length > 6) this.dropQ.splice(6);
+    this.dropNext();
+  }
+  dropNext() {
+    if (this.dropOn || !this.dropQ?.length) return;
+    const it = this.dropQ.shift(), host = document.getElementById('hud');
+    let el = this.dropEl; if (!el) { el = this.dropEl = document.createElement('div'); el.className = 'unl-drop'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); host.appendChild(el); }
+    const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    el.innerHTML = `<div class="ud-card"><span class="ud-art"><i class="ud-rays" aria-hidden="true"></i>${it.img ? `<img src="${it.img}" alt="">` : ''}</span><span class="ud-txt"><small>${esc(it.kind)}</small><b>${esc(it.name)}</b>${it.more ? `<em>+${it.more}</em>` : ''}</span><i class="ud-shine" aria-hidden="true"></i></div>`;
+    const ms = document.body.classList.contains('touchmode') ? 3000 : 3400;
+    this.dropOn = true; el.style.setProperty('--ud-ms', ms + 'ms');
+    el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); document.body.classList.add('unl-drop-on');
+    clearTimeout(this.dropT); this.dropT = setTimeout(() => { el.classList.remove('go'); this.dropOn = false; if (!this.dropQ.length) document.body.classList.remove('unl-drop-on'); setTimeout(() => this.dropNext(), 120); }, ms);
   }
 
   // granada de fragmentacao perto (< 9 m): icone em cima dela; fora da tela, preso na borda apontando
@@ -709,6 +725,7 @@ export class Hud {
       if (pg.t <= (this.g?.t || 0)) continue;
       pts.push({ p: [pg.pos[0], pg.pos[1] + (pg.kind === 'enemy' ? 2.4 : 1.6), pg.pos[2]], cls: 'ping' + (id === this.g?.myId ? '' : ' mate') + (pg.kind === 'enemy' ? ' enemy' : ''), txt: pg.kind === 'enemy' ? '!' : pg.kind === 'item' ? '◆' : '▼', sub: pg.label || '' });
     }
+    for (const h of snap.field?.holes || []) if (h[4] === this.g?.myId) pts.push({ p: [h[1], h[2] + 1.8, h[3]], cls: 'ping', txt: '◎', sub: t('holePin') }); // meu Buraco Portatil: onde ficou (08/11)
     // sentinelas (04/11): icone em cima de cada uma (a do inimigo em vermelho de alerta), com a vida
     for (const b of snap.blimps || []) if (b.k === 'sentry') {
       const mine = b.owner === this.g?.myId || (this.g?.myTeam && b.team === this.g.myTeam);
@@ -731,25 +748,94 @@ export class Hud {
     } else if (mode === 'dom') {
       for (const z of snap.zones) {
         const def = z.pos || (this.M?.zones.find(q => q.id === z.id) || { pos: [0, 0, 0] }).pos;
-        pts.push({ p: [def[0], def[1] + 3, def[2]], cls: (z.owner || '') + (z.bonus ? ' bonus' : ''), txt: z.id, sub: z.bonus ? z.left + ' s' : '' });
+        pts.push({ zid: z.id, p: [def[0], def[1] + 3, def[2]], cls: (z.owner || '') + (z.bonus ? ' bonus' : ''), txt: z.id, sub: z.bonus ? z.left + ' s' : '' });
       }
     }
-    const v = new THREE.Vector3();
+    const v = new THREE.Vector3(), D = (this.dc ||= { id: null, at: null, leaving: false, show: 0, last: 0, moved: 0, dir: 0, t: 0, st: '', cls: '', w: -1 }), want = mode === 'dom' ? this.domZone(snap) : null;
     let html = '';
     for (const o of pts) {
+      const held = o.zid && (o.zid === D.id || o.zid === want); // a zona em que a pessoa esta mora na HUD, nao no mundo
       v.fromArray(o.p).project(camera);
-      if (v.z > 1) continue;
+      if (v.z > 1) { if (held) D.at = null; continue; }
       const x = THREE.MathUtils.clamp((v.x * 0.5 + 0.5) * innerWidth, 24, innerWidth - 24);
       const y = THREE.MathUtils.clamp((-v.y * 0.5 + 0.5) * innerHeight, 70, innerHeight - 24);
+      if (held) { D.at = [x, y]; continue; }
       const d = me ? Math.round(Math.hypot(o.p[0] - me.pos[0], o.p[2] - me.pos[2])) : 0;
       html += `<div style="left:${x}px;top:${y}px"><span class="pin ${o.cls}">${o.txt}</span><span class="dist">${o.sub ? esc(o.sub) + ' · ' : ''}${d} m</span></div>`;
     }
     this.el.obj.innerHTML = html;
+    if (want || D.id) this.domCap(snap, want, D);
   }
 
+  // zona em que o jogador esta (mesma conta do servidor: raio e 2,5 m de altura)
+  domZone(snap) {
+    const P = this.g?.player; if (!P?.alive || this.g?.replay?.on) return null;
+    for (const z of snap.zones) {
+      const def = z.pos ? { pos: z.pos, r: 4 } : this.M?.zones.find(q => q.id === z.id); if (!def) continue;
+      if ((P.pos[0] - def.pos[0]) ** 2 + (P.pos[2] - def.pos[2]) ** 2 <= def.r * def.r && Math.abs(P.pos[1] - def.pos[1]) <= 2.5) return z.id;
+    }
+    return null;
+  }
+
+  // dominacao (08/11, pedido dele): a letra voa do mundo pra HUD ao entrar na zona e volta ao sair; a barra anda com a captura
+  domCap(snap, want, D) {
+    const E = (this.dcEl ||= { box: document.getElementById('domCap'), pin: document.getElementById('dcPin'), fill: document.getElementById('dcFill'), st: document.getElementById('dcState') });
+    const fly = (leaving) => {
+      const r = E.pin.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, dx = D.at ? D.at[0] - cx : 0, dy = D.at ? D.at[1] - cy : -90;
+      const far = { transform: `translate(${dx}px, ${dy}px) scale(.72)`, opacity: 0.85 }, home = { transform: 'translate(0, 0) scale(1)', opacity: 1 };
+      D.anim?.cancel();
+      D.anim = E.pin.animate(leaving ? [home, far] : [far, home], { duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : leaving ? 260 : 360, easing: 'cubic-bezier(.22, .8, .24, 1)', fill: 'forwards' });
+      return D.anim;
+    };
+    const z0 = want && snap.zones.find(q => q.id === want);
+    if (want && want !== D.id) {
+      D.id = want; D.leaving = false; E.box.hidden = false; E.pin.textContent = want; E.box.classList.add('on');
+      D.show = z0?.prog || 0; D.last = D.show; D.moved = 0; D.w = -1; fly(false);
+    } else if (want && D.leaving) {
+      D.leaving = false; E.box.classList.add('on'); fly(false);
+    } else if (!want && D.id && !D.leaving) {
+      D.leaving = true; E.box.classList.remove('on');
+      const a = fly(true); a.onfinish = () => { if (!D.leaving) return; D.leaving = false; D.id = null; D.anim = null; a.cancel(); E.box.hidden = true; };
+    }
+    if (!D.id) return;
+    const z = snap.zones.find(q => q.id === D.id); if (!z) return;
+    const now = performance.now(), dt = Math.min(0.1, (now - (D.t || now)) / 1000), prog = z.prog || 0; D.t = now;
+    D.show += (prog - D.show) * Math.min(1, dt * 12); // o snapshot chega em degraus; a barra anda lisa
+    if (Math.abs(prog - D.last) > 1e-4) { D.dir = Math.sign(prog - D.last); D.last = prog; D.moved = now; }
+    const moving = now - D.moved < 280, team = this.g?.myTeam, mine = team === 'red' ? -1 : 1;
+    const st = moving ? (D.dir === mine ? 'capturing' : 'losing') : z.owner && z.owner === team ? 'held' : 'contest';
+    if (st !== D.st) { D.st = st; E.box.dataset.st = st; E.st.textContent = t({ capturing: 'domCapturing', losing: 'domLosing', held: 'domHeld', contest: 'domContest' }[st]); }
+    E.box.classList.toggle('moving', moving);
+    const cls = (z.owner || '') + (z.bonus ? ' bonus' : ''), side = D.show < 0 ? 'red' : D.show > 0 ? 'blue' : '';
+    if (cls !== D.cls) { D.cls = cls; E.pin.className = 'dc-pin ' + cls; }
+    if (side !== D.side) { D.side = side; E.fill.className = side; }
+    const w = Math.round(Math.abs(D.show) * 1000) / 10; if (w !== D.w) { D.w = w; E.fill.style.width = w + '%'; }
+  }
+
+  chSlide(b) {
+    const box = b.querySelector('.bd-slide'), ul = box?.querySelector('ul'); if (!ul) return;
+    if (this.slideUl !== ul) { // lista so muda quando o progresso muda; a conta roda uma vez por lista (a altura da caixa muda depois de paginar)
+    const items = [...ul.children], avail = parseFloat(getComputedStyle(box).maxHeight) || 480, itemH = Math.max(...items.map(li => li.offsetHeight), 40) + 8;
+    const per = Math.max(1, Math.floor(avail / itemH)), pages = Math.ceil(items.length / per);
+    {
+      this.slidePages = pages; this.slideUl = ul; this.slideP = Math.min(this.slideP || 0, pages - 1);
+      items.forEach((li, k) => li.style.setProperty('--pg', Math.floor(k / per)));
+      ul.style.setProperty('--pages', pages); b.querySelector('.bd-dots').innerHTML = pages > 1 ? Array.from({ length: pages }, (_, k) => `<i class="${k === this.slideP ? 'on' : ''}"></i>`).join('') : '';
+      ul.style.transform = `translateX(${-this.slideP * 100}%)`;
+    }
+    }
+    const pages = this.slidePages;
+    if (pages > 1 && !this.slideT) this.slideT = setInterval(() => {
+      const u = this.slideUl; if (!u?.isConnected) { clearInterval(this.slideT); this.slideT = 0; return; }
+      this.slideP = (this.slideP + 1) % this.slidePages; u.style.transform = `translateX(${-this.slideP * 100}%)`;
+      u.closest('.bd-ch')?.querySelectorAll('.bd-dots i').forEach((d, k) => d.classList.toggle('on', k === this.slideP));
+    }, 6000);
+    if (pages <= 1 && this.slideT) { clearInterval(this.slideT); this.slideT = 0; }
+  }
   board(show, snap, players, meId, chs = null) {
     const b = this.el.board;
     b.hidden = !show;
+    if (!show && this.slideT) { clearInterval(this.slideT); this.slideT = 0; } // Tab fechado: o deslize para
     if (!show || !snap) return;
     const cfg = MODES[snap.mode];
     const TEAM = snap.mode === 'infect' ? { red: 'inf_h_inf', blue: 'inf_h_surv' } : { red: 'h_red', blue: 'h_blue' };
@@ -763,7 +849,9 @@ export class Hud {
     } else html += `<table>${head}${rows(sort(players))}</table>`;
     // desafios acompanhados ao lado do placar (embaixo na tela estreita), progresso ao vivo
     b.classList.toggle('has-ch', !!chs?.length);
-    if (chs?.length) html = `<div class="bd-main">${html}</div><aside class="bd-ch"><h3>${t('challenges')}</h3><ul>${chs.map(c => `<li class="${c.done ? 'done' : ''}${c.elite ? ' elite' : ''}"><small>${esc(c.tag)}${c.pin ? ' ·  ★' : ''}</small><b>${esc(c.name)}</b>${c.rw ? `<em>${esc(c.rw)}</em>` : ''}<span class="bd-bar"><i style="width:${Math.round(Math.min(1, c.prog / c.n) * 100)}%"></i></span><span class="bd-n">${c.done ? t('chDoneStamp') : `${Math.min(c.prog, c.n)}/${c.n}`}</span></li>`).join('')}</ul></aside>`;
+    if (chs?.length) html = `<div class="bd-main">${html}</div><aside class="bd-ch"><h3>${t('missions')}</h3><div class="bd-slide"><ul>${chs.map(c => `<li class="${c.done ? 'done' : ''}${c.elite ? ' elite' : ''}"><small>${esc(c.tag)}${c.pin ? ' ·  ★' : ''}</small><b>${esc(c.name)}</b>${c.rw ? `<em>${esc(c.rw)}</em>` : ''}<span class="bd-bar"><i style="width:${Math.round(Math.min(1, c.prog / c.n) * 100)}%"></i></span><span class="bd-n">${c.done ? t('chDoneStamp') : `${Math.min(c.prog, c.n)}/${c.n}`}</span></li>`).join('')}</ul></div><span class="bd-dots"></span></aside>`;
     if (b._h !== html) { b._h = html; b.innerHTML = html; } // so redesenha quando muda (antes era todo quadro)
+    // 08/11 (pedido dele): muitas missoes/desafios no painel do Tab = desliza sozinho pro lado a cada 6 s e volta pro comeco
+    if (show && chs?.length) this.chSlide(b); else { clearInterval(this.slideT); this.slideT = 0; }
   }
 }

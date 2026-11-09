@@ -11,6 +11,8 @@ import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout, isSaber, 
 import { CAMOS } from './camos.js';
 import { camoUnlocked } from './progress.js';
 import { audio } from './audio.js';
+import { tpSqueeze } from './tpfx.js';
+import { holeExit } from '../shared/field.js';
 import { LASER_BODY } from './world.js';
 import { t } from './i18n.js';
 import { isTouch } from './input.js';
@@ -444,7 +446,7 @@ export class Player {
       if (inp.slot >= 0 && this.owned[inp.slot]) this.equip(this.owned[inp.slot]);
       // luneta variavel mirando: a rodinha (ou o botao de troca no celular) alterna os 2 zooms em vez de trocar de arma
       const vari = this.adsK > 0.5 && this.g.vmScopeKind?.() === 'vari';
-      if (inp.wheel && vari) { this.zoomStep = this.zoomStep ? 0 : 1; audio.play('ui_click', { ui: true, vol: 0.4 }); }
+      if (inp.wheel && vari) { this.zoomStep = this.zoomStep ? 0 : 1; this.zoomPulse = 1; audio.play('ui_click', { ui: true, vol: 0.4 }); }
       else if (inp.wheel) this.cycle(inp.wheel > 0 ? 1 : -1);
       if (inp.lastPressed && this.g.mode !== 'bomb') this.equip(this.lastWpn); // na bomba o Q inclina
     }
@@ -582,7 +584,23 @@ export class Player {
     // camera
     { const vm = this.g.vm; if (vm?.gun?.userData.canted && inp.cantedPressed && this.adsK > 0.3) { vm.canted = !vm.canted; audio.play('ui_click', { vol: 0.5 }); } }
     this.zoomNow = this.g.vm?.canted ? this.g.vm.sight().zoom : st.zoom || W.zoom;
-    if (this.g.vmScopeKind?.() === 'vari') this.zoomNow *= this.zoomStep ? 1.5 : 0.75; // variavel: ~3x e ~6x
+    if (this.g.vmScopeKind?.() === 'vari') { // variavel: ~3x e ~6x. 08/11 (pedido dele): a troca corre e passa um tico do ponto antes de assentar
+      this.zoomVar = damp(this.zoomVar ?? 0.75, this.zoomStep ? 1.5 : 0.75, 11, dt);
+      this.zoomPulse = Math.max(0, (this.zoomPulse || 0) - dt * 3.2);
+      this.zoomNow *= this.zoomVar * (1 + 0.1 * Math.sin((this.zoomPulse || 0) * Math.PI));
+    }
+    // 08/11 (pedido dele): na luneta a mira balanca um pouco mais; segurar a respiracao firma por um tempo (PC segura, celular liga por um toque)
+    {
+      const scoped = this.adsK > 0.5 && !!this.g.vm?.sight?.()?.big && !this.g.tutorial;
+      if (scoped !== this.scopedNow) { this.scopedNow = scoped; document.body.classList.toggle('scope-big', scoped); }
+      this.breathE = Math.min(1, (this.breathE ?? 1) + (this.breathOn ? 0 : dt / 5));
+      if (this.breathOn) { this.breathE -= dt / 4; if (this.breathE <= 0 || !inp.breath || !scoped) this.breathOn = false; }
+      else if (inp.breath && scoped && this.breathE > 0.35) this.breathOn = true;
+      this.swayK = damp(this.swayK ?? 0, scoped ? (this.breathOn ? 0.06 : 1) : 0, 7, dt);
+      this.swayT = (this.swayT || 0) + dt;
+      const T = this.swayT, A = 0.0055 * this.swayK, sy = A * (Math.sin(T * 0.9) + 0.4 * Math.sin(T * 2.3 + 1)), sp = A * 0.7 * (Math.sin(T * 1.3 + 2) + 0.3 * Math.sin(T * 3.1));
+      this.yaw += sy - (this.swayY || 0); this.pitch += sp - (this.swayP || 0); this.swayY = sy; this.swayP = sp;
+    }
     // camera reta: andar de lado nao inclina a cabeca (era o que deixava o movimento "mole")
     this.roll = damp(this.roll, this.slideT > 0 ? SLIDE.roll : 0, 10, dt); // deslizando: inclina de leve
 
@@ -615,6 +633,7 @@ export class Player {
   useField() {
     const g = this.g, F = FIELD[g.field];
     if (!F || !this.alive || g.inRing || g.down) return; // ringue = so soco; caido nao usa
+    if (g.field === 'umbrella' && this.lo(this.wpn)?.handle === 'akimbo' && (g.fieldK ?? 0) >= 1) { audio.play('empty', { vol: 0.4 }); g.hud?.message?.(t('fieldAkimbo'), 1.6); return; } // 08/11 (regra dele): arma akimbo equipada = sem guarda-chuva (o servidor tambem barra)
     if ((g.fieldK ?? 0) < 1) { audio.play('empty', { vol: 0.4 }); return; } // barra ainda nao encheu (pontos/abates)
     const o = this.eyePos(), cp = Math.cos(this.pitch);
     const d = [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp];
@@ -636,16 +655,18 @@ export class Player {
     }
     if ((this.holeCd = (this.holeCd || 0) - dt) > 0) return;
     for (const h of F.holes) {
-      const A = [h[1], h[2], h[3]], B = [h[4], h[5], h[6]];
-      const inA = (this.pos[0] - A[0]) ** 2 + (this.pos[2] - A[2]) ** 2 < 0.8 && Math.abs(this.pos[1] - A[1]) < 0.6;
-      const inB = !inA && (this.pos[0] - B[0]) ** 2 + (this.pos[2] - B[2]) ** 2 < 0.8 && Math.abs(this.pos[1] - B[1]) < 0.6;
-      if (!inA && !inB) continue;
-      const to = inA ? B : A, fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      const A = [h[1], h[2], h[3]];
+      if ((this.pos[0] - A[0]) ** 2 + (this.pos[2] - A[2]) ** 2 >= 0.8 || Math.abs(this.pos[1] - A[1]) >= 0.6) continue;
+      const to = holeExit(g.M, A), fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw); // 08/11 (pedido dele): cada entrada joga num ponto aleatorio em raio medio
+      if (!to) continue;
       g.fx.puff([this.pos[0], this.pos[1] + 0.5, this.pos[2]], 6, 0.6, 0x141210, 0.5);
-      this.pos = [to[0] + fx * 1.3, to[1] + 0.05, to[2] + fz * 1.3]; this.vel = [fx * 3, 4, fz * 3];
-      g.fx.puff([to[0], to[1] + 0.5, to[2]], 6, 0.6, 0x141210, 0.5);
-      g.fx.word('SLURP!', [to[0], to[1] + 1.6, to[2]], 1.4, 0.6);
       audio.play('hole', { vol: 0.7 }); this.holeCd = 1.5;
+      tpSqueeze(() => { // 08/11 (pedido dele): muda de lugar com a tela fechada; abre ja no outro buraco
+        if (!this.alive) return;
+        this.pos = [to[0], to[1] + 0.05, to[2]]; this.vel = [fx * 3, 4, fz * 3];
+        g.fx.puff([to[0], to[1] + 0.5, to[2]], 6, 0.6, 0x141210, 0.5);
+        g.fx.word('SLURP!', [to[0], to[1] + 1.6, to[2]], 1.4, 0.6);
+      });
       break;
     }
   }

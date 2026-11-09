@@ -8,7 +8,6 @@ const STEPS = [
   ['#goSolo', 'play', 'ht_play'],
   ['#scr-home [data-go=mp]', 'multiplayer', 'ht_mp'],
   ['#scr-home [data-go=friends]', 'friends', 'ht_friends'],
-  ['#scr-home [data-go=pass]', 'passTitle', 'ht_pass'],
   ['#scr-home [data-go=shop]', 'shop', 'ht_shop'],
   ['#goPocket', 'pocket', 'ht_pocket'],
   ['#goTutorial', 'tutorial', 'ht_train'],

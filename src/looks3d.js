@@ -194,14 +194,80 @@ export function buildFace(id) {
     case 'barba': { const m = add(new THREE.SphereGeometry(0.29, 14, 10, 0, Math.PI * 2, Math.PI * 0.56, Math.PI * 0.44), 0x3a2a1c, 0, -0.04, -0.09, 0, 0, 0, 0.01); m.scale.set(1.02, 1.1, 0.98); break; }
     case 'tapa': add(new THREE.CircleGeometry(0.075, 14), INK, 0.1, 0.05, -0.385, 0, Math.PI, 0, 0); { const m = add(new THREE.TorusGeometry(0.37, 0.011, 5, 28), INK, 0, 0.08, 0, Math.PI / 2 + 0.2, 0, 0, 0); m.userData.detail = false; } break;
     case 'gargalhada': { add(new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), 0xfaf8f2, 0, -0.15, -0.32, -0.1, 0, 0, 0.01); break; }
-    case 'fantasma': { // 07/11 (pedido dele): mascara de caveira de pano cobrindo o rosto. Casca r 0,40 com folga da cabeca (0,36) e do
-      // rosto (ate z -0,38): nenhuma face no mesmo plano. Olhos, nariz e dentes sao pecas que ATRAVESSAM a casca (nunca coladas nela)
-      const C = new THREE.Vector3(0, -0.02, -0.05), R = 0.4, on = (x, y, out = 0) => { const dz = Math.sqrt(Math.max(0, R * R - x * x - (y - C.y) ** 2)); return C.z - dz - out; };
-      add(new THREE.SphereGeometry(R, 26, 16, Math.PI + 0.3, Math.PI - 0.6, Math.PI * 0.3, Math.PI * 0.52), 0xe4ded1, C.x, C.y, C.z, 0, 0, 0, 0.012); // abaixo da aba do chapeu, sem cobrir as laterais
-      for (const sx of [-1, 1]) { const m = add(new THREE.SphereGeometry(0.075, 12, 8), INK, sx * 0.12, 0.05, on(sx * 0.12, 0.05, -0.012), 0, 0, sx * 0.25, 0); m.scale.set(1, 1.25, 0.45); } // olheiras fundas
-      { const m = add(new THREE.SphereGeometry(0.045, 10, 6), INK, 0, -0.07, on(0, -0.07, -0.01), 0, 0, 0, 0); m.scale.set(1, 1.3, 0.5); } // buraco do nariz (o nariz do boneco sai por ele)
-      { const m = add(new THREE.CapsuleGeometry(0.03, 0.2, 4, 10), INK, 0, -0.2, on(0, -0.2, -0.008), 0, 0, Math.PI / 2, 0); m.scale.z = 0.5; } // boca
-      for (let i = -3; i <= 3; i++) { const x = i * 0.032, m = add(new THREE.BoxGeometry(0.022, 0.05, 0.03), 0xf6f2e8, x, -0.2, on(x, -0.2, 0.004), 0, -x * 2.4, 0, 0.004); m.userData.detail = true; } // dentes
+    // ---- mascaras com casca (07-08/11, pedido dele: nada piscando, tudo simetrico, rosto respeitado) ----
+    // Regra unica (stick): todo detalhe e orientado pela normal da superficie onde senta (rosto ou casca) e fica INTEIRO
+    // `gap` metros na frente dela: nunca cruza a pele, a casca nem o plano dos olhos (cruzar quase em paralelo = pisca).
+    // Os olhos desenhados ficam em x = +-0,079, y = 0,037 (textura 256 px, pupilas em 80/176, plano de 0,42 m).
+    // Casca R 0,40 com folga de 5 cm do rosto e abaixo da aba do chapeu. Tudo em pares espelhados (sx = -1 e 1).
+    case 'fantasma': case 'bandido': case 'mocinho': case 'palhaco': case 'gas': case 'luchador': {
+      const EX = 0.079, EY = 0.037;
+      // rosto do boneco: mascara branca (elipsoide), cranio (r 0,36) e o plano dos olhos 7 mm na frente
+      const face = (x, y) => { const k = 1 - (x / 0.315) ** 2 - ((y + 0.06) / 0.255) ** 2, mz = k > 0 ? -0.14 - 0.24 * Math.sqrt(k) : 0, sk = -Math.sqrt(Math.max(0, 0.1296 - x * x - y * y)); const z = Math.min(mz, sk); return Math.abs(x) < 0.21 && Math.abs(y - 0.04) < 0.105 ? z - 0.007 : z; };
+      const shellOf = (C, R) => (x, y) => C.z - Math.sqrt(Math.max(0, R * R - (x - C.x) ** 2 - (y - C.y) ** 2));
+      const N = new THREE.Vector3(), Z = new THREE.Vector3(0, 0, -1), Q = new THREE.Quaternion(), RQ = new THREE.Quaternion();
+      const stick = (m, surf, x, y, half, gap = 0.004, roll = 0) => { // half = meia espessura da peca no eixo z local (ja com a escala)
+        const e = 0.004, dx = (surf(x + e, y) - surf(x - e, y)) / (2 * e), dy = (surf(x, y + e) - surf(x, y - e)) / (2 * e);
+        N.set(dx, dy, -1).normalize(); // pra fora (frente = -z)
+        Q.setFromUnitVectors(Z, N); if (roll) Q.multiply(RQ.setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll)); m.quaternion.copy(Q);
+        m.position.set(x, y, surf(x, y)).addScaledVector(N, half + gap); return m; };
+      const put = (geo, col, surf, x, y, half, sc = [1, 1, 1], gap, roll, th = 0) => { const m = ink(geo, col, th); m.scale.set(...sc); g.add(m); return stick(m, surf, x, y, half, gap, roll); };
+      const shellMesh = (C, R, col, p0, pl, t0, tl) => { const m = ink(new THREE.SphereGeometry(R, 28, 16, p0, pl, t0, tl), col, 0.012); m.position.copy(C); g.add(m); return m; };
+      const both = (fn) => { for (const sx of [-1, 1]) fn(sx); };
+      if (id === 'fantasma' || id === 'gas' || id === 'luchador') g.userData.noNose = true; // casca na frente do nariz: o nariz do boneco sai (cruzaria a casca)
+      if (id === 'fantasma') { // 08/11 (pedido dele): no estilo do Ghost: balaclava preta cobrindo o rosto todo + caveira branca
+        // pintada (testa e macas numa 2a casca concentrica 5 mm pra fora: esferas concentricas nunca se cruzam), orbitas e nariz
+        // pretos, mandibula com dentes. Tudo espelhado em x
+        const C = new THREE.Vector3(0, -0.02, -0.05), sh = shellOf(C, 0.4), sk2 = shellOf(C, 0.405);
+        shellMesh(C, 0.4, 0x1d1c1a, Math.PI + 0.06, Math.PI - 0.12, Math.PI * 0.28, Math.PI * 0.46); // balaclava (para em 0,74 pi: o peito)
+        shellMesh(C, 0.405, 0xe9e4d8, Math.PI + 0.78, Math.PI - 1.56, Math.PI * 0.3, Math.PI * 0.27); // cranio pintado (testa ate o nariz)
+        both(sx => put(new THREE.SphereGeometry(0.07, 16, 10), 0xe9e4d8, sk2, sx * 0.15, -0.09, 0.07 * 0.22, [1.1, 0.75, 0.22], 0.002, -sx * 0.5)); // macas do rosto
+        both(sx => put(new THREE.SphereGeometry(0.07, 16, 10), 0x0b0a09, sk2, sx * EX * 1.15, EY, 0.07 * 0.22, [1.05, 1.2, 0.22], 0.003, -sx * 0.18)); // orbitas
+        { const n = put(new THREE.ConeGeometry(0.042, 0.07, 3), 0x0b0a09, sk2, 0, -0.075, 0.042 * 0.22, [1, 1, 0.22], 0.003, Math.PI); n.userData.detail = false; } // nariz (triangulo de ponta pra cima)
+        put(new THREE.CapsuleGeometry(0.03, 0.2, 4, 12), 0xe9e4d8, sh, 0, -0.2, 0.03 * 0.25, [1, 1.3, 0.25], 0.002, Math.PI / 2); // faixa da mandibula
+        for (let i = -3; i <= 3; i++) put(new THREE.BoxGeometry(0.004, 0.06, 0.006), 0x0b0a09, sh, i * 0.034, -0.2, 0.003, [1, 1, 1], 0.002 + 0.03 * 0.25 * 2); // riscos dos dentes (na frente da faixa)
+        both(sx => put(new THREE.CapsuleGeometry(0.014, 0.08, 3, 8), 0xe9e4d8, sh, sx * 0.15, -0.21, 0.014 * 0.3, [1, 1, 0.3], 0.002, Math.PI / 2 + sx * 0.5)); // canto da mandibula
+      } else if (id === 'bandido') { // 08/11 (pedido dele): bandana de faroeste DANDO A VOLTA na cabeca (anel de pano do nariz pra baixo)
+        // Medidas: rosto branco na frente vai ate z -0,37 (y -0,12) e -0,28 (y -0,27); cranio 0,36; peito (torso) 0,33 de raio
+        // em y -0,28. Anel com centro z -0,02, raio 0,395 em cima e 0,37 embaixo: 2 a 4 cm de folga de tudo, sem cruzar nada
+        const CY = -0.205, H = 0.15, RT = 0.395, RB = 0.37, CZ = -0.02;
+        { const m = ink(new THREE.CylinderGeometry(RT, RB, H, 40, 1, true), 0xb3261e, 0.01); m.position.set(0, CY, CZ); m.material.side = THREE.DoubleSide; g.add(m); }
+        const rAt = (y) => RB + (RT - RB) * ((y - (CY - H / 2)) / H), cyl = (x, y) => CZ - Math.sqrt(Math.max(0, rAt(y) ** 2 - x * x));
+        for (const [x, y] of [[0, -0.17], [0.13, -0.17], [0.26, -0.17], [0.065, -0.24], [0.195, -0.24], [0.32, -0.23]]) for (const sx of x ? [-1, 1] : [1]) put(new THREE.SphereGeometry(0.015, 8, 6), 0xfaf8f2, cyl, sx * x, y, 0.015 * 0.4, [1, 1, 0.4], 0.002); // bolinhas
+        { const m = ink(new THREE.ConeGeometry(0.13, 0.17, 3), 0xb3261e, 0.01); m.position.set(0, CY - H / 2 - 0.07, CZ - RB - 0.03); m.rotation.set(Math.PI + 0.25, 0, 0); m.scale.z = 0.3; g.add(m); } // ponta caida na frente (fora do peito)
+        { const k = ink(new THREE.SphereGeometry(0.04, 12, 8), 0xb3261e, 0.006); k.position.set(0, CY + 0.02, CZ + RT + 0.01); k.scale.set(1, 0.85, 0.6); g.add(k); } // no colado na nuca (encosta no anel por fora)
+        both(sx => { const m = ink(new THREE.CapsuleGeometry(0.026, 0.1, 3, 8), 0xb3261e, 0.006); m.position.set(sx * 0.055, CY - 0.05, CZ + RT + 0.02); m.rotation.z = sx * 0.55; m.scale.z = 0.5; g.add(m); }); // pontas do no
+      } else if (id === 'mocinho') { // mascara de mocinho: aros nos olhos (olho a mostra) + ponte + fita na nuca
+        both(sx => put(new THREE.TorusGeometry(0.062, 0.02, 8, 24), INK, face, sx * EX, EY, 0.02 * 0.5, [0.85, 1.2, 0.5], 0.004));
+        put(new THREE.CapsuleGeometry(0.018, 0.03, 3, 8), INK, face, 0, EY + 0.01, 0.018 * 0.6, [1, 1, 0.6], 0.004, Math.PI / 2);
+        both(sx => put(new THREE.CapsuleGeometry(0.02, 0.09, 3, 8), INK, face, sx * 0.17, EY + 0.012, 0.02 * 0.6, [1, 1, 0.6], 0.004, Math.PI / 2 - sx * 0.12)); // abas pros lados
+        { const m = ink(new THREE.TorusGeometry(0.392, 0.02, 6, 30, Math.PI * 1.1), INK, 0); m.position.set(0, 0.05, 0); m.rotation.set(Math.PI / 2, 0, -Math.PI * 0.05); m.userData.detail = false; g.add(m); } // fita na nuca (cranio 0,36: 1,2 cm de folga)
+        both(sx => { const m = ink(new THREE.CapsuleGeometry(0.022, 0.13, 3, 8), INK, 0.004); m.position.set(sx * 0.06, -0.02, 0.41); m.rotation.set(0.3, 0, sx * 0.5); m.scale.z = 0.6; g.add(m); });
+      } else if (id === 'palhaco') { // nariz de palhaco ENGOLINDO o nariz do boneco + losangos em cima dos olhos + bochechas
+        add(new THREE.SphereGeometry(0.115, 18, 14), 0xd8322a, 0, -0.08, -0.405, 0, 0, 0, 0.008); // nariz do boneco: 0,0975 x 0,075 x 0,075 (todo dentro)
+        both(sx => put(new THREE.OctahedronGeometry(0.04, 0), 0x2f5b8a, face, sx * EX, EY + 0.12, 0.04 * 0.3, [0.7, 1.25, 0.3], 0.003));
+        both(sx => put(new THREE.SphereGeometry(0.045, 14, 10), 0xe58a9a, face, sx * 0.2, -0.09, 0.045 * 0.25, [1, 0.8, 0.25], 0.003));
+      } else if (id === 'gas') { // mascara de gas: capuz de lona, visores de latao com vidro escuro, focinho e filtro listrado, tiras
+        const C = new THREE.Vector3(0, -0.02, -0.04), sh = shellOf(C, 0.4);
+        shellMesh(C, 0.4, 0x5c6b3a, Math.PI + 0.18, Math.PI - 0.36, Math.PI * 0.32, Math.PI * 0.42); // termina em 0,74 pi: abaixo disso entraria no peito
+        both(sx => { put(new THREE.SphereGeometry(0.06, 16, 10), 0x22303a, sh, sx * 0.105, EY, 0.06 * 0.25, [1, 1, 0.25], 0.002); put(new THREE.TorusGeometry(0.066, 0.02, 8, 24), 0xa8843a, sh, sx * 0.105, EY, 0.02 * 0.7, [1, 1, 0.7], 0.002); });
+        const sn = put(new THREE.CylinderGeometry(0.06, 0.075, 0.1, 16).rotateX(Math.PI / 2), 0x4a5730, sh, 0, -0.17, 0.05, [1, 1, 1], 0.002, 0, 0.008); sn.userData.detail = false; // focinho (eixo na normal)
+        const fp = sn.position.clone().addScaledVector(N.set(0, 0, 0).subVectors(sn.position, C).normalize(), 0.105);
+        { const f = ink(new THREE.CylinderGeometry(0.07, 0.07, 0.11, 18).rotateX(Math.PI / 2), 0x7a7a6e, 0.008); f.position.copy(fp); f.quaternion.copy(sn.quaternion); g.add(f);
+          for (const k of [-0.03, 0.02]) { const r = ink(new THREE.TorusGeometry(0.076, 0.009, 5, 20), 0x3f3f38, 0); r.position.copy(fp).addScaledVector(N, k); r.quaternion.copy(sn.quaternion); g.add(r); } }
+        for (const yy of [0.1, -0.12]) { const m = ink(new THREE.TorusGeometry(0.396, 0.016, 5, 28, Math.PI * 1.05), 0x3a3a2e, 0); m.position.set(0, yy, 0); m.rotation.set(Math.PI / 2 + (yy > 0 ? 0.25 : -0.2), 0, -Math.PI * 0.025); m.userData.detail = false; g.add(m); }
+      } else if (id === 'luchador') { // mascara de luchador: capuz azul, aro branco e vazado escuro nos olhos, chamas, boca
+        const C = new THREE.Vector3(0, -0.02, -0.04), sh = shellOf(C, 0.4);
+        shellMesh(C, 0.4, 0x2f5b8a, Math.PI + 0.1, Math.PI - 0.2, Math.PI * 0.3, Math.PI * 0.44);
+        both(sx => {
+          const x = sx * 0.1;
+          put(new THREE.SphereGeometry(0.062, 14, 10), INK, sh, x, EY, 0.062 * 0.25, [1.15, 0.9, 0.25], 0.002, -sx * 0.4); // vazado
+          put(new THREE.TorusGeometry(0.07, 0.02, 8, 24), 0xfaf8f2, sh, x, EY, 0.02 * 0.6, [1.15, 0.9, 0.6], 0.002, -sx * 0.4); // aro branco (fora do vazado)
+          for (const [dx, dy, h, rl] of [[0.0, 0.1, 0.08, 0.05], [0.04, 0.095, 0.065, -0.25], [-0.04, 0.095, 0.065, 0.35]]) put(new THREE.ConeGeometry(0.022, h, 8), 0xe3a92b, sh, x + sx * dx, EY + dy, 0.022 * 0.45, [1, 1, 0.45], 0.002, sx * rl);
+        });
+        put(new THREE.SphereGeometry(0.075, 14, 10), 0x2f5b8a, sh, 0, -0.08, 0.075 * 0.45, [1.25, 1, 0.45], 0.0, 0, 0.008); // nariz do capuz
+        put(new THREE.CapsuleGeometry(0.035, 0.12, 4, 10), INK, sh, 0, -0.2, 0.035 * 0.3, [1, 1, 0.3], 0.002, Math.PI / 2);
+        put(new THREE.TorusGeometry(0.055, 0.012, 6, 20), 0xfaf8f2, sh, 0, -0.2, 0.012 * 0.6, [2.0, 0.9, 0.6], 0.002);
+      }
       break; }
     case 'lingua': { const m = add(new THREE.CapsuleGeometry(0.05, 0.07, 4, 10), 0xe07a8a, 0.02, -0.25, -0.34, 0.25, 0, 0, 0.006); m.scale.z = 0.5; break; }
     default: return null;

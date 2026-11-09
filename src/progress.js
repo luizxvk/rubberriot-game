@@ -1,6 +1,6 @@
 // Progressao: XP do jogador (nivel 1..250) e de cada CORPO de arma (modelo, nivel 1..20; cada um o seu).
 // Pecas do Arsenal e camuflagens desbloqueiam por nivel. Fica salvo neste aparelho.
-import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted, wasUnlocked } from './challenges.js';
+import { LOCKED_BY, unlockDone, bpOwned, legendOwned, gifted, wasUnlocked, hadAkimbo } from './challenges.js';
 import { shopOwned } from './shopstore.js';
 import { pushSoon, me as rovexMe } from './rovex.js';
 import { PASS, PASS_PER, PASS_MAX, PASS_FREE } from './pass.js';
@@ -79,7 +79,7 @@ export function progressInfo() {
 }
 // Prestigio: no nivel maximo volta pro 1 e ganha uma estrela (ate 10). Nada que ja abriu fecha de novo:
 // desbloqueio por nivel do jogador olha o "nivel de desbloqueio" (prestigiado = maximo).
-export const unlockLevel = () => data.prestige > 0 ? MAX_LEVEL : level();
+export const unlockLevel = () => data.unlockAll || data.prestige > 0 ? MAX_LEVEL : level(); // 08/11: com "desbloquear tudo" a tela deixava escolher, mas a partida conferia o nivel real e o item sumia (Buraco e Bigorna no nivel 5)
 export function doPrestige() {
   if (level() < MAX_LEVEL || data.prestige >= MAX_PRESTIGE) return false;
   data.prestige++; data.xp = 0; data.pk = 1 + PRESTIGE_XP * data.prestige; save();
@@ -132,7 +132,7 @@ export const MUZZLE_LVL = { comp: 5, flash: 10, brake: 15, silencer: 21, silence
 export const AMMO_LVL = { fire: 7, slug: 9, trace: 12, boom: 17, ap: 23 };
 const STEP = { scope: [2, 3], handle: [3, 4], charger: [4, 4], laser: [6, 5], body: [2, 3] };
 const slotOf = (id) => !id ? 'body' : /scope/.test(id) ? 'scope' : /laser/.test(id) ? 'laser' : /handle|akimbo|^gd_/.test(id) ? 'handle' : /charg|drum|_ext_/.test(id) ? 'charger' : 'body';
-export function partReq(i, id) { if (i <= 0) return 1; const [a, b] = STEP[slotOf(id)]; return Math.min(MAX_WPN_LEVEL, a + (i - 1) * b); }
+export function partReq(i, id) { if (id === 'akimbo') return MAX_WPN_LEVEL; /* 08/11, pedido dele: ultimo nivel da arma */ if (i <= 0) return 1; const [a, b] = STEP[slotOf(id)]; return Math.min(MAX_WPN_LEVEL, a + (i - 1) * b); }
 // regra antiga (curva, passo 1,5 e bocais), so pro que a conta ja tinha aberto antes do hotfix
 const OLD_MZ = { comp: 3, flash: 6, brake: 9, silencer: 13, silencer2: 16 };
 const oldLv = (xp) => { let n = 1; while (n < 20 && xp >= Math.round(350 * n + 40 * n ** 2)) n++; return n; };
@@ -143,7 +143,7 @@ function hadOld(wpn, i, id) {
   if (id && bodiesOf(wpn).includes(id)) return Math.max(w, ...bodiesOf(wpn).map(b => oldLv(L[b] || 0))) >= need;
   return w >= need;
 }
-export const bpUnlocked = (id) => !!data.unlockAll || bpOwned(id);
+export const bpUnlocked = (id) => !!data.unlockAll || (String(id).startsWith('bm_') ? shopOwned('bp:' + id) : bpOwned(id)); // Mercado Negro: comprado (servidor)
 // modelo que so abre num nivel de JOGADOR (01/11, pedido dele): Liquidificador no 40
 export const BODY_MIN_LVL = { shotgun_3: 40, melee_17: 30, melee_18: 35, // Katana: nivel 30 do jogador; Sabre de Neon: 35 (04/11)
   // 07/11 (pedido dele): toda lamina com nivel do JOGADOR (o Facao, padrao, e livre; as de desafio seguem pelo desafio)
@@ -151,8 +151,7 @@ export const BODY_MIN_LVL = { shotgun_3: 40, melee_17: 30, melee_18: 35, // Kata
 export const CANTED_LVL = 8; // mira de 45 graus (05/11, pedido dele)
 export function partUnlocked(wpn, i, id) {
   if (id === 'canted') return !!data.unlockAll || wpnLevel(wpn) >= CANTED_LVL;
-  const own = id && LOCKED_BY[wpn + ':' + id]; // peca com desafio proprio nesta arma (akimbo da Espirro/Cuspideira)
-  if (own) return !!data.unlockAll || unlockDone(own.id);
+  if (id === 'akimbo') return !!data.unlockAll || hadAkimbo(wpn) || wpnLevel(wpn) >= MAX_WPN_LEVEL;
   if (id && BODY_MIN_LVL[id]) return !!data.unlockAll || unlockLevel() >= BODY_MIN_LVL[id];
   if (data.unlockAll || gifted(id) || wasUnlocked(id)) return true; // presente do treino / desafio antigo ja fechado
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
@@ -186,6 +185,7 @@ export function camoUnlocked(wpn, camo) {
   if (data.unlockAll || gifted(camo.id)) return true; // presente do treino vale em todas as armas
   if (camo.meta) return metaOwned(); // lendaria da meta da comunidade
   if (camo.legend) return legendOwned(camo.id); // lendaria: so com a variante de elite
+  if (camo.bm) return false; // Mercado Negro: a camo so vem montada na variante (nunca solta)
   if (camo.elite) return !!rovexMe?.elite;     // exclusiva do Elite da Rovex
   if (camo.prestige) return data.prestige >= camo.prestige; // exclusiva de quem prestigiou
   if (camo.rank != null) return data.rkPeak >= camo.rank; // premio da rankeada
@@ -200,11 +200,21 @@ export function camoUnlocked(wpn, camo) {
 // ---------- mestre da arma (07/11, pedido dele) ----------
 // Modelo no nivel maximo + todas as camuflagens de progresso dele abertas (nivel da arma, nivel da conta e desafio; Loja, Pass,
 // Elite, rankeada, lendaria e prestigio nao contam). Premio: banner-poster com a foto da arma e o chaveiro de ouro dela
+// o que falta pra virar mestre (08/11: requisitos ao tocar no chaveiro de ouro bloqueado)
+export function masteryInfo(body) {
+  const lvl = lvOf(data.wpn[body] || 0); let camos = 0;
+  for (const c of CAMOS) {
+    if (c.id === 'none' || c.acct || c.pass || c.shop || c.meta || c.legend || c.bm || c.elite || c.prestige || c.rank != null) continue;
+    if (LOCKED_BY[c.id]) { if (!unlockDone(LOCKED_BY[c.id].id)) camos++; continue; }
+    if ((c.req?.wpn && lvl < c.req.wpn) || (c.req?.player && unlockLevel() < c.req.player)) camos++;
+  }
+  return { lvl, max: MAX_WPN_LEVEL, camos };
+}
 export function masteryDone(body) {
   if (data.unlockAll) return true;
   if (lvOf(data.wpn[body] || 0) < MAX_WPN_LEVEL) return false;
   for (const c of CAMOS) {
-    if (c.id === 'none' || c.acct || c.pass || c.shop || c.meta || c.legend || c.elite || c.prestige || c.rank != null) continue;
+    if (c.id === 'none' || c.acct || c.pass || c.shop || c.meta || c.legend || c.bm || c.elite || c.prestige || c.rank != null) continue;
     if (LOCKED_BY[c.id]) { if (!unlockDone(LOCKED_BY[c.id].id)) return false; continue; }
     if (c.req?.wpn && lvOf(data.wpn[body] || 0) < c.req.wpn) return false;
     if (c.req?.player && unlockLevel() < c.req.player) return false;

@@ -15,7 +15,7 @@ const cam = new THREE.OrthographicCamera(-0.55, 0.55, 0.28, -0.28, 0.01, 10); ca
 const px = () => { const gl = r.getContext(), a = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, a); return a; };
 const out = [];
 const cases = [];
-for (const c of CAMOS) { if (c.react) for (let s = 0; s < 4; s++) cases.push([c, s]); else cases.push([c, 0]); }
+const only = new URLSearchParams(location.search).get('only'); for (const c of CAMOS) { if (only && !c.id.startsWith(only)) continue; if (c.react) for (let s = 0; s < 4; s++) cases.push([c, s]); else cases.push([c, 0]); }
 for (const [c, stage] of cases) {
   const gun = buildGun('rifle', { body: 'fusil_1', camo: c.id });
   const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();

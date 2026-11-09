@@ -1,3 +1,4 @@
+import { BM_IDS } from '../shared/blackmarket.js';
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
 import { LETHALS, TACTICALS, NADES } from '../shared/weapons.js';
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
@@ -8,6 +9,7 @@ import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
 const cvOf = (cat, lo) => (lo?.cv && (getVariants()[cat] || []).find(v => v.id === lo.cv && v.lo.body === lo.body)) || null;
 import { SKILL_ICONS } from './skillicons.js';
 import { screenTour } from './hometour.js'; // tours das telas (07/11); a dica-balao 'skills' saiu
+import { missionsToday, MIS_ZP, misKey } from './challenges.js';
 import { UNLOCKS, dailyToday, unlockState, msToReset, LOCKED_BY, unlockProg, unlockActive, eliteToday, BP_ORDER, tutorialState, togglePick, unlockPinned, pendingUnlocks } from './challenges.js';
 import { TRACER_STYLES } from './world.js';
 import { audio } from './audio.js';
@@ -15,14 +17,14 @@ import { renderShop, stopShop, initShop } from './shop.js';
 import { initAnn, startAnn, stopAnn, relangAnn, placePromos } from './ann.js';
 import { openNews, initNews } from './newspop.js';
 import { initElitePop } from './elitepop.js';
-import { renderPass } from './passview.js';
+import { passNav } from './passview.js';
 import { RET_PASS } from './pass.js';
 import { initSupport } from './support.js';
 import { renderAllBal } from './zbal.js';
 import * as rovex from './rovex.js';
 import { isTouch } from './input.js';
 import { CAMOS, CAMO_SWATCH } from './camos.js';
-import { stats as pStats } from './progress.js';
+import { masteryInfo, stats as pStats } from './progress.js';
 import { BANNERS } from '../shared/banners.js';
 import { DANCE_IDS, DANCE_INFO } from '../shared/looks.js';
 import { DANCES } from './dances.js';
@@ -65,7 +67,7 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'pass', 'friends'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'friends'];
   initShop();
   initElitePop(); // banner do Elite abre o popup com os beneficios (03/11)
   initSupport(); // botao de apoiar no cartaz (04/11)
@@ -75,7 +77,7 @@ export function initMenus(o) {
     if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     el.scrollLeft += e.deltaY; e.preventDefault();
   }, { passive: false });
-  placePromos(); initAnn((g) => g === 'play' ? $('goSolo')?.click() : g === 'news' ? openNews() : ui.go(g)); initNews(); { const v = document.getElementById('rovexVer'); if (v) v.textContent = 'v' + (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'); const mk = document.getElementById('rovexMark'), home = document.querySelector('#menu .poster-frame'), narrow = matchMedia('(max-width: 760px)'), place = () => { if (!mk || !home) return; if (narrow.matches) { if (mk.parentElement !== home) home.appendChild(mk); } else if (mk.parentElement !== document.body) document.body.appendChild(mk); }; narrow.addEventListener('change', place); place(); } // Powered by Rovex + versao (07/11) // anuncios do cartaz: 'play' abre a escolha do modo
+  placePromos(); initAnn((g) => g === 'play' ? $('goSolo')?.click() : g === 'news' ? openNews() : g === 'mpRanked' ? (ui.go('mp'), setTimeout(() => { const r = document.querySelector('#scr-mp .mp-rank'); r?.scrollIntoView({ behavior: 'smooth', block: 'start' }); r?.classList.add('flash'); setTimeout(() => r?.classList.remove('flash'), 1600); }, 180)) : ui.go(g)); initNews(); { const v = document.getElementById('rovexVer'); if (v) v.textContent = 'v' + (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'); const mk = document.getElementById('rovexMark'), home = document.querySelector('#menu .poster-frame'), narrow = matchMedia('(max-width: 760px)'), place = () => { if (!mk || !home) return; if (narrow.matches) { if (mk.parentElement !== home) home.appendChild(mk); } else if (mk.parentElement !== document.body) document.body.appendChild(mk); }; narrow.addEventListener('change', place); place(); } // Powered by Rovex + versao (07/11) // anuncios do cartaz: 'play' abre a escolha do modo
   let settingsFromGame = false, fromLobby = false;
 
   // from: true = da pausa da partida; 'lobby' = o arsenal por cima da sala (volta pra ela)
@@ -102,8 +104,7 @@ export function initMenus(o) {
     if (name === 'controls') renderKeys(); else if (binding) stopBinding();
     if (name === 'look') renderLook();
     if (name === 'profile') renderProfile();
-    if (name === 'shop') renderShop(); else stopShop();
-    if (name === 'pass') renderPass(ui.go);
+    if (name === 'shop') { passNav(ui.go); renderShop(true); } else stopShop();
     if (name === 'friends') renderFriends();
     if (name === 'home') { markNewChallenges(); markNewStuff(); rankMini(); startAnn(); renderAllBal(); } else stopAnn();
     const first = $('scr-' + name).querySelector('button, input');
@@ -327,7 +328,19 @@ export function initMenus(o) {
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   let chPickOpen = false;
+  // Missoes diarias (08/11): 5 do dia com XP e Zions Points; abas Missoes diarias | Desafios
+  let misTab = 'mis';
+  const misName = (m) => t(misKey(m), { n: m.n, w: m.wpn ? wName(m.wpn) : '' });
+  function renderMissions() {
+    const h = Math.ceil(msToReset() / 3600000), coin = import.meta.env.BASE_URL + 'brand/zion-points.png';
+    $('misReset').textContent = t('chReset', { n: h });
+    $('misList').innerHTML = missionsToday().map(m => `<li class="${m.done ? 'done' : ''} mis-${m.grp}"><div class="ch-txt"><small class="mis-grp">${t('misG_' + m.grp)}</small><b>${esc(misName(m))}</b><span class="ch-bar"><i style="width:${Math.round(Math.min(1, m.prog / m.n) * 100)}%"></i></span></div><div class="ch-side"><em>${Math.min(m.prog, m.n)}/${m.n}</em><small>+${m.xp.toLocaleString(document.documentElement.lang || 'pt-BR')} XP</small><small class="mis-zp"><img src="${coin}" alt="">+${MIS_ZP}</small></div>${m.done ? `<span class="ch-stamp">${t('chDoneStamp')}</span>` : ''}</li>`).join('');
+    $('misNote').textContent = t('misNote');
+    document.querySelectorAll('[data-mtab]').forEach(b => { b.setAttribute('aria-selected', String(b.dataset.mtab === misTab)); b.onclick = () => { misTab = b.dataset.mtab; audio.play('ui_click', { ui: true }); renderChallenges(); }; });
+    $('misPane').hidden = misTab !== 'mis'; $('chPane').hidden = misTab !== 'ch';
+  }
   function renderChallenges() {
+    renderMissions();
     const h = Math.ceil(msToReset() / 3600000);
     $('chReset').textContent = t('chReset', { n: h });
     const row = (name, prog, n, xp, done, extra = '') => `<li class="${done ? 'done' : ''}"><div class="ch-txt"><b>${name}</b>${extra}<span class="ch-bar"><i style="width:${Math.round(Math.min(1, prog / n) * 100)}%"></i></span></div><div class="ch-side"><em>${Math.min(prog, n)}/${n}</em><small>+${xp} XP</small></div>${done ? `<span class="ch-stamp">${t('chDoneStamp')}</span>` : ''}</li>`;
@@ -448,6 +461,9 @@ export function initMenus(o) {
       btn.querySelector('.nw')?.remove();
       if (anyNew(pre)) btn.insertAdjacentHTML('beforeend', newPill(t('chNew')));
     }
+    // Loja (08/11, pedido dele): selo NOVO sempre (a vitrine e o Mercado Negro trocam todo dia), com balanço pra chamar o olho
+    const shopBtn = document.querySelector('.bill-item.shop-go');
+    if (shopBtn) { shopBtn.querySelector('.nw')?.remove(); shopBtn.insertAdjacentHTML('beforeend', newPill(t('chNew'))); shopBtn.querySelector('.nw')?.classList.add('hot'); shopBtn.classList.add('shop-hot'); }
   }
   ui.markNewStuff = markNewStuff;
   onProgress(() => { if (ui.screen === 'home') markNewStuff(); });
@@ -685,6 +701,7 @@ export function initMenus(o) {
   ui.chRows = () => {
     const el = eliteToday();
     return [
+      ...missionsToday().map(m => ({ name: misName(m), prog: m.prog, n: m.n, done: m.done, tag: t('misTag'), rw: `+${m.xp} XP · +${MIS_ZP} ZP`, mis: true })), // 08/11: missoes do dia primeiro
       ...dailyToday().map(c => ({ name: t('ch_' + c.id, { n: c.n, w: c.wpn ? wName(c.wpn) : '' }), prog: c.prog, n: c.n, done: c.done, tag: t('chDaily') })),
       ...(el.done ? [] : [{ name: t('el_' + el.id, { n: el.n }), prog: el.prog, n: el.n, tag: t('elTitle'), elite: true }]),
       ...unlockState().active.map(u => ({ name: chName(u), prog: u.prog, n: u.n, tag: t('chCareerU'), rw: rewardName(u.reward), pin: unlockPinned(u.id) })),
@@ -774,7 +791,7 @@ export function initMenus(o) {
     $('pickBack').onclick = () => { picking = false; preview = null; audio.play('ui_back', { ui: true, vol: 0.6 }); renderSmith(); };
     const view = !preview ? lo : preview.k === 'bp' ? { ...lo, ...bpLoadout(preview.v) }
       : { ...lo, [preview.k]: preview.v, ...(preview.k === 'body' ? { charger: null } : {}) };
-    if (preview) $('equipBar').insertAdjacentHTML('beforeend', preview.k === 'camo' && CAMOS.find(c => c.id === preview.v)?.acct ? `<p class="peek-note">${t('acctCamo')} <a href="${rovex.AUTH_URL}" target="_top" rel="noopener">${t('gpChip')}</a></p>` : `<p class="peek-note">${t('peekNote')}</p>`);
+    if (preview) $('equipBar').insertAdjacentHTML('beforeend', preview.k === 'camo' && CAMOS.find(c => c.id === preview.v)?.acct ? `<p class="peek-note">${t('acctCamo')} <a href="${rovex.AUTH_URL}" target="_top" rel="noopener">${t('gpChip')}</a></p>` : preview.k === 'charm' && String(preview.v).startsWith('mst_') ? (() => { const b = preview.v.slice(4), I = masteryInfo(b); return `<p class="peek-note">${t('mstReq', { w: partName('body', b), max: I.max, n: I.lvl })} ${t(I.camos === 1 ? 'mstCamo1' : I.camos ? 'mstCamos' : 'mstCamo0', { n: I.camos })}</p>`; })() : `<p class="peek-note">${t('peekNote')}</p>`);
     renderPicker(lo, C);
     if (picking) {
       // NOVO nos itens da lista aberta; depois de vistos, saem
@@ -937,7 +954,7 @@ export function initMenus(o) {
       // "bom" quando o numero sobe (dano, passo, pente) ou desce (o resto: cadencia lenta, recuo, abertura...)
       const good = (k, v) => (k === 'dmg' || k === 'move' || k === 'mag') ? v > 1 : v < 1;
       const el = eliteToday();
-      p.innerHTML = wsHtml(lo) + customVariantsHtml(lo) + `<button class="opt bp-free ${!lo.bp && !lo.cv ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + BP_ORDER.filter(id => BLUEPRINTS[id].wpn === cat).map(id => {
+      p.innerHTML = wsHtml(lo) + customVariantsHtml(lo) + `<button class="opt bp-free ${!lo.bp && !lo.cv ? 'on' : ''}" data-bp="">${t('bpNone')}<small>${t('bpNoneSub')}</small></button>` + [...BP_ORDER, ...BM_IDS.filter(id => bpUnlocked(id))].filter(id => BLUEPRINTS[id].wpn === cat).map(id => { /* Mercado Negro: so as compradas */
         const B = BLUEPRINTS[id], open = bpUnlocked(id), cur = lo.bp === id;
         const mods = Object.entries(B.mods).map(([k, v]) => `<b class="${good(k, v) ? 'up' : 'down'}">${good(k, v) ? '+' : '−'} ${t(MOD_TXT[k])}</b>`).join('');
         const lock = open ? '' : `<small class="req-ch">${el.reward === id && !el.done ? t('bpToday', { c: t('el_' + el.id, { n: el.n }) }) : t('bpLocked')}</small>${el.reward === id ? `<span class="ubar"><i style="width:${Math.round(el.prog / el.n * 100)}%"></i></span>` : ''}`;
@@ -960,7 +977,7 @@ export function initMenus(o) {
       // uma secao por origem, cada uma com o titulo uma vez so (04/11: ordenar antes; a lista de CAMOS mistura as origens)
       const CG = ['static', 'anim', 'react', 'rank', 'special', 'legend', 'pass', 'shop', 'shopreact'];
       const grp = (c) => c.pass ? 'pass' : c.shop ? (c.react ? 'shopreact' : 'shop') : c.rank != null ? 'rank' : c.legend ? 'legend' : c.prestige || c.meta || c.acct ? 'special' : c.react ? 'react' : c.anim ? 'anim' : 'static';
-      p.innerHTML = CG.map(g => { const L = CAMOS.filter(c => grp(c) === g); return L.length ? `<p class="pk-h">${t('cg_' + g)}</p>` + L.map(camoOpt).join('') : ''; }).join('');
+      p.innerHTML = CG.map(g => { const L = CAMOS.filter(c => !c.bm && grp(c) === g); /* Mercado Negro: a camo so vem na variante */ return L.length ? `<p class="pk-h">${t('cg_' + g)}</p>` + L.map(camoOpt).join('') : ''; }).join('');
       function camoOpt(c) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
@@ -1008,8 +1025,8 @@ export function initMenus(o) {
       const bind = () => p.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { visTab = b.dataset.v; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
       if (visTab === 'charm') {
         const cur = getLook().charm || 'none';
-        const lockOf = (it) => it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : t('lookLvl', { n: it.lvl });
-        p.innerHTML = tabs + LOOKS.charm.filter(it => !it.mastery || (it.mastery === lo.body && lookOpen('charm', it.id))).map(it => { /* miniatura de ouro: so a do modelo aberto e so de quem e mestre dele */ const open = lookOpen('charm', it.id); return `<button class="opt ${cur === it.id ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'charm' && preview.v === it.id ? 'peek' : ''}" data-ch="${it.id}" ${open ? '' : 'aria-disabled="true"'}>${t('lk_charm_' + it.id)}${isNew('look|charm|' + it.id) ? newPill(t('chNew')) : ''}<br><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${open ? '' : `<br><small>${lockOf(it)}</small>`}</button>`; }).join('') + `<p class="vis-note">${t('lookCharmNote')}</p>`;
+        const lockOf = (it) => it.mastery ? t('mstLock') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : t('lookLvl', { n: it.lvl });
+        p.innerHTML = tabs + LOOKS.charm.filter(it => !it.mastery || it.mastery === lo.body).map(it => { /* miniatura de ouro: so a do modelo aberto; bloqueada aparece com o requisito (08/11) */ const open = lookOpen('charm', it.id); return `<button class="opt ${cur === it.id ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'charm' && preview.v === it.id ? 'peek' : ''}" data-ch="${it.id}" ${open ? '' : 'aria-disabled="true"'}>${t('lk_charm_' + it.id)}${isNew('look|charm|' + it.id) ? newPill(t('chNew')) : ''}<br><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${open ? '' : `<br><small>${lockOf(it)}</small>`}</button>`; }).join('') + `<p class="vis-note">${t('lookCharmNote')}</p>`;
         p.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const id = b.dataset.ch; if (b.classList.contains('locked')) { peek('charm', id); return; } preview = null; saveLook({ ...getLook(), charm: id }); audio.play('swap', { ui: true, vol: 0.6 }); renderSmith(); });
         markSeen('look|charm|'); bind(); return;
       }
@@ -1147,7 +1164,7 @@ export function initMenus(o) {
   const drawLevel = () => {
     const pi = progressInfo();
     let el = document.getElementById('lvlBadge');
-    if (!el) { el = document.createElement('div'); el.id = 'lvlBadge'; el.className = 'lvl-badge'; document.querySelector('.poster-frame').appendChild(el); }
+    if (!el) { el = document.createElement('div'); el.id = 'lvlBadge'; el.className = 'lvl-badge'; const fr = document.querySelector('.poster-frame'); fr.insertBefore(el, fr.querySelector('.bill-top')); } // 08/11: no topo do cartaz (no pe cortava e pedia rolagem)
     // estrelas de prestigio do lado do numero; no nivel maximo, o botao de prestigio (pede confirmacao)
     const stars = pi.prestige ? `<em class="prest" title="${t('prestN', { n: pi.prestige })}">★${pi.prestige > 1 ? pi.prestige : ''}</em>` : '';
     // nome do jogador em cima do nivel; o bloco todo abre o Perfil

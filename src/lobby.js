@@ -23,6 +23,30 @@ const MODE_CATS = [
 ];
 const HOT_MODES = ['ctf']; // selo "HOT" no cartao
 
+// linhas de opcao da partida: as mesmas no lobby e no "Alterar partida" (matchvote.js)
+export function cfgRows(c) {
+    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce', night = raw === 'borroes' || raw === 'arte';
+    const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
+    const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
+    return [
+      ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
+      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && x !== 'cortejo' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
+      // horario (07/11, pedido dele): Roubo ao Cofre de dia ou de noite
+      ...(!night ? [['tod', ['day', 'night'], c.tod || 'day', (v) => t(v === 'night' ? 'todNight' : 'todDay')]] : []),
+      br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)], // blitz: ate 24
+      ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
+      // Arte-Final: onda que vence a noite (10 a 50)
+      ...(raw === 'arte' ? [['wave', [10, 15, 20, 25, 30, 40, 50], Math.max(10, Math.min(50, c.limit || MODES.arte.limit)), (v) => String(v)]] : []),
+      ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
+      ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
+      // rankeada na sala de amigos (02/11): linha SEMPRE a vista; nos modos sem rankeada fica travada e diz onde vale
+      RANKED_MODES.includes(raw) ? ['ranked', [false, true], !!c.ranked, (v) => t(v ? 'cfgRkOn' : 'cfgRkOff')] : ['ranked', [false], false, () => t('cfgRkNo')],
+      // evento de fim de semana: o host liga/desliga (so aparece quando tem evento no ar ou a sala ja esta nele)
+      ...(currentEvent() || c.mut ? [['mut', ['', currentEvent() || c.mut], c.mut || '', (v) => v ? t('ev_' + v) : t('evOff')]] : []),
+    ];
+}
+
 export class Lobby {
   constructor({ onReady, onLeave, onStart, onTeam, onCfg, onKick }) {
     this.onKick = onKick;
@@ -180,26 +204,7 @@ export class Lobby {
     const c = m.cfg, el = $('lbCfg');
     el.hidden = !c || m.phase !== 'lobby';
     if (el.hidden) return;
-    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce', night = raw === 'borroes' || raw === 'arte';
-    const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
-    const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
-    const rows = [
-      ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + m.map))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
-      // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
-      // horario (07/11, pedido dele): Roubo ao Cofre de dia ou de noite
-      ...(raw === 'heist' ? [['tod', ['day', 'night'], c.tod || 'day', (v) => t(v === 'night' ? 'todNight' : 'todDay')]] : []),
-      br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)], // blitz: ate 24
-      ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
-      // Arte-Final: onda que vence a noite (10 a 50)
-      ...(raw === 'arte' ? [['wave', [10, 15, 20, 25, 30, 40, 50], Math.max(10, Math.min(50, c.limit || MODES.arte.limit)), (v) => String(v)]] : []),
-      ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
-      ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
-      // rankeada na sala de amigos (02/11): linha SEMPRE a vista; nos modos sem rankeada fica travada e diz onde vale
-      RANKED_MODES.includes(raw) ? ['ranked', [false, true], !!c.ranked, (v) => t(v ? 'cfgRkOn' : 'cfgRkOff')] : ['ranked', [false], false, () => t('cfgRkNo')],
-      // evento de fim de semana: o host liga/desliga (so aparece quando tem evento no ar ou a sala ja esta nele)
-      ...(currentEvent() || c.mut ? [['mut', ['', currentEvent() || c.mut], c.mut || '', (v) => v ? t('ev_' + v) : t('evOff')]] : []),
-    ];
+    const rows = cfgRows(c);
     // so redesenha quando muda alguma coisa (o lobby chega 4x/s; redesenhar sempre cortava o carimbo)
     const sig = JSON.stringify(c) + host + m.map;
     if (sig === this.cfgSig) return;

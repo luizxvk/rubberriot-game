@@ -8,6 +8,7 @@ import { cleanLook } from '../shared/looks.js';
 import { eyeTex, buildEyewear, buildHat, buildFace, styleGlove, patternTex, buildFx, skinMat, antiFlicker } from './looks3d.js';
 import { attachCharm, tickCharm } from './charms.js';
 import { applyDance, applyPose } from './dances.js';
+import { ring as fxRing, column as fxColumn, burst as fxBurst, play as fxPlay, disposeFx } from './deathfx.js';
 
 const SEG = 10, RAD = 6;
 
@@ -37,6 +38,10 @@ export class Hose {
     this.mesh.frustumCulled = this.line.frustumCulled = false;
     this.mesh.add(this.line);
   }
+
+  // 08/11 (desempenho): o tubo muda de forma todo quadro, entao ficava sem corte de camera e desenhava mesmo fora da tela (8 chamadas por boneco).
+  // Esfera fixa e folgada em volta do boneco: nunca some estando na vista
+  cull() { const s = new THREE.Sphere(new THREE.Vector3(0, 1, 0), 4); for (const m of [this.mesh, this.line]) { m.geometry.boundingSphere = s; m.frustumCulled = true; } }
 
   set(a, c, b) {
     const P = this.mesh.geometry.attributes.position.array, N = this.mesh.geometry.attributes.normal.array;
@@ -136,6 +141,29 @@ let KO_STAR = null; const KO_NUM = new Map();
 function koStar() { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.035 : 0.085, an = i / 10 * Math.PI * 2; sh[i ? 'lineTo' : 'moveTo'](Math.sin(an) * r, Math.cos(an) * r); } sh.closePath(); return new THREE.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: false }).translate(0, 0, -0.011); }
 function koNum(n) { if (!KO_NUM.has(n)) KO_NUM.set(n, wordTexture(String(n), { burst: false, size: 256, fill: '#faf8f2' })); return KO_NUM.get(n); }
 const wX = new THREE.Vector3(), wY = new THREE.Vector3(), wZ = new THREE.Vector3(), wM = new THREE.Matrix4(), WRIST_RATE = 12, WRIST_MAX = 24;
+// Volta pro Caixao (08/11, pedido dele): caixao de desenho animado (oco: paredes + fundo de cetim + tampa com cruz)
+// e lapide. Geometria feita uma vez so; cada morte so cria as malhas. Frente do boneco = -Z, caixao fica atras (+Z).
+export const DEATH_DUR = { caixao: 2.35 }; // quanto tempo o boneco morto fica na tela (padrao 1,4 s)
+let COF = null;
+function coffinGeo() {
+  if (COF) return COF;
+  const P = [[-0.2, 0], [0.2, 0], [0.44, 1.42], [0.3, 2.02], [-0.3, 2.02], [-0.44, 1.42]];
+  const outline = (k, rev = false) => { const pts = P.map(([x, y]) => new THREE.Vector2(x * k, (y - 1) * k + 1)); if (rev) pts.reverse(); return pts; };
+  const wall = new THREE.Shape(outline(1)); wall.holes.push(new THREE.Path(outline(0.86, true)));
+  const lidSh = new THREE.Shape(outline(1.01)), backSh = new THREE.Shape(outline(0.86));
+  const cross = [new THREE.BoxGeometry(0.07, 0.62, 0.03).translate(0, 1.16, 0), new THREE.BoxGeometry(0.34, 0.07, 0.03).translate(0, 1.28, 0)];
+  const stone = new THREE.Shape(); stone.moveTo(-0.27, 0); stone.lineTo(0.27, 0); stone.lineTo(0.27, 0.5); stone.absarc(0, 0.5, 0.27, 0, Math.PI, false); stone.closePath();
+  COF = {
+    walls: new THREE.ExtrudeGeometry(wall, { depth: 0.62, bevelEnabled: false }).translate(0, 0, -0.31), // z -0.31..0.31
+    back: new THREE.ExtrudeGeometry(backSh, { depth: 0.05, bevelEnabled: false }).translate(0, 0, 0.26),  // fundo de cetim por dentro
+    // tampa: dobradica no lado esquerdo (x = -0.45): a geometria sai da origem pra girar em volta dela
+    lid: new THREE.ExtrudeGeometry(lidSh, { depth: 0.06, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 }).translate(0.45, 0, -0.06),
+    cross: mergeGeometries(cross).translate(0.45, 0, -0.085),
+    stone: new THREE.ExtrudeGeometry(stone, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 1 }).translate(0, 0, -0.06),
+  };
+  return COF;
+}
+let RIP_TEX = null;
 function stripeTex() {
   if (STRIPE) return STRIPE;
   const c = document.createElement('canvas'); c.width = 256; c.height = 16;
@@ -187,7 +215,7 @@ export class Character {
     this.head.add(eyes); this.eyes = eyes;
     const nose = ink(shared(`new THREE.SphereGeometry(0.075, 10, 8)`, () => new THREE.SphereGeometry(0.075, 10, 8)), PAL.ink, 0.012);
     nose.position.set(0, -0.08, -0.395); nose.scale.set(1.3, 1, 1); nose.userData.detail = true;
-    this.head.add(nose);
+    this.head.add(nose); this.nose = nose;
     const mouth = ink(shared(`new THREE.TorusGeometry(0.11, 0.022, 6, 12, Math.PI)`, () => new THREE.TorusGeometry(0.11, 0.022, 6, 12, Math.PI)), PAL.ink, 0);
     mouth.position.set(0, -0.17, -0.33); mouth.rotation.set(0, 0, Math.PI); mouth.userData.detail = true;
     this.head.add(mouth);
@@ -250,6 +278,7 @@ export class Character {
     // detalhe que de longe nem aparece (botao, nariz, boca, topete, fita, punho): some a partir de LOD_FAR
     this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
     this.far = false;
+    for (const h of [this.armR, this.armL, this.legR, this.legL]) h.cull();
     this.v = new THREE.Vector3();
     // 05/11: camadas do corpo: o que esta por cima ganha sempre do que esta por baixo (rosto sobre a cabeca, short sobre o tronco)
     antiFlicker(mask, 1); antiFlicker(nose, 2);
@@ -278,7 +307,7 @@ export class Character {
     if (this.eyewear) this.head.remove(this.eyewear);
     this.eyewear = buildEyewear(L.eyes); if (this.eyewear) { antiFlicker(this.eyewear); this.head.add(this.eyewear); }
     if (this.faceP) this.head.remove(this.faceP);
-    this.faceP = buildFace(L.face); if (this.faceP) { antiFlicker(this.faceP); this.head.add(this.faceP); }
+    this.faceP = buildFace(L.face); if (this.faceP) { antiFlicker(this.faceP); this.head.add(this.faceP); } if (this.nose) this.nose.visible = !this.faceP?.userData.noNose; // mascara de casca (08/11)
     if (this.hat) this.head.remove(this.hat);
     this.hat = buildHat(L.hat, tc); if (this.hat) { antiFlicker(this.hat); this.head.add(this.hat); }
     if (this.curl) this.curl.visible = !['bolo', 'tubarao', 'sorvete', 'cogumelo', 'alavanca'].includes(L.hat); // chapeu que cobre o topo: o topete atravessava
@@ -360,7 +389,7 @@ export class Character {
     const far = dist > LOD_FAR;
     if (far === this.far) return;
     this.far = far;
-    for (const o of this.details) o.visible = !far;
+    for (const o of this.details) o.visible = !far && !(o === this.nose && this.faceP?.userData.noNose); // nariz debaixo da mascara de casca fica escondido (08/11)
     for (const o of this.gunDetails || []) o.visible = !far;
   }
 
@@ -387,6 +416,16 @@ export class Character {
   // animacao de morte (05/11, pedido dele): dura ate 1,4 s (depois o boneco some). So desenho, igual pra todo mundo ver
   deathAnim(dt) {
     const T = this.deadT, B = this.body, id = this.look?.death || 'pancake', sm = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, end = sm((T - 1.05) / 0.3);
+    // efeitos 3D das lendarias (08/11): malhas de shader presas no root (nao giram nem encolhem com o corpo)
+    const FX = this.deathFxFor(id);
+    if (id === 'caixao') { this.coffinDeath(T, B, FX, sm); return; }
+    if (FX) {
+      const f = FX.userData;
+      if (id === 'anjo') { fxPlay(f.col, T, 0, 1.4); fxPlay(f.ring, T, 0, 0.7); }
+      else if (id === 'balao') { fxPlay(f.ring, T, 0.38, 0.5); fxPlay(f.burst, T, 1.04, 0.34); f.burst.position.y = 1.1 + Math.max(0, T - 0.4) ** 2 * 7; }
+      else if (id === 'mola') { fxPlay(f.ring, T, 0.18, 0.5); fxPlay(f.col, T, 0.2, 1.0); }
+      else if (id === 'nocaute') { fxPlay(f.burst, T, 0.02, 0.3); fxPlay(f.ring, T, 0.52, 0.6); }
+    }
     if (id === 'nocaute') { // rankeada: leva o direto, cambaleia, cai de costas; estrelinhas em volta da cabeca e o juiz conta ate 10
       const fall = sm((T - 0.26) / 0.3), a = -fall * 1.42; B.rotation.set(a + (T < 0.26 ? -Math.sin(T * 30) * 0.16 : 0), 0, T < 0.26 ? Math.sin(T * 22) * 0.2 : 0); B.position.y = 0.04; B.scale.setScalar(1 - end * 0.25);
       if (!this.deathProp) {
@@ -418,6 +457,61 @@ export class Character {
     }
   }
 
+  // grupo dos efeitos 3D da morte lendaria (um por morte; some no renascer)
+  deathFxFor(id) {
+    if (this.deathFx || !['anjo', 'balao', 'mola', 'nocaute', 'caixao'].includes(id)) return this.deathFx;
+    const G = this.deathFx = new THREE.Group(), f = G.userData;
+    if (id === 'anjo') { f.col = fxColumn(0xf2d36b, 4.2, 0.75); f.ring = fxRing(0xfaf8f2, 1.7); }
+    else if (id === 'balao') { f.ring = fxRing(0xff8fb4, 1.4); f.burst = fxBurst(0xff6f9f, 1.5); }
+    else if (id === 'mola') { f.ring = fxRing(0xf2c94c, 1.8); f.col = fxColumn(0xf2c94c, 7, 0.6); f.col.scale.x = f.col.scale.z = 0.45; }
+    else if (id === 'nocaute') { f.burst = fxBurst(0xf2c94c, 0.6); f.burst.position.set(0, 1.85, -0.35); f.ring = fxRing(0xfaf8f2, 2); }
+    else if (id === 'caixao') { f.ring = fxRing(0x8a6ee0, 2.1); f.col = fxColumn(0xb9a6ff, 3.6, 0.6); f.dust = fxBurst(0xece9e1, 0.9, 0.8); f.dust.position.set(0, 1.0, -0.3); }
+    for (const k of ['col', 'ring', 'burst', 'dust']) if (f[k]) G.add(f[k]);
+    this.root.add(G);
+    return G;
+  }
+
+  // Volta pro Caixao (08/11, pedido dele): o caixao brota do chao atras dele, ele leva um susto e pula pra dentro de
+  // costas, a tampa bate (poeira), o caixao treme e afunda com a onda e a nevoa roxa; sobe a lapide R.I.P. e ela afunda
+  coffinDeath(T, B, FX, sm) {
+    const f = FX.userData, geo = coffinGeo();
+    if (!f.coffin) {
+      const C = f.coffin = new THREE.Group(); C.position.z = 0.12;
+      C.add(ink(geo.walls, 0x6b4630, 0.012), ink(geo.back, 0xa8322a, 0));
+      const lid = f.lid = new THREE.Group(); lid.position.set(-0.45, 0, -0.31);
+      lid.add(ink(geo.lid, 0x7c5236, 0.012), ink(geo.cross, 0xf2c94c, 0.006)); C.add(lid);
+      const st = f.stone = new THREE.Group(); st.position.set(0, 0, 0.12);
+      st.add(ink(geo.stone, 0x9a968c, 0.012));
+      RIP_TEX ||= wordTexture('RIP', { burst: false, size: 256, fill: '#faf8f2' });
+      const rip = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshBasicMaterial({ map: RIP_TEX, transparent: true, depthWrite: false })); rip.rotation.y = Math.PI; rip.position.set(0, 0.47, -0.088); st.add(rip); // gravado na frente da pedra (1,3 cm pra fora: sem pisca)
+      FX.add(C, st);
+    }
+    const C = f.coffin, lid = f.lid, st = f.stone, back = (x) => 1 + 2.4 * (x - 1) ** 3 + 1.4 * (x - 1) ** 2; // back-out (passa e volta)
+    // 1) brota do chao (0 a 0,32 s) com a tampa aberta pra fora
+    const rise = Math.min(1, T / 0.32);
+    C.position.y = -2.2 * (1 - back(rise)); C.visible = T < 1.85;
+    // 2) susto e pulo de costas pra dentro (0,18 a 0,62 s)
+    const hop = sm((T - 0.18) / 0.44);
+    const jolt = T < 0.18 ? Math.sin(T / 0.18 * Math.PI) : 0;
+    B.position.set(0, jolt * 0.18 + Math.sin(hop * Math.PI) * 0.45, hop * 0.12);
+    const shrink = 1 - hop * 0.22;
+    B.scale.set(shrink * (1 - jolt * 0.12), shrink * (1 + jolt * 0.18), shrink);
+    B.rotation.set(-Math.sin(hop * Math.PI) * 0.35, 0, 0);
+    // 3) tampa bate (0,62 a 0,82 s), com quique; poeira na batida
+    const shut = sm((T - 0.62) / 0.2), slam = T > 0.82 ? Math.sin((T - 0.82) * 30) * 0.12 * Math.max(0, 1 - (T - 0.82) / 0.3) : 0;
+    lid.rotation.y = -1.95 * (1 - shut) + slam;
+    fxPlay(f.dust, T, 0.8, 0.32);
+    if (T > 0.84) B.scale.setScalar(0.0001); // la dentro: some
+    // 4) treme e afunda girando de leve (1,0 a 1,75 s) com a onda no chao e a nevoa subindo
+    const wob = T > 0.84 && T < 1.05 ? Math.sin((T - 0.84) * 46) * 0.06 : 0, sink = sm((T - 1.02) / 0.72);
+    C.rotation.set(sink * 0.12, sink * 0.6, wob);
+    if (T > 1.02) C.position.y = -2.3 * sink;
+    fxPlay(f.ring, T, 1.0, 0.75); fxPlay(f.col, T, 0.98, 1.0);
+    // 5) lapide sobe com mola (1,55 s), fica e afunda no fim
+    const up = Math.min(1, Math.max(0, (T - 1.55) / 0.25)), down = sm((T - 2.08) / 0.25);
+    st.visible = T > 1.55; st.position.y = -0.9 * (1 - back(up)) - 0.95 * down; st.scale.set(1 + Math.sin(up * Math.PI) * 0.12, 1 - Math.sin(up * Math.PI) * 0.1, 1);
+  }
+
   update(dt, s) {
     const { anim, pitch = 0, alive, speed = 0, t } = s;
     if (!this.far) tickCharm(this.gun, dt);
@@ -444,7 +538,7 @@ export class Character {
     const crouch = this.crouchK;
     // sentado no carro (04/11): 'seat' = passageiro (arma na mao), 'drive' = motorista (maos no volante). SEAT_POSE
     // tem tudo que muda (quanto afunda, onde ficam pe, joelho e maos): mexer na pose = mexer so ali
-    this.seatK = ease(this.seatK || 0, anim === 'seat' || anim === 'drive' ? 1 : 0, 12);
+    this.seatK = ease(this.seatK || 0, anim === 'seat' || anim === 'drive' || anim === 'dealer' ? 1 : 0, 12);
     this.driveK = ease(this.driveK || 0, anim === 'drive' ? 1 : 0, 12);
     const seat = this.seatK;
     // escalada (01/11): corpo pra frente, um joelho sobe na borda, mao esquerda agarrada la em cima, arma abaixada
@@ -455,10 +549,11 @@ export class Character {
       this.deadT += dt;
       this.deathAnim(dt);
       this.tag.visible = false;
-      this.root.visible = this.deadT < 1.4;
+      this.root.visible = this.deadT < (DEATH_DUR[this.look?.death] || 1.4);
       return;
     }
     this.deadT = 0; if (this.deathProp) { this.body.remove(this.deathProp); this.deathProp = null; }
+    if (this.deathFx) { this.root.remove(this.deathFx); disposeFx(this.deathFx); this.deathFx = null; this.body.position.z = 0; } // efeitos da lendaria (08/11)
     this.root.visible = true;
     this.tag.visible = true;
     this.body.rotation.y = 0;
@@ -549,6 +644,17 @@ export class Character {
     const shR = new THREE.Vector3(0.26, 1.32, 0), shL = new THREE.Vector3(-0.26, 1.32, 0); // 07/11 (pedido dele: ombro vazado): o braco nasce DENTRO do tronco (borda em x 0,348 nessa altura; em 0,36 a ponta aberta da mangueira aparecia)
     if (anim === 'dance' && applyDance(this, s.dance, s.danceT || 0, dt)) return; // danca de vitoria (05/11): src/dances.js
     if (anim === 'posed') { applyPose(this, s.pose, s.gunPose, dt); return; } // podio: dança, descanso e a volta pra arma
+    if (anim === 'dealer') { // Seu Cambalacho (Mercado Negro, 08/11, referencia dele): sentado, curvado pra frente, caneca na mao direita
+      // perto do peito, a esquerda apoiada no joelho; a cabeca baixa (rosto na sombra do capuz). s.t = gole (0 a 1)
+      const g = Math.max(0, Math.min(1, s.sip || 0)), L = (a, b, k) => a + (b - a) * k;
+      this.body.rotation.x = -(s.lean ?? 0.32); this.body.rotation.z = -(s.tilt || 0) * 0.35; this.head.rotation.x = L(s.headX ?? 0.42, -0.05, g); this.head.rotation.z = s.tilt || 0; this.head.rotation.y = s.headY || 0; // inclinado e meio torto: parado reto parecia duro
+      this.handR.position.set(L(0.2, 0.1, g), L(1.02, 1.5, g), L(-0.42, -0.36, g));
+      this.handL.position.set(-0.26, 0.86, -0.46);
+      const cR = new THREE.Vector3(0.46, L(0.98, 1.12, g), L(-0.06, -0.12, g)), cL = new THREE.Vector3(-0.44, 1.0, -0.14);
+      this.armR.set(shR, cR, this.handR.position); this.armL.set(shL, cL, this.handL.position);
+      this.wristAlign(this.handR, cR, 0); this.wristAlign(this.handL, cL, 0);
+      return;
+    }
     if (anim === 'pose') { // vitrine (Visual e Loja, 03/11): sem arma. Ciclo de 8 s com transicao suave:
       // solto (bracos caidos balancando, peso trocando de perna) -> aceno (mao direita ao lado da cabeca, a outra na
       // cintura, cabeca inclina) -> maos na cintura (cotovelo pra fora, peito estufado). A luva gira junto com a pose.

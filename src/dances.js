@@ -231,15 +231,17 @@ export const DANCES = {
   charleston: { bpm: 168, beats: 16, pose: charleston }, macarrao: { bpm: 112, beats: 16, pose: macarrao }, sapateado: { bpm: 184, beats: 16, pose: sapateado },
   lindy: { bpm: 160, beats: 16, pose: lindy }, shimmy: { bpm: 130, beats: 16, pose: shimmy }, cancan: { bpm: 150, beats: 16, pose: cancan }, polichinelo: { bpm: 116, beats: 12, pose: polichinelo }, robo: { bpm: 96, beats: 16, pose: robo },
   deslizada: { bpm: 120, beats: 12, pose: deslizada }, bamboleio: { bpm: 105, beats: 12, pose: bamboleio }, marcha: { bpm: 120, beats: 16, pose: marcha }, cossaco: { bpm: 126, beats: 16, pose: cossaco }, galinha: { bpm: 140, beats: 16, pose: galinha },
-  cambalhota: { bpm: 104, beats: 8, pose: cambalhota }, mortal: { bpm: 104, beats: 8, pose: mortal },
+  // 08/11 (pedido dele): toda lendaria com efeito 3D proprio, sem repetir: cambalhota = poeira + rastro do giro; mortal = onda de choque + estrelas
+  cambalhota: { bpm: 104, beats: 8, pose: cambalhota, fx: [{ kind: 'dust', from: 'feet', dir: [0, 0.3, 0], at: 2, n: 8, spread: 2.2, speed: 1.6 }, { kind: 'trail', at: 2, life: 1.3, spin: 1 }, { kind: 'dust', from: 'feet', dir: [0, 0.3, 0], at: 4.2, n: 12, spread: 2.6, speed: 2 }] },
+  mortal: { bpm: 104, beats: 8, pose: mortal, fx: [{ kind: 'ring', at: 4.2, color: 0xd8322a, size: 2.6, life: 0.75 }, { kind: 'star', from: 'feet', dir: [0, 1.4, 0], at: 4.25, n: 10, spread: 2.2, speed: 3.4 }] },
   ombrinho: { bpm: 112, beats: 16, pose: ombrinho }, passinho: { bpm: 136, beats: 16, pose: passinho }, cruzadinha: { bpm: 104, beats: 16, pose: cruzadinha }, fiodental: { bpm: 138, beats: 16, pose: fiodental }, aponta: { bpm: 112, beats: 16, pose: aponta },
-  cospefogo: { bpm: 96, beats: 8, pose: cospefogo, fx: [{ kind: 'fire', from: 'head', dir: [0.8, 0.05, -0.6], at: 2, to: 5.2, every: 0.12, n: 3, spread: 0.3, speed: 6 }] },
+  cospefogo: { bpm: 96, beats: 8, pose: cospefogo, fx: [{ kind: 'fire', from: 'mouth', at: 2, to: 5.2, every: 0.12, n: 3, spread: 0.22, speed: 6 }, { kind: 'jet', at: 2, life: 2, len: 1.8 }] }, // 08/11: o fogo sai da BOCA (segue a cabeca) + jato de chama 3D
   coracao: { bpm: 96, beats: 8, pose: coracao, fx: [{ kind: 'heart', from: 'hands', dir: [0, 0.5, -0.3], at: 1, to: 6.5, every: 0.5, n: 2, spread: 1, speed: 1.2 }, { kind: 'heart', from: 'hands', dir: [0, 0.6, 0], at: 6.5, n: 14, spread: 1.6, speed: 2 }] },
   canhao: { bpm: 104, beats: 8, pose: canhao, fx: [{ kind: 'confetti', from: 'hR', dir: [0.15, 1, -0.2], at: 2.5, n: 26, spread: 0.7, speed: 6.5 }, { kind: 'confetti', from: 'hL', dir: [-0.15, 1, -0.2], at: 2.5, n: 26, spread: 0.7, speed: 6.5 }, { kind: 'confetti', from: 'hands', dir: [0, 1, -0.2], at: 4.5, n: 20, spread: 1.1, speed: 5.5 }] },
   raio: { bpm: 92, beats: 8, pose: raio, fx: [{ kind: 'bolt', at: 2.2 }, { kind: 'bolt', at: 5.2 }, { kind: 'spark', from: 'hL', dir: [-0.4, 0.6, 0], at: 2.4, to: 5.8, every: 0.5, n: 3, spread: 1.4, speed: 2.4 }] },
   projetor: { bpm: 88, beats: 8, pose: projetor, fx: [{ kind: 'card', from: 'hands', dir: [0, 0.08, -1], at: 1.4, word: 'BANG!' }, { kind: 'card', from: 'hands', dir: [0, 0.08, -1], at: 4.6, word: 'KAPOW!' }] },
-  remador: { bpm: 100, beats: 12, pose: remador }, palmas: { bpm: 126, beats: 16, pose: palmas }, piao: { bpm: 100, beats: 12, pose: piao }, mexe: { bpm: 116, beats: 12, pose: mexe }, reverencia: { bpm: 84, beats: 8, pose: reverencia },
-  volta: { bpm: 120, beats: 16, pose: volta },
+  remador: { bpm: 100, beats: 12, pose: remador }, palmas: { bpm: 126, beats: 16, pose: palmas }, piao: { bpm: 100, beats: 12, pose: piao }, mexe: { bpm: 116, beats: 12, pose: mexe }, reverencia: { bpm: 84, beats: 8, pose: reverencia, fx: [{ kind: 'spot', at: 0.3, life: 5.2 }, { kind: 'petal', from: 'sky', dir: [0, -0.2, 0], at: 2.2, to: 5.4, every: 0.35, n: 2, spread: 1.6, speed: 0.6 }] /* fim de espetaculo: holofote de cima e petalas caindo (08/11) */ },
+  volta: { bpm: 120, beats: 16, pose: volta, fx: [{ kind: 'note', from: 'head', dir: [0, 1, 0], at: 1, to: 15, every: 2, n: 2, spread: 1.2, speed: 1.2 }, { kind: 'burst', from: 'head', at: 8, color: 0xffd23f, size: 1.6, life: 0.55 }, { kind: 'burst', from: 'head', at: 16, color: 0xffd23f, size: 1.6, life: 0.55 }] }, // rankeada: notas e estouro dourado na volta completa
 };
 export const danceLen = (id) => DANCES[id].beats * 60 / DANCES[id].bpm;
 

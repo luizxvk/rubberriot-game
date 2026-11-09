@@ -15,7 +15,7 @@ const T = EN ? {
   soundOff: 'Click or press any key to turn the sound on', hint: 'Any controller picks: D-pad moves, A changes, Start starts',
   qr: 'Scan with your phone to play with your Rovex account', qrOpt: 'optional · code {n}', acct: 'Rovex account', out: 'Sign out', outPad: 'Y signs out', qrWait: 'Generating code...', qrOff: 'No connection: playing as guest',
   modes: { tdm: 'Team Deathmatch', ffa: 'Free-for-All', ctf: 'Capture the Flag', dom: 'Domination', gungame: 'Gun Game', escort: 'Escort' },
-  maps: { auto: 'Automatic', vila: 'Village', fabrica: 'Factory', fronteira: 'Frontier', estaleiro: 'Shipyard', refinaria: 'Refinery', ferradura: 'Horseshoe Bank', bonde: 'Tram Hill', apito: 'Whistle Valley' },
+  maps: { auto: 'Automatic', vila: 'Village', fabrica: 'Factory', fronteira: 'Frontier', estaleiro: 'Shipyard', refinaria: 'Refinery', ferradura: 'Horseshoe Bank', bonde: 'Tram Hill', apito: 'Whistle Valley', becos: 'Inkwell Alley', feira: 'Tire Fair', largo: 'Siren Square', cortejo: 'Parade Avenue' },
   diffs: { 0.7: 'Easy', 1: 'Normal', 1.35: 'Hard' },
 } : {
   title: 'Tela dividida', seat: 'Aperte A pra entrar', seatSub: 'um controle por tela', leave: 'B sai', pad: 'Controle {n}', player: 'Jogador {n}',
@@ -23,7 +23,7 @@ const T = EN ? {
   soundOff: 'Clique ou aperte uma tecla pra ligar o som', hint: 'Qualquer controle escolhe: direcional anda, A troca, Start começa',
   qr: 'Leia com o celular pra jogar com a sua conta Rovex', qrOpt: 'opcional · código {n}', acct: 'Conta Rovex', out: 'Sair da conta', outPad: 'Y sai da conta', qrWait: 'Gerando o código...', qrOff: 'Sem conexão: joga como convidado',
   modes: { tdm: 'Mata-Mata', ffa: 'Contra Todos', ctf: 'Captura a Bandeira', dom: 'Dominação', gungame: 'Escada de Armas', escort: 'Escolta' },
-  maps: { auto: 'Automático', vila: 'Vila', fabrica: 'Fábrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', ferradura: 'Banco Ferradura', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito' },
+  maps: { auto: 'Automático', vila: 'Vila', fabrica: 'Fábrica', fronteira: 'Fronteira', estaleiro: 'Estaleiro', refinaria: 'Refinaria', ferradura: 'Banco Ferradura', bonde: 'Ladeira do Bonde', apito: 'Vale do Apito', becos: 'Beco do Nanquim', feira: 'Feira do Pneu', largo: 'Largo da Sirene', cortejo: 'Avenida do Cortejo' },
   diffs: { 0.7: 'Fáceis', 1: 'Normais', 1.35: 'Difíceis' },
 };
 const fmt = (s, n) => s.replace('{n}', n);

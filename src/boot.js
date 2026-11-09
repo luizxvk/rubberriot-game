@@ -11,6 +11,9 @@ if (matchMedia('(orientation: portrait) and (pointer: coarse)').matches) funil('
 addEventListener('error', (ev) => reportaErro(ev.error || ev.message, (ev.filename || '').split('/').pop() + ':' + ev.lineno));
 addEventListener('unhandledrejection', (ev) => reportaErro(ev.reason, 'promise'));
 
+// 08/11: aba restaurada do cache (celular) roda o index velho; reload() comum pode reaproveitar a mesma pagina.
+// Muda o endereco (?rr=hora) pra o navegador buscar o index novo, mantendo os outros parametros (token da Rovex etc.)
+function recarregaLimpo() { try { const u = new URL(location.href); u.searchParams.set('rr', Date.now().toString(36)); location.replace(u.href); } catch { location.reload(); } }
 const B = window.__rrBoot; // tela de entrada do celular (index.html): o pavio anda com os marcos da carga
 B?.set(0.15);
 const limite = new Promise(res => setTimeout(res, 4500));
@@ -23,7 +26,7 @@ else (SS && !rovex.token() ? Promise.resolve() : Promise.race([pullSave(), limit
   try { await import('./main.js'); sessionStorage.removeItem('rr_reload'); }
   catch (e) {
     reportaErro(e, 'import main');
-    if (!sessionStorage.getItem('rr_reload')) { sessionStorage.setItem('rr_reload', '1'); location.reload(); return; }
+    if (!sessionStorage.getItem('rr_reload')) { sessionStorage.setItem('rr_reload', '1'); recarregaLimpo(); return; }
     // ja recarregou e falhou de novo: em vez da tela parada, explica (log 02/11: "Error creating WebGL context" = o navegador
     // desligou o 3D depois de ficar sem memoria de video)
     const gl = /WebGL/i.test(String(e?.message || e));
@@ -31,7 +34,7 @@ else (SS && !rovex.token() ? Promise.resolve() : Promise.race([pullSave(), limit
     const d = document.createElement('div');
     d.className = 'boot-fail'; d.setAttribute('role', 'alert');
     d.innerHTML = `<b>${gl ? (en ? 'Your browser turned off 3D graphics' : 'O navegador desligou os gráficos 3D') : (en ? 'The game did not load' : 'O jogo não carregou')}</b><span>${gl ? (en ? 'Close other tabs and apps, then reload.' : 'Feche outras abas e apps e recarregue.') : (en ? 'Check your connection and reload.' : 'Confira a internet e recarregue.')}</span><button type="button">${en ? 'Reload' : 'Recarregar'}</button>`;
-    d.querySelector('button').onclick = () => { sessionStorage.removeItem('rr_reload'); location.reload(); };
+    d.querySelector('button').onclick = () => { sessionStorage.removeItem('rr_reload'); recarregaLimpo(); };
     document.body.appendChild(d);
     return;
   }

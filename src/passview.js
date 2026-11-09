@@ -1,4 +1,4 @@
-// Tela do Rovex Pass: uma tira de filme na horizontal. Cada fotograma e um nivel; a barra corre embaixo da tira. So o Elite
+// Rovex Pass: aba da Loja. So o Elite
 // da Rovex ativa o Pass: sem Elite a tira aparece trancada com o convite. Tambem desenha o aviso da partida e o bloco do fim.
 import { t } from './i18n.js';
 import { passInfo, BOOST_PASS_ELITE, BOOST_PASS_FREE } from './progress.js';
@@ -7,6 +7,9 @@ import { bannerHtml } from './banners.js';
 import { CAMO_SWATCH } from './camos.js';
 import { RET_COLORS } from './arsenal.js';
 import { openElite } from './elitepop.js';
+import { pieceShot } from './shop.js';
+import { audio } from './audio.js';
+import { paneBusy, paneProg, settle } from './paneload.js';
 
 const LOCK = '<svg class="pf-lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z"/></svg>';
 // icones do visual: Material Icons (Apache 2.0)
@@ -26,22 +29,77 @@ export const passArt = (p) => (p.k === 'banner' ? `<i class="pf-art pf-bnr">${ba
 export const passName = (p) => t(p.k === 'banner' ? 'bn_' + p.id : p.k === 'dance' ? 'dn_' + p.id : p.k === 'camo' ? 'camo_' + p.id : p.k === 'ret' ? 'retc_' + p.id : 'lk_' + p.slot + '_' + p.id);
 const kindOf = (p) => t(p.k === 'banner' ? 'passBanner' : p.k === 'dance' ? 'passDance' : p.k === 'look' ? 'lkt_' + p.slot : p.k === 'camo' ? 'passCamo' : p.k === 'ret' ? 'passRet' : 'passLook');
 
-export function renderPass(go) {
-  const box = document.getElementById('passBody'), I = passInfo(), done = I.level >= PASS_MAX;
-  // a barra vai do 1o ao ultimo fotograma: cada nivel e um passo, e o XP atual anda dentro do passo
-  const fill = Math.min(100, (Math.max(0, I.level - 1 + (done ? 0 : I.into / I.need)) / (PASS_MAX - 1)) * 100);
-  box.innerHTML = `<p class="ps-season">${t('season1')}</p>` + `<div class="ps-head"><b class="ps-lvl">${t('passLevel', { n: I.level, m: PASS_MAX })}</b>
-      <span class="ps-xp"><span class="ps-bar"><i style="width:${done ? 100 : Math.round(I.into / I.need * 100)}%"></i></span><small>${done ? t('passDone') : t('passXp', { a: I.into.toLocaleString('pt-BR'), b: I.need.toLocaleString('pt-BR') })}</small></span></div>
-    ` + (I.on ? `<p class="ps-hint">${t('passHint')}</p>`
-    : `<div class="ps-gate"><p>${t('passGate')}</p><button class="ps-elite" id="psElite">${t('passGateGo')}</button></div>`)
-    + `<div class="ps-strip" id="psStrip"><ol class="ps-frames">${PASS.map((p, i) => {
-      const n = i + 1, open = I.on && I.level >= n, next = n === I.level + 1, F = PASS_FREE[n], fo = I.level >= n;
-      const free = F ? `<button class="pf-free ${fo ? 'on' : ''}" data-open="${fo ? 1 : ''}" data-k="${F.k}" ${fo ? '' : 'aria-disabled="true"'}><em>${t('passFreeTag')}</em>${BOOST_PASS_FREE.includes(n) ? `<span class="pf-boost">${t('passBoost')}</span>` : ''}${passArt(F)}${fo ? '' : LOCK}<span class="pf-name">${passName(F)}</span></button>` : '<span class="pf-free none" aria-hidden="true"></span>';
-      return `<li>${free}<button class="pf ${open ? 'on' : ''} ${next ? 'next' : ''}" data-open="${open ? 1 : ''}" data-k="${p.k}" ${open ? '' : 'aria-disabled="true"'}><b class="pf-n">${n}</b>${BOOST_PASS_ELITE.includes(n) ? `<span class="pf-boost">${t('passBoost')}</span>` : ''}${passArt(p)}${open ? '' : LOCK}<span class="pf-name">${passName(p)}</span><small>${kindOf(p)}</small></button></li>`;
-    }).join('')}</ol><div class="ps-track" aria-hidden="true"><i style="width:${fill}%"></i></div></div>`;
-  box.querySelectorAll('.pf[data-open="1"], .pf-free[data-open="1"]').forEach(b => { b.onclick = () => go(['look', 'banner', 'dance'].includes(b.dataset.k) ? 'look' : 'arsenal'); });
+// 08/11 (pedido dele): aba da Loja, no layout da Loja e no padrao de passe do Fortnite: premio grande a esquerda, nivel e progresso ao lado e a trilha
+// de niveis embaixo (Elite em cima, gratis embaixo). Fotos so do que esta na tela, igual a vitrine.
+let goTo = null, passIO = null, passRun = 0, pickRun = 0;
+export const passNav = (f) => { goTo = f; };
+export function stopPass() { passRun++; passIO?.disconnect(); paneBusy(document.getElementById('passPane'), false); }
+const shotSlot = (p) => (p.k === 'look' ? p.slot : p.k);
+const putShot = (el, u) => { el.innerHTML = `<img src="${u}" alt="">`; el.classList.add('img'); };
+const rewardOf = (n, free) => (free ? PASS_FREE[n] : PASS[n - 1]);
+const rarOf = (n, free) => (free ? 'comum' : n % 10 === 0 ? 'lendario' : 'epico');
+
+export function renderPass() {
+  const box = document.getElementById('passPane'); if (!box) return;
+  const I = passInfo(), done = I.level >= PASS_MAX, cur = Math.min(PASS_MAX, I.level + 1), run = ++passRun;
+  const isOpen = (n, free) => (free ? I.level >= n : I.on && I.level >= n);
+  const tile = (n, free) => {
+    const p = rewardOf(n, free), open = isOpen(n, free), boost = (free ? BOOST_PASS_FREE : BOOST_PASS_ELITE).includes(n);
+    return `<button class="shop-tile psx-tile r-${rarOf(n, free)} ${open ? 'open' : 'locked'}" data-n="${n}" data-free="${free ? 1 : ''}" aria-label="${t('passLevel', { n, m: PASS_MAX })}: ${passName(p)}">
+      <span class="st-bg"></span><span class="st-art psx-art">${passArt(p)}</span>
+      <span class="st-tag ${free ? '' : 'psx-elite'}">${free ? t('passFreeTag') : 'Elite'}</span>${boost ? `<span class="pf-boost">${t('passBoost')}</span>` : ''}${open ? '' : LOCK}
+      <span class="st-foot"><b>${passName(p)}</b><small>${kindOf(p)}</small></span></button>`;
+  };
+  box.innerHTML = `<section class="shop-sec psx-hero" aria-labelledby="psxH">
+      <div class="psx-show" id="psxShow"><span class="st-bg"></span><span class="psx-shot" id="psxShot"></span></div>
+      <div class="psx-side">
+        <span class="shop-left">${t('season1')}</span>
+        <h3 id="psxH">${t('passTitle')}</h3>
+        <div class="ps-head"><b class="ps-lvl">${t('passLevel', { n: I.level, m: PASS_MAX })}</b>
+          <span class="ps-xp"><span class="ps-bar"><i style="width:${done ? 100 : Math.round(I.into / I.need * 100)}%"></i></span><small>${done ? t('passDone') : t('passXp', { a: I.into.toLocaleString('pt-BR'), b: I.need.toLocaleString('pt-BR') })}</small></span></div>
+        <div class="psx-pick"><b id="psxName"></b><small id="psxKind"></small><p id="psxState"></p><button class="psx-go" id="psxEquip" hidden>${t('psEquip')}</button></div>
+        ${I.on ? `<p class="psx-note">${t('passHint')}</p>` : `<div class="psx-gate"><p>${t('passGate')}</p><button class="psx-go" id="psElite">${t('passGateGo')}</button></div>`}
+      </div>
+    </section>
+    <section class="shop-sec" aria-labelledby="psxR">
+      <header><h3 id="psxR">${t('psRewards')}</h3></header>
+      <ol class="psx-track" id="psxTrack">${PASS.map((_, i) => { const n = i + 1; return `<li class="psx-col ${I.level >= n ? 'got' : ''} ${n === cur ? 'next' : ''}"><span class="psx-n">${n}</span>${tile(n, false)}${PASS_FREE[n] ? tile(n, true) : '<span class="psx-none" aria-hidden="true"></span>'}</li>`; }).join('')}</ol>
+    </section>`;
+  const shot = box.querySelector('#psxShot'), show = box.querySelector('#psxShow'), equip = box.querySelector('#psxEquip');
+  const pick = (n, free) => {
+    const p = rewardOf(n, free), open = isOpen(n, free), token = ++pickRun;
+    box.querySelectorAll('.psx-tile.sel').forEach(x => x.classList.remove('sel'));
+    box.querySelector(`.psx-tile[data-n="${n}"][data-free="${free ? 1 : ''}"]`)?.classList.add('sel');
+    show.className = `psx-show r-${rarOf(n, free)}`;
+    shot.classList.remove('img'); shot.innerHTML = passArt(p);
+    box.querySelector('#psxName').textContent = passName(p);
+    box.querySelector('#psxKind').textContent = `${kindOf(p)} · ${t('passLevel', { n, m: PASS_MAX })}`;
+    box.querySelector('#psxState').textContent = open ? t('psUnlocked') : !free && !I.on ? t('psEliteOnly') : t('psLocked', { n });
+    equip.hidden = !open;
+    equip.onclick = () => goTo?.(['look', 'banner', 'dance'].includes(p.k) ? 'look' : 'arsenal');
+    return pieceShot(shotSlot(p), p.id).then(u => { if (u && token === pickRun && shot.isConnected) putShot(shot, u); }).catch(() => {});
+  };
+  box.querySelectorAll('.psx-tile').forEach(b => { b.onclick = () => { audio.play('ui_click', { ui: true }); pick(+b.dataset.n, !!b.dataset.free); }; });
   const el = box.querySelector('#psElite'); if (el) el.onclick = () => openElite(el);
-  box.querySelector('.pf.next')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  // abre no proximo nivel; a fileira anda sozinha ate ele
+  const track = box.querySelector('#psxTrack'), col = track.querySelector('.psx-col.next');
+  if (col) track.scrollLeft = col.offsetLeft - track.clientWidth / 2 + col.offsetWidth / 2;
+  paneBusy(box, true);
+  const jobs = [pick(cur, false)]; let seen = false, doneFirst; const first = new Promise(r => { doneFirst = r; });
+  passIO?.disconnect();
+  passIO = new IntersectionObserver((es) => {
+    const right = track.getBoundingClientRect().right;
+    es.forEach(e => {
+      if (!e.isIntersecting) return;
+      passIO.unobserve(e.target);
+      const b = e.target.closest('.psx-tile'), p = rewardOf(+b.dataset.n, !!b.dataset.free);
+      const job = pieceShot(shotSlot(p), p.id).then(u => { if (u && e.target.isConnected) putShot(e.target, u); }).catch(() => {});
+      if (!seen && e.boundingClientRect.left < right) jobs.push(job);
+    });
+    if (!seen) { seen = true; let n = 0; jobs.forEach(j => j.then(() => paneProg(box, ++n, jobs.length))); Promise.all(jobs).then(doneFirst); }
+  }, { root: track, rootMargin: '0px 300px' });
+  box.querySelectorAll('.psx-art').forEach(a => passIO.observe(a));
+  settle(first).then(() => { if (run === passRun) paneBusy(box, false); });
 }
 
 // aviso na partida: nivel novo do Pass com o premio

@@ -14,13 +14,17 @@ import { me, buyItem, redeemItem } from './rovex.js';
 import { audio } from './audio.js';
 import { SHOP_ITEMS, shopPrice as price, shopRotation as rotation } from '../shared/shop.js';
 import { openZionBuy } from './zionbuy.js';
-import { RET_ROW_LONG, buildGun, buildSight, getLoadouts, RET_PATH } from './arsenal.js';
+import { RET_ROW_LONG, buildGun, buildSight, getLoadouts, RET_PATH, bpLoadout, arsenalLoaded } from './arsenal.js';
+import { BLUEPRINTS } from '../shared/weapons.js';
 import { WSKINS } from '../shared/weapons.js';
 import { Character } from './character.js';
+import { ink } from './toon.js';
 import { DEFAULT_LOOK } from '../shared/looks.js';
 import { shopOwned } from './shopstore.js';
 import { camoById } from './camos.js';
 import { renderBal } from './zbal.js';
+import { initBlackMarket, stopBM, reopenBM } from './bmview.js';
+import { paneBusy, paneProg, settle } from './paneload.js';
 
 const $ = (id) => document.getElementById(id);
 const COIN_SRC = import.meta.env.BASE_URL + 'brand/zion-points.png';
@@ -116,7 +120,34 @@ function pieceModel(slot, v) { // uma peca so: camo = a arma; skin/chapeu = o bo
   if (slot === 'charm') { const g = gunModel(null); attachCharm(g.holder.children[0], v, 1); return { obj: g.holder, gun: true, r: g.r }; }
   if (slot === 'ret') return retModel(v);
   if (slot === 'camo') { const g = gunModel(v); return { obj: g.holder, gun: true, r: g.r }; }
+  if (slot === 'bp') { // variante montada (Mercado Negro, 08/11). Foto antes do pacote de armas chegar saia com OUTRO corpo (provisorio): espera e remonta
+    const h = new THREE.Group(), m = { obj: h, gun: true, r: 0.5 };
+    const put = () => { h.clear(); const gun = buildGun(BLUEPRINTS[v].wpn, bpLoadout(v)); const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent(); const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()); gun.position.sub(c); h.add(gun); m.fitLen = Math.max(sz.x, sz.z) * 0.5; m.fitH = sz.y * 0.5; m.r = sz.length() * 0.5; }; // esfera que envolve a caixa inteira (com o maior lado so a pistola saia rente a borda)
+    put(); if (!arsenalLoaded()) m.ready = new Promise(res => { const iv = setInterval(() => { if (arsenalLoaded()) { clearInterval(iv); put(); res(); } }, 200); });
+    return m;
+  }
   if (slot === 'wskin') { const g = gunModel(null, v); return { obj: g.holder, gun: true, r: g.r }; } // skin de modelo (04/11): a arma ja com o modelo novo
+  if (slot === 'merchant') { // Seu Cambalacho (08/11, referencia dele): capuz, sentado curvado pra frente com a caneca, de 3/4 olhando pra vitrine
+    const ch = new Character('red', '', { ...DEFAULT_LOOK, hat: 'none', eyes: 'sleepy', shirt: '#2a1d16', gloveCol: '#3a3a3a' } /* 08/11: sem mascara, so o capuz */); ch.tag.visible = false; if (ch.shadow) ch.shadow.visible = false;
+    // capuz: casca R 0,43 (cabeca 0,36) ate theta 0,74pi (regra do rosto: mais baixo entra no peito), aberto na frente (-z)
+    const hood = ink(new THREE.SphereGeometry(0.43, 32, 18, Math.PI * 1.5 + 0.62, Math.PI * 2 - 1.24, 0, Math.PI * 0.74), 0x3b3128, 0.03, { side: THREE.DoubleSide, unique: true });
+    hood.position.set(0, 0.04, -0.03); ch.head.add(hood); if (ch.curl) ch.curl.visible = false; // o topete furava o capuz
+    const rim = ink(new THREE.TorusGeometry(0.315, 0.036, 10, 32), 0x3b3128, 0.02); rim.scale.set(1, 1.18, 1); rim.position.set(0, 0.0, -0.36); rim.rotation.x = 0.28; // borda descida na testa: sombra nos olhos ch.head.add(rim); // borda dobrada do capuz em volta do rosto
+    // caneca na mao direita: corpo + alca, fora da luva
+    const mug = new THREE.Group(), cup = ink(new THREE.CylinderGeometry(0.12, 0.105, 0.24, 20), 0xd8cfb8, 0.025), ear = ink(new THREE.TorusGeometry(0.07, 0.022, 8, 14, Math.PI), 0xd8cfb8, 0.015);
+    ear.position.set(0.125, 0, 0); ear.rotation.z = -Math.PI / 2; mug.add(cup, ear); mug.position.set(-0.04, -0.02, -0.12); ch.handR.add(mug);
+    for (let k = 0; k < 90; k++) ch.update(0.016, { anim: 'dealer', alive: true, speed: 0, t: k * 0.016, pitch: 0, sip: 0, lean: 0.22, headX: 0.14, tilt: 0.16, headY: -0.08 }); // assenta (seatK sobe aos poucos)
+    // 08/11 (pedido dele): cara seria e cigarro. Boca virada e achatada; cigarro no canto da boca com a brasa acesa
+    for (const o of ch.head.children) if (o.geometry?.type === 'TorusGeometry' && o.userData.detail && o.geometry.parameters.arc === Math.PI) { o.rotation.z = 0; o.scale.set(0.72, 0.28, 1); o.position.y = -0.2; }
+    const cig = new THREE.Group(), stick = ink(new THREE.CylinderGeometry(0.016, 0.016, 0.2, 10), 0xf1ece0, 0.008), ember = new THREE.Mesh(new THREE.CylinderGeometry(0.0175, 0.0175, 0.022, 10), new THREE.MeshBasicMaterial({ color: 0xff6a1a }));
+    ember.position.y = 0.109; cig.add(stick, ember);
+    // 08/11 (pedido dele): a ponta de tras entra NA boca (linha da boca y -0.19, z -0.34) e o cigarro aponta pra frente e pro lado; a fumaca sai da brasa
+    cig.rotation.set(-1.28, 0, -0.32); const cd = new THREE.Vector3(0, 1, 0).applyEuler(cig.rotation), mouthPt = new THREE.Vector3(0.04, -0.19, -0.34);
+    cig.position.copy(mouthPt).addScaledVector(cd, 0.1); ch.head.add(cig);
+    // fumaca: sem bolinhas 3D; as 3 fumacas animadas do banner (.bm-steam, CSS) saem da brasa
+    ch.root.rotation.y = Math.PI - 0.3; const root = new THREE.Group(); root.add(ch.root); // de frente pra camera, virado 3/4 pra esquerda (a vitrine)
+    return { obj: root, ch, gun: false, cam: [[0.05, 1.5, 3.5], [0, 1.18, 0]], size: [448, 448] };
+  }
   const ch = new Character('red', '', slot === 'dance' ? DEFAULT_LOOK : { ...DEFAULT_LOOK, [slot]: v });
   ch.tag.visible = false; if (ch.shadow) ch.shadow.visible = false;
   // dança: a foto do cartao pega o meio do movimento; o popup dança em loop com o efeito
@@ -130,16 +161,23 @@ const MODELS = new Map();
 const buildModels = (id) => { if (!MODELS.has(id)) MODELS.set(id, gives(id).map(([s, v]) => pieceModel(s, v))); return MODELS.get(id); };
 function frame(m, w, h, yaw) {
   cam.aspect = w / h; cam.updateProjectionMatrix();
-  if (m.gun) { const d = m.r / Math.tan(THREE.MathUtils.degToRad(15)) * 1.15 + (m.depth || 0); cam.position.set(d, m.sway ? 0 : m.r * 0.35, 0); cam.lookAt(0, 0, 0); m.obj.rotation.y = m.sway ? Math.sin(yaw) * 0.42 - 0.3 : yaw; } // mira balanca: de costas o vidro some
+  if (m.cam) { cam.position.set(...m.cam[0]); cam.lookAt(...m.cam[1]); return; } // enquadramento proprio (comerciante do Mercado Negro)
+  if (m.gun) { const rad = m.live && m.fitLen ? Math.max(m.fitLen / cam.aspect, m.fitH) * 1.02 : m.r; /* ficha: a arma ocupa a largura do palco */ const d = rad / Math.tan(THREE.MathUtils.degToRad(15)) * 1.15 + (m.depth || 0); cam.position.set(d, m.sway ? 0 : m.r * 0.35, 0); cam.lookAt(0, 0, 0); m.obj.rotation.y = m.sway ? Math.sin(yaw) * 0.42 - 0.3 : yaw; } // mira balanca: de costas o vidro some
   else { cam.position.set(m.side ? 0.3 : 0, 1.3, m.side ? 7.4 : 6.2); cam.lookAt(m.side ? 0.3 : 0, 1.1, 0); m.obj.rotation.y = Math.PI + yaw * (m.side ? 0.35 : 1); if (m.side) m.side.rotation.y = yaw * 2.2; }
 }
 // estagio da camo reativa (0 a 3). Na partida sobe com os abates; aqui a foto mostra o ultimo e o popup passa por todos
 const setStage = (obj, n) => obj.traverse(o => { const u = o.material?.userData?.u?.uReact; if (u) u.value = n; });
-async function snapshot(id) { // uma foto por peca (pacote = varias, o cartao desliza entre elas)
+// 08/11 (print dele: duas armas sobrepostas e a mao do comerciante por cima): as fotos dividem a MESMA cena e o snapshot espera
+// (ready/compileAsync) com o modelo dentro dela; duas fotos ao mesmo tempo fotografavam uma o modelo da outra. Agora uma por vez
+let shotChain = Promise.resolve();
+function snapshot(id) { const run = shotChain.then(() => snapshotNow(id)); shotChain = run.catch(() => {}); return run; }
+async function snapshotNow(id) { // uma foto por peca (pacote = varias, o cartao desliza entre elas)
   if (SHOT.has(id)) return SHOT.get(id);
   stage();
-  const W = 256, H = 256, urls = [];
+  const urls = [];
   for (const m of buildModels(id)) {
+    while (live) await new Promise(r => setTimeout(r, 200)); // popup ao vivo usa a mesma cena: espera (senao a peca desta foto aparecia nele)
+    const [W, H] = m.size || [256, 256];
     if (m.ready) await m.ready;
     // compila em paralelo ANTES de desenhar: compilar no render travava a tela ate 2 s por camo nova (Direct3D)
     scene.add(m.obj); if (R.compileAsync) await Promise.race([R.compileAsync(scene, cam).catch(() => {}), new Promise(r => setTimeout(r, 4000))]); scene.remove(m.obj); // 08/11: o compileAsync do three pode nunca terminar (material trocado no meio)
@@ -155,13 +193,20 @@ async function snapshot(id) { // uma foto por peca (pacote = varias, o cartao de
 }
 // fotos dos cartoes uma por quadro (compilar a camo de 8 armas de uma vez travava a tela), e so quando o cartao chega perto da vista
 let shotQ = [], pumping = false, shotIO = null;
+// loader (08/11): a promessa fecha quando as fotos que estao de fato na vista ficam prontas; o que vem depois carrega ao rolar
+let firstWait = null, firstTotal = 0, firstDone = null, shopRun = 0;
 function watchShots(pane) {
   shotIO?.disconnect(); shotQ = [];
+  let seen = false; firstWait = null;
+  const first = new Promise(r => { firstDone = r; });
   shotIO = new IntersectionObserver((es) => {
-    for (const e of es) if (e.isIntersecting) { shotIO.unobserve(e.target); shotQ.push(e.target); }
+    const bottom = pane.getBoundingClientRect().bottom, vis = [];
+    for (const e of es) if (e.isIntersecting) { shotIO.unobserve(e.target); shotQ.push(e.target); if (!seen && e.boundingClientRect.top < bottom) vis.push(e.target); }
+    if (!seen) { seen = true; firstWait = new Set(vis); firstTotal = vis.length; if (!vis.length) firstDone(); }
     if (shotQ.length && !pumping) { pumping = true; requestAnimationFrame(pumpShots); }
   }, { root: pane, rootMargin: '400px 0px' });
   pane.querySelectorAll('.shop-tile').forEach(b => shotIO.observe(b));
+  return first;
 }
 async function pumpShots() {
   if (live) { setTimeout(pumpShots, 300); return; } // popup aberto: a fila espera
@@ -172,17 +217,24 @@ async function pumpShots() {
       const urls = await snapshot(el.dataset.item), a = el.querySelector('.st-art');
       if (!urls.length) { shotQ.unshift(el); requestAnimationFrame(pumpShots); return; } // abriu o popup no meio: tenta depois
       a.classList.add('img');
-      a.innerHTML = urls.length > 1 ? `<span class="st-slides" style="--n:${urls.length}">${urls.map(u => `<img src="${u}" alt="">`).join('')}</span>` : `<img src="${urls[0]}" alt="">`;
+      a.innerHTML = urls.length > 1 ? `<span class="st-slides" data-at="${Date.now()}" style="--n:${urls.length}">${urls.map(u => `<img src="${u}" alt="">`).join('')}</span>${navBtns('span')}` : `<img src="${urls[0]}" alt="">`;
     } catch (e) { console.warn('previa da loja', e); }
   }
+  if (firstWait?.delete(el)) { paneProg($('shopPane'), firstTotal - firstWait.size, firstTotal); if (!firstWait.size) firstDone(); }
   requestAnimationFrame(pumpShots);
 }
-// cartao de pacote: a cada 3 s desliza pra proxima peca, em loop
-let slideI = 0;
+// cartao de pacote: a cada 10 s desliza pra proxima peca (08/11, pedido dele: era 3 s); setas anterior/proximo no cartao
+const TILE_HOLD = 10;
+function slideTile(s, dir) { const n = s.children.length; s.dataset.i = String(((Number(s.dataset.i) || 0) + dir + n) % n); s.style.transform = `translateX(${-Number(s.dataset.i) * 100 / n}%)`; s.dataset.at = String(Date.now()); }
 function slideTiles() {
-  slideI++;
-  document.querySelectorAll('#shopPane .st-slides').forEach(s => { const n = s.children.length; s.style.transform = `translateX(${-(slideI % n) * 100 / n}%)`; });
+  document.querySelectorAll('#shopPane .st-slides').forEach(s => { if (Date.now() - (Number(s.dataset.at) || 0) >= TILE_HOLD * 1000 - 50) slideTile(s, 1); });
 }
+// setas do cartao: troca na hora e o relogio de 10 s recomeca daquela peca (o clique na seta nao abre o pacote)
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('#shopPane .st-nav'); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const sl = b.parentElement.querySelector('.st-slides'); if (sl) { slideTile(sl, b.dataset.dir === 'prev' ? -1 : 1); audio.play('ui_hover', { ui: true, vol: 0.5 }); }
+}, true);
 
 // foto de uma peca qualquer (popup do Elite: as skins de verdade do pack, a camo, o visual)
 export async function pieceShot(slot, v) {
@@ -194,14 +246,20 @@ export async function pieceShot(slot, v) {
 }
 // giro do popup; pacote: cada peca fica 3 s girando e desliza pra proxima (sai pela esquerda, a outra entra pela direita)
 let live = null, raf = 0, shopFx = null;
-const HOLD = 3, SLIDE = 0.7;
+const HOLD = 10, SLIDE = 0.7; // 08/11 (pedido dele): cada peca do pacote fica 10 s (era 3) e as setas trocam na hora
+// setas anterior/proximo (Material Icons, Apache 2.0)
+const navBtns = (tag) => ['prev', 'next'].map(d => `<${tag} ${tag === 'button' ? 'type="button"' : 'role="button" tabindex="-1"'} class="st-nav ${d}" data-dir="${d}" aria-label="${t(d === 'prev' ? 'shopPrev' : 'shopNext')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d === 'prev' ? 'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z' : 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z'}"/></svg></${tag}>`).join('');
 function startLive(id, host) {
   stage();
   const ms = buildModels(id), w = Math.max(120, host.clientWidth), h = Math.max(120, host.clientHeight);
   R.setSize(w, h, false);
   R.domElement.className = 'sp-live';
   host.appendChild(R.domElement);
-  live = { ms, t: 0, w, h, stage: -1, pips: host.querySelector('.sp-stages') };
+  live = { ms, t: 0, w, h, stage: -1, pips: host.querySelector('.sp-stages'), i: 0, k: 0, dir: 0, s: 0 };
+  if (ms.length > 1) { // pacote: setas + contador da peca (1 de N)
+    host.insertAdjacentHTML('beforeend', navBtns('button').replace(/st-nav/g, 'st-nav sp-nav') + `<span class="sp-count" aria-live="polite">1 / ${ms.length}</span>`);
+    host.querySelectorAll('.sp-nav').forEach(b => { b.onclick = (e) => { e.stopPropagation(); if (!live || live.dir) return; live.dir = b.dataset.dir === 'prev' ? -1 : 1; live.s = 0; audio.play('ui_hover', { ui: true, vol: 0.5 }); }; });
+  }
   { const d = ms.find(m => m.dance); if (d) audio.dance(d.dance); const bn = ms.find(m => m.banner); if (bn) host.insertAdjacentHTML('beforeend', `<div class="sp-bnr">${bannerHtml(bn.banner, { plain: true })}</div>`); }
   let last = performance.now();
   const draw = (m, ox) => { // desenha uma peca deslocada ox pixels na horizontal
@@ -211,8 +269,12 @@ function startLive(id, host) {
   const loop = (now) => {
     if (!live) return;
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; live.t += dt; // max 0: o 1o quadro do rAF pode vir antes do performance.now()
-    const n = live.ms.length, per = HOLD + SLIDE, cyc = live.t % (per * n), i = Math.min(n - 1, Math.floor(cyc / per)), k = Math.min(per, cyc - i * per); // min: arredondamento no fim do ciclo passava do ultimo
-    const s = n > 1 && k > HOLD ? (k - HOLD) / SLIDE : 0, e = s * s * (3 - 2 * s); // ease
+    const n = live.ms.length;
+    if (n > 1) { // peca atual fica HOLD s; depois (ou na seta) desliza pro lado do dir
+      if (!live.dir) { live.k += dt; if (live.k >= HOLD) { live.dir = 1; live.s = 0; } }
+      else { live.s += dt / SLIDE; if (live.s >= 1) { live.i = (live.i + live.dir + n) % n; live.dir = 0; live.s = 0; live.k = 0; const c = R.domElement.parentElement?.querySelector('.sp-count'); if (c) c.textContent = `${live.i + 1} / ${n}`; } }
+    }
+    const i = live.i, dir = live.dir || 1, s = live.dir ? live.s : 0, e = s * s * (3 - 2 * s); // ease
     for (const m of live.ms) if (m.ch) {
       if (m.dance) { const T = live.t % danceLen(m.dance); if (Math.floor(live.t / danceLen(m.dance)) !== (m.loopN ?? 0)) { m.loopN = Math.floor(live.t / danceLen(m.dance)); audio.dance(m.dance); } m.ch.update(dt, { anim: 'dance', dance: m.dance, danceT: T, alive: true, speed: 0, t: live.t, pitch: 0 }); (shopFx ||= new DanceFx(scene)).tick(m.ch, m.dance, T); }
       else if (m.death) m.ch.update(dt, { anim: 'pose', alive: live.t % 2.8 < 1.2, speed: 0, t: live.t, pitch: 0 }); // morre e volta, em ciclo
@@ -225,8 +287,8 @@ function startLive(id, host) {
       if (live.pips) { live.pips.querySelector('small').textContent = t('shopStage', { n: st + 1 }); live.pips.querySelectorAll('i').forEach((p, j) => p.classList.toggle('on', j <= st)); }
     }
     R.setScissorTest(false); R.autoClear = false; R.clear(); R.setScissorTest(true); // limpa a tela INTEIRA (com o recorte ligado so limpava o pedaco da ultima peca e sobrava rastro)
-    const cur = live.ms[i]; frame(cur, live.w, live.h, live.t * 0.6); draw(cur, Math.round(-e * live.w));
-    if (e > 0) { const nx = live.ms[(i + 1) % n]; frame(nx, live.w, live.h, live.t * 0.6); draw(nx, Math.round((1 - e) * live.w)); }
+    const cur = live.ms[i]; frame(cur, live.w, live.h, live.t * 0.6); draw(cur, Math.round(-dir * e * live.w));
+    if (e > 0) { const nx = live.ms[(i + dir + n) % n]; frame(nx, live.w, live.h, live.t * 0.6); draw(nx, Math.round(dir * (1 - e) * live.w)); }
     R.setScissorTest(false); R.autoClear = true; R.setViewport(0, 0, live.w, live.h);
     raf = requestAnimationFrame(loop);
   };
@@ -240,6 +302,14 @@ export function prizePreview(i, show, host) {
   stage();
   if (!MODELS.has(key)) MODELS.set(key, show.map(g => { const k = g.indexOf(':'); return pieceModel(g.slice(0, k), g.slice(k + 1)); }));
   try { startLive(key, host); } catch (e) { console.warn('previa do premio', e); }
+}
+// ficha da variante do Mercado Negro (08/11): a arma ao vivo, balancando de leve. Devolve quem desliga
+export function bmLive(v, host) {
+  stopLive(); stage();
+  const key = 'pc:bp:' + v; if (!MODELS.has(key)) MODELS.set(key, [pieceModel('bp', v)]);
+  const m = MODELS.get(key)[0]; m.sway = true; m.live = true;
+  startLive(key, host);
+  return () => { stopLive(); m.sway = false; m.live = false; };
 }
 function stopLive() {
   cancelAnimationFrame(raf); shopFx?.clear(); audio.danceStop();
@@ -265,10 +335,10 @@ function tick() {
   if (a) a.textContent = left(R2.weekEnd - now);
   if (b) b.textContent = left(R2.dayEnd - now);
   if (now >= R2.dayEnd - 500) setTimeout(renderShop, 1000); // virou o dia com a loja aberta: troca as ofertas
-  if (Math.floor(now / 1000) % 3 === 0) slideTiles();
+  slideTiles();
 }
 
-export function renderShop() {
+export function renderShop(boot) { // boot = chegou agora na tela: mostra o loader ate a primeira tela ficar pronta
   const pane = $('shopPane'); if (!pane) return;
   const RT = rotation(), keepY = pane.scrollTop;
   renderBal($('shopBal')); // Zions Points e Zions Cash no canto (zbal.js)
@@ -292,11 +362,17 @@ export function renderShop() {
     b.addEventListener('pointerenter', () => audio.play('ui_hover', { ui: true, vol: 0.35, key: 'hover', max: 1 }));
   });
   pane.scrollTop = keepY; // comprar redesenha a vitrine: nao volta pro topo
-  watchShots(pane);
+  const first = watchShots(pane);
+  if (boot === true || pane.classList.contains('pane-busy')) { // o saldo chegando redesenha a vitrine no meio da carga: o loader continua
+    paneBusy(pane, true);
+    const run = ++shopRun;
+    settle(first).then(() => { if (run === shopRun) paneBusy(pane, false); });
+  }
+  if (boot === true) reopenBM(); // voltou pra Loja com a aba do Mercado Negro aberta: recarrega ela
   tick();
   clearInterval(timer); timer = setInterval(tick, 1000);
 }
-export function stopShop() { clearInterval(timer); timer = 0; shotIO?.disconnect(); shotQ = []; closeItem(false); const c = $('buyCine'); if (c && !c.hidden) { stopLive(); c.hidden = true; c.classList.remove('out'); } }
+export function stopShop() { stopBM(); clearInterval(timer); timer = 0; shopRun++; paneBusy($('shopPane'), false); shotIO?.disconnect(); shotQ = []; closeItem(false); const c = $('buyCine'); if (c && !c.hidden) { stopLive(); c.hidden = true; c.classList.remove('out'); } }
 
 function openItem(id, from) {
   const it = SHOP_ITEMS[id], pop = $('shopPop'), mine = owned(id);
@@ -355,6 +431,7 @@ function closeItem(back = true) {
 
 export function initShop() {
   const pop = $('shopPop'); if (!pop) return;
+  initBlackMarket(); // Mercado Negro: aba dentro da Loja (08/11)
   const bc = document.querySelector('#shopBal .zc'); if (bc) bc.src = COIN_SRC;
   document.body.appendChild($('buyCine')); // tela cheia de verdade: dentro do cartao o fixed ficava preso nele
   $('buyCine').onclick = closeCine;

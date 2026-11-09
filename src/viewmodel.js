@@ -355,8 +355,10 @@ export class ViewModel {
     if (id !== 'melee' && id !== 'fists') attachCharm(this.gun, this.charm);
     // mao que segura (06/11): mede a arma ainda sem escala e monta os dedos contornando cabo e guarda-mao
     this.wrapR = this.wrapL = this.wrapAK = null;
+    // 08/11 (pedido dele, referencia Krunker): sem casca moldada na malha (abria buraco e envolvia a coronha inteira). As duas luvas FECHADAS vao nos pontos de pega da arma
+    const USE_WRAP = false;
     const handKey = id + '|' + [loadout?.body, loadout?.handle, loadout?.charger, loadout?.ws, loadout?.scope, loadout?.muzzle].join('|');
-    if (id !== 'melee' && id !== 'fists') {
+    if (USE_WRAP && id !== 'melee' && id !== 'fists') {
       const ak = loadout?.handle === 'akimbo';
       const H = measureHands(this.gun, { key: handKey, leftKind: id === 'pistol' || ak ? null : loadout?.handle ? 'grip' : 'fore' });
       this.wrapR = buildWrap(this.gun, H.R); this.wrapL = buildWrap(this.gun, H.L);
@@ -371,7 +373,7 @@ export class ViewModel {
     if (this.akimbo) { this.scene.remove(this.akimbo); this.akimbo = null; this.gun2 = null; }
     if (loadout?.handle === 'akimbo' && id !== 'melee') { // pistola, Cuspideira e Espirro
       this.gun2 = buildGun(id, { ...loadout, handle: null });
-      this.wrapAK = buildWrap(this.gun2, measureHands(this.gun2, { key: handKey + '|ak', akimboLeft: true }).AK); // esquerda segura a 2a de verdade
+      if (USE_WRAP) this.wrapAK = buildWrap(this.gun2, measureHands(this.gun2, { key: handKey + '|ak', akimboLeft: true }).AK); // esquerda segura a 2a de verdade
       this.gun2.scale.setScalar(VM_SCALE);
       this.akimbo = new THREE.Group(); this.akimbo.add(this.gun2); this.scene.add(this.akimbo);
       this.kick2 = 0; this.akSide = false;
@@ -517,10 +519,11 @@ export class ViewModel {
       // distancia do olho estilo COD: a lente ocupa uma fatia fixa da altura da tela
       // (luneta ~62%, red dot ~14%), calculada pelo raio real de cada lente
       const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / (sc?.big ? 1 : this.fovK || 1); // escala de FOV afasta a mira tambem; luneta segue enchendo a tela
-      let relief = sc ? sc.lensR * VM_SCALE / (half * (sc.big ? 0.62 : 0.14)) : 0.42;
+      let relief = sc ? sc.lensR * VM_SCALE / (half * (sc.big ? 0.78 : 0.14)) : 0.42; // 08/11 (pedido dele): luneta perto do olho como no COD, com a borda do tubo a vista (era 0,62)
       if (pistol && !sc?.big) relief = Math.max(0.6, relief * 1.9);
       if (!sc && g.ironDepth) relief = Math.max(relief, g.ironDepth * VM_SCALE + 0.2); // ferro do TT (07/11): o olho fica atras da alca, nunca dentro da arma
-      relief = Math.max(relief, sc ? 0.09 : 0.12); // 07/11 (regra dele): a camera nunca encosta na mira/arma (perto demais o corte da camera atravessava a malha e piscava)
+      relief = Math.max(relief, sc?.big ? 0.035 : sc ? 0.09 : 0.12); // luneta pode chegar mais perto (o corte da camera e 0,01)
+      // antes: // 07/11 (regra dele): a camera nunca encosta na mira/arma (perto demais o corte da camera atravessava a malha e piscava)
       // eixo optico inclinado no modelo: gira a arma pra ele ficar reto no olho
       const tilt = -(sc ? sc.tilt || 0 : g.ironTilt || 0); // mira de ferro do TT (07/11): inclina pra alca e massa ficarem na mesma linha
       this.adsEyeRaw = null; if (roll) eye.applyAxisAngle(new THREE.Vector3(0, 0, 1), roll); // mira de 45 graus: a arma deita e o red dot fica de pe
@@ -531,6 +534,11 @@ export class ViewModel {
       tx = THREE.MathUtils.lerp(tx, ax, st.ads); ty = THREE.MathUtils.lerp(ty, ay, st.ads); tz = THREE.MathUtils.lerp(tz, az, st.ads);
       // mirando: arma reta, sem inclinacao da pose de quadril
       trx = THREE.MathUtils.lerp(trx, tilt, st.ads); tryy = THREE.MathUtils.lerp(tryy, yawI, st.ads); trz = THREE.MathUtils.lerp(trz, roll, st.ads);
+    }
+    // 08/11 (pedido dele): TODA arma inclina pra baixo ao recarregar, entra e sai suave (o resto da recarga segue por cima desta pose)
+    if (this.reloadT > 0 && this.wpn !== 'melee' && this.wpn !== 'fists') {
+      const p = 1 - this.reloadT / this.reloadDur, sm = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c); }, k = sm(p / 0.16) * sm((1 - p) / 0.18);
+      trx -= 0.72 * k; ty -= 0.1 * k; tz += 0.04 * k; trz += 0.18 * k;
     }
     // inspecionar (pose por categoria); atirar, mirar, correr, recarregar ou granada cancela na hora
     let insp = null, akL = null, spinR = 0, spinL = 0;
@@ -796,9 +804,11 @@ export class ViewModel {
     if (mlD > 0 && !this.akimbo) this.gloveL.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.35, 0.2, 0.1, 'YXZ')), mlD); // palma deitada na borda
     // punho fechado: no soco e segurando a faca (na mao ou no golpe rapido); aberta segurando arma
     const quickSw = !!(this.knife?.visible && this.knife.userData.sword), holdR = two || quickSw, holdL = two && th < 0.3;
-    const fistR = (fists || this.wpn === 'melee' || (this.knife?.visible ?? false)) && !holdR, fistL = fists;
+    const onGun = !fists && this.wpn !== 'melee' && !(this.knife?.visible ?? false), fistR = (fists || this.wpn === 'melee' || (this.knife?.visible ?? false) || (onGun && bo < 0.02)) && !holdR, fistL = fists || (onGun && pL.distanceTo(pL0) < 0.006 && !holdL); // parada na arma = punho fechado no ponto de pega; soltou (recarga, granada) = aberta
     this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR && !holdR; this.gloveR.userData.grip.visible = holdR;
     this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL && !holdL; this.gloveL.userData.grip.visible = holdL;
+    // mao esquerda fechada fica EMBAIXO do guarda-mao (o ponto de pega e dentro do cano: os nos subiam na frente da mira)
+    if (fistL && !fists) { pL.add(new THREE.Vector3(0, -0.062 - 0.035 * st.ads, 0).applyQuaternion(this.rig.quaternion)); this.gloveL.position.copy(pL); }
     if (fists) { // impacto: luva estica pra frente e gira um pouco (rola no direto)
       const k = this.punchK || 0, g2 = this.punchLeft ? this.gloveL : this.gloveR;
       for (const gg of [this.gloveL, this.gloveR]) gg.userData.fist.scale.set(1, 1, 1);
@@ -807,6 +817,9 @@ export class ViewModel {
     if (fists) { this.gloveR.quaternion.identity(); this.gloveL.quaternion.identity(); this.gloveL.rotateZ(-0.15); this.gloveR.rotateZ(0.15); const pmp = this.fPump || 0; this.gloveR.rotateX(-pmp * 0.5 - (this.fRun || 0) * 0.35); this.gloveL.rotateX(pmp * 0.5 - (this.fRun || 0) * 0.35); if (this.punchK && !this.punchLeft) this.gloveR.rotateZ(-0.5 * this.punchK); } // punho gira com a passada; o direto rola no impacto
     else if (this.akimbo) this.gloveL.quaternion.copy(this.akimbo.quaternion); // akimbo: a esquerda segue a 2a pistola
     else this.gloveL.rotateZ(-0.9);
+    // 08/11 (print dele): na pistola o punho de costas cobria a arma; a mao fica de lado, com os nos pra direita
+    if (fistR && !fists && this.wpn === 'pistol') this.gloveR.rotateZ(-1.35);
+    if (fistL && !fists && this.wpn === 'pistol' && this.akimbo) this.gloveL.rotateZ(1.35 + 0.9);
     if (fs > 0.001 && !fists && !two) { // palma da esquerda virada pro chao, dedos pra frente
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.25, -0.25, 0.3, 'YXZ'));
       this.gloveL.quaternion.slerp(q, fs);

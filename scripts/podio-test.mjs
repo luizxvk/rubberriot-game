@@ -17,11 +17,13 @@ const run = (c, s) => { for (let i = 0; i < s * 10; i++) c.tick(0.1); };
   c.handle('me', { t: 'dance', d: 'charleston' }); ok(dances(c).length === 1 && dances(c)[0].id === 'me', 'do podio dança');
   c.handle('me', { t: 'dance', d: 'macarrao' }); ok(dances(c).length === 1, 'troca rapida demais e ignorada');
   c.clock = 11; c.handle('me', { t: 'dance', d: 'macarrao' }); ok(dances(c).length === 2, 'depois de 0,5 s troca');
-  c.handle('me', { t: 'toLobby' }); run(c, 0.3); ok(c.phase === 'play' && c.over, 'um so apertando nao corta a dança do outro');
-  c.handle('b', { t: 'toLobby' }); run(c, 0.3); ok(c.phase === 'lobby' && !c.over, 'todos apertaram: volta na hora');
-  c.ev.length = 0; c.clock = 20; c.handle('me', { t: 'dance', d: 'sapateado' }); ok(dances(c).length === 0, 'fora do fim de partida nao dança');
+  c.handle('me', { t: 'toLobby' }); run(c, 0.3); ok(c.phase === 'lobby' && !c.over, '08/11: o primeiro que aperta leva a sala pro lobby (quem quer fica no podio no cliente)');
+  c.ev.length = 0; c.clock = 20; c.handle('b', { t: 'dance', d: 'sapateado' }); ok(dances(c).length === 0, 'fora dos 3 continua sem dançar');
+  c.handle('me', { t: 'dance', d: 'sapateado' }); ok(dances(c).length === 1, '08/11: quem ficou no podio (sala ja no lobby) ainda dança');
+  c.phase = 'play'; c.clock = 30; c.ev.length = 0; c.handle('me', { t: 'dance', d: 'macarrao' }); ok(dances(c).length === 0, 'partida nova: nada de dança');
 }
-{ const c = mk({ lobby: true, bots: 2 }); c.join('me', 'Eu'); c.phase = 'play'; c.end('Eu'); run(c, OVER_LOBBY - 1); ok(c.phase === 'play' && c.over, 'continua no podio antes do tempo'); run(c, 1.5); ok(c.phase === 'lobby', 'ninguem apertou: volta sozinho pro lobby'); ok(c.ev.some(e => e.k === 'restart'), 'avisa a volta'); }
+{ const c = mk({ lobby: true, bots: 2 }); c.join('me', 'Eu'); c.phase = 'play'; c.end('Eu'); run(c, OVER_LOBBY + 60); ok(c.phase === 'play' && c.over, '08/11: sala com lobby NAO volta sozinha (fica no podio)'); c.handle('me', { t: 'toLobby' }); run(c, 0.3); ok(c.phase === 'lobby', 'apertou: volta pro lobby'); ok(c.ev.some(e => e.k === 'restart'), 'avisa a volta'); }
+{ const c = mk({ lobby: false, bots: 8 }); c.join('me', 'Eu'); c.endless = true; c.end('x'); ok(!c.over, '08/11: partida de fundo do menu nunca acaba'); }
 { const c = mk({ lobby: false, autoNext: true, bots: 2 }); c.join('me', 'Eu'); c.end('Eu'); ok(c.overT === OVER_NEXT, 'sala sem lobby: tempo inclui o placar = ' + OVER_NEXT); c.handle('me', { t: 'toLobby' }); run(c, 0.3); ok(c.over, 'sala sem lobby nao tem botao de volta'); run(c, OVER_NEXT + 1); ok(!c.over && c.ev.some(e => e.k === 'start'), 'vai pra proxima partida'); }
 { const c = mk({ lobby: true, bots: 0, mode: 'borroes', map: 'tinteiro' }); c.join('me', 'Eu'); c.phase = 'play'; c.players.set('m1', { id: 'm1', mob: 'x', score: 999, kills: 99, alive: true, pos: [0, 0, 0] }); c.end('red'); const E = c.ev.find(e => e.k === 'end'); ok(!E.top.includes('m1'), 'vilao nao sobe no podio'); }
 console.log(f ? f + ' FALHA(S)' : 'TUDO CERTO');

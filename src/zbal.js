@@ -1,5 +1,5 @@
 // Saldos de Zions da conta Rovex (03/11, pedido dele): Zions Points (moeda da Loja) e Zions Cash, com as moedas da
-// Rovex. Aparece no canto de cima do menu inicial e na Loja; some pra visitante sem conta.
+// Rovex. Aparece na Loja (no menu inicial saiu em 08/11, pedido dele); some pra visitante sem conta.
 import { me } from './rovex.js';
 import { openVaultInfo } from './zionbuy.js';
 // cofre (Material Icons, Apache 2.0)
@@ -14,12 +14,6 @@ export function renderBal(el) {
   const shop = el.classList.contains('shop-zbal'), p = me?.zionsPoints ?? (shop ? 0 : undefined), c = me?.zions ?? (shop ? 0 : undefined), ok = Number.isFinite(p) || Number.isFinite(c);
   el.hidden = !ok;
   if (!ok) { el.innerHTML = ''; return; }
-  if (el.classList.contains('wallet')) { // carteira do menu: duas linhas alinhadas (moeda | valor | nome)
-    el.innerHTML = `<span class="wl-row pts"><img src="${IMG}zion-points.png" alt=""><b>${fmt(p)}</b><small>Zions Points</small></span>`
-      + `<span class="wl-row cash"><img src="${IMG}zion-cash.png" alt=""><b>${fmt(c)}</b><small>Zions Cash</small></span>`;
-    el.setAttribute('aria-label', `Zions Points ${fmt(p)}, Zions Cash ${fmt(c)}`);
-    return;
-  }
   el.innerHTML = `<span class="zb pts" title="Zions Points"><img src="${IMG}zion-points.png" alt=""><b>${fmt(p)}</b><small>Points</small></span>`
     + `<span class="zb cash" title="Zions Cash"><img src="${IMG}zion-cash.png" alt=""><b>${fmt(c)}</b><small>Cash</small></span>`
     // Vault Points (05/11, pedido dele): so na Loja e com conta; tocar explica como ganhar

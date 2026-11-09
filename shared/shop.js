@@ -80,7 +80,7 @@ export const SHOP_ITEMS = {
   // leva de 05/11: banners animados premium, chaveiros do Tripo, rosto e morte
   bCortina: { kind: 'banner', r: 'lendario', give: ['banner:cortina'] }, bHolofote: { kind: 'banner', r: 'lendario', give: ['banner:holofote'] }, bCarrossel: { kind: 'banner', r: 'lendario', give: ['banner:carrossel'] }, bVitrola: { kind: 'banner', r: 'lendario', give: ['banner:vitrola'] }, bFoguete: { kind: 'banner', r: 'lendario', give: ['banner:foguete'] }, bZepelim: { kind: 'banner', r: 'lendario', give: ['banner:zepelim'] },
   kDado: { kind: 'charm', r: 'raro', give: ['charm:dado'] }, kPato: { kind: 'charm', r: 'raro', give: ['charm:pato'] },
-  fGargalhada: { kind: 'face', r: 'raro', give: ['face:gargalhada'] }, fLingua: { kind: 'face', r: 'raro', give: ['face:lingua'] }, fFantasma: { kind: 'face', r: 'lendario', give: ['face:fantasma'] }, mBalao: { kind: 'death', r: 'lendario', give: ['death:balao'] }, mMola: { kind: 'death', r: 'lendario', give: ['death:mola'] },
+  fGargalhada: { kind: 'face', r: 'raro', give: ['face:gargalhada'] }, fLingua: { kind: 'face', r: 'raro', give: ['face:lingua'] }, fFantasma: { kind: 'face', r: 'lendario', give: ['face:fantasma'] }, fBandido: { kind: 'face', r: 'raro', give: ['face:bandido'] }, fMocinho: { kind: 'face', r: 'raro', give: ['face:mocinho'] }, fPalhaco: { kind: 'face', r: 'raro', give: ['face:palhaco'] }, fGas: { kind: 'face', r: 'lendario', give: ['face:gas'] }, fLuchador: { kind: 'face', r: 'lendario', give: ['face:luchador'] }, mBalao: { kind: 'death', r: 'lendario', give: ['death:balao'] }, mMola: { kind: 'death', r: 'lendario', give: ['death:mola'] }, mCaixao: { kind: 'death', r: 'lendario', give: ['death:caixao'] },
   // pacotes: skin + a camo que combina, mais barato que separado (8k a 12k)
   pDragao: { kind: 'bundle', r: 'pacote', give: ['skin:dragao', 'camo:lava'], price: 2400, feat: 1 },
   pTormenta: { kind: 'bundle', r: 'pacote', give: ['skin:tempestade', 'camo:darkaether'], price: 2000, feat: 1 },
@@ -104,7 +104,8 @@ export const SHOP_ITEMS = {
 // navegador e o servidor nao tem como conferir o resultado: por isso o cliente so conta o que houve e o SERVIDOR decide o
 // valor, com intervalo minimo no relogio dele, teto por dia e desafio pago uma vez so.
 // 04/11 (pedido dele): teto de 600 pra 150 por dia. Grátis demais competia com a venda; com a Loja nova um pacote leva ~8 dias jogando
-export const ZP = { win: 40, lose: 8, daily: 20, elite: 60, unlock: 40, dayCap: 150, gapMs: 90000, chDay: { daily: 3, elite: 1, unlock: 3 } };
+// 08/11 (pedido dele): missoes diarias (5 por dia) pagam ZP.mission cada, FORA do teto do dia (o teto segue so pra partida e desafios)
+export const ZP = { win: 40, lose: 8, daily: 20, elite: 60, unlock: 40, mission: 60, dayCap: 150, gapMs: 90000, chDay: { daily: 3, elite: 1, unlock: 3, mission: 5 } };
 // st = o que ja pagou hoje { n, last, ch }; claim = { won, ch: [{ k, id }] }. Funcao pura: devolve o estado novo e as linhas pagas
 export function zpCredit(st, claim, now) {
   const s = { n: Math.max(0, Number(st?.n) || 0), last: Number(st?.last) || 0, ch: Array.isArray(st?.ch) ? [...st.ch] : [] }, want = [];
@@ -118,8 +119,9 @@ export function zpCredit(st, claim, now) {
   }
   let room = Math.max(0, ZP.dayCap - s.n), total = 0, capped = false;
   const lines = [];
-  for (const { k } of want) { const n = Math.min(ZP[k], room); if (n < ZP[k]) capped = true; if (n > 0) { lines.push({ k, n }); room -= n; total += n; } }
-  s.n += total;
+  let free = 0;
+  for (const { k } of want) { if (k === 'mission') { lines.push({ k, n: ZP.mission }); total += ZP.mission; free += ZP.mission; continue; } const n = Math.min(ZP[k], room); if (n < ZP[k]) capped = true; if (n > 0) { lines.push({ k, n }); room -= n; total += n; } }
+  s.n += total - free; // missao nao gasta o teto
   return { state: s, lines, total, capped };
 }
 export const shopPrice = (id) => { const it = SHOP_ITEMS[id]; return it ? it.price ?? PRICE[it.kind]?.[it.r] : undefined; };

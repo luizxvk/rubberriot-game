@@ -24,6 +24,10 @@ TH = {
   'apito': {'walls': ['e3d3b4', 'd9c39c', 'cfc9bd'], 'wood': '9a7a52', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'c9c4b8', 'stoned': '8e8a80', 'slate': '5a4a40', 'rock': '8a857c', 'sky': 'd6d4c8'},
   'ilha': {'walls': ['e8dcc4', 'e3c3a6', 'c9cdb4', 'bfc8cc', 'e8d69a'], 'wood': 'a0794f', 'woodd': '6b4a2c', 'woodl': 'c9a77a', 'stone': 'b9b2a4', 'stoned': '8f897e', 'slate': '4a4540', 'rock': '8a857c', 'sky': 'd9d6c8'},
   'deserto': {'walls': ['e0b98a'], 'wood': '8a5f3a', 'woodd': '5a3d24', 'woodl': 'b08a5e', 'stone': 'c9a46e', 'stoned': '8e6a44', 'slate': '6e4a34', 'rock': 'b08a5e', 'sky': 'eed7ae'},
+  'becos': {'walls': ['d9c9ac', 'cbb99a', 'c4c0ae', 'd8bda0'], 'wood': '8a6a4a', 'woodd': '54402c', 'woodl': 'b4946c', 'stone': 'aaa698', 'stoned': '7e7a6e', 'slate': '3e3a36', 'rock': '8a857c', 'sky': 'cfc8ba'},
+  'feira': {'walls': ['e9c9a4', 'e3d3a8', 'd2c6a6', 'e0b890'], 'wood': 'a0794f', 'woodd': '6b4a2c', 'woodl': 'c9a77a', 'stone': 'cfc6b2', 'stoned': '9a917e', 'slate': '7a4a34', 'rock': '9a8b74', 'sky': 'e4dac0'},
+  'largo': {'walls': ['dcd6c8', 'c9cdb4', 'bfc8cc', 'd9c7a8'], 'wood': '8a6a4a', 'woodd': '5d4a3a', 'woodl': 'b89a74', 'stone': 'b9bcb2', 'stoned': '7e847a', 'slate': '3a3d3a', 'rock': '8a857c', 'sky': 'd2d6d0'},
+  'cortejo': {'walls': ['e9d3a8', 'e3c3a6', 'c9d0bc', 'bfc8cc', 'e8d69a', 'd9b9a0'], 'wood': '9a7a52', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'c2bcb0', 'stoned': '8a847a', 'slate': '4a4540', 'rock': '8a857c', 'sky': 'dcd6c6'},
   'fronteira': {'walls': ['e3cfae', 'd9b48f', 'e8dcc0', 'cfa98a', 'ddc59a'], 'wood': '94704a', 'woodd': '5e4128', 'woodl': 'bf9c70', 'stone': 'c2b49a', 'stoned': '948670', 'slate': '7a4a34', 'rock': '9a8b74', 'sky': 'dcd8cc'},
 }[MAP]
 EAVE = 0.35
@@ -1413,7 +1417,7 @@ def canyonwall(b):
     box(CLD, [mn[0] - 0.1, mx[1] - 0.25, mn[2] - 0.1], [mx[0] + 0.1, mx[1] + 0.015, mx[2] + 0.1])
 
 SAND = mat('sandbag', 'b7a37c')
-wallfn = border if MAP == 'vila' else seawall if MAP == 'estaleiro' else brickwall if MAP in ('fabrica', 'ferradura', 'moeda', 'bonde') else (lambda b: concrete(b) if min(b['max'][0] - b['min'][0], b['max'][2] - b['min'][2]) < 0.7 else brickwall(b)) if MAP == 'apito' else tinfence if MAP == 'refinaria' else (lambda b: palisade(b) if b['max'][1] - b['min'][1] >= 5 else mureta(b))
+wallfn = border if MAP in ('vila', 'becos', 'feira', 'largo', 'cortejo') else seawall if MAP == 'estaleiro' else brickwall if MAP in ('fabrica', 'ferradura', 'moeda', 'bonde') else (lambda b: concrete(b) if min(b['max'][0] - b['min'][0], b['max'][2] - b['min'][2]) < 0.7 else brickwall(b)) if MAP == 'apito' else tinfence if MAP == 'refinaria' else (lambda b: palisade(b) if b['max'][1] - b['min'][1] >= 5 else mureta(b))
 pillarfn = gantry_leg if MAP == 'estaleiro' else ibeam if MAP == 'fabrica' else derrick_leg if MAP == 'refinaria' else concrete if MAP == 'apito' else post
 
 DRAW = {'house': house, 'rock': rock, 'tower': tower, 'roof': lambda b: None, 'crate': crate, 'post': slimpost if MAP in ('ferradura', 'moeda') else post, 'pillar': pillarfn, 'vat': vat, 'machine': machine, 'pipe': lowpipe if MAP == 'refinaria' else pipe, 'concrete': concrete, 'silo': silo, 'derrick': derrick, 'marble': marble, 'column': column, 'rail': rail, 'counter': counter, 'bankroof': bankroof, 'duct': duct, 'coreto': coreto, 'coretoroof': coretoroof, 'bench': bench, 'hedge': hedge, 'lamp': lamp, 'dumpster': dumpster, 'car': lambda b: None, 'container': container, 'contshell': contshell, 'contdoor': contdoor, 'gantry': gantry, 'platform': deck, 'bridge': catwalk if MAP == 'fabrica' else concrete if MAP == 'apito' else deck, 'step': step, 'tank': tank,
@@ -1423,12 +1427,95 @@ DRAW = {'house': house, 'rock': rock, 'tower': tower, 'roof': lambda b: None, 'c
 if MAP == 'deserto': DRAW.update({'cliff': cliff, 'mesa': mesa, 'rockstep': rockstep, 'dune': dune, 'cactus': cactus, 'adobe': adobe, 'adobewall': adobewall, 'truck': lambda b: None, 'wall': canyonwall})  # caminhao = modelo do Tripo no jogo (MAP_KEEP)
 if MAP == 'ilha': DRAW.update({'gantry': gantry_leg, 'derrick': lambda b: gantry_leg(b, RUST, RUSTD), 'pillar': snag, 'ringfloor': lambda b: None, 'rope': lambda b: None, 'post': lambda b: None, 'pipe': pipe, 'wall': border})  # ringue fica o do jogo (MAP_KEEP)
 if MAP == 'tinteiro': DRAW.update({'vat': paintcan, 'rock': lambda b: None})  # floresta (pedra, tronco, arvore) fica a do jogo
+
+# ---------- moveis e props novos (08/11, pedido dele): tudo na medida da caixa de colisao; detalhe sempre em plano proprio ----------
+AWN_R, AWN_W, KIOSKG, WATER = mat('awning_r', 'b8352a'), mat('awning_w', 'ece4d2'), mat('kiosk', '4f6a52'), mat('water', '7d9aa6')
+FRUIT = [mat('fruit_r', 'c0452f'), mat('fruit_y', 'd9a93a'), mat('fruit_g', '7f9a4a')]
+CLOTH = [mat('cloth_a', 'e9e2d2'), mat('cloth_b', 'b8c7d0'), mat('cloth_c', 'd6a58a')]
+def awning(mn, mx, along, n=6):
+    L = (mx[0] - mn[0]) if along else (mx[2] - mn[2])
+    for k in range(n):
+        a, e = k / n * L, (k + 1) / n * L; m = AWN_R if k % 2 == 0 else AWN_W
+        if along: box(m, [mn[0] + a, mn[1], mn[2]], [mn[0] + e, mx[1], mx[2]])
+        else: box(m, [mn[0], mn[1], mn[2] + a], [mx[0], mx[1], mn[2] + e])
+def stall(b):
+    "barraca de feira: balcao, quatro postes, toldo listrado e mercadoria em cima"
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w >= d; top = mx[1]; y9 = mn[1] + 0.9; R = random.Random(int(c[0] * 11 + c[2] * 5))
+    box(WOOD, mn, [mx[0], y9, mx[2]]); box(WOODD, [mn[0] - 0.025, y9 - 0.1, mn[2] - 0.025], [mx[0] + 0.025, y9 + 0.02, mx[2] + 0.025])
+    for x in (mn[0] + 0.12, mx[0] - 0.12):
+        for z in (mn[2] + 0.12, mx[2] - 0.12): box(WOODD, [x - 0.05, y9 + 0.02, z - 0.05], [x + 0.05, top - 0.22, z + 0.05])
+    awning([mn[0] - 0.2, top - 0.22, mn[2] - 0.2], [mx[0] + 0.2, top, mx[2] + 0.2], along)
+    n = 5; L = w if along else d
+    for k in range(n):
+        u = (k + 0.5) / n * L - L / 2; s = 0.16 + R.random() * 0.08; px, pz = (c[0] + u, c[2]) if along else (c[0], c[2] + u)
+        box(FRUIT[k % 3], [px - s, y9 + 0.02, pz - s], [px + s, y9 + 0.02 + s * 1.6, pz + s])
+def kiosk(b):
+    "banca de jornal: caixa verde, telhado com beiral, revistas nas duas faces compridas e placa"
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w >= d; top = mx[1]; R = random.Random(int(c[0] * 7 + c[2] * 13))
+    box(KIOSKG, mn, [mx[0], top - 0.3, mx[2]]); box(SLATE, [mn[0] - 0.24, top - 0.3, mn[2] - 0.24], [mx[0] + 0.24, top, mx[2] + 0.24])
+    L = w if along else d
+    for sgn in (-1, 1):
+        for k in range(5):
+            u = (k + 0.5) / 5 * L - L / 2; hw = L / 5 * 0.38; y0 = mn[1] + 0.85 + R.random() * 0.1; m = PAPER if k % 2 else TRIM
+            if along: z = (mx[2] if sgn > 0 else mn[2]); box(m, [c[0] + u - hw, y0, min(z, z + sgn * 0.02)], [c[0] + u + hw, y0 + 0.75, max(z, z + sgn * 0.02)])
+            else: x = (mx[0] if sgn > 0 else mn[0]); box(m, [min(x, x + sgn * 0.02), y0, c[2] + u - hw], [max(x, x + sgn * 0.02), y0 + 0.75, c[2] + u + hw])
+def cart(b):
+    "carrinho de pipoca: caixa vermelha sobre rodas, vidro claro e toldo listrado"
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w >= d; top = mx[1]; y0 = mn[1] + 0.42
+    box(PAINTR, [mn[0], y0, mn[2]], [mx[0], y0 + 0.62, mx[2]])
+    box(PAPER, [mn[0] + 0.12, y0 + 0.62, mn[2] + 0.12], [mx[0] - 0.12, top - 0.2, mx[2] - 0.12])
+    awning([mn[0] - 0.12, top - 0.2, mn[2] - 0.12], [mx[0] + 0.12, top, mx[2] + 0.12], along, 4)
+    L = w if along else d
+    for k in (-1, 1):
+        u = k * L * 0.27
+        if along:
+            for z0, z1 in ((mn[2] - 0.06, mn[2] + 0.02), (mx[2] - 0.02, mx[2] + 0.06)): tube(IRON, 'z', (mn[1] + 0.42, c[0] + u), 0.4, z0, z1, 12)
+        else:
+            for x0, x1 in ((mn[0] - 0.06, mn[0] + 0.02), (mx[0] - 0.02, mx[0] + 0.06)): tube(IRON, 'x', (mn[1] + 0.42, c[2] + u), 0.4, x0, x1, 12)
+def fountain(b):
+    "chafariz redondo: bacia, borda, agua, coluna e prato"
+    (w, h, d), c = dims(b); r = w / 2; y0, y1 = b['min'][1], b['max'][1]; p = (c[0], c[2])
+    cyl(STONE, p, r, y0, y1 - 0.12, 26); cyl(STONED, p, r + 0.04, y1 - 0.12, y1, 26); cyl(WATER, p, r - 0.2, y1, y1 + 0.012, 26)
+    cyl(STONED, p, 0.36, y1 + 0.012, y1 + 1.05, 12, r2=0.22); cyl(STONE, p, 0.28, y1 + 1.05, y1 + 1.3, 14, r2=0.85); cyl(WATER, p, 0.72, y1 + 1.3, y1 + 1.312, 14); cyl(STONED, p, 0.12, y1 + 1.312, y1 + 1.85, 8, r2=0.05)
+def poster(b):
+    "coluna de cartazes: tubo verde, faixa de papel e chapeu"
+    (w, h, d), c = dims(b); r = w / 2; y0, y1 = b['min'][1], b['max'][1]; p = (c[0], c[2])
+    cyl(KIOSKG, p, r * 0.88, y0, y1 - 0.34, 16); cyl(PAPER, p, r * 0.92, y0 + 0.55, y1 - 0.75, 16); cyl(IRON, p, r, y1 - 0.34, y1, 16, r2=0.08)
+def hydrant(b):
+    (w, h, d), c = dims(b); y0, y1 = b['min'][1], b['max'][1]; p = (c[0], c[2])
+    cyl(PAINTR, p, 0.17, y0, y1 - 0.2, 10); cyl(IRON, p, 0.22, y0, y0 + 0.07, 10); cyl(PAINTR, p, 0.17, y1 - 0.2, y1, 10, r2=0.05); tube(IRON, 'x', (y1 - 0.42, c[2]), 0.07, c[0] - 0.25, c[0] + 0.25, 8)
+def mailbox(b):
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); m = mat('mail', '2f5b8a')
+    box(m, [c[0] - 0.3, mn[1] + 0.4, c[2] - 0.25], [c[0] + 0.3, mx[1], c[2] + 0.25]); box(IRON, [c[0] - 0.07, mn[1], c[2] - 0.07], [c[0] + 0.07, mn[1] + 0.4, c[2] + 0.07]); box(IRON, [c[0] - 0.2, mx[1] - 0.28, c[2] + 0.25], [c[0] + 0.2, mx[1] - 0.2, c[2] + 0.265])
+def trashcan(b):
+    (w, h, d), c = dims(b); r = w / 2 * 0.9; y0, y1 = b['min'][1], b['max'][1]; p = (c[0], c[2])
+    cyl(IRON, p, r * 0.92, y0, y1 - 0.06, 12, r2=r); cyl(STONED, p, r + 0.03, y1 - 0.06, y1, 12)
+    for yy in (y0 + h * 0.32, y0 + h * 0.64): cyl(STONED, p, r * 0.98, yy - 0.025, yy + 0.025, 12)
+def streetclock(b):
+    "relogio de rua: haste de ferro, caixa dourada e mostrador nas duas faces"
+    (w, h, d), c = dims(b); y0, y1 = b['min'][1], b['max'][1]; p = (c[0], c[2])
+    cyl(IRON, p, 0.14, y0, y0 + 0.5, 8); cyl(IRON, p, 0.07, y0 + 0.5, y1 - 0.72, 8); box(BRASS, [c[0] - 0.34, y1 - 0.72, c[2] - 0.13], [c[0] + 0.34, y1, c[2] + 0.13])
+    for sgn in (-1, 1):
+        z = c[2] + sgn * 0.13; box(PAPER, [c[0] - 0.25, y1 - 0.61, min(z, z + sgn * 0.015)], [c[0] + 0.25, y1 - 0.11, max(z, z + sgn * 0.015)])
+        z2 = z + sgn * 0.015; box(IRON, [c[0] - 0.012, y1 - 0.36, min(z2, z2 + sgn * 0.01)], [c[0] + 0.012, y1 - 0.16, max(z2, z2 + sgn * 0.01)]); box(IRON, [c[0], y1 - 0.372, min(z2, z2 + sgn * 0.01)], [c[0] + 0.14, y1 - 0.348, max(z2, z2 + sgn * 0.01)])
+DRAW.update({'stall': stall, 'kiosk': kiosk, 'cart': cart, 'fountain': fountain, 'poster': poster, 'hydrant': hydrant, 'mailbox': mailbox, 'trashcan': trashcan, 'streetclock': streetclock, 'truck': lambda b: None})
+def clothesline(x0, y, z0, x1, y1, z1, seed):
+    "varal atravessando o beco (so desenho): fio e roupa pendurada"
+    alongx = abs(x1 - x0) > abs(z1 - z0); R = random.Random(seed); L = abs(x1 - x0) if alongx else abs(z1 - z0)
+    if alongx: box(IRON, [min(x0, x1), y - 0.012, z0 - 0.012], [max(x0, x1), y + 0.012, z0 + 0.012])
+    else: box(IRON, [x0 - 0.012, y - 0.012, min(z0, z1)], [x0 + 0.012, y + 0.012, max(z0, z1)])
+    n = max(2, int(L / 0.9)); step = L / n
+    for k in range(n):
+        u = (k + 0.5) * step + (min(x0, x1) if alongx else min(z0, z1)); hw = step * 0.34 * (0.8 + R.random() * 0.4); hh = 0.45 + R.random() * 0.4; m = CLOTH[R.randrange(3)]; t = 0.012 + k * 0.0007
+        if alongx: box(m, [u - hw, y - hh, z0 - t], [u + hw, y - 0.012, z0 + t])
+        else: box(m, [x0 - t, y - hh, u - hw], [x0 + t, y - 0.012, u + hw])
 skipped = {}
 for b in L['boxes']:
     fn = DRAW.get(b['k'])
     if fn: fn(b)
     else: skipped[b['k']] = skipped.get(b['k'], 0) + 1
 
+for i, ln in enumerate((L.get('deco') or {}).get('lines') or []): clothesline(*ln, 40 + i)
 if MAP in ('bonde', 'apito'): catenary()
 if MAP == 'apito':
     watertower(-70, -90); watertower(92, 40)
@@ -1525,6 +1612,7 @@ CAMS = {'vila': (('alto', (52, -52, 48), (0, 0, 0)), ('rua', (0, -30, 2.2), (0, 
         'apito': (('alto', (72, -72, 60), (0, 0, 0)), ('vale', (-10, 14, 1.7), (10, 5, 3)), ('casas', (-20, 40, 1.7), (-42, 40, 3))),
         'ilha': (('alto', (120, -120, 110), (0, 0, 0)), ('porto', (-40, 40, 2), (-66, 66, 4)), ('soluco', (40, -40, 2), (64, -70, 5)), ('brejo', (-70, 0, 2), (-88, 0, 3))),
         'deserto': (('alto', (130, -130, 110), (0, 0, 0)), ('ponte', (-20, -30, 2), (0, 0, 3)), ('base', (20, 90, 2), (0, 112, 4)), ('mesa', (-70, 30, 2), (-96, 52, 4))),
+        'becos': (('alto', (72, -72, 60), (0, 0, 0)), ('beco', (-9, -30, 2.0), (-9, 0, 3))), 'feira': (('alto', (80, -80, 64), (0, 0, 0)), ('mercado', (-20, -14, 2.2), (0, 0, 3))), 'largo': (('alto', (84, -84, 68), (0, 0, 0)), ('largo', (0, -28, 2.2), (0, 0, 3))), 'cortejo': (('alto', (84, -84, 68), (0, 0, 0)), ('avenida', (-12, 8, 2.2), (30, 8, 3))),
         'fronteira': (('alto', (72, -72, 62), (0, 0, 0)), ('forte', (14, 50, 2.2), (0, 70, 5)), ('meio', (-30, 12, 2.2), (30, -4, 3)), ('casas', (-44, -6, 6), (-58, -22, 3)))}[MAP]
 for nm, loc, tgt in CAMS:
     cam.location = Vector(loc); cam.rotation_euler = (Vector(tgt) - cam.location).to_track_quat('-Z', 'Y').to_euler()

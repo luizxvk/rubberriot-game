@@ -22,6 +22,7 @@ import { Player } from './player.js';
 import { renderEndZp } from './zpview.js';
 import { startEndSlides } from './endslides.js';
 import { Podium } from './podium.js';
+import { warmDeathFx } from './deathfx.js';
 import { wornDances, bannerOpen } from './lookstore.js';
 import { kbBinds, padBinds, PAD_BTN, keyName } from './binds.js';
 import { initPocket, openPocket } from './pocket.js';
@@ -32,6 +33,7 @@ import { danceLen } from './dances.js';
 import { DanceFx } from './dancefx.js';
 import { OVER_STATS } from '../shared/core.js';
 import { podiumSpot } from '../shared/podiumspot.js';
+import { startPresence } from './presence.js';
 import { metaGet, metaPost, pushSoon, sessionPing, requestReset, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
 import { Hud, STREAK_SVG, DEATH_SVG, BOOM_SVG } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer, setRawMouse } from './input.js';
@@ -52,13 +54,13 @@ const lobbyCam = new LobbyCam();
 import { attachCharm, tickCharm } from './charms.js';
 import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
-import { t, wName, setLang, getLang } from './i18n.js';
+import { t, wName, setLang, getLang, modeName } from './i18n.js';
 import { outlinesOn, ink, PAL, OUTLINE_FAR } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
 import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
-import { unlockDone, LOCKED_BY, track, grantTutorial } from './challenges.js';
+import { unlockDone, LOCKED_BY, track, grantTutorial, missionById, MIS_ZP, misKey } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
 import { BrView } from './brview.js';
 import { tip, tipClose } from './tips.js';
@@ -71,6 +73,7 @@ import { passEvent, renderEndPass, passArt, passName } from './passview.js';
 import { PASS, PASS_FREE } from './pass.js';
 import { startHomeTour, homeTourSeen } from './hometour.js';
 import { FieldView } from './fieldview.js';
+import { MatchVote } from './matchvote.js';
 import { StrikeView, bomberMesh, sentryMesh, beaconMesh, ammoboxMesh } from './strikeview.js';
 import { HeistView } from './heistview.js';
 import { CarView } from './carview.js';
@@ -346,6 +349,7 @@ $('dupReset').onclick = async () => {
 };
 setTimeout(() => dupCheck(), 1500);
 setInterval(() => { if (!document.hidden) dupCheck(); }, 60000);
+startPresence(presenceText); // Rich Presence da Rovex: modo, mapa, placar, round e K/D (src/presence.js)
 document.addEventListener('visibilitychange', () => { if (!document.hidden) dupCheck(); }); // voltou pra aba: confere na hora
 
 function chEvent(e) {
@@ -360,7 +364,7 @@ function chEvent(e) {
     addXp('challenge', c.xp);
     const r = c.reward;
     if (c.kind === 'elite') hud.eliteTrack(t('el_' + c.id, { n: c.n }), 1, 1, true);
-    const name = r ? (r.slot === 'look' ? t('look') + ': ' + t('lk_' + r.id.replace(':', '_')) : r.slot === 'bp' ? t(r.id) : r.slot === 'tracer' ? t('s_tracer') + ': ' + t('tr_' + r.id.slice(3)) : r.slot === 'ammo' ? t('slot_ammo') + ': ' + t('am_' + r.id.slice(3)) : r.slot === 'camo' ? t('camo_' + r.id) : partName(r.slot, r.id)) : t('ch_' + c.id, { n: '', w: c.wpn ? wName(c.wpn) : '' }).replace(/\s+/g, ' ');
+    const name = r ? (r.slot === 'look' ? t('look') + ': ' + t('lk_' + r.id.replace(':', '_')) : r.slot === 'bp' ? t(r.id) : r.slot === 'tracer' ? t('s_tracer') + ': ' + t('tr_' + r.id.slice(3)) : r.slot === 'ammo' ? t('slot_ammo') + ': ' + t('am_' + r.id.slice(3)) : r.slot === 'camo' ? t('camo_' + r.id) : partName(r.slot, r.id)) : c.kind === 'mission' ? t(misKey(missionById(c.id)), { n: missionById(c.id).n, w: c.wpn ? wName(c.wpn) : '' }) : t('ch_' + c.id, { n: '', w: c.wpn ? wName(c.wpn) : '' }).replace(/\s+/g, ' ');
     const img = r && r.slot !== 'tracer' && r.slot !== 'look' ? unlockShot({ slot: r.slot, id: r.id, wpn: r.wpn || G.player?.wpn || 'smg' }) : null;
     if (r) logUnlock(t('chUnlocked'), name, img);
     if (c.kind === 'elite') {
@@ -370,7 +374,7 @@ function chEvent(e) {
       if (r) { G.loadouts = matchLoadouts(); sendLoadout(); }
       continue;
     }
-    setTimeout(() => { hud.unlockBanner({ kind: t(c.kind === 'elite' ? 'elDone' : r ? 'chUnlocked' : 'chDoneDaily'), name: name + ' +' + c.xp + ' XP', img }); audio.play(r ? 'unlock' : 'levelup', { vol: 0.7, ui: true, jitter: 0 }); }, 400);
+    setTimeout(() => { hud.unlockBanner({ kind: t(c.kind === 'elite' ? 'elDone' : c.kind === 'mission' ? 'misDone' : r ? 'chUnlocked' : 'chDoneDaily'), name: name + ' +' + c.xp + ' XP' + (c.kind === 'mission' ? ' · +' + MIS_ZP + ' ZP' : ''), img }); audio.play(r ? 'unlock' : 'levelup', { vol: 0.7, ui: true, jitter: 0 }); }, 400);
     if (r) { G.loadouts = matchLoadouts(); sendLoadout(); }
   }
 }
@@ -400,7 +404,10 @@ function gainXp(kind, wpn = null, mult = 1) {
   G.matchXp = (G.matchXp || 0) + amount;
   logXp(kind, amount);
   const ras = night && G.snap?.bor && !G.snap.bor.art && CATEGORY[wpn] && wpn !== 'melee';
-  addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : null, night ? base : amount);
+  // 08/11 (conta Cafe com Xp): o XP de arma ia SEMPRE pro modelo equipado no Arsenal. Quem jogava com a Garoa da Escada de
+  // Armas, pega do chao, do caixote ou do battle royale upava o Trovao equipado e a Garoa ficava parada. Agora vai pro modelo NA MAO
+  let inHand = null; try { const b = WEAPONS[wpn] && CATEGORY[wpn] ? G.player?.lo?.(wpn)?.body : null; if (b && CATEGORY[wpn].bodies.includes(b)) inHand = b; } catch { /* sem arma montada */ }
+  addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : inHand, night ? base : amount);
   hud.xpPop(`+${amount} ${t('xp_' + kind)}`);
   if (boostSync()) hud.message(t('boostGot'), 2.6); // subiu num nivel do Pass que paga ficha
 }
@@ -477,12 +484,14 @@ onProgress((e) => {
   // tudo vai pra tela de fim; na hora, banner estilo COD um por vez (ate 3)
   // so o que existe de verdade (01/11): peca de um modelo so (akimbo, kit) mostra nele e com o nome dele; modelo travado por nivel de jogador nao entra
   for (let i = got.length - 1; i >= 0; i--) { const u = got[i]; if (u.slot === 'body' && BODY_MIN_LVL[u.id] && unlockLevel() < BODY_MIN_LVL[u.id]) got.splice(i, 1); }
-  // peca de desafio (akimbo, camo...) nao sai por nivel (04/11, Nyx recebeu banner do akimbo da escopeta sem o desafio): so anuncia se o desafio dela fechou
+  // peca de desafio (camo...) nao sai por nivel; o akimbo agora abre no ultimo nivel da arma (04/11, Nyx recebeu banner do akimbo da escopeta sem o desafio): so anuncia se o desafio dela fechou
   for (let i = got.length - 1; i >= 0; i--) { const u = got[i], ch = LOCKED_BY[u.wpn + ':' + u.id] || LOCKED_BY[u.id]; if (ch && !unlockDone(ch.id)) got.splice(i, 1); }
   for (const u of got) {
     const fits = u.slot === 'handle' ? CATEGORY[u.wpn]?.bodies.filter(b => handleFits(b, u.wpn, u.id)) : u.slot === 'conv' ? CATEGORY[u.wpn]?.bodies.filter(b => convOptions(b).includes(u.id)) : null;
     if (fits && fits.length && fits.length < CATEGORY[u.wpn].bodies.length) { u.onBody = fits[0]; u.name += ' (' + fits.map(b => partName('body', b)).join(', ') + ')'; }
   }
+  if (e.wpnUp) for (let n = (e.wpnFrom || 0) + 1; n <= e.wpnUp; n++) chEvent({ type: 'wpnUp', wpn: e.wpn }); // missoes diarias (08/11)
+  for (const u of got) chEvent({ type: 'unlock', slot: u.slot, wpn: u.wpn });
   const shots = got.map(u => unlockShot(u));
   got.forEach((u, i) => logUnlock(t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), u.name, shots[i]));
   got.slice(0, 3).forEach((u, i) => hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 })); // entram em fila no hud
@@ -700,7 +709,32 @@ function matchTrack() {
   if (G.blitz) return G.M?.id === 'deserto' ? 'music_deserto' : 'music_blitz';
   return MODE_TRACK[G.mode] || MAP_TRACK[G.M?.id] || 'music_m' + (1 + Math.floor(Math.random() * 4));
 }
+// Rich Presence (08/11): texto do que a pessoa faz agora; null = fora da partida (limpa a presenca)
+function presenceText() {
+  if (G.state !== 'game' || !G.snap) return G.state === 'lobby' ? 'No lobby · Rubber Riot' : null;
+  const s = G.snap, parts = [];
+  if (G.range) return 'Treinando no estande · Rubber Riot';
+  if (G.tutorial) return 'No tutorial · Rubber Riot';
+  parts.push(modeName(G.mode)); parts.push(t('map_' + (G.M?.id || '')));
+  const ts = s.teamScore; if (ts && G.myTeam) { const mine = ts[G.myTeam] ?? 0, other = ts[G.myTeam === 'red' ? 'blue' : 'red'] ?? 0; parts.push(`${mine} x ${other}`); }
+  const rn = s.round?.n ?? s.esc?.round; if (rn) parts.push(t('roundN', { n: rn }));
+  if (G.me) parts.push(`${G.me.kills || 0}/${G.me.deaths || 0} K/D`);
+  return parts.join(' · ');
+}
+// narrador (08/11): falas que nascem da mudanca entre dois snapshots. O atraso de 400 ms deixa a fala do evento (bandeira tomada, captura) entrar primeiro; esta vai pra fila
+const voLater = (key) => setTimeout(() => audio.voice(key), 400);
+const zonesAllOwner = (zs) => { const z3 = (zs || []).filter(z => !z.bonus); return z3.length === 3 && z3.every(z => z.owner && z.owner === z3[0].owner) ? z3[0].owner : null; };
+function voSnap(s) {
+  const o = G.snap;
+  if (G.state !== 'game' || G.range || G.tutorial || !o) return;
+  if (!s.round && o.time > 120 && s.time <= 120 && s.time > 110) audio.voice('min2');
+  if (s.mode === 'dom') { const own = zonesAllOwner(s.zones); if (own && own !== zonesAllOwner(o.zones)) voLater('zones3_' + own); }
+  if (s.mode === 'ctf' && s.limit > 1) for (const tm of ['red', 'blue']) if (s.teamScore?.[tm] === s.limit - 1 && o.teamScore?.[tm] < s.limit - 1) voLater('flagwin_' + tm);
+  if (s.bomb?.state === 'planted' && o.bomb?.t > 10 && s.bomb.t <= 10 && s.bomb.t > 8) audio.voice('bomb10');
+  if (s.esc && o.esc && s.esc.round === o.esc.round && o.esc.d / o.esc.len < 0.85 && s.esc.d / s.esc.len >= 0.85) audio.voice('tramlast');
+}
 function onSnap(s) {
+  voSnap(s);
   // narrador: ultimo minuto (so em partida corrida; modo de rounds zera o relogio a cada round)
   if (G.state === 'game' && !s.round && !G.range && !G.tutorial && G.snap?.time > 60 && s.time <= 60 && s.time > 50) audio.voice('lastmin');
   G.snap = s;
@@ -713,7 +747,7 @@ function onSnap(s) {
       G.me = p;
       if (G.player) {
         G.player.hp = p.hp;
-        hud.hp(p.hp);
+        hud.hp(p.hp, 100 * (EV(s.mut)?.hp || 1));
         hud.armor(p.armor || 0, s.mode === 'br' || p.armor > 0); // colete de campo aparece em todo modo
         document.body.classList.toggle('mode-br', s.mode === 'br');
         document.body.classList.toggle('mode-pve', s.mode === 'borroes' || s.mode === 'gungame'); // noite dos borroes: sem sequencias na tela
@@ -868,7 +902,7 @@ function onEvent(e) {
         if (G.mode === 'br' && inGame) setTimeout(() => tip('ping'), 9000); // marcacao: dica de primeira vez (depois da do modo)
         if (e.air && G.bounce) hud.alert(t('bounceDrop'), t(settings.autoChute ? 'bounceDropAuto' : (isTouch ? 'bounceDropTouch' : 'bounceDropKey')), 'red');
         if (!G.inRing || e.pos[2] < (G.M.ring?.c[2] ?? 1e9) - 10) G.inRing = false; // saiu do ringue
-        hud.hp(100); hud.weapon(G.player);
+        hud.hp(100 * (EV(G.snap?.mut)?.hp || 1), 100 * (EV(G.snap?.mut)?.hp || 1)); hud.weapon(G.player);
         $('dead').hidden = true; document.body.classList.remove('is-dead');
         G.deathPos = null;
       } else if (inGame) fx.puff([e.pos[0], 1, e.pos[2]], 5, 0.8, 0xece9e1, 0.6);
@@ -879,6 +913,7 @@ function onEvent(e) {
     case 'shot': {
       if (e.id === G.myId) break;
       if (e.id !== 'blimp') G.seen.set(e.id, G.t + 2.2);
+      else { const bm = G.blimpMeshes.find(m => m.userData.dg && m.position.distanceToSquared(tmpV.fromArray(e.o)) < 900); if (bm) { bm.userData.aim = e.e; bm.userData.dg.aim(e.e, 1); bm.updateMatrixWorld(true); e.o = bm.userData.dg.muzzle.getWorldPosition(new THREE.Vector3()).toArray(); } } // o tiro sai da boca da metralhadora
       const r = G.remotes.get(e.id);
       if (G.specVm && G.specVm.startsWith(e.id + '|') && !G.player?.alive) vm.fire((WEAPONS[e.wpn]?.kick || 1) * 1.3);
       const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && (rBody === 'pistol_10' || rBody === 'pistol_5') /* Bico Longo virou revolver (06/11) */, aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
@@ -899,6 +934,7 @@ function onEvent(e) {
     case 'borSpit': case 'borSummon': { const r = G.remotes.get(e.id); r?.char.swing?.(); break; } // vilao atacando de longe: mesmo bote
     case 'borLeap': { const r = G.remotes.get(e.id); r?.char.leap?.(); break; }
     case 'hurt':
+      if (inGame && G.matchLog) { const L = G.matchLog; if (e.a === G.myId && e.v !== G.myId) { L.dmg = (L.dmg || 0) + (e.dmg || 0); L.hits = (L.hits || 0) + 1; if (e.head) L.heads = (L.heads || 0) + 1; } else if (e.v === G.myId) L.taken = (L.taken || 0) + (e.dmg || 0); } // tela de fim (08/11)
       if (e.v === G.myId && G.player) {
         audio.play('hit', { vol: 0.7, key: 'hurt', max: 2 });
         G.hurtFlash = Math.min(1, (G.hurtFlash || 0) + e.dmg / 60);
@@ -924,6 +960,7 @@ function onEvent(e) {
       break;
     case 'kill': {
       if (inGame && !G.tutorial && !G.range) { if (e.v === G.myId) statAdd('deaths'); if (e.a === G.myId && e.streak) statMax('bestStreak', e.streak); } // Perfil
+      if (inGame && G.matchLog && e.a === G.myId && e.v !== G.myId) { const L = G.matchLog; L.best = Math.max(L.best || 0, e.streak || 0); if (e.head) L.headKills = (L.headKills || 0) + 1; }
       if (e.v === G.myId && (G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { $('specBar').hidden = false; $('dead').classList.add('spec'); } // sem renascer: assiste
       if (e.v === G.myId) G.inRing = false; // perdeu no ringue: a parede da iris volta pra quem assiste
       const vPos = e.pos || posOf(e.v);
@@ -944,6 +981,7 @@ function onEvent(e) {
         // multiabate: 3 derrubados em 4 s (desafio de elite)
         const now = performance.now() / 1000;
         G.multi = (G.multi || []).filter(x => now - x < 4); G.multi.push(now);
+        if (G.multi.length === 2) chEvent({ type: 'double' }); // missao diaria: abate duplo (08/11)
         if (G.multi.length >= 3) { G.multi = []; chEvent({ type: 'multi' }); }
         // camuflagem reativa: sobe de estagio a cada 2 abates nessa vida (2, 4, 6)
         const st = Math.min(3, Math.floor((e.streak || 0) / 2));
@@ -1122,7 +1160,7 @@ function onEvent(e) {
         if (e.kind === 'plane' || e.kind === 'bomber') audio.play(e.kind === 'plane' ? 'planefly' : 'bomberdrone', { vol: e.kind === 'bomber' ? 1 : 0.8, ui: true, key: e.kind, max: 1 });
         // Torta Atomica: aviso grande pra todo mundo, com o nome de quem pediu
         if (e.kind === 'nuke') hud.alert(t(mine ? 'nukeYou' : ally ? 'nukeAlly' : 'nukeEnemy', { n: nameOf(e.id) }), t(mine ? 'nukeYouSub' : ally ? 'nukeAllySub' : 'nukeEnemySub', { t: e.delay || 6 }), mine || ally ? 'blue' : 'red');
-        else hud.push(`${bannerHtml(e.bn, { name: nickOf(e.id), lvl: lvlOf(e.id) })}<small>${esc(t(mine || ally ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }))}</small>`, 'ev-bnr' + (mine || ally ? '' : ' foe'), 3200);
+        else hud.push(`${bannerHtml(e.bn, { name: nickOf(e.id), lvl: lvlOf(e.id) })}<small>${esc(t(mine || ally || isTouch ? 'streakAlly' : 'streakEnemy', { s: t('s_' + e.kind), n: nameOf(e.id) }))}</small>`, 'ev-bnr' + (mine || ally ? '' : ' foe'), 3200);
         audio.play(mine || ally ? 'flag' : 'capture', { vol: 0.7, ui: true });
         streakVoice(e.kind, mine || ally);
       }
@@ -1143,13 +1181,13 @@ function onEvent(e) {
     // ---------- equipamento de campo ----------
     case 'field': {
       const pos = e.id === G.myId ? G.player?.pos : posOf(e.id);
-      if (e.id === G.myId) { G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); G.stimBoostT = FIELD.stim.boostT; if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
+      if (e.id === G.myId) { if (e.kind === 'hole' && G.player) G.player.holeCd = Math.max(G.player.holeCd || 0, 1.1); /* buraco abre e da 1 s pra ver onde ficou, depois puxa quem ficar em cima (08/11) */ G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); G.stimBoostT = FIELD.stim.boostT; if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
       // estimulante = chiado da bomba de ar; colete = o som de pegar item (sem som proprio ainda)
       if (inGame) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind === 'stim' ? 'pump' : e.kind === 'vest' ? 'pickup' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
       break;
     }
     case 'vestBreak': if (e.id === G.myId && inGame) { hud.message(t('vestBreak'), 1.6); audio.play('balloon', { ui: true, vol: 0.5, rate: 1.3 }); } break;
-    case 'fieldFail': if (e.id === G.myId && inGame) { hud.message(t('fieldFail'), 1.6); audio.play('empty', { vol: 0.4 }); } break;
+    case 'fieldFail': if (e.id === G.myId && inGame) { hud.message(t(e.why === 'akimbo' ? 'fieldAkimbo' : 'fieldFail'), 1.6); audio.play('empty', { vol: 0.4 }); } break;
     case 'fieldReady': if (e.id === G.myId && inGame) { G.fieldK = 1; audio.play('fieldready', { ui: true, vol: 0.5 }); hud.stampText(t('fieldStamp', { w: t('fd_' + G.field) }), t('fieldStampSub')); } break; // mesmo carimbo do 'Virou panqueca' (04/11)
     case 'tomaPick': if (e.id === G.myId && inGame) { hud.message(t('tomaPick'), 1.4); audio.play('pickup', { ui: true, vol: 0.5 }); } break;
     case 'umbBreak': { // guarda-chuva levou tiro demais: estoura e some
@@ -1285,7 +1323,7 @@ function onEvent(e) {
     case 'flag': {
       if (!inGame) break;
       hud.message(t('fl_' + e.act, { w: e.who, t: t(e.team === 'red' ? 'flagRed' : 'flagBlue') }), 2.6);
-      if (e.who && e.who === G.myName) gainXp(e.act === 'cap' ? 'flagCap' : e.act === 'return' ? 'flagReturn' : '');
+      if (e.who && e.who === G.myName) { gainXp(e.act === 'cap' ? 'flagCap' : e.act === 'return' ? 'flagReturn' : ''); if (e.act === 'cap') chEvent({ type: 'flagCap' }); }
       audio.play(e.act === 'cap' ? 'flag' : 'capture', { vol: 0.7, ui: true });
       { const other = e.team === 'red' ? 'blue' : 'red'; // e.team = dono da bandeira; quem pega/captura e o outro time
         if (e.act === 'cap') modeVoice(teamKey('flagcap', e.by || other), true);
@@ -1338,7 +1376,7 @@ function onEvent(e) {
     case 'zone':
       if (inGame) {
         hud.message(t('zoneTaken', { z: e.id, t: t(e.team === 'red' ? 'h_red' : 'h_blue') }), 2); audio.play('capture', { vol: 0.6, ui: true });
-        { const k = teamKey('zone', e.team); if (k) modeVoice(k); }
+        { const k = teamKey(/^[ABC]$/.test(e.id) ? 'zone_' + e.id.toLowerCase() : 'zone', e.team); if (k) modeVoice(k); } // A, B e C tem fala propria; a extra D usa a generica
         const z = G.M.zones.find(q => q.id === e.id), p = G.player;
         if (z && p && p.alive && e.team === G.myTeam && Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) < z.r + 0.5) gainXp('zone');
       }
@@ -1408,7 +1446,7 @@ function onEvent(e) {
         // ta-da ou trombone triste, por cima da musica abaixada
         audio.duck(0.3, 2.2); setTimeout(() => audio.play(iWon ? 'win' : 'lose', { ui: true, vol: 0.6, jitter: 0, key: 'end', max: 1 }), 350);
         if (!G.range && !G.tutorial) setTimeout(() => audio.voice(iWon ? 'win' : e.winner ? 'lose' : 'tie'), 1500); // narrador fecha a partida depois da fanfarra
-        chEvent({ type: 'match' });
+        chEvent({ type: 'match', map: G.map, mode: G.mode });
         gainXp('match');
         if (G.snap?.ranked && G.mode !== 'br') rankEnd(iWon);
         // repassa o abate final de cinema e so depois o placar
@@ -1418,16 +1456,16 @@ function onEvent(e) {
       }
       break;
     case 'dance': podium.setDance(e.id, e.d); audio.dance(e.d); podium.humanSound = true; if (e.id === G.myId) podButtons(e.d); break;
+    case 'mv': matchVote.event(e); break;
+    case 'mvFail': matchVote.fail(e); break;
     case 'restart': {
-      const E = G.endInfo; G.endInfo = null; // fim do podio: o lobby abre com o placar da partida (sala sem lobby ja mostrou antes da proxima)
-      if (replay.on) { replay.stop(scene); document.body.classList.remove('replay'); }
-      stopPodium();
-      $('theend').hidden = true;
-      $('endXp')?.remove();
-      if (G.state === 'game') { backToLobby(); if (E?.lob && !G.tutorial && !G.range) { G.endInfo = E; showEnd(E.winner); G.endInfo = null; } }
+      // 08/11 (pedido dele): sala com lobby e outro apertou "Voltar": quem nao apertou continua no podio (a sala ja esta no lobby)
+      if ((podium.on || replay.on) && G.endInfo?.lob && !G.podLeaving && G.state === 'game') { G.podStay = true; break; }
+      podLeave();
       break;
     }
     case 'start':
+      if (G.podStay) podLeave(true); // host comecou a proxima: quem ficou no podio vai junto
       if (e.map) setMap(e.map);
       if (e.mode) { G.mode = e.mode; G.duo = !!e.duo; G.bounce = !!e.bounce; } // jogo rapido: a proxima vem em outro modo e mapa
       if (G.state === 'lobby') beginMatch(false);
@@ -1594,18 +1632,40 @@ function showPodium() {
   $('podDances').innerHTML = eq.map((id, i) => `<button type="button" data-dance="${id}">${hintOf(i)}${t('dn_' + id)}</button>`).join('');
   document.querySelectorAll('#podDances [data-dance]').forEach(b => { b.onclick = () => { audio.play('ui_click', { ui: true }); G.net?.send({ t: 'dance', d: b.dataset.dance }); }; });
   $('podDances').hidden = !E.top.includes(G.myId); podButtons(null);
-  $('podBack').hidden = !E.lob; $('podBack').disabled = false; $('podBack').textContent = t('endToLobby');
+  // 08/11 (pedido dele): nada de voltar sozinho; o botao so aparece depois de 8 s e quem quiser fica no podio
+  G.podLeaving = false; G.podStay = false; G.podLobbyMsg = null;
+  const backAt = performance.now() + POD_BACK_MS;
+  $('podBack').hidden = true; $('podBack').disabled = false; $('podBack').textContent = t(E.lob ? 'endToLobby' : 'podSeeStats');
   $('podium').hidden = false; document.body.classList.add('on-podium');
   podium.onBot = (d) => { if (!podium.humanSound) audio.dance(d); }; podium.humanSound = false;
   podium.start(scene, G.M, spot, people);
   const tick = () => {
-    const left = G.snap?.overT ?? 0;
-    if (!E.lob && left <= OVER_STATS) { stopPodium(); showEnd(E.winner); return; }
-    $('podTime').textContent = t(E.lob ? 'podBackIn' : 'podStatsIn', { n: Math.max(1, Math.ceil(E.lob ? left : left - OVER_STATS)) });
+    if ($('podBack').hidden && performance.now() >= backAt) $('podBack').hidden = false;
+    // jogo rapido: a proxima partida vem sozinha (a sala segue); sala com lobby nao tem relogio nenhum
+    $('podTime').textContent = E.lob || G.podStay ? '' : t('podNextIn', { n: Math.max(1, Math.ceil(G.snap?.overT ?? 0)) });
   };
   tick(); podTimer = setInterval(tick, 250);
 }
-$('podBack').onclick = () => { audio.play('ui_click', { ui: true }); G.net?.send({ t: 'toLobby' }); $('podBack').disabled = true; $('podBack').textContent = t('podWait'); };
+const POD_BACK_MS = 8000;
+$('podBack').onclick = () => {
+  audio.play('ui_click', { ui: true });
+  const E = G.endInfo; if (!E) return;
+  if (!E.lob) { stopPodium(); showEnd(E.winner); return; } // jogo rapido: vai pro placar (a proxima chega no tempo da sala)
+  if (G.podStay) { podLeave(); return; } // a sala ja voltou pro lobby: so sai do podio
+  G.podLeaving = true; G.net?.send({ t: 'toLobby' }); $('podBack').disabled = true; $('podBack').textContent = t('podWait');
+};
+// sai do podio/fim pro lobby (restart da sala, botao de quem ficou no podio, ou a proxima comecando: quiet = sem placar)
+function podLeave(quiet = false) {
+  const E = G.endInfo; G.endInfo = null; G.podStay = false; G.podLeaving = false; // o lobby abre com o placar da partida (sala sem lobby ja mostrou antes da proxima)
+  if (replay.on) { replay.stop(scene); document.body.classList.remove('replay'); }
+  stopPodium();
+  $('theend').hidden = true;
+  $('endXp')?.remove();
+  if (G.state !== 'game') return;
+  backToLobby();
+  const lm = G.podLobbyMsg; G.podLobbyMsg = null; if (lm) onMsg(lm);
+  if (!quiet && E?.lob && !G.tutorial && !G.range) { G.endInfo = E; showEnd(E.winner); G.endInfo = null; }
+}
 
 function showEnd(winner) {
   funil('terminou');
@@ -1615,7 +1675,11 @@ function showEnd(winner) {
     : inf ? t(winner === 'red' ? 'inf_winInf' : 'inf_winSurv') : winner === 'red' ? t('winRed') : winner === 'blue' ? t('winBlue') : winner === 'empate' ? t('draw') : t('winName', { n: winner });
   $('endWin').textContent = won;
   const ps = (G.endInfo?.players || [...(G.snap?.players || [])].filter(p => !p.mob).sort((a, b) => b.score - a.score)).slice(0, 8);
-  $('endBoard').innerHTML = ps.map(p => `<div class="${p.id === G.myId ? 'me' : ''}"><span>${esc(p.name)}</span><span>${t('endKills', { n: p.kills })}</span></div>`).join('');
+  // 08/11 (pedido dele): placar com nocautes, quedas, assistencias e pontos de cada um + o resumo completo da sua partida
+  const all = G.endInfo?.players || [...(G.snap?.players || [])].filter(p => !p.mob).sort((a, b) => b.score - a.score);
+  $('endBoard').innerHTML = `<div class="eb-head"><span>${t('ebPlayer')}</span><b>${t('ebK')}</b><b>${t('ebD')}</b><b>${t('ebA')}</b><b>${t('ebPts')}</b></div>`
+    + ps.map((p, i) => `<div class="${p.id === G.myId ? 'me' : ''}"><span><em>${i + 1}</em>${esc(p.name)}</span><b>${p.kills | 0}</b><b>${p.deaths | 0}</b><b>${p.assists | 0}</b><b>${Math.round(p.score || 0)}</b></div>`).join('');
+  renderEndMe(all);
   // progresso: XP por tipo, nivel subindo na barra e tudo o que liberou
   const L = G.matchLog || newMatchLog();
   const total = Object.values(L.xp).reduce((a, b) => a + b, 0);
@@ -1644,6 +1708,23 @@ function showEnd(winner) {
   const endAt = performance.now() + Math.max(1, (G.snap?.overT ?? 9) - 1) * 1000;
   const tick = () => { if ($('theend').hidden) return; const n = Math.max(0, Math.round((endAt - performance.now()) / 1000)); $('endNext').textContent = t('nextIn', { n }); if (n > 0) setTimeout(tick, 1000); };
   tick();
+}
+
+// resumo da sua partida (08/11): numeros do servidor (nocautes/quedas/assistencias/pontos) + o que o cliente contou (dano, cabeca, sequencia)
+function renderEndMe(all) {
+  const box = $('endMe'); if (!box) return;
+  const me = all.find(p => p.id === G.myId), L = G.matchLog || {};
+  if (!me || G.tutorial || G.range) { box.hidden = true; return; }
+  const k = me.kills | 0, d = me.deaths | 0, pos = all.indexOf(me) + 1;
+  const tiles = [
+    ['ems_pos', `${pos}º`, t('ems_posOf', { n: all.length })],
+    ['ems_k', k], ['ems_d', d], ['ems_a', me.assists | 0], ['ems_pts', Math.round(me.score || 0)],
+    ['ems_kd', (d ? k / d : k).toFixed(2)],
+    ['ems_dmg', Math.round(L.dmg || 0)], ['ems_taken', Math.round(L.taken || 0)],
+    ['ems_hits', L.hits | 0], ['ems_head', L.heads | 0], ['ems_headk', L.headKills | 0], ['ems_best', L.best | 0],
+  ];
+  box.innerHTML = tiles.map(([key, v, sub]) => `<div class="em-t"><small>${t(key)}</small><b>${v}</b>${sub ? `<em>${sub}</em>` : ''}</div>`).join('');
+  box.hidden = false;
 }
 
 // barra de XP enchendo do XP de antes da partida ate o de agora (vira o nivel no caminho)
@@ -1683,11 +1764,12 @@ function onMsg(m) {
     // partida ja rolando: pula o lobby
     if (m.phase === 'play' && G.state === 'lobby') beginMatch(true);
   } else if (m.t === 'lobby') {
+    if (G.podStay) { G.podLobbyMsg = m; G.lobbyCfg = m.cfg; return; } // ainda no podio: aplica quando ele voltar
     // 04/11 (hotfix): no lobby nao chega snapshot, entao balao/sentinela da partida anterior ficavam parados no ceu
     if (G.blimpMeshes.length) { while (G.blimpMeshes.length) scene.remove(G.blimpMeshes.pop()); G.strikes?.clear(); }
     if (m.map) setMap(m.map);
     if (m.mode) { G.mode = m.mode; G.duo = !!m.duo; } // o host pode ter trocado o modo
-    G.lobbyCfg = m.cfg; // horario do lobby (07/11)
+    G.lobbyCfg = m.cfg; G.lobbyHost = m.host; G.lobbyHumans = m.players.filter(p => !p.bot).length; // horario do lobby (07/11); host e sala: Alterar partida (08/11)
     if (G.state === 'lobby') { lobby.render(m, G.myId); syncLobbyPick(m.duo ? 'duo' : m.bounce ? 'bounce' : m.mode); }
     duoLineup(m);
   }
@@ -1839,6 +1921,7 @@ function iris(to, dur = 650) {
 let attract = null;
 function startAttract() {
   attract = new LocalNet({ mode: 'ffa', map: 'vila', bots: 8, difficulty: 0.9, lobby: false });
+  attract.core.endless = true; // 08/11: a partida de fundo nao acaba (antes congelava todo mundo no fim de cada partida)
   attract.onmsg = onMsg;
   G.net = attract;
   setMap('vila');
@@ -1868,7 +1951,7 @@ async function startGame(net, name, mpArgs = null) {
   G.loadouts = matchLoadouts();
   G.net = net;
   G.player = new Player(G);
-  G.snap = null; G.me = null; G.matchXp = 0; G.myName = name;
+  G.snap = null; G.me = null; G.matchXp = 0; G.myName = name; G.lobbyCfg = null; G.lobbyHost = null; matchVote.reset();
   net.onmsg = onMsg;
   net.onclose = () => reconnect(name, mpArgs);
   G.state = 'lobby';
@@ -1901,8 +1984,10 @@ async function warmGuns() {
     const skins = new THREE.Group(), tiny = new THREE.BoxGeometry(0.01, 0.01, 0.01);
     for (const id of Object.keys(SKIN_CODE)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
     skins.position.copy(camera.position); scene.add(skins);
+    const airs = [fx.blimpMesh('red'), bomberMesh('red')]; for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular
     await compileSafe(scene, camera);
-    scene.remove(skins); tiny.dispose();
+    scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
+    warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11): nada de travar na 1a morte
   } catch (e) { console.warn('aquecimento das armas falhou', e); }
 }
 
@@ -1936,7 +2021,7 @@ async function beginMatch(join) {
   $('hud').hidden = false;
   input.enabled = true;
   document.body.classList.toggle('bombmode', G.mode === 'bomb');
-  if (isTouch) { buildTouch(input, $('touch')); try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); await screen.orientation?.lock?.('landscape'); } catch { /* sem tela cheia */ } }
+  if (isTouch) { buildTouch(input, $('touch')); try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); G.fsWanted = true; await screen.orientation?.lock?.('landscape'); } catch { /* sem tela cheia */ } }
   else if (!SS) lockPointer(canvas); // sem gesto: a pausa pede o clique
   iris(150, 500);
 }
@@ -1947,7 +2032,7 @@ function backToLobby() {
   audio.music(true, 'music');
   G.paused = false;
   input.enabled = false;
-  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead', 'stim-rush'); G.stimFx = false; chat.enable(false);
+  document.body.classList.remove('ingame', 'mode-br', 'is-dead', 'stim-rush'); if (!isTouch) document.body.classList.remove('touchmode'); /* 08/11: no celular o visual de toque fica (antes voltava pro layout de PC: cartaz espremido, banners cortados) */ G.stimFx = false; chat.enable(false);
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   if (document.pointerLockElement) document.exitPointerLock();
   clearRemotes();
@@ -2071,7 +2156,7 @@ async function quitGame() {
   n && n.close();
   G.player = null; G.myId = null; G.me = null;
   clearRemotes();
-  document.body.classList.remove('ingame', 'touchmode', 'mode-br', 'is-dead', 'stim-rush'); G.stimFx = false; chat.enable(false);
+  document.body.classList.remove('ingame', 'mode-br', 'is-dead', 'stim-rush'); if (!isTouch) document.body.classList.remove('touchmode'); /* 08/11: no celular o visual de toque fica (antes voltava pro layout de PC: cartaz espremido, banners cortados) */ G.stimFx = false; chat.enable(false);
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   lobby.hide(); hideLoading();
   $('menu').hidden = false;
@@ -2167,6 +2252,7 @@ function setPaused(p) {
   G.paused = p;
   if (p) renderPausePick();
   $('pauseHud').hidden = !isTouch;
+  $('pauseMatch').hidden = !matchVote.canEdit();
   // trocar de time (02/11): so em modo de time escolhivel e com sala de verdade (o servidor confere vaga e espera de 6 min)
   $('pauseTeam').hidden = !(MODES[G.mode]?.teams && !G.duo && !['infect', 'bomb', 'br'].includes(G.mode) && !G.tutorial && !G.range && !SS);
   $('pause').hidden = !p;
@@ -2295,6 +2381,8 @@ const ui = initMenus({
 let last = performance.now();
 let menuT = 0;
 const tmpV = new THREE.Vector3();
+// 08/11 (desempenho): boneco fora da tela ou muito longe nao recalcula as ~100 pecas todo quadro (trocar updateMatrixWorld corta a descida na arvore)
+const NO_MATRIX = () => {}, camFr = new THREE.Frustum(), camPV = new THREE.Matrix4(), chSph = new THREE.Sphere();
 
 // granada cozinhando: tracejado (bolinhas) com a mesma fisica do servidor ate o pavio que sobra, e um anel
 // onde ela estoura. Tinta preta (o filtro do jogo tira a cor, branco sumia no chao); pisca no fim do pavio.
@@ -2341,8 +2429,11 @@ function frame() {
 function boostHud(realDt) {
   const B = boostInfo(), on = B.active && G.state === 'game' && !G.range && !G.tutorial, el = $('xpChip');
   if (on && boostCounts()) boostTick(realDt * 1000);
-  document.body.classList.toggle('xp2', on);
-  if (!el) return; el.hidden = !on; if (!on) return;
+  // 08/11 (pedido dele): avisa ao entrar na partida e some; a ficha continua contando sem nada na tela
+  if (!on) G.xpChipUntil = 0; else if (!G.xpChipUntil) G.xpChipUntil = performance.now() + 5000;
+  const show = on && performance.now() < G.xpChipUntil;
+  document.body.classList.toggle('xp2', show);
+  if (!el) return; el.hidden = !show; if (!show) return;
   const why = G.snap?.over ? '' : weekend() ? t('boostPauseWknd') : G.blitz ? t('boostPauseBlitz') : '';
   const s = Math.ceil(B.ms / 1000), txt = why || `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${String(Math.floor(s / 60) % 60).padStart(Math.floor(s / 3600) ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`;
   if (el.dataset.t !== txt) { el.dataset.t = txt; el.classList.toggle('paused', !!why); el.querySelector('.t').textContent = txt; }
@@ -2452,7 +2543,7 @@ function frameBody(now, realDt) {
     hud.prompt(pr);
     if (input.useBtn) input.useBtn.classList.toggle('can', !!pr); // toque: a mao pulsa quando da pra comprar/abrir/levantar ali
   }
-  objectives.update(G.t, G.snap, G.mode, (id) => id === G.myId ? { me: true } : G.remotes.get(id));
+  objectives.update(G.t, G.snap, G.mode, (id) => id === G.myId ? { me: true } : G.remotes.get(id), hud.dc?.id);
   escView?.update(G.t, dt, G.snap?.esc); escHud(G.snap?.esc);
   fieldView?.update(G.t, dt, G.snap, G.remotes);
   // barra do equipamento (enche com pontos e abates, vem do servidor no snapshot); guarda-chuva fecha sozinho
@@ -2525,10 +2616,21 @@ function frameBody(now, realDt) {
   for (const m of G.nadeMeshes.values()) if (m.userData.to) { m.position.lerp(tmpV.fromArray(m.userData.to), Math.min(1, dt * 18)); if (m.userData.rocket) { if (Math.random() < dt * 30) fx.puff(m.position.toArray(), 1, 0.35, 0x8a8478, 0.5); } else m.rotation.x += dt * 8; } // foguete nao gira: solta fumaca
   for (const m of G.blimpMeshes) if (m.userData.to) {
     if (m.userData.bomber) { // dirigivel bombardeiro (04/11): aparece e vai embora esmaecendo perto da borda do mapa
-      if (!m.userData.fadeMats) { m.userData.fadeMats = []; m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.transparent = true; m.userData.fadeMats.push(o.material); } }); }
+      if (!m.userData.fadeMats) { m.userData.fadeMats = []; m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); m.userData.fadeMats.push(o.material); } }); }
       const r = Math.hypot(m.position.x, m.position.z), A = G.M?.arena || 60, op = THREE.MathUtils.clamp((A + 40 - r) / 32, 0, 1);
-      for (const mt of m.userData.fadeMats) { mt.opacity = op; mt.depthWrite = op > 0.95; }
+      // 08/11: so vira transparente enquanto esmaece. Transparente o tempo todo, casco e contorno (mesmo centro) trocavam de ordem
+      // a cada quadro e o balao piscava
+      const fading = op < 0.995;
+      if (m.userData.fading !== fading) { m.userData.fading = fading; for (const mt of m.userData.fadeMats) { mt.transparent = fading; mt.depthWrite = !fading; mt.needsUpdate = true; } }
+      for (const mt of m.userData.fadeMats) mt.opacity = fading ? op : 1;
       m.visible = op > 0.01;
+    }
+    const dg = m.userData.dg;
+    if (dg) { // dirigivel (08/11): helices giram, leme balanca, metralhadora segue o ultimo alvo; furado solta fumaca no motor
+      for (const p of dg.props) p.rotation.z += dt * 24;
+      dg.rudder.rotation.y = Math.sin(G.t * 0.7) * 0.24;
+      if (m.userData.aim) dg.aim(m.userData.aim, Math.min(1, dt * 10));
+      if ((m.userData.hp ?? 100) < 50 && Math.random() < dt * 16) fx.puff(dg.props[m.userData.hp < 25 ? 1 : 0].getWorldPosition(tmpV).toArray(), 1, 0.7, 0x2a2622, 0.9);
     }
     if (m.userData.sentry) { m.position.fromArray(m.userData.to); let d = (m.userData.yaw || 0) - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); m.rotation.y += d * Math.min(1, dt * 10); continue; } // parada: so gira pra mira
     const prev = m.position.clone();
@@ -2539,7 +2641,9 @@ function frameBody(now, realDt) {
 
   if (G.snap?.cars) (G.carView ||= new CarView(scene)).update(dt, G.snap.cars, G.myCar);
   else if (G.carView) { G.carView.dispose(); G.carView = null; }
+  camFr.setFromProjectionMatrix(camPV.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   for (const r of G.remotes.values()) {
+    if (replay.on && r.frozen) { r.frozen = false; delete r.char.root.updateMatrixWorld; }
     if (replay.on && replay.pose(r, r.id)) continue;
     const k = 1 - Math.exp(-14 * dt);
     const ox = r.pos[0], oz = r.pos[2];
@@ -2555,7 +2659,9 @@ function frameBody(now, realDt) {
     const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
     // longe (battle royale com 50): o esqueleto anima 10x por segundo em vez de todo quadro; de perto nada muda
     r.animAcc = (r.animAcc || 0) + dt;
-    if (camD < 70 || r.animAcc >= 0.1) { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); r.animAcc = 0; }
+    const chStep = (camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on; // fora da tela: a vez dele vem 10x por segundo
+    if (chStep) { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); r.animAcc = 0; }
+    if (chStep === !!r.frozen) { r.frozen = !chStep; if (r.frozen) r.char.root.updateMatrixWorld = NO_MATRIX; else delete r.char.root.updateMatrixWorld; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
     r.char.lod(camD);
@@ -2778,6 +2884,7 @@ function frameBody(now, realDt) {
       if (bombBeep <= 0) { bombBeep = period; if (planted) audio.play('ui_click', { pos: [BS.pos[0], BS.pos[1] + 0.3, BS.pos[2]], vol: 0.7, rate: 1.8, jitter: 0 }); }
       bombMesh.userData.light.visible = bombBeep > period * 0.5 || !planted;
     }
+    matchVote.tick();
     if (G.snap) { hud.objectives(G.snap, camera, G.me); hud.radar(G, camera); hud.nadeWarn(G, camera); hud.streaks(G, G.snap); }
     hud.compass(G, camera);
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
@@ -2795,8 +2902,8 @@ function frameBody(now, realDt) {
   } else {
     menuT += realDt;
     modeTipsHide();
-    { const ln = G.state === 'lobby' && G.lobbyCfg?.mode === 'heist' && G.lobbyCfg?.tod === 'night'; // lobby ja mostra o mapa no horario escolhido
-      if (ln !== !!G.nightOn) { G.nightOn = ln; world?.setNight?.(ln); for (const r of G.remotes.values()) nightChar(r.char, ln); } }
+    { const m = G.lobbyCfg?.mode, ln = G.state === 'lobby' && G.lobbyCfg?.tod === 'night' && m !== 'borroes' && m !== 'arte'; // lobby ja mostra o mapa no horario escolhido, em todo modo (08/11); chamado todo quadro: trocar de mapa no lobby monta um cenario novo, ainda de dia
+      G.nightOn = ln; world?.setNight?.(ln); for (const r of G.remotes.values()) nightChar(r.char, ln); }
     film.uniforms.smoke.value = 0; // veu da fumaca nao fica preso fora da partida
     // lobby (07/11, pedido dele): tomadas de cinema pelo mapa com fade entre elas; menu e mapa sem tomada boa: a orbita de sempre
     const fade = G.state === 'lobby' ? lobbyCam.frame(realDt, G.M, camera) : null;
@@ -2867,6 +2974,9 @@ function keepStreaksInView() {
 }
 $('deadGo').onclick = () => G.net?.send({ t: 'respawn' });
 hud.onStreakTap = (id) => { G.streakKind = id; input.edges.add('STREAK'); }; // celular: tocou num selo pronto
+const matchVote = new MatchVote({ G, send: (m) => G.net?.send(m), onApplied: () => { if (G.paused) setPaused(false); }, onCloseEditor: () => { $('pause').hidden = !G.paused; } });
+G.nameOf = nameOf; G.matchVote = matchVote;
+$('pauseMatch').onclick = () => { audio.play('ui_click', { ui: true }); $('pause').hidden = true; matchVote.openEditor(); };
 $('pauseTeam').onclick = () => { audio.play('ui_click', { ui: true }); G.net?.send({ t: 'team' }); setPaused(false); };
 $('endLobby').onclick = () => { audio.play('ui_click', { ui: true }); $('theend').hidden = true; }; // o placar abre em cima do lobby
 $('specNext').onclick = (e) => { e.stopPropagation(); if (G.spec) G.spec.i++; G.spec && (G.spec.map = false); };
@@ -2879,15 +2989,22 @@ $('dead').addEventListener('pointerdown', (e) => {
 
 // ---------- editor do HUD de toque ----------
 let heLayout = null;
+let heSel = null;
+function heSelect(elx) { // botao tocado: o controle Tamanho passa a valer so pra ele
+  heSel?.classList.remove('he-sel'); heSel = elx; elx?.classList.add('he-sel');
+  const S = $('heScale'); S.disabled = !elx;
+  S.value = elx ? heLayout.size[elx.dataset.hid] ?? heLayout.scale ?? 1 : 1;
+}
 function openHudEditor() {
   heLayout = JSON.parse(JSON.stringify(settings.hudLayout || {}));
-  heLayout.pos = heLayout.pos || {};
+  heLayout.pos = heLayout.pos || {}; heLayout.size = heLayout.size || {}; heSelect(null);
   $('pause').hidden = true; $('hudEdit').hidden = false;
   document.body.classList.add('hudedit');
-  $('heScale').value = heLayout.scale || 1; $('heAlpha').value = heLayout.alpha ?? 1;
+  $('heAlpha').value = heLayout.alpha ?? 1;
   applyHudLayout($('touch'), { hudLayout: heLayout });
 }
 function closeHudEditor(save) {
+  heSelect(null);
   if (save) { settings.hudLayout = heLayout; saveSettings(); }
   applyHudLayout($('touch'), settings);
   if (!save) buildTouch(input, $('touch')); // descarta posicoes arrastadas
@@ -2896,8 +3013,8 @@ function closeHudEditor(save) {
 }
 $('pauseHud').onclick = openHudEditor;
 $('heSave').onclick = () => { audio.play('pickup', { ui: true, vol: 0.5 }); closeHudEditor(true); };
-$('heReset').onclick = () => { heLayout = { pos: {} }; settings.hudLayout = null; buildTouch(input, $('touch')); $('heScale').value = 1; $('heAlpha').value = 1; };
-$('heScale').oninput = (e) => { heLayout.scale = +e.target.value; applyHudLayout($('touch'), { hudLayout: heLayout }); };
+$('heReset').onclick = () => { heLayout = { pos: {}, size: {} }; settings.hudLayout = null; buildTouch(input, $('touch')); heSelect(null); $('heAlpha').value = 1; };
+$('heScale').oninput = (e) => { if (!heSel) return; heLayout.size[heSel.dataset.hid] = +e.target.value; applyHudLayout($('touch'), { hudLayout: heLayout }); };
 $('heAlpha').oninput = (e) => { heLayout.alpha = +e.target.value; applyHudLayout($('touch'), { hudLayout: heLayout }); };
 // arrastar: so no modo de edicao (captura antes do botao reagir)
 $('touch').addEventListener('pointerdown', (e) => {
@@ -2905,12 +3022,15 @@ $('touch').addEventListener('pointerdown', (e) => {
   const elx = e.target.closest('[data-hid]');
   if (!elx) return;
   e.preventDefault(); e.stopPropagation();
+  heSelect(elx);
+  const x0 = e.clientX, y0 = e.clientY; let dragging = false; // toque parado so seleciona; arrastar move
   const move = (ev) => {
+    if (!dragging && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return;
+    dragging = true;
     const x = Math.max(4, Math.min(96, ev.clientX / innerWidth * 100)), y = Math.max(6, Math.min(94, ev.clientY / innerHeight * 100));
     heLayout.pos[elx.dataset.hid] = [+x.toFixed(1), +y.toFixed(1)];
     applyHudLayout($('touch'), { hudLayout: heLayout });
   };
-  move(e);
   const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
   addEventListener('pointermove', move); addEventListener('pointerup', up);
 }, true);
@@ -2974,10 +3094,17 @@ const toggleFs = async () => {
   if (iosNoFs) { $('installGuide').hidden = false; return; }
   try {
     const de = document.documentElement;
-    if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-    else { await (de.requestFullscreen ? de.requestFullscreen({ navigationUI: 'hide' }) : de.webkitRequestFullscreen?.()); if (G.state === 'game' && isTouch) await screen.orientation?.lock?.('landscape').catch(() => {}); }
+    if (fsEl()) { G.fsWanted = false; await (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+    else { G.fsWanted = true; await (de.requestFullscreen ? de.requestFullscreen({ navigationUI: 'hide' }) : de.webkitRequestFullscreen?.()); if (G.state === 'game' && isTouch) await screen.orientation?.lock?.('landscape').catch(() => {}); }
   } catch { /* navegador recusou */ }
 };
+// 08/11 (pedido dele): celular que saiu da tela cheia sozinho (fim da partida, voltar do Android, troca de app) volta pra ela
+// no proximo toque no menu. So se ele nao desligou pelo botao (fsWanted)
+addEventListener('pointerup', (e) => {
+  if (!isTouch || !G.fsWanted || fsEl() || iosNoFs || e.target.closest?.('#fsMenu, #pauseFs, a[target]')) return;
+  const de = document.documentElement;
+  try { (de.requestFullscreen ? de.requestFullscreen({ navigationUI: 'hide' }) : de.webkitRequestFullscreen?.())?.catch?.(() => {}); } catch { /* recusou */ }
+}, true);
 $('fsMenu').onclick = toggleFs;
 $('pauseFs').onclick = toggleFs;
 document.addEventListener('fullscreenchange', syncFs);

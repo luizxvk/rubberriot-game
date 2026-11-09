@@ -1,3 +1,4 @@
+import { BM_VARIANTS } from './blackmarket.js';
 // Arsenal da Vila Borracha. dmg por projetil; rate = segundos entre tiros.
 export const WEAPONS = {
   pistol:  { name: 'Estalo',     slot: 1, dmg: 34, rate: 0.15, mag: 12, reserve: Infinity, reload: 1.0, spread: 0.012, auto: false, zoom: 1.25, kick: 0.035, range: 140, recoil: [[1, 0], [1, 0.2], [1, -0.2]] },
@@ -156,7 +157,7 @@ export const AMMO_IDS = Object.keys(AMMO);
 export const FIELD = {
   umbrella: { lvl: 1, need: 300, dur: 5, hp: 170, icon: 'beach_access' },  // escudo na frente: bloqueia tiro e soco que vem de frente; aguenta hp de dano e estoura
   spring: { lvl: 5, need: 250, dur: 20, power: 15, icon: 'keyboard_double_arrow_up' }, // trampolim no chao: quem pisa voa
-  hole: { lvl: 9, need: 350, dur: 25, range: 35, icon: 'adjust' },          // buraco no pe + buraco onde mira: entra num, sai no outro
+  hole: { lvl: 9, need: 350, dur: 25, range: 35, exitMin: 16, exitMax: 36, icon: 'adjust' }, // buraco no pe: quem entra sai num ponto aleatorio do mapa, em raio medio (08/11, pedido dele)
   anvil: { lvl: 13, need: 400, range: 45, fall: 1.3, icon: 'hardware' },    // bigorna cai do ceu no ponto mirado
   // 01/11 (pedido dele): estimulante injeta e devolve vida em 1,5 s; colete nasce vestido (absorve 70% do tiro ate
   // quebrar, ai o dano volta pra vida) e a barra cheia conserta ele
@@ -360,4 +361,5 @@ export const BLUEPRINTS = {
   bp_aurora:     { wpn: 'sniper',  lo: { body: 'sniper_4', scope: 'sniper_scope_1', laser: 'laser_2', camo: 'galaxy', tracer: 'ice', paint: '#020615', accent: '#3dffa0', retColor: 'green' },
                    mods: { adsTime: 0.9, dmg: 0.97, move: 1.02, reload: 1.1 } },
 };
+Object.assign(BLUEPRINTS, BM_VARIANTS); // Mercado Negro (08/11): bm_<modelo>_<n>, com bm: true (posse pela Loja, nunca por desafio)
 export const bpMods = (bp) => BLUEPRINTS[bp]?.mods || {};

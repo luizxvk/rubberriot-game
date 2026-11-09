@@ -15,6 +15,7 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'saber_on', 'saber_swing', 'saber_hit', // Sabre de Neon (04/11)
   'rocket', 'flamer']; // 03/11: Bazuca e lanca-chamas // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
+const STEREO_SFX = new Set(['win', 'lose', 'levelup', 'prestige', 'crowd', 'comic']); // vinhetas de tela, sem posicao: seguem em estereo
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
 function soundEdges(b) {
   const d = b.getChannelData(0), th = 0.003;
@@ -96,7 +97,7 @@ class Audio {
       const r = await fetch(`./sfx/${name}.mp3`);
       if (!r.ok) { (this.failed ||= new Set()).add(name); this.loading.delete(name); return; }
       const raw = await this.ctx.decodeAudioData(await r.arrayBuffer());
-      const pol = name.startsWith('music') || name.startsWith('dn_') || name.startsWith('vo_') ? raw : this.polish(raw); // trilha nao passa pelo tratamento de efeito curto
+      const pol = name.startsWith('music') || name.startsWith('dn_') || name.startsWith('vo_') ? raw : this.polish(raw, name); // trilha nao passa pelo tratamento de efeito curto
       // arquivo mudo (veio vazio do gerador) = usa o sintetizado
       if (pol) this.buf[name] = pol;
       if (name === (this.track || 'music') && this.wantMusic) this.music(true);
@@ -104,8 +105,9 @@ class Audio {
     this.loading.delete(name);
   }
 
-  polish(b) {
+  polish(b, name) {
     const ch = b.numberOfChannels, sr = b.sampleRate;
+    const outCh = STEREO_SFX.has(name) ? ch : 1; // 08/11 (memoria): efeito em mono ocupa metade (no 3D o panner ja somava os dois lados)
     let start = b.length, end = 0, peak = 0;
     for (let c = 0; c < ch; c++) {
       const d = b.getChannelData(c);
@@ -119,11 +121,13 @@ class Audio {
     start = Math.max(0, start - Math.floor(sr * 0.002));
     end = Math.min(b.length, end + Math.floor(sr * 0.04));
     const len = end - start;
-    const out = this.ctx.createBuffer(ch, len, sr);
+    const out = this.ctx.createBuffer(outCh, len, sr);
     const g = peak > 0 ? 0.9 / peak : 1;
     const fin = Math.floor(sr * 0.003), fout = Math.min(Math.floor(sr * 0.035), len >> 1);
-    for (let c = 0; c < ch; c++) {
-      const src = b.getChannelData(c), dst = out.getChannelData(c);
+    let mix = null;
+    if (outCh === 1 && ch > 1) { mix = new Float32Array(b.length); for (let c = 0; c < ch; c++) { const d = b.getChannelData(c); for (let i = 0; i < d.length; i++) mix[i] += d[i] / ch; } }
+    for (let c = 0; c < outCh; c++) {
+      const src = mix || b.getChannelData(c), dst = out.getChannelData(c);
       for (let i = 0; i < len; i++) {
         let v = src[start + i] * g;
         if (i < fin) v *= i / fin;
@@ -323,7 +327,7 @@ class Audio {
       if (this.musicSrc?.name === want) return;
       const b = this.buf[want];
       if (!b) { this.load(want); return; } // o load chama de novo quando terminar
-      if (this.musicSrc) { const { s, g } = this.musicSrc; g.gain.setTargetAtTime(0, t, 0.25); s.stop(t + 1.5); }
+      if (this.musicSrc) { const { s, g, name: old } = this.musicSrc; g.gain.setTargetAtTime(0, t, 0.25); s.stop(t + 1.5); if (old !== want) setTimeout(() => { if (this.musicSrc?.name !== old) delete this.buf[old]; }, 2000); } // 08/11 (memoria): a trilha de antes sai (7 MB cada); se voltar, carrega de novo
       const s = this.ctx.createBufferSource();
       s.buffer = b; s.loop = true;
       // loop pelo som de verdade: o mp3 traz uns milissegundos mudos nas pontas

@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>dancas</title><style>body{margin:0;background:#dcd7cb}</style>
+<script type="module">
+// folha das dancas (08/11): ?d=cospefogo&t=2.2,2.8,... quadros da danca COM os efeitos (simula quadro a quadro ate cada tempo)
+import * as THREE from 'three';
+import { Character } from '../src/character.js';
+import { DanceFx } from '../src/dancefx.js';
+import { DANCES } from '../src/dances.js';
+const q = new URLSearchParams(location.search), id = q.get('d') || 'cospefogo', D = DANCES[id], spb = 60 / D.bpm;
+const ts = (q.get('b') || '1,2.3,3,4.3,5,6').split(',').map(Number).map(b => b * spb); // em batidas
+const W = 260, H = 320, r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W * ts.length, H); r.setClearColor(0xdcd7cb); r.autoClear = false; document.body.appendChild(r.domElement); r.clear();
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(2, 3, -3); sc.add(dl);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshLambertMaterial({ color: 0xbdb6a6 })); floor.rotation.x = -Math.PI / 2; sc.add(floor);
+const ch = new Character('red', '', {}); sc.add(ch.root); const fx = new DanceFx(sc);
+const cam = new THREE.PerspectiveCamera(40, W / H, 0.1, 80), a = Number(q.get('a') ?? 0.5); cam.position.set(Math.sin(a) * -7, 2.6, -Math.cos(a) * 7); cam.lookAt(0, 1.4, 0);
+r.setScissorTest(true);
+let T = 0; const dt = 1 / 60;
+ts.forEach((tt, i) => {
+  while (T < tt) { T += dt; ch.update(dt, { anim: 'dance', dance: id, danceT: T, alive: true, speed: 0, t: T, pitch: 0 }); fx.tick(ch, id, T); fx.update(dt); }
+  r.setViewport(i * W, 0, W, H); r.setScissor(i * W, 0, W, H); r.clear(); r.render(sc, cam);
+});
+document.title = 'pronto';
+</script>

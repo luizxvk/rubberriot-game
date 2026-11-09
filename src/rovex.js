@@ -25,6 +25,10 @@ export const isGuest = () => STANDALONE && !me;
 export function logout() { try { localStorage.removeItem(OWN); } catch { /* */ } }
 export const inviteRoom = (qs.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || null;
 export const inRovex = qs.has('api');
+// conta falsa do localhost (08/11, src/devfake.js): so no `npm run dev`, sem login de verdade; ?semconta = visitante.
+// Todo uso vem como `import.meta.env.DEV && FAKE`, entao o build de producao corta os desvios e nem leva o devfake.js
+const FAKE = import.meta.env.DEV && !qs.has('semconta') && !qs.has('api') && !qs.has('solto') && !(() => { try { return localStorage.getItem('token') || localStorage.getItem(OWN); } catch { return null; } })();
+const fk = () => import('./devfake.js');
 
 // servidor multiplayer: dentro do backend da Rovex, no app rovex-games (Fly), em /rubber-riot/ws.
 // Jogo solto no dev (vite 5197): o server.js local. Rovex no dev (api relativa): o backend local.
@@ -68,6 +72,7 @@ async function call(path, opt = {}) {
 // conta logada (null = visitante ou sem rede)
 export let me = null;
 export async function loadMe() {
+  if (import.meta.env.DEV && FAKE) { me = (await fk()).fakeMe(); try { dispatchEvent(new Event('rovex-me')); } catch { /* */ } loadShop(); return me; }
   if (!token()) return null;
   try {
     const u = await call('/users/me', { timeout: 5000 });
@@ -92,6 +97,7 @@ export async function friendRooms() {
 export const invite = (friendId, room) => call('/games/rubber-riot/invite', { method: 'POST', body: { friendId, room } });
 // Loja (03/11): o que a conta comprou (me.rrOwned) e os saldos; comprar desconta Zions Points no servidor da Rovex
 export async function loadShop() {
+  if (import.meta.env.DEV && FAKE) { const j = await (await fk()).loja(); Object.assign(me, { rrOwned: j.itens, zionsPoints: j.zionsPoints, zions: j.zions }); dispatchEvent(new Event('rovex-me')); return j; }
   if (!token() || !me) return null;
   try {
     const j = await call('/games/rubber-riot/loja', { timeout: 6000 });
@@ -102,8 +108,11 @@ export async function loadShop() {
     return j;
   } catch { return null; }
 }
+// resposta da conta falsa: mesmo formato do servidor; atualiza saldo e carteira como as rotas de verdade
+const fakeApply = (j) => { if (me && j) { if (j.itens) me.rrOwned = j.itens; if (Number.isFinite(j.zionsPoints)) me.zionsPoints = j.zionsPoints; if (Number.isFinite(j.zions)) me.zions = j.zions; dispatchEvent(new Event('rovex-me')); } return j; };
 // devolve { ok } ou { code: 'sem_saldo' | 'ja_tem' | 'login' | 'erro', saldo?, preco? }
 export async function buyItem(sku) {
+  if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).comprar(sku));
   if (!token() || !me) return { code: 'login' };
   try {
     const r = await fetch(API + '/games/rubber-riot/loja/comprar', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ sku }) });
@@ -125,6 +134,7 @@ export async function rankingBoard(tipo) {
 }
 // resgate do Elite (05/11): sem Zions, entra na conta; quem confere a assinatura e o servidor
 export async function redeemItem(sku) {
+  if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).resgatar(sku));
   if (!token() || !me) return { code: 'login' };
   try {
     const r = await fetch(API + '/games/rubber-riot/loja/resgatar', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ sku }) });
@@ -137,6 +147,7 @@ export async function redeemItem(sku) {
 }
 // presente da remasterizacao (07/11, pedido dele): 1000 Zions Points uma vez por conta; valor e trava no servidor (rota /zions/presente)
 export async function claimGift() {
+  if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).presente());
   if (!token() || !me) return { code: 'login' };
   try {
     const r = await fetch(API + '/games/rubber-riot/zions/presente', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: '{}' });
@@ -149,6 +160,7 @@ export async function claimGift() {
 }
 // fim de partida: conta o que aconteceu; quem decide o valor e deposita e o servidor (zpCredit em shared/shop.js)
 export async function claimZions(won, ch) {
+  if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).partida(won, ch));
   if (!token() || !me) return { code: 'login' };
   try {
     const r = await fetch(API + '/games/rubber-riot/zions/partida', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ won, ch }) });
@@ -208,6 +220,7 @@ export function keepEarned(localRaw, cloudRaw) {
 }
 
 export async function pullSave() {
+  if (import.meta.env.DEV && FAKE) { await loadMe(); return; } // conta falsa: joga com o save deste navegador
   if (!(await loadMe())) {
     // sem conta no site proprio = guest: save local de outra conta deste navegador nao vira do guest
     // (a conta continua salva na nuvem e volta quando ela entrar)
@@ -244,11 +257,11 @@ export async function pullSave() {
 const GAP = 30000;
 let timer = 0, lastPush = 0, lastBody = '';
 export function pushSoon() {
-  if (!me || timer) return;
+  if (!me || timer || (import.meta.env.DEV && FAKE)) return;
   timer = setTimeout(pushSave, Math.max(3000, lastPush + GAP - Date.now()));
 }
 export function pushSave(keepalive = false) {
-  if (!me) return;
+  if (!me || (import.meta.env.DEV && FAKE)) return;
   clearTimeout(timer); timer = 0;
   const data = {};
   for (const k of KEYS) { const v = ls.get(k); if (v != null) data[k] = v; }
@@ -268,7 +281,7 @@ function deviceId() {
   return d;
 }
 export async function sessionPing(tomar = false) {
-  if (!me) return { ok: true };
+  if (!me || (import.meta.env.DEV && FAKE)) return { ok: true };
   try { return await call('/games/rubber-riot/sessao', { method: 'POST', body: { dev: deviceId(), tomar }, timeout: 6000 }); } catch { return { ok: true }; } // sem rede/servidor antigo: nao trava ninguem
 }
 export function sessionEnd() { if (me) call('/games/rubber-riot/sessao', { method: 'POST', body: { dev: deviceId(), sair: true }, keepalive: true }).catch(() => {}); }
@@ -278,3 +291,23 @@ export async function requestReset() {
   try { const r = await fetch(API + '/auth/request-reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: me.email }) }); return r.ok; } catch { return false; }
 }
 addEventListener('pagehide', () => sessionEnd()); // fechou: libera a conta pro outro aparelho na hora
+// Mercado Negro (08/11): vitrine, pecas e compra/bau. Preco, sorteio e posse sao do servidor; aqui so pede e mostra
+const bmPost = async (rota, body) => {
+  if (import.meta.env.DEV && FAKE) { const F = await fk(); return fakeApply(rota === '/bau' ? await F.mercadoBau() : await F.mercadoComprar(body?.id)); }
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/mercado' + rota, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify(body || {}) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { code: j.code || 'erro', saldo: j.saldo, preco: j.preco };
+    if (j.itens) me.rrOwned = j.itens; if (Number.isFinite(j.zionsPoints)) me.zionsPoints = j.zionsPoints; if (Number.isFinite(j.zions)) me.zions = j.zions;
+    dispatchEvent(new Event('rovex-me'));
+    return { ok: true, ...j };
+  } catch { return { code: 'erro' }; }
+};
+export async function bmLoad() {
+  if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).mercado());
+  if (!token() || !me) return { code: 'login' };
+  try { const j = await call('/games/rubber-riot/mercado', { timeout: 7000 }); if (j?.itens) me.rrOwned = j.itens; if (Number.isFinite(j?.zionsPoints)) me.zionsPoints = j.zionsPoints; dispatchEvent(new Event('rovex-me')); return j || { code: 'erro' }; } catch { return { code: 'erro' }; }
+}
+export const bmBuy = (id) => bmPost('/comprar', { id });
+export const bmChest = () => bmPost('/bau');

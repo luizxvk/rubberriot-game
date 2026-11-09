@@ -1,0 +1,16 @@
+{
+ "round_next": "[excited] Next round, folks! Places, everybody!",
+ "zone_a_red": "[excited] Red team takes flag A!",
+ "zone_b_red": "[excited] Red team takes flag B!",
+ "zone_c_red": "[excited] Red team takes flag C!",
+ "zone_a_blue": "[excited] Blue team takes flag A!",
+ "zone_b_blue": "[excited] Blue team takes flag B!",
+ "zone_c_blue": "[excited] Blue team takes flag C!",
+ "zones3_red": "[shouting] Red team holds all three flags!",
+ "zones3_blue": "[shouting] Blue team holds all three flags!",
+ "min2": "[excited] Two minutes on the clock!",
+ "flagwin_red": "[excited] Red team needs one more capture!",
+ "flagwin_blue": "[excited] Blue team needs one more capture!",
+ "bomb10": "[fast] Ten seconds on the fuse!",
+ "tramlast": "[excited] Last stretch! The trolley's almost home!"
+}

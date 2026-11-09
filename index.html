@@ -233,14 +233,11 @@ html.touch-boot .boot { display: grid; }
         <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </a>
       </div>
-      <!-- carteira (04/11): saldos de Zions num bilhete proprio na coluna do titulo (no topo ficavam espremidos e desalinhados) -->
-      <div class="zbal wallet" id="homeBal" role="group" hidden></div>
       <nav class="bill" aria-label="Menu principal">
         <!-- icones: Material Icons (Apache 2.0) -->
         <button id="goSolo" class="bill-item main play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span data-i18n="play">Jogar</span></button>
         <button data-go="mp" class="bill-item main mp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="multiplayer">Multiplayer</span><i class="rk-mini" id="rkMini"></i></button>
         <button data-go="friends" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span data-i18n="friends">Amigos</span></button>
-        <button data-go="pass" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10V6c0-1.11-.9-2-2-2H4c-1.1 0-1.99.89-1.99 2v4c1.1 0 1.99.9 1.99 2s-.89 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2s.9-2 2-2zm-9 7.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2z"/></svg><span data-i18n="passTitle">Rovex Pass</span></button>
         <button data-go="shop" class="bill-item shop-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zm-2.99-3.9 1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-.94.47-.61 0-1.14-.49-1.21-1.14L16.98 5l1.93-.01zM13 5h1.96l.54 4.52c.05.39-.07.78-.33 1.07-.22.26-.54.41-.95.41-.67 0-1.22-.59-1.22-1.31V5zM8.49 9.52 9.04 5H11v4.69c0 .72-.55 1.31-1.29 1.31-.34 0-.65-.15-.89-.41-.25-.29-.37-.68-.33-1.070zm-4.45-.16L5.050 5h1.97l-.58 4.86c-.08.65-.6 1.14-1.21 1.14-.49 0-.8-.29-.93-.47-.27-.32-.36-.75-.26-1.17zM5 19v-6.03c.08.01.15.03.23.03.87 0 1.66-.36 2.24-.95.6.6 1.4.95 2.31.95.87 0 1.65-.36 2.23-.93.59.57 1.39.93 2.29.93.84 0 1.640-.35 2.24-.95.58.59 1.37.95 2.24.95.08 0 .15-.02.23-.03V19H5z"/></svg><span data-i18n="shop">Loja</span></button>
         <!-- Bolso (06/11): consumiveis; icone Material Icons (Apache 2.0) -->
         <button id="goPocket" class="bill-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM9 4h6v2H9V4zm11 15H4v-2h16v2zm0-5H4V8h3v2h2V8h6v2h2V8h3v6z"/></svg><span data-i18n="pocket">Bolso</span></button>
@@ -338,12 +335,21 @@ html.touch-boot .boot { display: grid; }
   </section>
 
   <section class="card" id="scr-challenges" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="challenges">Desafios</h2></header>
+    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="missions">Missões</h2></header>
+    <!-- 08/11 (pedido dele): Missoes = aba de missoes diarias + aba de desafios (como era) -->
+    <div class="mis-tabs" role="tablist"><button role="tab" data-mtab="mis" aria-selected="true" data-i18n="misTab">Missões diárias</button><button role="tab" data-mtab="ch" aria-selected="false" data-i18n="challenges">Desafios</button></div>
+    <div id="misPane">
+      <div class="ch-head"><h3 data-i18n="misTab">Missões diárias</h3><small id="misReset"></small></div>
+      <ul class="ch-list mis-list" id="misList"></ul>
+      <p class="shop-note" id="misNote"></p>
+    </div>
+    <div id="chPane" hidden>
     <div class="elite-card" id="chElite"></div>
     <div class="ch-head"><h3 data-i18n="chDaily">Do dia</h3><small id="chReset"></small></div>
     <ul class="ch-list" id="chDaily"></ul>
     <div class="ch-head"><h3 data-i18n="chCareerU">Desbloqueios</h3></div>
     <ul class="ch-list" id="chCareer"></ul>
+    </div>
   </section>
 
   <section class="card wide" id="scr-arsenal" hidden>
@@ -371,11 +377,6 @@ html.touch-boot .boot { display: grid; }
   </section>
 
   <!-- Rovex Pass (04/11): so itens do jogo, em src/passview.js -->
-  <section class="card wide" id="scr-pass" hidden>
-    <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="passTitle">Rovex Pass</h2></header>
-    <div id="passBody"></div>
-  </section>
-
   <!-- loja (03/11): vitrine estilo Fortnite, itens em previa (src/shop.js). Icone de fechar: Material Icons (Apache 2.0) -->
   <section class="card wide shop-card" id="scr-shop" hidden>
     <header class="card-head"><button class="back" data-go="home" data-i18n-aria="back" aria-label="Back">&larr;</button><h2 data-i18n="shop">Loja</h2><div class="zbal shop-zbal" id="shopBal" role="group" hidden></div><button class="shop-addz" id="shopBuyZ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button></header>
@@ -509,6 +510,8 @@ html.touch-boot .boot { display: grid; }
   <div class="ammo-fx" id="ammoFx" aria-hidden="true"><i class="af-fire"></i><i class="af-trace"></i><i class="af-boom"></i><b class="af-txt" id="afTxt"></b></div>
   <!-- escolta: caminho do bonde com os pontos de controle, quem esta no circulo e o estado -->
   <div class="esc-bar" id="escBar" hidden><div class="eb-track"><i class="eb-fill" id="ebFill"></i><span id="ebCps"></span><b class="eb-tram" id="ebTram"></b></div><p class="eb-st"><span class="eb-n red" id="ebRed">0</span><em id="ebState"></em><span class="eb-n blue" id="ebBlue">0</span></p><p class="eb-role" id="ebRole"></p></div>
+  <!-- dominacao (08/11, pedido dele): dentro da zona, a letra vem pra ca e a barra mostra a captura -->
+  <div class="dom-cap" id="domCap" hidden><span class="dc-pin" id="dcPin" aria-hidden="true"></span><div class="dc-body"><div class="dc-track"><i id="dcFill"></i></div><small id="dcState" aria-live="polite"></small></div></div>
   <div class="chute-canopy" aria-hidden="true"><svg viewBox="0 0 400 90" preserveAspectRatio="none"><path d="M0 0H400V40Q375 70 350 40Q325 70 300 40Q275 70 250 40Q225 70 200 40Q175 70 150 40Q125 70 100 40Q75 70 50 40Q25 70 0 40Z" fill="#a83a2c" stroke="#141210" stroke-width="5"/><path d="M50 0V40M100 0V40M150 0V40M200 0V40M250 0V40M300 0V40M350 0V40" stroke="#ece9e1" stroke-width="22" opacity=".9"/><path d="M0 0H400V40Q375 70 350 40Q325 70 300 40Q275 70 250 40Q225 70 200 40Q175 70 150 40Q125 70 100 40Q75 70 50 40Q25 70 0 40Z" fill="none" stroke="#141210" stroke-width="5"/></svg><i class="cord l"></i><i class="cord r"></i></div>
   <div class="chute-hud" id="chuteHud" hidden><b id="chuteAlt">0 m</b><span id="chuteTxt"></span></div>
   <div class="xp-chip" id="xpChip" hidden aria-live="off"><span class="c">2x</span>XP<span class="t"></span></div>
@@ -574,7 +577,7 @@ html.touch-boot .boot { display: grid; }
 <div id="hudEdit" hidden>
   <div class="he-bar">
     <b data-i18n="hudEdit">Ajustar HUD e botões</b>
-    <label><span data-i18n="heSize">Tamanho</span><input type="range" id="heScale" min="0.7" max="1.4" step="0.05"></label>
+    <label><span data-i18n="heSize">Tamanho</span><input type="range" id="heScale" min="0.5" max="1.4" step="0.05"></label>
     <label><span data-i18n="heAlpha">Opacidade</span><input type="range" id="heAlpha" min="0.3" max="1" step="0.05"></label>
     <button id="heReset" data-i18n="heReset">Restaurar</button>
     <button id="heSave" class="he-save" data-i18n="heSave">Salvar</button>
@@ -617,6 +620,7 @@ html.touch-boot .boot { display: grid; }
     <button class="big" id="resume" data-i18n="resume">Voltar pro tiroteio</button>
     <button class="plain" id="pauseSmith" data-i18n="lbSmith">Montar arma</button>
     <button class="plain" id="pausePocket" data-i18n="pocket">Bolso</button>
+    <button class="plain" id="pauseMatch" data-i18n="mvBtn" hidden>Alterar partida</button>
     <button class="plain" id="pauseTeam" data-i18n="teamSwapBtn" hidden>Trocar de time</button>
     <button class="plain" id="pauseHud" data-i18n="hudEdit" hidden>Ajustar HUD e botões</button>
     <button class="plain" id="pauseFs" data-i18n="fsOn" hidden>Tela cheia</button>
@@ -646,6 +650,7 @@ html.touch-boot .boot { display: grid; }
     <div class="end-cols">
       <section class="end-panel">
         <h3 data-i18n="endCast">Placar final</h3>
+        <div class="end-me" id="endMe" hidden></div>
         <div class="end-board" id="endBoard"></div>
       </section>
       <section class="end-panel end-prog" aria-labelledby="endProgTitle">

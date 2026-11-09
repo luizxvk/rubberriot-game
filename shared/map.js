@@ -1010,10 +1010,13 @@ function docas() {
 // (raio 0,62 da largura, altura 1,05); mesa e paredao = as 3 camadas do desenho (paredao afina so na espessura); pedra = dentro do icosaedro
 export const ROOF_EAVE = 0.35; // beiral do telhado de duas aguas (o desenho do Blender usa o mesmo)
 const SHAPE_TIERS = {
+  // chafariz redondo: bacia em octogono dentro do circulo + a coluna do meio (08/11: a coluna nao tinha corpo)
+  fountain: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92], [1, 2.2, 0.15]],
+  cactus: [[0, 1, 1], [0.36, 0.66, 2, 0.5]], // 08/11: os bracos tambem batem
   dune: [[0, 0.35, 0.82], [0.35, 0.7, 0.65], [0.7, 0.95, 0.37]],
   mesa: [[0, 1 / 3, 1], [1 / 3, 2 / 3, 0.93], [2 / 3, 1, 0.86]],
   cliff: [[0, 1 / 3, 1], [1 / 3, 2 / 3, 0.92], [2 / 3, 1, 0.84]],
-  rock: [[0, 0.9, 0.56]],
+  rock: [[0, 0.9, 0.56], [0, 0.5, 0.88, 0.36], [0, 0.5, 0.36, 0.88]], // 08/11: a metade de baixo, a mais larga, acompanha o desenho
   // cilindro em pe (caixa d'agua, silo): 3 caixas cruzadas, todas dentro do circulo (quina a quina = octogono)
   tank: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92]],
   silo: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92]],
@@ -1107,12 +1110,239 @@ function deserto() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda };
+// ---------- bairros grandes pra Dominacao e Bandeira (08/11, pedido dele) ----------
+// Quarteiroes entre ruas, com becos entre os predios, pracas abertas e casas que da pra entrar. Tudo sorteado com semente fixa (servidor e navegador
+// montam igual) e colocado duas vezes, no ponto e no oposto em volta do centro: nenhum lado leva vantagem.
+function cityMap(id, A, c) {
+  const { boxes, box, stairs, walls, walkIn } = builder(A);
+  walls(10);
+  let seed = c.seed; const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const flip = (d) => (d[0] === '+' ? '-' : '+') + d[1], twin = (fn) => { fn(1); fn(-1); };
+  const baseZ = A - 11, baseR = [0, -baseZ, 17, 10], open = [...c.open, baseR], allOpen = open.flatMap(R => [R, [-R[0], -R[1], R[2], R[3]]]);
+  const hit = (R, x, z, w, d, pad) => Math.abs(x - R[0]) < R[2] + w / 2 + pad && Math.abs(z - R[1]) < R[3] + d / 2 + pad;
+  const lines = [], solid = [], reserve = (x, z, w, d) => { solid.push([x, z, w, d], [-x, -z, w, d]); };
+  const free = (x, z, w, d, pad) => solid.every(o => Math.abs(o[0] - x) > (o[2] + w) / 2 + pad || Math.abs(o[1] - z) > (o[3] + d) / 2 + pad);
+  const sw = c.sw;
+  const bound = (L, i) => [i === 0 ? -A + 0.9 : L[i - 1] + sw / 2, i === L.length ? A - 0.9 : L[i] - sw / 2];
+  for (let i = 0; i <= c.xs.length; i++) for (let j = 0; j <= c.zs.length; j++) {
+    const [x0, x1] = bound(c.xs, i), [z0, z1] = bound(c.zs, j), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    if (cz > 1e-6 || (Math.abs(cz) < 1e-6 && cx >= -1e-6)) continue; // a outra metade sai no espelho
+    const alongX = x1 - x0 >= z1 - z0, a0 = alongX ? x0 : z0, a1 = alongX ? x1 : z1, b0 = alongX ? z0 : x0, b1 = alongX ? z1 : x1, D = b1 - b0;
+    const rows = D >= 21 ? 2 : 1;
+    for (let r = 0; r < rows; r++) {
+      const depth = Math.min(c.depth || 12, rows === 2 ? (D - 2.8) / 2 : D - 0.4);
+      let p = a0 + 0.2, prev = null;
+      while (p < a1 - 5.5) {
+        let len = Math.min(13, 8 + rng() * 5.5); if (a1 - p - len < 6) len = Math.min(14, a1 - p - 0.2);
+        const u = p + len / 2, across = rows === 2 ? (r === 0 ? b0 + depth / 2 + 0.2 : b1 - depth / 2 - 0.2) : (b0 + b1) / 2;
+        p += len + (rng() < 0.35 ? 3.6 : 2.5); // beco entre os predios (de 2,5 a 3,6 m: passa gente, nao passa carro)
+        const x = alongX ? u : across, z = alongX ? across : u, w = alongX ? len : depth, d = alongX ? depth : len;
+        const roll = rng(), two = rng(), hr = rng(), peak = rng(), colI = Math.floor(rng() * c.cols.length), sd = Math.floor(rng() * 90);
+        if (Math.min(w, d) < 5.5 || allOpen.some(R => hit(R, x, z, w, d, 1.2))) { prev = null; continue; }
+        reserve(x, z, w, d);
+        const isWalk = roll < c.walk && Math.min(w, d) >= 7.5 && Math.max(w, d) <= 14.2, top = isWalk ? (Math.min(w, d) >= 9 && two < c.two ? 2 : 1) * 3.4 : c.h0 + hr * c.h1;
+        if (prev && u - len / 2 - prev.end < 4.5) { // o beco entre este predio e o anterior: varal no alto (so desenho) e tralha encostada numa parede, sem fechar a passagem
+          const g0 = prev.end, g1 = u - len / 2, y = Math.min(prev.top, top) - 0.8, dress = rng(), side = rng() < 0.5 ? -1 : 1, off = (rng() * 2 - 1) * (depth / 2 - 1.2), kind = c.alley[Math.floor(rng() * c.alley.length)];
+          if (y >= 2.7 && dress < 0.75) { const L = alongX ? [g0 - 0.1, y, across, g1 + 0.1, y, across] : [across, y, g0 - 0.1, across, y, g1 + 0.1]; lines.push(L, L.map((v, i) => (i % 3 === 1 ? v : -v))); }
+          if (g1 - g0 > 3 && dress > 0.3) { const mid = (g0 + g1) / 2 + side * ((g1 - g0) / 2 - 0.75), ax = alongX ? mid : across + off, az = alongX ? across + off : mid; if (free(ax, az, 1.2, 1.2, 0.05) && Math.hypot(Math.abs(ax), Math.abs(az) - (A - 12)) > 18) { reserve(ax, az, 1.2, 1.2); twin(s => box(s * ax, s * az, 1.2, 1.2, kind[1], 0, kind[0])); } }
+        }
+        prev = { end: u + len / 2, top };
+        if (isWalk) {
+          const axis = alongX ? 'z' : 'x'; let sg = rows === 2 ? (r === 0 ? '-' : '+') : two < 0.5 ? '-' : '+';
+          const front = (axis === 'x' ? x : z) + (sg === '+' ? 1 : -1) * ((axis === 'x' ? w : d) / 2 + 2); if (Math.abs(front) > A - 2) sg = sg === '+' ? '-' : '+'; // nunca de cara pro muro da borda
+          const o = { floors: Math.min(w, d) >= 9 && two < c.two ? 2 : 1, col: c.cols[colI] };
+          twin(s => walkIn(s * x, s * z, w, d, s > 0 ? sg + axis : flip(sg + axis), o));
+        } else {
+          const h = c.h0 + hr * c.h1;
+          twin(s => box(s * x, s * z, w, d, h, 0, 'house', { roof: peak < 0.55 ? 'peak' : 'flat', seed: sd + (s > 0 ? 0 : 7) }));
+        }
+      }
+    }
+  }
+  // base de cada time: fundo com casa na cor do time e barricadas (o espelho da a do outro lado)
+  twin(s => {
+    const team = s < 0 ? 'red' : 'blue';
+    box(0, s * (A - 3.2), 24, 3.6, 9, 0, 'house', { team, roof: 'flat', seed: 11 });
+    for (const x of [-13, 13]) box(x, s * (A - 5.5), 6, 6, 6.5, 0, 'house', { team, roof: 'peak', seed: 12 + (x > 0 ? 1 : 0) });
+  });
+  reserve(0, -(A - 3.2), 24, 3.6); for (const x of [-13, 13]) reserve(x, -(A - 5.5), 6, 6);
+  // mirantes: plataforma alta com escada, um por praca lateral (e o do outro lado)
+  for (const [x, z, sx] of c.towers) {
+    twin(s => {
+      box(s * x, s * z, 7, 7, 0.5, 3.5, 'platform');
+      for (const [px, pz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) box(s * x + px, s * z + pz, 0.6, 0.6, 3.5, 0, 'pillar');
+      stairs(s * (x + sx * 8.75), s * (z + 2), -s * sx, 0, 2.4, 7, 0.5, 0.75);
+    });
+    reserve(x, z, 7, 7); reserve(x + sx * 6.1, z + 2, 5.3, 2.4);
+  }
+  const spawnSpots = [-14, -8, -3, 3, 8, 14].flatMap(x => [[x, -(A - 16), 4.6], [x, A - 16, 4.6]]).concat([[-12, -(A - 12), 4.6], [12, -(A - 12), 4.6], [-12, A - 12, 4.6], [12, A - 12, 4.6]]);
+  const zones = c.zones, keep = (x, z) => [...zones.flatMap(q => [[q.pos[0], q.pos[2], q.r + 2.2], [-q.pos[0], -q.pos[2], q.r + 2.2]]), [0, -baseZ, 5], [0, baseZ, 5], ...spawnSpots].every(([a, b, r]) => Math.hypot(x - a, z - b) > r);
+  c.center?.({ box, stairs, twin, reserve });
+  // cobertura e enfeite nas pracas, sempre em par
+  for (const R of open) for (let k = 0; k < c.cover; k++) {
+    const x = R[0] + (rng() * 2 - 1) * (R[2] - 1.5), z = R[1] + (rng() * 2 - 1) * (R[3] - 1.5), t = c.props[Math.floor(rng() * c.props.length)], flipL = rng() < 0.5;
+    const [w0, d0] = t[1], h = t[2], w = flipL ? d0 : w0, d = flipL ? w0 : d0;
+    if (!keep(x, z) || !free(x, z, w, d, 1.9)) continue;
+    reserve(x, z, w, d);
+    twin(s => box(s * x, s * z, w, d, h, 0, t[0], t[3] ? { seed: k + (s > 0 ? 0 : 3) } : {}));
+  }
+  // contorno das pracas: barracas e bancos encostados na beirada, nunca na boca de uma rua
+  const nearStreet = (L, v) => L.some(q => Math.abs(q - v) < sw / 2 + 2.2);
+  for (const R of c.open) for (const sd of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const horiz = sd[1] !== 0, span = horiz ? R[2] : R[3];
+    for (let u = -span + 2; u < span - 1; u += c.ringStep) {
+      const t = c.ring[Math.floor(rng() * c.ring.length)], [L0, W0] = t[1], x = horiz ? R[0] + u : R[0] + sd[0] * (R[2] - W0 / 2 - 0.5), z = horiz ? R[1] + sd[1] * (R[3] - W0 / 2 - 0.5) : R[1] + u, w = horiz ? L0 : W0, d = horiz ? W0 : L0;
+      if (nearStreet(c.xs, x) || nearStreet(c.zs, z) || !keep(x, z) || !free(x, z, w, d, 1.1)) continue;
+      reserve(x, z, w, d); twin(s => box(s * x, s * z, w, d, t[2], 0, t[0]));
+    }
+  }
+  // carros e caminhao (modelos do Tripo) estacionados nas ruas largas, encostados na calcada
+  if (c.park) for (const x of c.xs) for (let zz = -A + 12; zz < -1; zz += c.park) {
+    const go = rng(), side = rng() < 0.5 ? -1 : 1, big = rng() < 0.2, W = big ? 2.7 : 2.4, Ln = big ? 5.1 : 4.6, H = big ? 2.5 : 2.2, sd = Math.floor(rng() * 40), px = x + side * (sw / 2 - W / 2 - 0.1);
+    if (go > 0.6 || c.zs.some(v => Math.abs(v - zz) < sw / 2 + 3.4) || !keep(px, zz) || !free(px, zz, W, Ln, 0.05)) continue;
+    reserve(px, zz, W, Ln); twin(s => box(s * px, s * zz, W, Ln, H, 0, big ? 'truck' : 'car', { seed: sd + (s > 0 ? 0 : 1) }));
+  }
+  // lampioes nas quinas das pracas
+  for (const R of c.open) for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const x = R[0] + a * (R[2] - 1), z = R[1] + b * (R[3] - 1);
+    if (!keep(x, z) || !free(x, z, 0.4, 0.4, 0.7)) continue;
+    reserve(x, z, 0.4, 0.4); twin(s => box(s * x, s * z, 0.4, 0.4, 4.2, 0, 'lamp'));
+  }
+  // moveis de rua nas esquinas: hidrante, correio, lixeira, coluna de cartazes, relogio
+  for (const x of c.xs) for (const z of c.zs) {
+    if (z > 0) continue;
+    for (let n = 0; n < 2; n++) {
+      const a = rng() < 0.5 ? -1 : 1, b = rng() < 0.5 ? -1 : 1, t = STREET_KIT[Math.floor(rng() * STREET_KIT.length)], px = x + a * (sw / 2 - 0.55), pz = z + b * (sw / 2 - 0.55);
+      if (!keep(px, pz) || !free(px, pz, t[1], t[1], 0.5)) continue;
+      reserve(px, pz, t[1], t[1]); twin(s => box(s * px, s * pz, t[1], t[1], t[2], 0, t[0]));
+    }
+  }
+  const clearAt = (x, z) => free(x, z, 1.6, 1.6, 0.4);
+  const cross = []; for (const x of c.xs) for (const z of c.zs) if (clearAt(x, z)) cross.push([x, z]);
+  const line = (sg) => [-14, -8, -3, 3, 8, 14].map(x => [x, sg * (A - 16)]).concat([[-12, sg * (A - 12)], [12, sg * (A - 12)]]);
+  return {
+    id, arena: A, boxes, theme: id,
+    roads: c.xs.map(x => [sw, A * 2, x, 0]), deco: { lines },
+    spawns: { red: line(-1), blue: line(1), ffa: cross },
+    flagBase: { red: [0, 0, -baseZ], blue: [0, 0, baseZ] },
+    zones,
+    pickups: [
+      ...c.towers.flatMap(([x, z]) => [{ kind: 'wpn', wpn: 'sniper', pos: [x, 4, z] }, { kind: 'wpn', wpn: 'sniper', pos: [-x, 4, -z] }]),
+      ...zones.filter(q => q.id !== 'B').flatMap(q => [{ kind: 'hp', pos: [q.pos[0] + q.r + 1.5, q.pos[1], q.pos[2]] }]),
+      ...cross.filter((_, i) => i % 5 === 0).slice(0, 6).map(([x, z]) => ({ kind: 'hp', pos: [x, 0, z] })),
+      ...cross.filter((_, i) => i % 7 === 3).slice(0, 4).map(([x, z], i) => ({ kind: 'wpn', wpn: i % 2 ? 'rifle' : 'shotgun', pos: [x, 0, z] })),
+    ],
+  };
+}
+const PROP_MIX = [['crate', [2.2, 2.2, 1.6], 1.6], ['crate', [4, 1.3, 1.4], 1.4], ['bench', [3.2, 1, 0.8], 0.8], ['hedge', [5, 1, 1.15], 1.15], ['dumpster', [2.6, 1.5, 1.5], 1.5], ['stall', [3.2, 1.6, 2.5], 2.5], ['kiosk', [2.6, 2.2, 2.7], 2.7], ['cart', [2, 1.2, 1.6], 1.6], ['car', [2.4, 4.6, 2.2], 2.2, 1], ['truck', [2.7, 5.1, 2.5], 2.5, 1]];
+const STREET_KIT = [['hydrant', 0.5, 0.9], ['mailbox', 0.7, 1.5], ['trashcan', 0.7, 1], ['poster', 1.2, 3], ['streetclock', 0.5, 4.6]];
+const ALLEY_KIT = [['crate', 1.2], ['trashcan', 1], ['barrel', 1.4], ['dumpster', 1.3]];
+// Beco do Nanquim: miolo apertado de becos, tres pracinhas
+function becos() {
+  return cityMap('becos', 70, { seed: 4021, sw: 4, depth: 14, xs: [-52, -30, -9, 9, 30, 52], zs: [-46, -28, -9, 9, 28, 46], walk: 0.5, two: 0.5, h0: 5, h1: 5, cols: [0xe6d6b4, 0xd8c4a0, 0xcfc8b4, 0xe3c8a6], cover: 14, props: PROP_MIX, alley: ALLEY_KIT, ringStep: 5, ring: [['stall', [3.2, 1.6], 2.5], ['crate', [2.2, 1.3], 1.4], ['bench', [3.2, 1], 0.8], ['cart', [2, 1.2], 1.6]],
+    open: [[0, 0, 13, 13], [-41, 0, 11, 9.5]], zones: [{ id: 'A', pos: [-41, 0, 0], r: 5 }, { id: 'B', pos: [0, 0, 0], r: 5 }, { id: 'C', pos: [41, 0, 0], r: 5 }], towers: [[-41, -6.5, 1]],
+    center: ({ box, twin, reserve }) => { for (const [x, z] of [[9, 9], [-9, 9]]) { twin(s => box(s * x, s * z, 5, 5, 1.1, 0, 'fountain')); reserve(x, z, 5, 5); } } });
+}
+// Feira do Pneu: ruas largas, mercado coberto no centro e barracas nas pracas
+function feira() {
+  return cityMap('feira', 76, { seed: 9173, sw: 6.5, depth: 14, xs: [-58, -35, -13, 13, 35, 58], zs: [-52, -33, -13, 13, 33, 52], walk: 0.36, two: 0.4, h0: 4.5, h1: 4, cols: [0xe9c9a4, 0xe3d3a8, 0xd2c6a6, 0xe0b890], cover: 20, alley: ALLEY_KIT, props: [['stall', [3.2, 1.6, 2.5], 2.5], ['stall', [3.2, 1.6, 2.5], 2.5], ['cart', [2, 1.2, 1.6], 1.6], ['kiosk', [2.6, 2.2, 2.7], 2.7], ['table', [3, 1.1, 0.95], 0.95], ['crate', [2.2, 2.2, 1.6], 1.6], ['barrel', [1.2, 1.2, 1.4], 1.4], ['bench', [3.2, 1, 0.8], 0.8], ['car', [2.4, 4.6, 2.2], 2.2, 1], ['truck', [2.7, 5.1, 2.5], 2.5, 1]], park: 9, ringStep: 4.6, ring: [['stall', [3.2, 1.6], 2.5], ['stall', [3.2, 1.6], 2.5], ['cart', [2, 1.2], 1.6], ['kiosk', [2.6, 2.2], 2.7]],
+    open: [[0, 0, 14.5, 14.5], [-46.5, 13, 12, 10.5]], zones: [{ id: 'A', pos: [-46.5, 0, 13], r: 5.5 }, { id: 'B', pos: [0, 0, 0], r: 5.5 }, { id: 'C', pos: [46.5, 0, -13], r: 5.5 }], towers: [[-46.5, 6.5, 1]],
+    center: ({ box, reserve }) => { // mercado coberto: telhado sobre colunas, aberto dos quatro lados
+      for (const [x, z] of [[-8, -8], [8, -8], [-8, 8], [8, 8], [-8, 0], [8, 0], [0, -8], [0, 8]]) { box(x, z, 1.1, 1.1, 5, 0, 'column'); reserve(x / 2 + (x < 0 ? -0.1 : 0), z / 2 + 0.03, 0.01, 0.01); }
+      box(0, 0, 19, 19, 0.3, 5, 'hroof');
+      for (const [x, z] of [[-8, -8], [8, -8], [-8, 8], [8, 8], [-8, 0], [8, 0], [0, -8], [0, 8]]) reserve(x, z, 1.1, 1.1);
+    } });
+}
+// Largo da Sirene: predios altos, tres largos em diagonal e o do meio elevado
+function largo() {
+  return cityMap('largo', 80, { seed: 2711, sw: 5.5, depth: 14, xs: [-60, -38, -15, 15, 38, 60], zs: [-58, -38, -15, 15, 38, 58], walk: 0.26, two: 0.5, h0: 7, h1: 7, cols: [0xdcd6c8, 0xc9cdb4, 0xbfc8cc, 0xd9c7a8], cover: 16, props: PROP_MIX, alley: ALLEY_KIT, park: 12, ringStep: 5.5, ring: [['bench', [3.2, 1], 0.8], ['hedge', [4.4, 1], 1.15], ['kiosk', [2.6, 2.2], 2.7], ['stall', [3.2, 1.6], 2.5]],
+    open: [[0, 0, 13.5, 13.5], [-49, -26.5, 10, 11]], zones: [{ id: 'A', pos: [-49, 0, -26.5], r: 5 }, { id: 'B', pos: [0, 1.5, 0], r: 5 }, { id: 'C', pos: [49, 0, 26.5], r: 5 }], towers: [[-49, -33, 1]],
+    center: ({ box, reserve }) => {
+      box(0, 0, 12, 12, 1.5, 0, 'platform');
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let i = 0; i < 3; i++) { const off = 3 - i; box(dx * (6 + off * 0.75 - 0.375), dz * (6 + off * 0.75 - 0.375), dx ? 0.75 : 4, dz ? 0.75 : 4, (i + 1) * 0.5, 0, 'step'); }
+      reserve(0, 0, 16.5, 16.5);
+    } });
+}
+
+// ---------- Avenida do Cortejo (so Escolta, 08/11, pedido dele) ----------
+// A mais movimentada: bulevares retos com lojas de entrar dos dois lados, ruas de servico por tras pra flanquear, barracas, bancos e canteiros na calcada,
+// passarela sobre o trilho e duas pracas nos pontos de controle. Reto de proposito: a Ladeira e o Vale sao zigue-zague e rampa.
+function cortejo() {
+  const A = 78, { boxes, box, stairs, walls, walkIn } = builder(A);
+  walls(10);
+  const track = [[-58, -68], [-58, -36], [-20, -36], [-20, -8], [34, -8], [34, 24], [-14, 24], [-14, 54], [46, 54], [46, 68]];
+  let seed = 6151; const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const dTrack = (x, z) => { let m = 1e9; for (let i = 1; i < track.length; i++) { const [ax, az] = track[i - 1], [bx, bz] = track[i], vx = bx - ax, vz = bz - az, L = vx * vx + vz * vz, k = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L)); m = Math.min(m, Math.hypot(x - ax - vx * k, z - az - vz * k)); } return m; };
+  const clear = (x, z, w, d, gap) => [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].every(([a, b]) => dTrack(x + a * w / 2, z + b * d / 2) > gap);
+  const solid = [], free = (x, z, w, d, pad = 1) => Math.abs(x) + w / 2 < A - 1.5 && Math.abs(z) + d / 2 < A - 1.5 && solid.every(o => Math.abs(o[0] - x) > (o[2] + w) / 2 + pad || Math.abs(o[1] - z) > (o[3] + d) / 2 + pad);
+  const reserve = (x, z, w, d) => solid.push([x, z, w, d]);
+  // estacao de cada ponta, as duas pracas e a passarela guardam o lugar antes das lojas
+  reserve(-58, -66, 30, 20); reserve(46, 66, 30, 20);
+  // praca do 1o ponto: monumento, canteiros e bancos
+  reserve(3, -23, 24, 18); box(3, -24, 4, 4, 9, 0, 'tower');
+  for (const sx of [-1, 1]) { box(3 + sx * 8, -27, 1, 7, 1.15, 0, 'hedge'); box(3 + sx * 8, -18, 1, 3.4, 0.8, 0, 'bench'); box(3 + sx * 4.5, -17, 0.4, 0.4, 4.2, 0, 'lamp'); }
+  // praca do 2o ponto: coreto de musica com escada e barracas em volta
+  reserve(-34, 38, 22, 22); box(-34, 38, 8, 8, 0.5, 0, 'coreto'); for (const [x, z] of [[-3.4, -3.4], [3.4, -3.4], [-3.4, 3.4], [3.4, 3.4]]) box(-34 + x, 38 + z, 0.3, 0.3, 3.5, 0.5, 'post'); box(-34, 38, 9, 9, 0.4, 4, 'coretoroof');
+  for (const [x, z] of [[-44, 30], [-24, 30], [-44, 46], [-24, 46]]) { box(x, z, 3.2, 1.6, 2.5, 0, 'stall'); box(x, z + 2, 1.2, 1.2, 1.4, 0, 'barrel'); }
+  box(3, -32, 5, 5, 1.1, 0, 'fountain'); box(-34, 26.5, 2.6, 2.2, 2.7, 0, 'kiosk');
+  // passarela sobre o trilho
+  reserve(34, 8, 42, 5); box(34, 8, 16, 3, 0.4, 5, 'bridge'); for (const x of [27, 41]) box(x, 8, 0.6, 2.4, 5, 0, 'pillar'); stairs(18, 8, 1, 0, 2.6, 10, 0.5, 0.8); stairs(50, 8, -1, 0, 2.6, 10, 0.5, 0.8);
+  const COLS = [0xe9d3a8, 0xe3c3a6, 0xc9d0bc, 0xbfc8cc, 0xe8d69a, 0xd9b9a0];
+  const T = []; for (let i = 1; i < track.length; i++) T.push([track[i - 1], track[i]]);
+  let n = 0;
+  for (const [a, b] of T) {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, alongX = Math.abs(ux) > 0.5;
+    for (const side of [-1, 1]) {
+      // calcada: lojas coladas na avenida, porta virada pro trilho
+      for (let s = 2; s < L - 2;) {
+        const len = 8.5 + rng() * 2.5, depth = 9, off = 6.6 + depth / 2, x = a[0] + ux * (s + len / 2) + uz * side * off, z = a[1] + uz * (s + len / 2) - ux * side * off;
+        const W = alongX ? len : depth, D = alongX ? depth : len, nx = alongX ? 0 : (uz * side > 0 ? 1 : -1), nz = alongX ? (-ux * side > 0 ? 1 : -1) : 0, two = rng(), kindR = rng();
+        s += len + (rng() < 0.3 ? 4.4 : 1.5); // beco de vez em quando: atalho pra rua de tras
+        if (!clear(x, z, W, D, 6.2) || !free(x, z, W, D, 1.2)) continue;
+        reserve(x, z, W, D);
+        if (kindR < 0.72) walkIn(x, z, W, D, nz ? (nz > 0 ? '-z' : '+z') : (nx > 0 ? '-x' : '+x'), { floors: two < 0.6 ? 2 : 1, col: COLS[n++ % COLS.length] });
+        else box(x, z, W, D, 5 + rng() * 4, 0, 'house', { roof: 'flat', seed: 200 + n++ });
+      }
+      // segunda fileira: predios altos, atras da rua de servico
+      for (let s = 2; s < L - 2;) {
+        const len = 10 + rng() * 4, depth = 10 + rng() * 3, off = 21 + depth / 2, x = a[0] + ux * (s + len / 2) + uz * side * off, z = a[1] + uz * (s + len / 2) - ux * side * off;
+        const W = alongX ? len : depth, D = alongX ? depth : len, h = 9 + rng() * 6, peak = rng();
+        s += len + 3.2;
+        if (!clear(x, z, W, D, 17) || !free(x, z, W, D, 2.8)) continue;
+        reserve(x, z, W, D); box(x, z, W, D, h, 0, 'house', { roof: peak < 0.4 ? 'peak' : 'flat', seed: 300 + n++ });
+      }
+    }
+  }
+  // o movimento da calcada: barracas, barris, bancos, canteiros, sempre fora do caminho do bonde
+  const PR = [['stall', 3.2, 1.6, 2.5], ['stall', 3.2, 1.6, 2.5], ['kiosk', 2.6, 2.2, 2.7], ['cart', 2, 1.2, 1.6], ['crate', 1.8, 1.8, 1.4], ['barrel', 1.2, 1.2, 1.4], ['bench', 3.2, 1, 0.8], ['hedge', 4, 1, 1.15], ['poster', 1.2, 1.2, 3], ['mailbox', 0.7, 0.7, 1.5], ['hydrant', 0.5, 0.5, 0.9], ['trashcan', 0.7, 0.7, 1], ['car', 4.6, 2.4, 2.2], ['car', 4.6, 2.4, 2.2], ['truck', 5.1, 2.7, 2.5], ['dumpster', 2.6, 1.5, 1.5]];
+  for (let k = 0; k < 260; k++) {
+    const [a, b] = T[Math.floor(rng() * T.length)], s = rng(), side = rng() < 0.5 ? -1 : 1, off = 3.6 + rng() * 1.6, L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, [kd, w0, d0, h] = PR[Math.floor(rng() * PR.length)], alongX = Math.abs(ux) > 0.5;
+    const x = a[0] + (b[0] - a[0]) * s + uz * side * off, z = a[1] + (b[1] - a[1]) * s - ux * side * off, W = alongX ? w0 : d0, D = alongX ? d0 : w0;
+    if (!clear(x, z, W, D, 3) || !free(x, z, W, D, 1.8)) continue;
+    reserve(x, z, W, D); box(x, z, W, D, h, 0, kd, kd === 'car' || kd === 'truck' ? { seed: k } : {});
+  }
+  for (const [a, b] of T) { const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L; for (let s = 6; s < L - 4; s += 13) for (const side of [-1, 1]) { const x = a[0] + ux * s + uz * side * 3.4, z = a[1] + uz * s - ux * side * 3.4; if (clear(x, z, 0.4, 0.4, 3) && free(x, z, 0.4, 0.4, 0.6)) { reserve(x, z, 0.4, 0.4); box(x, z, 0.4, 0.4, 4.2, 0, 'lamp'); } } }
+  // estacao (vermelho) e garagem (azul)
+  box(-58, -74.6, 22, 1.4, 7, 0, 'house', { team: 'red', roof: 'flat', seed: 21 }); box(46, 74.6, 22, 1.4, 7, 0, 'house', { team: 'blue', roof: 'flat', seed: 22 });
+  const sp = (i0, side) => { const out = []; for (let i = 0; i < 8; i++) { const t = track[i0], o = (i % 4 - 1.5) * 3, r = 5 + Math.floor(i / 4) * 3; out.push([t[0] + side * r, t[1] + o]); } return out; };
+  return {
+    id: 'cortejo', arena: A, boxes, theme: 'cortejo', track, checks: [0.36, 0.7],
+    spawns: { red: sp(0, 1), blue: sp(9, -1), ffa: [...sp(0, 1), ...sp(9, -1)] },
+    flagBase: { red: track[0].length ? [-58, 0, -68] : [0, 0, 0], blue: [46, 0, 68] },
+    zones: [{ id: 'A', pos: [-58, 0, -36], r: 5 }, { id: 'B', pos: [34, 0, 8], r: 5 }, { id: 'C', pos: [-14, 0, 54], r: 5 }],
+    pickups: [
+      { kind: 'hp', pos: [3, 0, -14] }, { kind: 'hp', pos: [-24, 0, 38] }, { kind: 'hp', pos: [34, 5.4, 8] }, { kind: 'hp', pos: [-40, 0, -36] }, { kind: 'hp', pos: [20, 0, 24] }, { kind: 'hp', pos: [14, 0, 54] },
+      { kind: 'wpn', wpn: 'sniper', pos: [34, 5.4, 8] }, { kind: 'wpn', wpn: 'shotgun', pos: [3, 0, -14] }, { kind: 'wpn', wpn: 'rifle', pos: [-34, 0.5, 38] },
+    ],
+  };
+}
+
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo };
 export const PVE_ONLY = ['tinteiro']; // Noite dos Borroes: so a noite usa (e a noite so usa ele)
 export const HEIST_ONLY = ['ferradura', 'moeda', 'docas']; // mapas de objetivo proprio (Cofre / Contrabando): fora da lista dos outros modos
 // Canyon Poeira (04/11): mapa grande so pra bandeira e dominacao (normal e blitz); nos outros modos nao entra
-export const BIG_OBJ_ONLY = ['deserto'], BIG_OBJ_MODES = ['ctf', 'dom']; // mapa feito pro Roube o Cofre (fora dele nao entra na lista)
-export const ESCORT_MAPS = ['bonde', 'apito']; // mapas com trilho (so a escolta usa)
+export const BIG_OBJ_ONLY = ['deserto', 'becos', 'feira', 'largo'], BIG_OBJ_MODES = ['ctf', 'dom']; // mapa feito pro Roube o Cofre (fora dele nao entra na lista)
+export const ESCORT_MAPS = ['bonde', 'apito', 'cortejo']; // mapas com trilho (so a escolta usa)
 // mapas que aparecem na escolha do lobby (a ilha e so do battle royale)
 export const PICK_MAPS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria'];
 export const MAP_IDS = Object.keys(BUILDERS);
@@ -1128,7 +1358,7 @@ export const BOMB_SITES = {
   ferradura: { A: [0, -2], B: [-12.5, 8] }, // cofre no fosso do subsolo
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
-const MINIGUN_AT = { moeda: [0, 0, -16], docas: [0, 0, 0], deserto: [0, 3.3, 0], ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+const MINIGUN_AT = { largo: [0, 1.5, 0], cortejo: [-34, 0.5, 34], moeda: [0, 0, -16], docas: [0, 0, 0], deserto: [0, 3.3, 0], ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 // mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
 // So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
 const MAP_PACE = { estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
@@ -1261,7 +1491,7 @@ function blockedAbove(boxes, pos, rad, height, newY) {
 }
 
 // peca redonda em pe (tanque, silo, tonel, pilar, poste, pedra): raio no chao; 0 = caixa comum
-const ROUND_BODY = { pillar: 1, post: 1, vat: 1, tank: 1, silo: 1, rock: 1.05, tree: 1, cactus: 1, dune: 1, barrel: 1, bollard: 1 };
+const ROUND_BODY = { trunk: 1, pillar: 1, post: 1, vat: 1, tank: 1, silo: 1, rock: 1.05, tree: 1, cactus: 1, dune: 1, barrel: 1, bollard: 1 };
 function roundR(b) { const k = ROUND_BODY[b.kind]; return k ? Math.min(b.max[0] - b.min[0], b.max[2] - b.min[2]) / 2 * k : 0; }
 function overlap(pos, rad, height, b) {
   const r = roundR(b);

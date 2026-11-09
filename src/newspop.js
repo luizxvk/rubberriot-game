@@ -80,7 +80,7 @@ export const newsOpen = () => !!pop() && !pop().hidden;
 function check() {
   let seen = ''; try { seen = localStorage.getItem(SEEN) || ''; } catch { /* */ }
   if (!me || seen === CAMPAIGN || newsOpen()) return;
-  if (!document.getElementById('menu')?.classList.contains('on') || document.pointerLockElement) return;
+  const mn = document.getElementById('menu'); if (!mn?.classList.contains('on') || mn.hidden || document.pointerLockElement) return; // 08/11: no celular nao tem pointer lock e o menu fica com .on escondido: abria por cima da partida
   openNews();
 }
 // 07/11 (bug: nao abria na 1a vez): com a sessao salva, o 'rovex-me' chegava ANTES deste init. Confere tambem sozinho

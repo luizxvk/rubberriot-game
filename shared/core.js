@@ -39,20 +39,20 @@ function segToBody(a, b, feet) {
   return best;
 }
 // mapa automatico (04/11): bandeira e dominacao sorteiam entre o mapa do modo, a Vila/Fronteira e o Canyon Poeira
-const AUTO_POOL = { ctf: ['fronteira', 'vila', 'deserto'], dom: ['vila', 'fronteira', 'deserto'] };
+const AUTO_POOL = { ctf: ['fronteira', 'vila', 'deserto', 'becos', 'feira', 'largo'], dom: ['vila', 'fronteira', 'deserto', 'becos', 'feira', 'largo'], escort: ['bonde', 'apito', 'cortejo'] };
 const autoMap = (mode) => { const L = AUTO_POOL[mode]; return L ? L[Math.floor(Math.random() * L.length)] : MODE_MAP[mode]; };
 // opcoes do host no lobby: em que modos a meta e o tempo valem (o resto tem regra propria)
 const PATHS_PER_TICK = 3;
 const GUN_DROP_T = 10;    // s que a arma largada fica no chao
 const TEAM_SWAP_CD = 360; // 6 min entre trocas de time no meio da partida
 const DOM_RATE = 0.25;    // pontos por segundo de cada zona da dominacao
-const SPAWN_PROT = 1.8;   // s de escudo ao nascer (04/11, pedido dele: era 3)
+const SPAWN_PROT = 2.8;   // s de escudo ao nascer (08/11, pedido dele: era 1,8)
 const AFK_PLAY = 120, AFK_LOBBY = 480; // s parado ate sair da sala
 const STREAK_GAP = 4; // s de folga entre uma sequencia acabar e a proxima poder entrar
 const BOT_YIELD = 8; // s que o bot espera com a sala livre quando um jogador tem sequencia guardada (vez dos jogadores, 03/11)
 export const LIMIT_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'bomb'];
 export const TIME_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'gungame', 'ctf', 'dom', 'infect'];
-export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
+export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto', 'becos', 'feira', 'largo']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
 // kit de sequencias do bot (03/11): uma de cada faixa, sorteada; as grandes novas entram aqui
 const BOT_BIG = ['plane', 'train', 'bomber', 'hand'];
 const BOT_KIT = [['uav', 'milk', 'talc'], ['anvil', 'rpg', 'blimp', 'anvline', 'sentry', 'sentry'], ['plane', 'train', 'blimp'], ['bomber', 'hand', 'nuke']];
@@ -163,7 +163,7 @@ export class Core {
     if (this.mode === 'br') brInit(this);
     this.esc = null; if (this.mode === 'escort') escInit(this);
     this.heist = null; if (this.mode === 'heist' || this.mode === 'smuggle') heistInit(this); // Contrabando (04/11): mesmo motor do Cofre
-    this.night = this.mode === 'heist' && this.tod === 'night'; // 07/11 (pedido dele): o host escolhe Dia ou Noite no lobby (linha Horario)
+    this.night = this.mode !== 'borroes' && this.tod === 'night'; // 07/11 (pedido dele): o host escolhe Dia ou Noite no lobby (linha Horario)
     if (this.bor) for (const p of [...this.players.values()]) if (p.mob) this.players.delete(p.id); // viloes da noite passada saem
     this.bor = null; if (this.mode === 'borroes') borInit(this);
     this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.talcs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; this.botBig = {}; fieldReset(this); strikeReset(this); this.rockets = [];
@@ -364,6 +364,35 @@ export class Core {
       if (b.ai) b.ai.path = null;
       this.event({ k: 'spawn', id: b.id, pos: b.pos, yaw: b.yaw, wpn: b.wpn, owned: [...b.owned], team: b.team });
     }
+  }
+
+  mvOpen(id, m) {
+    if (id !== this.hostId() || !this.useLobby || this.phase !== 'play' || this.over || this.ranked || this.mv || !m.cfg || typeof m.cfg !== 'object') return;
+    if ((this.mvCd || 0) > 0) { this.send(id, { t: 'ev', k: 'mvFail', n: Math.ceil(this.mvCd) }); return; }
+    const c = m.cfg, cfg = { mode: c.mode, map: c.map, bots: c.bots, difficulty: c.difficulty, limit: c.limit, time: c.time, mut: c.mut, tod: c.tod, ranked: false };
+    const need = [...this.players.values()].filter(p => !p.bot && !p.mob && p.id !== id).map(p => p.id);
+    if (!need.length) { this.mv = { cfg, host: id, need: new Set(), yes: new Set(), t: 0 }; this.mvApply(); return; } // sozinho na sala
+    this.mv = { cfg, host: id, need: new Set(need), yes: new Set(), t: MV_TIME };
+    this.event({ k: 'mv', st: 'open', host: id, need, yes: 0, secs: MV_TIME, cfg }); // 'secs': o campo 't' e o tipo da mensagem
+  }
+  mvCheck() { const V = this.mv; if (!V) return; if ([...V.need].every(i => V.yes.has(i))) this.mvApply(); else this.event({ k: 'mv', st: 'tally', yes: V.yes.size }); }
+  mvEnd(st, who) { this.mv = null; this.mvCd = MV_CD; this.event({ k: 'mv', st, who }); }
+  mvTick(dt) {
+    if ((this.mvCd || 0) > 0) this.mvCd -= dt;
+    const V = this.mv; if (!V) return;
+    if (this.phase !== 'play' || this.over || this.hostId() !== V.host) { this.mvEnd('cancel'); return; }
+    for (const i of [...V.need]) if (!this.players.has(i)) { V.need.delete(i); V.yes.delete(i); if (!V.need.size) { this.mvApply(); return; } this.mvCheck(); if (!this.mv) return; } // quem saiu nao conta
+    if ((V.t -= dt) <= 0) this.mvEnd('time');
+  }
+  // todos aprovaram: mesma rota do lobby (configura e conta 5 s), sem ninguem precisar marcar pronto de novo
+  mvApply() {
+    const V = this.mv; this.mv = null; this.mvCd = 0;
+    this.over = false; this.phase = 'lobby';
+    this.configure(V.cfg);
+    this.event({ k: 'mv', st: 'ok' });
+    this.event({ k: 'restart' });
+    for (const p of this.players.values()) p.lobbyReady = true;
+    this.phase = 'count'; this.countT = COUNTDOWN; this.lobbyT = 0;
   }
 
   // configuracao da sala (host no lobby). Refaz modo/mapa/times e a partida do zero; os humanos ficam.
@@ -642,7 +671,7 @@ export class Core {
     }
     let x = s[0], z = s[1];
     const jx = x + rnd(-0.8, 0.8), jz = z + rnd(-0.8, 0.8);
-    if (standable(this.M, jx, jz) && Math.abs(floorAt(this.M, jx, jz) - floorAt(this.M, x, z)) < 0.1) { x = jx; z = jz; }
+    if (!this.esc && standable(this.M, jx, jz) && Math.abs(floorAt(this.M, jx, jz) - floorAt(this.M, x, z)) < 0.1) { x = jx; z = jz; } // escolta: o ponto ja foi medido com folga, o sorteio empurrava pra parede
     [x, z] = this.freeSpot(p, x, z);
     const y = floorAt(this.M, x, z);
     p.pos = [x, y, z];
@@ -653,6 +682,7 @@ export class Core {
     { const bc = !this.bounce && this.mode !== 'br' && this.blimps.find(b => b.kind === 'beacon' && b.owner === p.id); if (bc) { p.pos = [bc.pos[0] + 0.6, bc.pos[1], bc.pos[2]]; this.event({ k: 'beaconSpawn', id: p.id, pos: bc.pos }); } } // sinalizador: renasce nele
     if (this.bounce) { p.pos[1] = y + BR.bounce.dropH; p.drop = 30; p.chute = false; p.air = true; p.dropAt = [x, z]; } // dropAt: o ponto espalhado sorteado (bot cai ali)
     p.hp = p.bot && !this.bor ? BOT_HP : 100; // noite: bot e parceiro, vida cheia
+    { const hk = EV(this.mut)?.hp; if (hk && !this.bor) p.hp = Math.round(p.hp * hk); } // evento Tanque/Casca de Ovo (08/11)
     p.alive = true; p.shieldT = 0; p.stimT = 0;
     p.flameFuel = GADGETS.gd_flame.fuel; p.ubShells = GADGETS.gd_shot.shells; p.ubT = 0; // gadget cheio ao nascer
     if (p.losBase) { p.los = p.losBase; p.losBase = null; this.event({ k: 'lo', id: p.id, los: p.los, tracer: p.tracer }); } // largou a arma pega do chao
@@ -726,13 +756,14 @@ export class Core {
       case 'toLobby': {
         if (!this.over || !this.useLobby || p.bot) break;
         p.endBack = true;
-        // 05/11: com o podio um so nao corta a danca dos outros; volta quando todos apertam ou no fim do tempo, sem depender do host
-        this.backLobby = [...this.players.values()].every(o => o.bot || o.endBack);
+        // 08/11 (pedido dele): podio sem volta automatica; quem aperta volta, quem quer fica no podio (o cliente segura o podio
+        // dele ate apertar ou o host comecar a proxima). A sala vai pro lobby no primeiro que voltar.
+        this.backLobby = true;
         this.event({ k: 'endBack', id, host: id === this.hostId() });
         break;
       }
       case 'dance': { // podio: so quem ficou entre os 3 dança, no maximo uma troca por 0,5 s
-        if (!this.over || !this.top3?.includes(id) || !DANCE_IDS.includes(m.d) || (p.danceAt ?? -9) + 0.5 > (this.clock || 0)) break;
+        if ((!this.over && this.phase === 'play') || !this.top3?.includes(id) || !DANCE_IDS.includes(m.d) || (p.danceAt ?? -9) + 0.5 > (this.clock || 0)) break;
         p.danceAt = this.clock || 0;
         this.event({ k: 'dance', id, d: m.d });
         break;
@@ -753,6 +784,15 @@ export class Core {
         break;
       }
       // host muda a partida no lobby (modo, mapa, bots, meta, tempo, pontaria): vale pra sala toda na hora
+      // alterar a partida em andamento (08/11, pedido dele): host propoe, TODOS os outros humanos precisam aprovar
+      case 'mvProp': this.mvOpen(id, m); break;
+      case 'mvVote': {
+        const V = this.mv; if (!V || !V.need.has(id)) break;
+        if (!m.yes) { this.mvEnd('no', id); break; }
+        V.yes.add(id); this.mvCheck();
+        break;
+      }
+      case 'mvCancel': if (this.mv && id === this.mv.host) this.mvEnd('cancel'); break;
       case 'cfg': {
         if (id !== this.hostId() || this.phase !== 'lobby') break;
         this.configure(m);
@@ -1703,6 +1743,9 @@ export class Core {
 
   end(winner) {
     if (this.over) return;
+    // partida de fundo do menu (08/11): nunca acaba. Antes a cada ~4 min um bot fechava 20 abates, a partida acabava e todo mundo
+    // congelava 27 s (com o balao parado no ceu) ate o reset. Agora so zera o placar e o relogio e segue rolando
+    if (this.endless) { for (const p of this.players.values()) { p.kills = 0; p.score = 0; } this.teamScore = { red: 0, blue: 0 }; this.time = Math.max(this.time, 300); return; }
     // 05/11 (pedido dele): camera da ultima morte -> podio dos 3 melhores -> sala com lobby volta sozinha e mostra o placar la; sala
     // sem lobby ainda mostra o placar antes da proxima
     this.over = true; this.overT = this.useLobby ? OVER_LOBBY : OVER_NEXT;
@@ -2220,6 +2263,7 @@ export class Core {
     this.pathBudget = PATHS_PER_TICK; // rotas novas por tick (espalha o custo: 15 bots refazendo juntos travava a sala)
     if (this.noises) for (const [id, n] of this.noises) if ((n.t -= dt) <= 0) this.noises.delete(id);
     this.clock = (this.clock || 0) + dt;
+    this.mvTick(dt);
     this.checkAfk();
     // bala flamejante: o dano do fogo entra em 4 pedacos (cada um vira 1 evento de dano)
     for (const p of this.players.values()) {
@@ -2231,6 +2275,9 @@ export class Core {
       if (p.burn && p.burn.n <= 0) p.burn = null;
     }
     // folego: vida volta sozinha depois de um tempo sem levar dano
+    { const E = EV(this.mut); if (E?.regen && !this.over) for (const p of this.players.values()) { // evento Pele de Elastico (08/11)
+      if (p.alive && !p.mob && p.hp < (p.maxHp || 100) && this.clock - (p.hurtAt ?? -99) >= (E.regenAfter || 2)) p.hp = Math.min(p.maxHp || 100, p.hp + E.regen * dt);
+    } }
     for (const p of this.players.values()) {
       if (!p.alive || !hasSkill(p, 'folego') || p.hp >= (p.maxHp || 100)) continue;
       if (this.clock - (p.hurtAt ?? -99) >= SKILLS.folego.after) p.hp = Math.min(p.maxHp || 100, p.hp + SKILLS.folego.regen * dt);
@@ -2239,7 +2286,7 @@ export class Core {
     if (this.over) {
       this.overT -= dt;
       // fim de partida: volta todo mundo pro lobby (pronto zerado) quando acaba o tempo do podio ou todo mundo apertou "Voltar pro lobby"
-      if (this.overT <= 0 || this.backLobby) {
+      if ((this.overT <= 0 && !this.useLobby) || this.backLobby) { // sala com lobby: so volta quando alguem aperta (08/11)
         this.backLobby = false; for (const p of this.players.values()) p.endBack = false;
         if (this.useLobby) this.phase = 'lobby'; else if (this.autoNext) this.nextQuick(); else this.reset();
         this.over = false;
@@ -2432,6 +2479,7 @@ function cleanLoadouts(los) {
 }
 
 const COUNTDOWN = 5;
+const MV_TIME = 20, MV_CD = 20; // votacao pra alterar a partida: tempo pra responder e espera depois de uma recusa
 const COUNT_IN = 3.5;   // contagem 3, 2, 1 antes de soltar todo mundo
 const LOAD_WAIT = 15;   // espera maxima pelo carregamento do mais lento
 const AUTO_SPAWN = 5;

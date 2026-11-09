@@ -9,3 +9,4 @@ tools/blender/*.blend1
 tools/blender/glb-raw/
 tools/blender/out/
 tools/blender/__pycache__/
+.assets-anteriores/

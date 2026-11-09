@@ -109,6 +109,17 @@ function trackOrBack(M, d) { // antes do comeco do trilho: segue reto pra tras d
   const p = trackAt(M, 0);
   return { x: p.x - Math.sin(p.yaw) * -d, z: p.z - Math.cos(p.yaw) * -d, yaw: p.yaw };
 }
+// 08/11 (pedido dele: nascendo no muro e em cima do tunel): a grade do nav conta topo de muro e de tunel como chao. Ponto valido = com folga do
+// corpo em volta, sem caixa no volume da pessoa, na altura do trilho ali perto e sem beirada alta do lado
+const clearOf = (M, x, y, z, r = 0.55, h = 1.75) => !M.boxes.some(b => x + r > b.min[0] && x - r < b.max[0] && z + r > b.min[2] && z - r < b.max[2] && y + 0.15 < b.max[1] && y + h > b.min[1]);
+function okSpot(M, x, z, d) {
+  if (!standable(M, x, z)) return false;
+  const y = floorAt(M, x, z); let lo = Infinity;
+  for (let s = -14; s <= 14; s += 2) { const p = trackAt(M, d + s); lo = Math.min(lo, floorAt(M, p.x, p.z)); }
+  if (y > lo + 2 || !clearOf(M, x, y, z)) return false;
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, fx = x + Math.cos(a) * 2.4, fz = z + Math.sin(a) * 2.4; if (y - floorAt(M, fx, fz) > 1.6) return false; }
+  return true;
+}
 export function escSpawn(c, team) {
   const E = c.esc, base = E.next > 0 ? E.cps[E.next - 1] : 0, tram = trackAt(c.M, E.d);
   const atk = team === E.atk;
@@ -118,14 +129,14 @@ export function escSpawn(c, team) {
   for (let k = 0; k < 24; k++) {
     const p = trackOrBack(c.M, Math.min(E.len, d + (Math.random() - 0.5) * 10)), side = (Math.random() < 0.5 ? -1 : 1) * (1.5 + Math.random() * (k < 12 ? 6 : 3));
     const x = p.x + Math.cos(p.yaw) * side, z = p.z - Math.sin(p.yaw) * side;
-    if (standable(c.M, x, z) && far(x, z)) return [x, z];
+    if (okSpot(c.M, x, z, p.d ?? d) && far(x, z)) return [x, z];
   }
   // sem ponto longe o bastante (bonde chegando na garagem): o ponto de pe mais longe do bonde que der
   let best = null, bd = -1;
   for (let k = 0; k < 40; k++) {
     const p = trackOrBack(c.M, Math.min(E.len, d + (Math.random() - 0.5) * 16)), side = (Math.random() < 0.5 ? -1 : 1) * (1.5 + Math.random() * 9);
     const x = p.x + Math.cos(p.yaw) * side, z = p.z - Math.sin(p.yaw) * side, dd = Math.hypot(x - tram.x, z - tram.z);
-    if (standable(c.M, x, z) && dd > bd) { bd = dd; best = [x, z]; }
+    if (okSpot(c.M, x, z, p.d ?? d) && dd > bd) { bd = dd; best = [x, z]; }
   }
   if (best) return best;
   const p = trackAt(c.M, atk ? 0 : E.len); return [p.x, p.z];

@@ -6,8 +6,8 @@ import { Character } from '../src/character.js';
 const q = new URLSearchParams(location.search), r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(900, 340); r.setClearColor(0xdcd7cb); document.body.appendChild(r.domElement);
 const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(2, 3, -3); sc.add(dl);
 const ch = new Character('red', '', { face: q.get('face') || 'none' }); sc.add(ch.root || ch.group || ch.obj || ch.body.parent || ch.body);
-for (let i = 0; i < 40; i++) ch.update(0.016, { anim: 'pose', alive: true, speed: 0, t: 1 + i * 0.016, pitch: 0 }); const full = q.get('full'), ty = full ? 1.1 : 1.6, dist = full ? 5.2 : 3.2;
+for (let i = 0; i < 40; i++) ch.update(0.016, { anim: 'pose', alive: true, speed: 0, t: 1 + i * 0.016, pitch: 0 }); if (!q.has('sway')) { ch.body.rotation.set(0, 0, 0); ch.head.rotation.set(0, 0, 0); ch.root.updateMatrixWorld(true); } /* previa de frente sem o balanco (08/11) */ const full = q.get('full'), ty = full ? 1.1 : 1.6, dist = full ? 5.2 : 3.2;
 r.setScissorTest(true);
 [[0, 0], [300, 0.7], [600, Math.PI / 2]].forEach(([x, a]) => { const cam = new THREE.PerspectiveCamera(26, 1, 0.1, 50); cam.position.set(Math.sin(a) * -dist, ty + 0.15, -Math.cos(a) * dist); cam.lookAt(0, ty, 0); r.setViewport(x, 0, 300, 340); r.setScissor(x, 0, 300, 340); cam.aspect = 300 / 340; cam.updateProjectionMatrix(); r.render(sc, cam); });
-document.title = 'pronto';
+window.__ch = ch; document.title = 'pronto';
 </script>
