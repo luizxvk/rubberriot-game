@@ -421,7 +421,7 @@ export class Player {
       if (!this.wasGround && vy < -6) { this.g.vm.landed(-vy); audio.play('land', { vol: Math.min(0.8, -vy / 20) }); }
     }
     const eyeT = this.g.mySeat ? 1.5 : this.g.down ? 0.5 : this.slideT > 0 ? SLIDE.eye : this.crouch ? 1.05 : 1.6;
-    this.eye = damp(this.eye, eyeT, 12, dt);
+    { const r = 3.45 * dt; this.eye += Math.max(-r, Math.min(r, eyeT - this.eye)); } // 09/11 (pedido dele): agachar linear, 0,16 s de pe ate agachado
 
     // passos no ritmo do balanco: fluido, alternando pe e variando um tiquinho
     const hs = Math.hypot(this.vel[0], this.vel[2]);

@@ -792,6 +792,12 @@ Object.assign(D.en, { si_pEspaco: 'Outer Space Bundle', sid_pEspaco: 'Flying Sau
   si_pFesta: 'Party Bundle', sid_pFesta: 'Birthday Cake hat + Disco Ball skin + Hypno camo. Way cheaper than apart.',
   si_pPraia: 'Deep Sea Bundle', sid_pPraia: 'Shark Fin hat + Blueprint skin + Aquarium camo. Way cheaper than apart.' });
 // leva da Loja (04/11): prateleiras, secoes de camo, reativas e itens novos
+Object.assign(D.pt, { s_outl: 'Contornos', s_chars: 'Detalhe dos bonecos', q_eco: 'Econômico', q_near: 'Só de perto', q_full: 'Completo', q_low: 'Baixo', q_mid: 'Médio', q_high: 'Alto' });
+Object.assign(D.en, { s_outl: 'Outlines', s_chars: 'Character detail', q_eco: 'Economy', q_near: 'Close only', q_full: 'Full', q_low: 'Low', q_mid: 'Medium', q_high: 'High' });
+Object.assign(D.pt, { drumM: 'Tambor 50', drumL: 'Tambor 71', magCurve1: 'Curvo Curto', magCurve5: 'Curvo Compacto', magCurve3: 'Curvo Padrão', magCurve2: 'Curvo Longo', magCurve4: 'Curvo Extra', magCurve6: 'Curvo Gigante' });
+Object.assign(D.en, { drumM: 'Drum 50', drumL: 'Drum 71', magCurve1: 'Short Curve', magCurve5: 'Compact Curve', magCurve3: 'Standard Curve', magCurve2: 'Long Curve', magCurve4: 'Extra Curve', magCurve6: 'Giant Curve' });
+Object.assign(D.pt, { cgSrcShop: 'Loja', cgSrcPlay: 'Jogando' });
+Object.assign(D.en, { cgSrcShop: 'Shop', cgSrcPlay: 'Earned' });
 Object.assign(D.pt, { cg_rank: 'Rankeada', cg_special: 'Especiais', cg_pass: 'Rovex Pass', cg_shopreact: 'Reativas da Loja',
   shopShelf_bundle: 'Pacotes', shopShelf_react: 'Camuflagens reativas', shopShelf_camo: 'Camuflagens', shopShelf_skin: 'Skins', shopShelf_hat: 'Chapéus', shopShelf_ret: 'Retículas',
   shk_react: 'Camuflagem reativa', shopStage: 'Estágio {n} de 4', shopWeekly: 'Muda toda semana',

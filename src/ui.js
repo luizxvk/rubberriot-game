@@ -239,6 +239,8 @@ export function initMenus(o) {
     ['seg', 'film', 's_film', [['full', 'film_full'], ['color', 'film_color'], ['bw', 'film_bw']]],
     ['seg', 'scopeQ', 's_scopeQ', [['fast', 'sq_fast'], ['full', 'sq_full']]], // luneta (05/11, pedido dele): otimizada ou qualidade cheia
     ['seg', 'draw', 's_draw', [['near', 'draw_near'], ['mid', 'draw_mid'], ['far', 'draw_far']]], // 07/11: voltou (pedido dele), com nevoa
+    ['seg', 'outl', 's_outl', [['eco', 'q_eco'], ['near', 'q_near'], ['full', 'q_full']]], // 09/11: o que mais pesa nos mapas grandes
+    ['seg', 'chars', 's_chars', [['low', 'q_low'], ['mid', 'q_mid'], ['high', 'q_high']]], // 09/11: o que mais pesa com muitos bots
     ['seg', 'aa', 's_aa', [['off', 'aa_off'], ['2x', 'aa_2'], ['4x', 'aa_4'], ['8x', 'aa_8']]], // antisserrilhado (07/11, pedido dele): menos = mais leve
     ['toggle', 'invertY', 's_invert'],
     ['seg', 'adsMode', 's_adsMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]], // 09/11 (pedido dele): segurar pra mirar ou alternar
@@ -273,7 +275,7 @@ export function initMenus(o) {
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
     autoFire: 'play', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', modeTips: 'game',
-    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', draw: 'video', aa: 'video', showFps: 'video',
+    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
@@ -788,7 +790,7 @@ export function initMenus(o) {
       else if (s === 'tracer') val = `<i class="trsw tr-${lo.tracer || 'chalk'}"></i> ${t('tr_' + (lo.tracer || 'chalk'))}`;
       else if (s === 'visual') val = t('lk_charm_' + (getLook().charm || 'none'));
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
-      else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${lo[s === 'paint' ? 'pat' : 'pat2'] ? t('stamp_' + lo[s === 'paint' ? 'pat' : 'pat2']) : lo[s]}` : lo[s === 'paint' ? 'pat' : 'pat2'] ? t('stamp_' + lo[s === 'paint' ? 'pat' : 'pat2']) : t('original');
+      else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${(s === 'accent' && (lo.pat2 || lo.pat)) ? t('stamp_' + (lo.pat2 || lo.pat)) : lo[s]}` : (s === 'accent' && (lo.pat2 || lo.pat)) ? t('stamp_' + (lo.pat2 || lo.pat)) : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
       return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew(s === 'visual' ? 'look|charm|' : 'arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
     }).join('');
@@ -958,6 +960,13 @@ export function initMenus(o) {
 
   function renderPicker(lo, C) {
     const p = $('picker');
+    // 09/11 (lista de camos recarregando): com a mesma lista aberta, so troca a marcacao; refazer 200 amostras a cada clique pesava
+    const camoSig = slot === 'camo' ? cat + '|' + JSON.stringify(progressInfo().unlockLevel) : '';
+    if (camoSig && p.dataset.sig === camoSig && p.querySelector('[data-camo]')) {
+      p.querySelectorAll('[data-camo]').forEach(b => { const id = b.dataset.camo; b.classList.toggle('on', (lo.camo || 'none') === id); b.classList.toggle('peek', preview?.k === 'camo' && preview.v === id); });
+      return;
+    }
+    p.dataset.sig = camoSig;
     p.innerHTML = ''; // se algo quebrar daqui pra baixo, nunca sobra a lista do slot anterior (botao velho gravava no slot errado)
     if (slot === 'bp') {
       const MOD_TXT = { dmg: 'st_dmg', rate: 'st_rate', spread: 'st_acc', hip: 'st_hip', kick: 'st_ctrl', adsTime: 'st_ads', reload: 'st_reload', move: 'st_move', mag: 'st_mag' };
@@ -985,16 +994,16 @@ export function initMenus(o) {
     }
     if (slot === 'camo') {
       // uma secao por origem, cada uma com o titulo uma vez so (04/11: ordenar antes; a lista de CAMOS mistura as origens)
-      const CG = ['static', 'anim', 'react', 'rank', 'special', 'legend', 'pass', 'shop', 'shopreact'];
-      const grp = (c) => c.pass ? 'pass' : c.shop ? (c.react ? 'shopreact' : 'shop') : c.rank != null ? 'rank' : c.legend ? 'legend' : c.prestige || c.meta || c.acct ? 'special' : c.react ? 'react' : c.anim ? 'anim' : 'static';
-      p.innerHTML = CG.map(g => { const L = CAMOS.filter(c => !c.bm && grp(c) === g); /* Mercado Negro: a camo so vem na variante */ return L.length ? `<p class="pk-h">${t('cg_' + g)}</p>` + L.map(camoOpt).join('') : ''; }).join('');
+      const CG = ['static', 'anim', 'react', 'rank', 'special', 'legend', 'pass', 'shop']; // 09/11 (pedido dele): reativas numa secao so, as da Loja por ultimo e com selo
+      const grp = (c) => c.pass ? 'pass' : c.shop ? (c.react ? 'react' : 'shop') : c.rank != null ? 'rank' : c.legend ? 'legend' : c.prestige || c.meta || c.acct ? 'special' : c.react ? 'react' : c.anim ? 'anim' : 'static';
+      p.innerHTML = CG.map(g => { const L = CAMOS.filter(c => !c.bm && grp(c) === g).sort((a, b) => (a.shop ? 1 : 0) - (b.shop ? 1 : 0)); /* Mercado Negro: a camo so vem na variante */ return L.length ? `<p class="pk-h">${t('cg_' + g)}</p>` + L.map(camoOpt).join('') : ''; }).join('');
       function camoOpt(c) {
         const open = camoUnlocked(cat, c), cur = (lo.camo || 'none') === c.id;
         const lockC = !open && LOCKED_BY[c.id];
         // camo sem req (prestigio): sem esse caso o c.req.player quebrava a lista inteira (ficava a lista anterior na tela)
         const req = c.acct && !open ? t('acctCamo') : c.pass && !open ? t('passOnly', { n: c.pass }) : c.shop && !open ? t('shopOnly') : c.rank != null && !open ? t('rkLock', { t: t('rk_' + TIERS[c.rank].id) }) : c.elite && !open ? t('eliteOnly') : c.meta && !open ? t('metaOnly') : c.legend && !open ? t('bpLocked') : c.prestige && !open ? t('prestOnly') : !c.req && !open ? t('bpLocked') : lockC ? (unlockActive(lockC.id) ? `${t('reqCh')}: ${chName(lockC)}` : t('reqQueue')) : !open ? (c.req.player && c.req.wpn ? t('reqBoth', { p: c.req.player, w: c.req.wpn }) : c.req.player ? t('reqPlayer', { n: c.req.player }) : t('reqWpn', { n: c.req.wpn })) : (c.anim ? t('animated') : '');
         const bar = open || c.acct || c.shop || c.legend || c.meta || c.elite || c.rank != null || (!c.req && !lockC) ? '' : `<span class="ubar"><i style="width:${Math.round((lockC ? unlockProg(lockC.id) : reqProgress(cat, c.req)) * 100)}%"></i></span>`;
-        return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}<small>${req}</small>${bar}</button>`;
+        return `<button class="opt camo ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'camo' && preview.v === c.id ? 'peek' : ''}" data-camo="${c.id}" ${open ? '' : 'aria-disabled="true"'}><i class="cswatch ${c.anim ? 'anim' : ''}" style="background:${CAMO_SWATCH[c.id]}"></i>${t('camo_' + c.id)}${c.react ? `<em class="cv-pill">${t(c.shop ? 'cgSrcShop' : 'cgSrcPlay')}</em>` : ''}<small>${req}</small>${bar}</button>`;
       }
       p.querySelectorAll('[data-camo]').forEach(b => b.onclick = () => {
         if (b.classList.contains('locked')) { peek('camo', b.dataset.camo === 'none' ? null : b.dataset.camo); return; }
@@ -1064,7 +1073,7 @@ export function initMenus(o) {
       p.innerHTML = `<button class="swatch none ${!cur ? 'on' : ''}" data-c="">${t('original')}</button>` +
         PAINTS.map((c, i) => { const ok = wl >= lvOf(i); return `<button class="swatch ${cur === c ? 'on' : ''} ${ok ? '' : 'locked'}" style="background:${c}" data-c="${c}" ${ok ? '' : `aria-disabled="true" data-lv="${lvOf(i)}" title="${t('skLvl', { n: lvOf(i) })}"`} aria-label="Cor ${c}">${ok ? '' : `<small class="sw-lv">${lvOf(i)}</small>`}</button>`; }).join('') +
         `<label class="swatch none ${freeOk ? '' : 'locked'}" title="${freeOk ? 'Cor livre' : t('skLvl', { n: PAINT_FREE })}" style="display:grid;place-items:center">${freeOk ? t('free') : t('skLvl', { n: PAINT_FREE })}<input type="color" value="${cur || '#5f8f3a'}" ${freeOk ? '' : 'disabled'}></label>` +
-        `<div class="ret-cols st-cols"><small>${t('stampTitle')}</small><button class="swatch none st-solid ${!lo[stK] ? 'on' : ''}" data-st="">${t('stampNone')}</button>` + STAMPS.map(s => { const open = stampOpen(s.id), peeked = preview?.k === stK && preview.v === s.id; return `<button class="swatch st ${lo[stK] === s.id ? 'on' : ''} ${open ? '' : 'locked'} ${peeked ? 'peek' : ''}" style="background-image:url(${stampThumb(s.id)})" data-st="${s.id}" ${open ? '' : 'aria-disabled="true"'} title="${t('stamp_' + s.id)}${open ? '' : ' (' + t(s.pass ? 'stampPass' : 'stampShop') + ')'}" aria-label="${t('stamp_' + s.id)}"></button>`; }).join('') + '</div>';
+        (slot === 'paint' ? '' : `<div class="ret-cols st-cols"><small>${t('stampTitle')}</small><button class="swatch none st-solid ${!lo[stK] ? 'on' : ''}" data-st="">${t('stampNone')}</button>` + STAMPS.map(s => { const open = stampOpen(s.id), peeked = preview?.k === stK && preview.v === s.id; return `<button class="swatch st ${lo[stK] === s.id ? 'on' : ''} ${open ? '' : 'locked'} ${peeked ? 'peek' : ''}" style="background-image:url(${stampThumb(s.id)})" data-st="${s.id}" ${open ? '' : 'aria-disabled="true"'} title="${t('stamp_' + s.id)}${open ? '' : ' (' + t(s.pass ? 'stampPass' : 'stampShop') + ')'}" aria-label="${t('stamp_' + s.id)}"></button>`; }).join('') + '</div>');
       p.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek(stK, b.dataset.st); return; } setPart(stK, b.dataset.st || null); });
       p.querySelectorAll('button.swatch:not([data-st])').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; } setPart(slot, b.dataset.c || null); });
       p.querySelector('input[type=color]').onchange = (e) => setPart(slot, e.target.value);

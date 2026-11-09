@@ -3,7 +3,7 @@ import { offscreen } from './offscreen.js';
 import { buildWorld, buildObjectives, FX, LASER_BODY, preloadMap } from './world.js';
 import { EscortView } from './escortview.js';
 import { rankResult, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
-import { Character } from './character.js';
+import { Character, CHAR_LOD } from './character.js';
 import { MobChar } from './mobchar.js';
 import { Flashlights } from './flashlight.js';
 import { GunLights } from './gunlights.js';
@@ -57,7 +57,7 @@ import { attachCharm, tickCharm } from './charms.js';
 import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang, modeName } from './i18n.js';
-import { outlinesOn, ink, PAL, OUTLINE_FAR } from './toon.js';
+import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
 import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
@@ -90,7 +90,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, voSubs: true, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, voSubs: true, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -190,6 +190,7 @@ function applySettings() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1)); // tela dividida: 2-4 desenhos por quadro
   resize();
   { const n = { off: 0, '2x': 2, '4x': 4, '8x': 8 }[settings.aa] ?? (isTouch ? 0 : 4); setAA(n); menuPipe.setAA(n); } // antisserrilhado (07/11)
+  { const O = { eco: [40, 12], near: [90, 45], full: [1e9, 1e9] }[settings.outl] || [90, 45]; OUTLINE_CFG.map = O[0]; OUTLINE_CFG.thin = O[1]; const C = { low: [11, 20], mid: [18, 34], high: [34, 1e9] }[settings.chars] || [18, 34]; CHAR_LOD.far = C[0]; CHAR_LOD.hull = C[1]; } // 09/11
   film.uniforms.grain.value = settings.grain;
   film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
   audio.setVolumes(SS?.vol || { master: settings.master, music: settings.music, sfx: settings.sfx, vo: settings.vo ?? 0.7 }); // tela dividida: volume do PC, igual nas telas
@@ -528,6 +529,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('pocPodio'))
   const c = G.net.core; let i = 1; for (const x of c.players.values()) x.score = i++ * 10; c.players.get(G.myId).score = 9000; c.end(G.myName); c.overT = 180;
 })();
 window.__smithShow = (cat, lo, charm = 'none') => { smithHolder.clear(); const gun = ARS.buildGun(cat, lo); const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; smithHolder.add(gun); if (charm !== 'none' && cat !== 'melee') attachCharm(gun, charm, 1); };
+if (import.meta.env.DEV) window.__applySet = (c) => { Object.assign(settings, { draw: 'mid', outl: 'near', chars: 'mid' }, c); applySettings(); }; // bateria de desempenho
 if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Teste'); // teste de desempenho (08/11): partida solo por script
 window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
@@ -602,11 +604,19 @@ function setMap(id) {
   if (swap) { // a cortina so abre com o modelo no lugar, os shaders prontos e 2 quadros desenhados (nada de peca surgindo do nada)
     const w = world, t0 = performance.now();
     Promise.race([w.ready, new Promise(r => setTimeout(r, 12000))])
-      .then(() => compileSafe(scene, camera)).catch(() => {})
+      .then(() => { uploadWorld(); return compileSafe(scene, camera); }).catch(() => {})
       .then(() => new Promise(r => setTimeout(r, Math.max(0, 650 - (performance.now() - t0)))))
       .then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
       .then(() => { if (world === w) mapCurtain(false); });
   }
+}
+// 09/11 (trava ao virar pro meio do Largo): cada pedaco do mapa subia pra placa de video so na primeira vez que entrava na tela. Agora sobe tudo atras da cortina
+const WARM_RT = new THREE.WebGLRenderTarget(4, 4);
+function uploadWorld() {
+  if (!world?.root) return;
+  const saved = []; world.root.traverse(o => { if (o.isMesh && o.frustumCulled) { saved.push(o); o.frustumCulled = false; } });
+  const prev = renderer.getRenderTarget(); try { renderer.setRenderTarget(WARM_RT); renderer.render(scene, camera); } catch (e) { console.warn('uploadWorld', e); }
+  renderer.setRenderTarget(prev); for (const o of saved) o.frustumCulled = true;
 }
 // 08/11 (producao: carregamento INFINITO): o compileAsync do three 0.169 estoura dentro do proprio setTimeout quando um
 // material e trocado/descartado no meio (currentProgram undefined -> "reading 'isReady'") e a promessa NUNCA termina.
@@ -1990,6 +2000,7 @@ async function warmGuns() {
     for (const id of Object.keys(SKIN_CODE)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
     skins.position.copy(camera.position); scene.add(skins);
     const airs = [fx.blimpMesh('red'), bomberMesh('red')]; for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular
+    uploadWorld(); // 09/11: mapa inteiro sobe pra placa aqui, nao na primeira vez que entra na tela
     await compileSafe(scene, camera);
     scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
     warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11): nada de travar na 1a morte
@@ -2387,7 +2398,7 @@ const ui = initMenus({
   previewDeath: (on) => { G.lookDeath = !!on; },
   previewDance: (id) => { if (id === G.lookDance?.id) return; G.lookDance = id ? { id, t: 0 } : null; lookFx?.clear(); if (id) audio.dance(id); else audio.danceStop(); },
   // vitrine: o feixe do laser e' curto (o de 12 m da partida cruzava a tela inteira); so mostra a cor saindo do cano
-  onSmith: (gun, cat, charm) => { smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') attachCharm(gun, charm ?? wornLook().charm, 1); },
+  onSmith: (gun, cat, charm) => { const smithId = (G.smithN = (G.smithN || 0) + 1), swap = () => { if (smithId !== G.smithN) { disposeGun(gun); return; } for (const o of smithHolder.children) disposeGun(o); smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') attachCharm(gun, charm ?? wornLook().charm, 1); }; /* 09/11: a arma velha fica na tela ate o shader da nova ficar pronto (sem travada) e so entao e liberada (vazava a cada clique) */ if (!gun) { swap(); return; } compileSafe(gun, smithCam, smithScene, 3000).then(swap, swap); },
   onBackFromSettingsInGame: () => { $('menu').hidden = true; $('pause').hidden = false; },
   // arsenal aberto do lobby: aplica a arma montada e volta pra sala (ready = ja marca pronto)
   onBackToLobby: (ready) => closeLobbySmith(ready),
@@ -2693,8 +2704,17 @@ function frameBody(now, realDt) {
     const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
     // longe (battle royale com 50): o esqueleto anima 10x por segundo em vez de todo quadro; de perto nada muda
     r.animAcc = (r.animAcc || 0) + dt;
-    const chStep = (camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on; // fora da tela: a vez dele vem 10x por segundo
-    if (chStep) { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); r.animAcc = 0; }
+    // 09/11 (mapas de cidade): boneco atras de predio nao desenha. 4 raios (cabeca, peito, ombros), confere a cada 5 quadros; depois de visto fica 0,4 s garantido (nada de piscar na quina)
+    if (G.state === 'game' && G.M && r.alive && camD > 9 && !replay.on && !r.char.seated) {
+      if (((r.occN = (r.occN || 0) + 1) + (r.occOff ??= Math.floor(Math.random() * 5))) % 5 === 0) {
+        const cp = camera.position.toArray(), sx = Math.cos(r.yaw || 0) * 0.65, sz = -Math.sin(r.yaw || 0) * 0.65, y = r.pos[1];
+        if (hasLOS(G.M, cp, [r.pos[0], y + 1.8, r.pos[2]]) || hasLOS(G.M, cp, [r.pos[0], y + 1.0, r.pos[2]]) || hasLOS(G.M, cp, [r.pos[0] + sx, y + 1.3, r.pos[2] + sz]) || hasLOS(G.M, cp, [r.pos[0] - sx, y + 1.3, r.pos[2] - sz])) r.seenT = G.t;
+        r.occl = G.t - (r.seenT ?? -9) > 0.4;
+      }
+    } else { r.occl = false; r.seenT = G.t; }
+    if (r.char.body.visible === !!r.occl) r.char.body.visible = !r.occl;
+    const chStep = !r.occl && ((camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on); // fora da tela: a vez dele vem 10x por segundo
+    if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); r.animAcc = 0; }
     if (chStep === !!r.frozen) { r.frozen = !chStep; if (r.frozen) r.char.root.updateMatrixWorld = NO_MATRIX; else delete r.char.root.updateMatrixWorld; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
@@ -2777,7 +2797,7 @@ function frameBody(now, realDt) {
     if (camera.far !== dd) camera.far = dd;
     // nevoa: comeca na metade da distancia e fecha antes do corte (nada some de repente). rrBase: a nevoa do proprio mapa (Tinteiro e Docas tem a deles, mais fechada)
     if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = longEye ? Math.min(b[1], dd * 0.96) : Math.min(b[1], dd * 0.94); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.45); }
-    OUTLINE_FAR.value = scene.fog && !longEye ? scene.fog.near + (scene.fog.far - scene.fog.near) * 0.8 : 1e9; // contorno so de perto (07/11): a 80% da nevoa ele ja quase nao aparece
+    OUTLINE_FAR.value = scene.fog && !longEye ? Math.min(OUTLINE_CFG.map, scene.fog.near + (scene.fog.far - scene.fog.near) * 0.8) : 1e9; // contorno so de perto (07/11): a 80% da nevoa ele ja quase nao aparece
     camera.fov += (fovT - camera.fov) * (1 - Math.exp(-14 * realDt));
     camera.updateProjectionMatrix();
     // escala de FOV (04/11, pedido dele): 1x = como sempre; acima disso a arma fica mais longe do olho, parada e mirando (o mundo nao muda)

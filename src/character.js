@@ -182,7 +182,8 @@ function stripeTex() {
 }
 
 // a partir daqui (m) o boneco perde os detalhes pequenos
-const LOD_FAR = 18;
+// 09/11: Ajustes > Detalhe dos bonecos. far = some o detalhe pequeno; hull = some o contorno (a essa distancia ele tem menos de 1 pixel e dobra as chamadas de desenho)
+export const CHAR_LOD = { far: 18, hull: 34 };
 
 // pose de sentado no carro (04/11): coordenadas do corpo do boneco (quadril em y 0.72, frente = -z).
 // sink = quanto o corpo desce (o quadril encosta no banco); pe e joelho vao pra frente; wheel = centro do volante
@@ -394,7 +395,12 @@ export class Character {
 
   // nivel de detalhe pela distancia da camera: 16 bonecos x 48 malhas pesavam no celular
   lod(dist) {
-    const far = dist > LOD_FAR;
+    const hf = dist > CHAR_LOD.hull;
+    if (hf !== this.hullFar || this.hulls === undefined || this.hullGun !== this.gun || this.hullLook !== this.details) {
+      this.hullFar = hf; this.hullGun = this.gun; this.hullLook = this.details; this.hulls = [];
+      this.body.traverse(o => { if (o.isMesh && o.material?.uniforms?.th && o.parent?.isMesh) { this.hulls.push(o); o.visible = !hf; } });
+    }
+    const far = dist > CHAR_LOD.far;
     if (far === this.far) return;
     this.far = far;
     for (const o of this.details) o.visible = !far && !(o === this.nose && this.faceP?.userData.noNose); // nariz debaixo da mascara de casca fica escondido (08/11)
@@ -573,7 +579,8 @@ export class Character {
     // deslize e agachar entram e saem amaciados (01/11: o boneco pulava de pe pro deslize num quadro so)
     const ease = (v, to, k) => v + (to - v) * (1 - Math.exp(-k * dt));
     this.slideK = ease(this.slideK || 0, anim === 'slide' ? 1 : 0, anim === 'slide' ? 16 : 9);
-    this.crouchK = ease(this.crouchK || 0, anim === 'crouch' || anim === 'slide' ? 0.45 : 0, 14);
+    { const to = anim === 'crouch' || anim === 'slide' ? 0.45 : 0, r = dt * 0.45 / 0.16, c = this.crouchK || 0; this.crouchK = c + Math.max(-r, Math.min(r, to - c)); } // 09/11: agachar linear
+    { const to = anim === 'jump' ? 1 : 0, r = dt / 0.14, c = this.jumpK || 0; this.jumpK = c + Math.max(-r, Math.min(r, to - c)); } // 09/11: pulo linear
     this.leanK = ease(this.leanK || 0, anim === 'sprint' || anim === 'tac' ? -0.25 : anim === 'slide' ? 0.35 : 0, 12);
     const moving = speed > 0.8 && anim !== 'jump' && anim !== 'slide';
     this.walkK = ease(this.walkK || 0, moving ? 1 : 0, 12); // passada some aos poucos (deslize, parar)
@@ -607,7 +614,7 @@ export class Character {
     if (this.hitT > 0) { this.hitT -= dt; fl = Math.sin(Math.min(1, this.hitT / 0.2) * Math.PI) * (this.hitHead ? 1.4 : 1); }
     // quique de borracha
     const bounce = moving ? Math.abs(Math.sin(ph)) : (Math.sin(t * 4.4 + this.phase) * 0.5 + 0.5) * 0.3;
-    const sq = anim === 'jump' ? 1.12 : 1 + (bounce - 0.5) * 0.08;
+    const sq = 1 + 0.12 * this.jumpK + (1 - this.jumpK) * (bounce - 0.5) * 0.08;
     this.body.scale.set(1 / Math.sqrt(sq), sq * (1 - crouch * 0.35), 1 / Math.sqrt(sq));
     this.body.position.y = moving && seat < 0.5 ? bounce * 0.12 : 0; this.body.position.x = 0; // x: a danca desloca o corpo pro lado
     if (seat > 0.01) { this.body.position.y -= SEAT_POSE.sink * seat; this.body.scale.set(1, 1, 1); this.body.rotation.x = 0; } // sentado: parado (sem quique nem respiracao)
@@ -626,7 +633,7 @@ export class Character {
       const lift = Math.max(0, Math.cos(ph + off)) * 0.25 * walk;
       const a = new THREE.Vector3(side * 0.17, hip, 0);
       const footZ = -sw * 0.5 * walk - 0.5 * sk;
-      const b = new THREE.Vector3(side * 0.22, 0.1 + lift + (anim === 'jump' ? 0.25 : 0), footZ);
+      const b = new THREE.Vector3(side * 0.22, 0.1 + lift + this.jumpK * 0.25, footZ);
       if (climb) b.lerp(side > 0 ? new THREE.Vector3(0.2, 0.62, -0.42) : new THREE.Vector3(-0.22, 0.12, 0.28), climb); // direita sobe, esquerda empurra
       // joelho de mangueira dobra pra frente
       const c = new THREE.Vector3(side * 0.24, (a.y + b.y) / 2, (a.z + b.z) / 2 - 0.18 - lift * 0.4);

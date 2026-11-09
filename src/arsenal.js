@@ -13,7 +13,7 @@ import { t, wName } from './i18n.js';
 import { camoGlsl, camoTime, camoById, rovexLogoU, bmUniforms } from './camos.js';
 import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS, GADGETS, WSKINS, baseBody } from '../shared/weapons.js';
 import { bpUnlocked, progressInfo, passLevel, passHasStamp } from './progress.js';
-import { STAMPS, STAMP_GLSL, stampCode } from './stamps.js';
+import { STAMPS, stampGlsl, stampCode } from './stamps.js';
 import { RET_PASS } from './pass.js';
 import { shopOwned } from './shopstore.js';
 import TT_GUNS from './tt_guns.json'; // armas do TastyTony (06/11): o editor tools/arma-editor.html grava aqui
@@ -114,6 +114,8 @@ export function partName(slot, id) {
   if (slot === 'scope' && IRONS[id]) return t('ir_' + id);
   if (slot === 'scope' && SNIPER_SCOPE_NAME[id]) return t(SNIPER_SCOPE_NAME[id]); // lunetas com nome do que fazem (01/11)
   if (slot === 'scope') { const big = !!parts[id] && sightLen(parts[id]) >= 0.6; return (big ? t('scopeBig') : t('scopeDot')) + ' ' + n + (id.startsWith('sniper') ? ' ' + t('long') : ''); }
+  if (slot === 'charger' && id.startsWith('cmag_fusil_13_')) return t('magCurve' + id.slice(-1)); // Pipocadeira: tamanhos do pente curvo
+  if (slot === 'charger' && DRUM_MAGS[id]?.name) return t(DRUM_MAGS[id].name);
   if (slot === 'charger' && id.startsWith('cmag_')) return t(['bmMagSmall', 'extMag', 'magShoe', 'magBottle', 'magRibbed', 'magWedge'][Number(id.slice(-1)) - 1] || 'extMag');
   if (slot === 'charger' && DRUM_MAGS[id]?.heatK) return t('coolMag');
   if (slot === 'charger' && DRUM_MAGS[id]?.ext) return t(id.endsWith('_2') ? 'extMag2' : 'extMag');
@@ -661,6 +663,9 @@ function muzzleGeo(id, r, len, uvA, uvB) {
 // pente de tambor da Pipoqueira (01/11, pedido dele): 40 balas, recarga lenta. Procedural: gargalo que entra no
 // poco do pente original + tambor redondo deitado de lado, com tampa e parafusos. So encaixa na pistol_2.
 export const DRUM_MAGS = { pistol_drum: { body: 'pistol_2', rounds: 40, reload: 1.55, adsTime: 1.14, move: 0.95, kick: 0.92 },
+  // tambores redondos (09/11, foto dele): Sanfona e Dois Toques, dois tamanhos
+  cdrum_subfusil_13_1: { body: 'subfusil_13', rounds: 50, name: 'drumM', reload: 1.3, adsTime: 1.1, move: 0.97, kick: 0.96 }, cdrum_subfusil_13_2: { body: 'subfusil_13', rounds: 71, name: 'drumL', reload: 1.55, adsTime: 1.18, move: 0.93, kick: 0.92 },
+  cdrum_subfusil_8_1: { body: 'subfusil_8', rounds: 50, name: 'drumM', reload: 1.3, adsTime: 1.1, move: 0.97, kick: 0.96 }, cdrum_subfusil_8_2: { body: 'subfusil_8', rounds: 71, name: 'drumL', reload: 1.55, adsTime: 1.18, move: 0.93, kick: 0.92 },
   // pentes estendidos da Cuspideira (04/11, pedido dele): o pente de fabrica esticado pra baixo (mesma boca e largura:
   // encaixa no mesmo poco, sem malha cruzando). magK = multiplica o pente; ext = quanto estica a altura
   subfusil_ext_1: { body: 'subfusil_5', of: 'subfusil_charguer_5', ext: 1.45, magK: 1.4, reload: 1.12, adsTime: 1.05, move: 0.98, kick: 1 },
@@ -1415,7 +1420,7 @@ export const stampOpen = (id) => STAMPS.some(s => s.id === id) && (!!progressInf
 function paintMaterial(paint, accent, camo, part = false, camoGreen = false, hatch = false, pat = null, pat2 = null) {
   const m = toon(0xffffff, { map: gunTex, unique: true });
   m.userData.gunOwn = true; // so desta arma: disposeGun libera
-  const st1 = stampCode(pat), st2 = stampCode(part ? pat2 || pat : pat2), hasSt = !!(st1 || st2); // sem estampa o shader nem recebe o desenho (nao pesa no celular). Peca encaixada (09/11, pedido dele): leva a do Destaque ou, sem ela, a da Pintura
+  const st1 = 0, st2 = stampCode(pat2 || pat), hasSt = !!st2; /* 09/11 (regra dele): a estampa so existe na area da cor de destaque, no corpo e nas pecas; a da Pintura salva antes vale como a do Destaque */ // sem estampa o shader nem recebe o desenho (nao pesa no celular). Peca encaixada (09/11, pedido dele): leva a do Destaque ou, sem ela, a da Pintura
   // so a camo desta peca entra no shader (peca encaixada nunca leva camo)
   const glslCode = part ? 0 : camoById(camo).code;
   m.userData.u = {
@@ -1425,15 +1430,15 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false, hat
     uCamo: { value: camoById(camo).code }, uTime: camoTime, uReact: { value: 0 }, uCamoGreen: { value: camoGreen ? 1 : 0 },
     ...(glslCode === 60 ? { uRovexLogo: rovexLogoU() } : {}),
     ...(glslCode === 70 ? bmUniforms(camo) : {}), // Mercado Negro: cores/desenho da variante
-    ...(hasSt ? { uStamp: { value: st1 }, uStamp2: { value: st2 }, uStampC: { value: new THREE.Vector3() } } : {}),
+    ...(hasSt ? { uStampM: { value: new THREE.Matrix4().makeScale(1.8, 1.8, 1.8) } } : {}), // uStampM: da malha pro espaco unico da arma (stampSpace)
   };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, m.userData.u);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position * 1.8;'); // estampa menor (01/11): a arma mostrava so um pedaco da camo
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;' + (hasSt ? ' uniform mat4 uStampM; varying vec3 vStampPos;' : ''))
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position * 1.8;' + (hasSt ? ' vStampPos = (uStampM * vec4(position, 1.0)).xyz;' : '')); // estampa menor (01/11): a arma mostrava so um pedaco da camo
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn; uniform float uPart; uniform float uCamoGreen;\n' + (hasSt ? 'uniform float uStamp; uniform float uStamp2; uniform vec3 uStampC;\n' + STAMP_GLSL + '\n' : '') + camoGlsl(glslCode) + '\nvec3 gCamoGlow = vec3(0.0);')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uPaint; uniform float uPaintOn; uniform vec3 uAccent; uniform float uAccentOn; uniform float uPart; uniform float uCamoGreen;\n' + (hasSt ? 'varying vec3 vStampPos;\n' + stampGlsl([st1, st2]) + '\n' : '') + camoGlsl(glslCode) + '\nvec3 gCamoGlow = vec3(0.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;' + (glslCode === 70 ? '\n/* bloom levissimo (08/11, pedido dele): camo ANIMADA do Mercado Negro ganha halo na borda da silhueta e o brilho dela vaza um tico (sem pos-processo: nao pesa no celular) */ if (uBmP.w > 0.5 && uPart < 0.5) { float fr = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.6); totalEmissiveRadiance += uBmC * fr * 0.32 + gCamoGlow * 0.35; }' : ''))
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
@@ -1447,9 +1452,9 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false, hat
           // a luz da cena estourava a cor ate virar branco. Era isso que fazia o destaque
           // "pegar so numa parte" (so as pecas escuras, abaixo de 1x, mostravam a cor).
           vec3 pCol = uPaint * clamp(0.45 + lum * 0.75, 0.45, 1.0), aCol = uAccent * clamp(0.55 + lum * 0.45, 0.55, 1.0);
-          ${hasSt ? `vec3 stP = vCamoPos - uStampC; vec2 stQ = vec2(stP.z, stP.y + stP.x * 0.35) * 5.5; /* 09/11 (2 prints dele): desenho pequeno, pra ver o padrao inteiro na arma */
-          if (uStamp > 0.5) pCol = mix(pCol, stampInk(pCol), stampAt(int(uStamp + 0.5), stQ));
-          if (uStamp2 > 0.5) aCol = mix(aCol, stampInk(aCol), stampAt(int(uStamp2 + 0.5), stQ));` : ''}
+          ${hasSt ? `vec2 stQ = vec2(vStampPos.z, vStampPos.y + vStampPos.x * 0.35) * 5.5; /* 09/11: mesma escala e mesmo centro em todas as pecas (stampSpace) */
+          ${st1 ? 'float stA = stampAt(' + st1 + ', stQ); pCol = mix(pCol, stampInk(pCol), stA);' : ''}
+          ${st2 ? (st2 === st1 ? '' : 'float stB = stampAt(' + st2 + ', stQ);') + ' aCol = mix(aCol, stampInk(aCol), ' + (st2 === st1 ? 'stA' : 'stB') + ');' : ''}` : ''}
           diffuseColor.rgb = mix(tc, pCol, green * uPaintOn);
           diffuseColor.rgb = mix(diffuseColor.rgb, aCol, accent * uAccentOn);
           // camuflagem so nas partes escuras do corpo: o verde fica com a pintura (ou o verde
@@ -1475,7 +1480,8 @@ function paintMaterial(paint, accent, camo, part = false, camoGreen = false, hat
         }
         #include <dithering_fragment>`);
   };
-  m.customProgramCacheKey = () => 'paint' + glslCode + (hatch ? 'h' : '') + (hasSt ? 's' : '');
+  m.customProgramCacheKey = () => 'paint' + glslCode + (hatch ? 'h' : '') + (hasSt ? 's' + st1 + '_' + st2 : '');
+  m.userData.again = () => paintMaterial(paint, accent, camo, part, camoGreen, hatch, pat, pat2); // copia da pintura com matriz propria (stampSpace): divide o programa
   return m;
 }
 
@@ -1840,8 +1846,8 @@ const CMAGS = {};
 async function loadCmags(loader) {
   const g = await loader.loadAsync(import.meta.env.BASE_URL + 'models/src/comic/mags.glb'); g.scene.updateMatrixWorld(true);
   const pal = paletteReader(gunTex), uv = pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5];
-  g.scene.traverse(o => { if (!o.isMesh || (o.name !== 'pdrum' && !o.name.startsWith('cmag_'))) return; const ge = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); setUV(ge, uv); ge.computeVertexNormals(); ge.computeBoundingBox(); if (o.name === 'pdrum') { parts.pistol_drum = { geo: ge, box: ge.boundingBox.clone(), ww2: true, drumMag: true, cmag: true }; return; } parts[o.name] = { geo: ge, box: ge.boundingBox.clone(), cmag: true }; const m = o.name.match(/^cmag_(.+)_\d$/); (CMAGS[m[1]] ||= []).push(o.name); });
-  for (const k of Object.keys(CMAGS)) CMAGS[k].sort();
+  g.scene.traverse(o => { if (!o.isMesh || (o.name !== 'pdrum' && !o.name.startsWith('cmag_') && !o.name.startsWith('cdrum_'))) return; const ge = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); setUV(ge, uv); ge.computeVertexNormals(); ge.computeBoundingBox(); if (o.name === 'pdrum') { parts.pistol_drum = { geo: ge, box: ge.boundingBox.clone(), ww2: true, drumMag: true, cmag: true }; return; } if (o.name.startsWith('cdrum_')) { parts[o.name] = { geo: ge, box: ge.boundingBox.clone(), ww2: true, drumMag: true, cmag: true }; return; } parts[o.name] = { geo: ge, box: ge.boundingBox.clone(), cmag: true }; const m = o.name.match(/^cmag_(.+)_\d$/); (CMAGS[m[1]] ||= []).push(o.name); });
+  for (const k of Object.keys(CMAGS)) CMAGS[k].sort(); if (CMAGS.fusil_13) CMAGS.fusil_13.sort((a, b) => parts[a].box.min.y > parts[b].box.min.y ? -1 : 1); // pente curvo da Pipocadeira: do mais curto ao maior
   if (parts.cmag_subfusil_5_2) parts.subfusil_ext_1 = { ...parts.cmag_subfusil_5_2 }; if (parts.cmag_subfusil_5_6) parts.subfusil_ext_2 = { ...parts.cmag_subfusil_5_6 }; // 09/11 (print dele): estendidos da Cuspideira na largura certa do pente fino
   if (parts.cmag_lmg_2_6) parts.lmg_ext_2 = { ...parts.cmag_lmg_2_6 }; // 09/11: caixa de superaquecimento do Rolo Compressor: pente em cima, longo, do Blender
   for (const k of Object.keys(magCompat)) delete magCompat[k];
@@ -1996,8 +2002,23 @@ export function bpLoadout(id) {
 // Camuflagem lendaria liga o efeito de fora da arma (fogo, raio, tinta, estrelas)
 // arma que saiu de vez (troca de arma de um boneco, arma largada que sumiu): libera os materiais que sao so dela.
 // Geometria das pecas e compartilhada (cache das pecas), entao fica. (02/11: cada troca/largada vazava memoria de video)
+// 09/11 (travada ao trocar de arma): soltar o ultimo material de um shader apagava o programa, e a proxima arma igual compilava tudo de novo.
+// O ultimo de cada programa fica guardado (poucos: PROGRAM_KEEP) e o shader segue pronto.
+const PROGRAM_KEEP = matchMedia('(pointer: coarse)').matches ? 10 : 40, KEPT = new Map();
+function releaseGunMat(m) {
+  const k = m.customProgramCacheKey?.();
+  if (!k || !/^paint/.test(k)) { m.dispose(); return; }
+  if (KEPT.has(k)) { m.dispose(); const old = KEPT.get(k); KEPT.delete(k); KEPT.set(k, old); return; } // ja tem guardado: so renova a ordem
+  KEPT.set(k, m);
+  if (KEPT.size > PROGRAM_KEEP) { const [ok, om] = KEPT.entries().next().value; KEPT.delete(ok); om.dispose(); }
+}
 export function disposeGun(g) {
-  g?.traverse(o => { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) if (m?.userData?.gunOwn) m.dispose(); });
+  const done = new Set();
+  g?.traverse(o => {
+    if (o.geometry?.userData.gunOwn) { o.geometry.dispose(); for (const c of o.children) if (c.geometry && c.material?.isShaderMaterial) c.geometry.dispose(); } // bocal e laser sao malha propria de cada montagem
+    const ms = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of ms) if (m?.userData?.gunOwn && !done.has(m)) { done.add(m); releaseGunMat(m); }
+  });
 }
 const lensOwn = (m) => { m.userData.gunOwn = true; return m; };
 
@@ -2054,7 +2075,6 @@ function buildGunParts(wpn, lo) {
   // revolver: o metal (zona verde) e preto de fabrica e leva a camo por cima
   const camoGreen = !!parts[lo.body]?.camoGreen;
   const mat = paintMaterial(lo.paint || DEFAULT_PAINT, lo.accent || DEFAULT_ACCENT, lo.camo, false, camoGreen, TOON_HATCH, lo.pat, lo.pat2); // 07/11 (pedido dele): toda arma vem BRANCA de fabrica
-  mat.userData.u.uStampC?.value.copy(parts[lo.body].box.getCenter(new THREE.Vector3())).multiplyScalar(1.8); // estampa radial centrada no corpo da arma
   const partMat = paintMaterial(lo.paint, lo.accent || DEFAULT_ACCENT, null, true, false, TOON_HATCH, lo.pat, lo.pat2); partMat.polygonOffset = true; partMat.polygonOffsetFactor = -1; partMat.polygonOffsetUnits = -2; // 05/11: base da mira colada no corpo nao pisca
   const bodyBox = parts[lo.body].box;
   const len = bodyBox.max.z - bodyBox.min.z, h = bodyBox.max.y - bodyBox.min.y, cx = axisX(lo.body);
@@ -2192,7 +2212,7 @@ function buildGunParts(wpn, lo) {
       const gap = Number.isFinite(seat) ? b.min.y + shift.y - seat : lift;
       if (gap > 0.012) {
         const rw = Math.min(b.max.x - b.min.x, 0.2), rd = Math.min(sl * 0.55, 0.5);
-        const riser = new THREE.Mesh(new THREE.BoxGeometry(rw, gap + 0.02, rd), toon(0x2a2724));
+        const riser = new THREE.Mesh(new THREE.BoxGeometry(rw, gap + 0.02, rd), toon(0x2a2724)); riser.geometry.userData.gunOwn = true;
         outline(riser, 0.0055);
         riser.position.set(scx, b.min.y + shift.y - gap / 2 + 0.004, (b.min.z + b.max.z) / 2 + shift.z).sub(origin);
         inner.add(riser);
@@ -2228,7 +2248,7 @@ function buildGunParts(wpn, lo) {
     // bocal no lugar da ponta: encaixa um pouco pra tras da boca (cobre o bico original) e sai pra frente (-z)
     const T = barrelTip(lo.body), pal = paletteReader(gunTex);
     const uvA = pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5], uvB = pal ? paletteUV(pal, [30, 30, 30]) : [0.4, 0.4];
-    const ge = muzzleGeo(lo.muzzle, T.r, T.len, uvA, uvB); ge.rotateX(-Math.PI / 2); ge.computeBoundingBox();
+    const ge = muzzleGeo(lo.muzzle, T.r, T.len, uvA, uvB); ge.rotateX(-Math.PI / 2); ge.computeBoundingBox(); ge.userData.gunOwn = true;
     const m = new THREE.Mesh(ge, partMat); outline(m, 0.0045); const msc = adjS('muzzle'), mad = adjV('muzzle'); m.scale.setScalar(msc);
     const back = T.len * 0.008; // so encosta (entrar 2,5% cruzava a malha do cano e piscava: Bacamarte, 04/11)
     m.position.set(T.c.x, T.c.y, T.z + back).add(mad).sub(origin); inner.add(m);
@@ -2282,8 +2302,8 @@ function buildGunParts(wpn, lo) {
     const G = new THREE.Group(); G.position.set(gx, y0, zs).sub(origin); G.rotation.z = -CANTED_ROLL; G.userData.sight = 'canted';
     // suporte: braco deitado saindo de dentro do corpo, por baixo da mira atual; se a mira subiu, um poste do lado de fora
     { const x0 = edgeBody - 0.02, x1 = gx + 0.015, pal = paletteReader(gunTex), dk = pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5]; // 09/11 (pedido dele): suporte na celula escura da paleta = a camo da arma pinta ele
-      const arm = new THREE.Mesh(setUV(new THREE.BoxGeometry(x1 - x0, 0.03, sz * 0.5), dk), mat); arm.position.set((x0 + x1) / 2, yFloor - 0.02, zs).sub(origin); outline(arm, 0.0055); inner.add(arm);
-      if (y0 - yFloor > 0.01) { const h = y0 - yFloor + 0.03, post = new THREE.Mesh(setUV(new THREE.BoxGeometry(0.035, h, sz * 0.5), dk), mat); post.position.set(gx, yFloor - 0.02 + h / 2, zs).sub(origin); outline(post, 0.0055); inner.add(post); } }
+      const arm = new THREE.Mesh(setUV(new THREE.BoxGeometry(x1 - x0, 0.03, sz * 0.5), dk), mat); arm.position.set((x0 + x1) / 2, yFloor - 0.02, zs).sub(origin); arm.geometry.userData.gunOwn = true; outline(arm, 0.0055); inner.add(arm);
+      if (y0 - yFloor > 0.01) { const h = y0 - yFloor + 0.03, post = new THREE.Mesh(setUV(new THREE.BoxGeometry(0.035, h, sz * 0.5), dk), mat); post.position.set(gx, yFloor - 0.02 + h / 2, zs).sub(origin); post.geometry.userData.gunOwn = true; outline(post, 0.0055); inner.add(post); } }
     const base = new THREE.Vector3(bx, b.min.y, (b.min.z + b.max.z) / 2), m = new THREE.Mesh(P.geo, partMat); m.position.copy(base).negate(); outline(m, 0.0015); G.add(m); // mira de 45: traco curto (07/11)
     const lc = L ? L.c : new THREE.Vector3(bx, b.min.y + (b.max.y - b.min.y) * 0.62, 0), lz = L ? L.z : b.max.z, lr = (L ? L.r : (b.max.y - b.min.y) * 0.3) * 0.96;
     const lens = new THREE.Mesh(geo(THREE.CircleGeometry, Math.round(lr * 1e4) / 1e4, 32), lensMaterial(false, mainCant ? (lo.ret && lo.ret !== 'auto' ? lo.ret : 'dot') : lo.ret45 && lo.ret45 !== 'auto' ? lo.ret45 : 'dot', (mainCant ? lo.retColor : lo.retColor45) || 'red', null)); lens.position.set(lc.x, lc.y, lz + 0.003).sub(base); lens.renderOrder = 3; G.add(lens);
@@ -2307,7 +2327,30 @@ function buildGunParts(wpn, lo) {
     if (eyeY != null) k = Math.min(k, Math.max(0.35, (eyeY - 0.012 - axisY) / (bb.max.y * msc * k * S) * k));
     if (k < 1) { for (const x of list) x.scale.setScalar(msc * k); const nr = -bb.min.z * msc * k - back; muzzle.position.z += (reach - nr) * S; }
   }
+  stampSpace(holder, mat, partMat, parts[lo.body].box.getCenter(new THREE.Vector3()).sub(origin).multiplyScalar(S));
   return holder;
+}
+
+// 09/11 (print dele: no laser o desenho vinha maior): cada peca tem escala e origem proprias, entao a estampa media diferente em cada uma.
+// Agora todas leem a mesma coordenada, a da arma montada: o desenho tem um tamanho so e continua de uma peca pra outra.
+// Malhas com a mesma matriz dividem o material; as copias usam o mesmo programa do shader (nao compilam de novo).
+function stampSpace(holder, mat, partMat, center) {
+  if (!mat.userData.u.uStampM && !partMat.userData.u.uStampM) return;
+  holder.updateMatrixWorld(true);
+  const inv = holder.matrixWorld.clone().invert(), toStamp = new THREE.Matrix4().makeScale(1.8 / S, 1.8 / S, 1.8 / S).multiply(new THREE.Matrix4().makeTranslation(-center.x, -center.y, -center.z)), seen = new Map();
+  holder.traverse(o => {
+    const base = o.isMesh && (o.material === mat || o.material === partMat) ? o.material : null;
+    if (!base?.userData.u.uStampM) return;
+    const M = toStamp.clone().multiply(inv).multiply(o.matrixWorld), key = (base === mat ? 'b' : 'p') + M.elements.map(v => v.toFixed(4)).join(',');
+    let m = seen.get(key);
+    if (!m) {
+      const first = ![...seen.values()].includes(base); // a primeira matriz fica no material original (holder.userData.mat continua valendo)
+      if (first) m = base;
+      else { m = base.userData.again(); m.polygonOffset = base.polygonOffset; m.polygonOffsetFactor = base.polygonOffsetFactor; m.polygonOffsetUnits = base.polygonOffsetUnits; m.userData.u = { ...base.userData.u, uStampM: { value: new THREE.Matrix4() } }; }
+      m.userData.u.uStampM.value.copy(M); seen.set(key, m);
+    }
+    o.material = m;
+  });
 }
 
 function buildMinigun() {
@@ -2541,7 +2584,7 @@ function addLaser(holder, lo, origin, isPistol, magMesh, partMat) {
   const AG = CL || ATT[D.model];
   if (AG) { // peca do pacote de acessorios no tamanho do slot (comprimento manda, proporcao do modelo)
     const ge = AG.clone(); ge.computeBoundingBox(); const sz = ge.boundingBox.getSize(new THREE.Vector3()), k = Math.min(d / sz.z, w * 1.25 / sz.x, h * 1.6 / sz.y);
-    ge.scale(k, k, k); box = new THREE.Mesh(ge, CL && partMat ? partMat : (ATT_MAT ||= toon(0xffffff, { map: gunTex }))); // 08/11 (pedido dele): laser pintado na cor de destaque, como as outras pecas
+    ge.scale(k, k, k); ge.userData.gunOwn = true; box = new THREE.Mesh(ge, CL && partMat ? partMat : (ATT_MAT ||= toon(0xffffff, { map: gunTex }))); // 08/11 (pedido dele): laser pintado na cor de destaque, como as outras pecas
   } else box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(0x2a2724));
   // 08/11: a peca encosta de verdade no corpo, medido pela propria malha (o tamanho do slot deixava um vao e sobrava so a haste)
   if (CL) { box.geometry.computeBoundingBox(); const bb = box.geometry.boundingBox, q = LA?.s || 1;
@@ -2558,6 +2601,7 @@ function addLaser(holder, lo, origin, isPistol, magMesh, partMat) {
   beam.position.set(box.position.x, box.position.y, -d / 2 - 0.004); beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
   beam.userData.noFx = true; // feixe de 18 m nao conta como superficie da arma (efeito da camo lendaria)
   g.add(beam);
+  g.traverse(o => { if (o.geometry) o.geometry.userData.gunOwn = true; }); // 09/11 (bateria: memoria de video subindo a cada renascimento): tudo do laser e so desta montagem
   holder.add(g);
   if (D.light) { beam.visible = false; eye.scale.setScalar(1.5); } // lanterna: sem feixe colorido; a luz e da GunLights
   return { group: g, beam, eye, color: D.color, len: BEAM_LEN, light: !!D.light };

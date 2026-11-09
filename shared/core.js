@@ -85,6 +85,7 @@ export function nadeStep(M, n, dt) {
   return 0;
 }
 
+const CITY_ROUTES = ['becos', 'feira', 'largo', 'cortejo'];
 export class Core {
   constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false }) {
     this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
@@ -2030,11 +2031,11 @@ export class Core {
   // segue pro objetivo; quem carrega, resgata ou ja esta perto vai direto, entao o objetivo nunca e largado. Canyon fica como esta.
   objRoute(p, g) {
     const ai = p.ai, role = ai.role ?? (p.id.charCodeAt(p.id.length - 1) + p.id.length) % 3;
-    if (!g || role !== 1 || this.M.arena >= 100 || ai.rescue || !['ctf', 'dom', 'heist', 'smuggle'].includes(this.mode) || this.carrying?.(p) || (this.heist && carryingBag(this, p))) return g;
+    const cityR = CITY_ROUTES.includes(this.M.id); /* 09/11: nos mapas de cidade todo bot escolhe caminho ate o objetivo */ if (!g || (role !== 1 && !cityR) || this.M.arena >= 100 || ai.rescue || (!['ctf', 'dom', 'heist', 'smuggle'].includes(this.mode) && !(cityR && this.esc)) || this.carrying?.(p) || (this.heist && carryingBag(this, p))) return g;
     const key = Math.round(g[0] / 8) + ':' + Math.round(g[2] / 8);
-    if (ai.objKey !== key) { ai.objKey = key; const r = Math.hypot(g[0] - p.pos[0], g[2] - p.pos[2]) > 22 ? this.routeTo(p, g) : []; ai.objVia = r.length > 1 ? r[0] : null; }
-    if (ai.objVia && dist2(ai.objVia, p.pos) < 16) ai.objVia = null;
-    return ai.objVia || g;
+    if (ai.objKey !== key) { ai.objKey = key; const r = Math.hypot(g[0] - p.pos[0], g[2] - p.pos[2]) > 22 ? this.routeTo(p, g) : []; ai.objVias = r.slice(0, -1); ai.objViaT = this.clock || 0; }
+    while (ai.objVias?.length && (dist2(ai.objVias[0], p.pos) < 16 || (this.clock || 0) - ai.objViaT > 9)) { ai.objVias.shift(); ai.objViaT = this.clock || 0; } // 9 s sem chegar: desiste do ponto (nunca fica preso num beco)
+    return ai.objVias?.[0] || g;
   }
 
   botGoal(p) {
@@ -2109,7 +2110,7 @@ export class Core {
         const d = dist2(z.pos, p.pos) * (0.6 + Math.random()) * (z.bonus ? 0.4 : 1); // a extra chama mais gente
         if (d < bd) { bd = d; best = z.pos; }
       }
-      return best || this.zones[1].pos;
+      return best || (CITY_ROUTES.includes(this.M.id) ? this.huntGoal(p) : this.zones[1].pos); // 09/11: zonas todas do time: na cidade vai patrulhar em vez de juntar no meio
     }
     return this.huntGoal(p);
   }
@@ -2119,7 +2120,7 @@ export class Core {
   // posicao de um inimigo sorteado (via atraves da parede) e todo mundo usava o mesmo corredor.
   huntGoal(p) {
     const ai = p.ai;
-    if (ai.lastSeenT > 0 && ai.lastSeen) return ai.lastSeen;
+    if (ai.lastSeenT > 0 && ai.lastSeen && !(CITY_ROUTES.includes(this.M.id) && dist2(ai.lastSeen, p.pos) > 784)) return ai.lastSeen; // 09/11: na cidade so persegue de perto; longe volta a andar pelas rotas
     let heard = null, hd = 40 * 40;
     for (const [id, n] of this.noises || []) {
       const o = this.players.get(id);
@@ -2187,6 +2188,7 @@ export class Core {
   // rota com desvio: um ponto de passagem de lado (30-80 graus fora da linha reta) quando o desvio
   // nao alonga demais o caminho; assim os bots chegam por flancos diferentes
   routeTo(p, target) {
+    if (CITY_ROUTES.includes(this.M.id)) { const r = this.cityRoute(p, target); if (r) return r; }
     const d0 = Math.hypot(target[0] - p.pos[0], target[2] - p.pos[2]);
     if (d0 < 14 || Math.random() < 0.15) return [target];
     const dir = Math.atan2(target[0] - p.pos[0], target[2] - p.pos[2]);
@@ -2200,6 +2202,54 @@ export class Core {
       if (sc > bs) { bs = sc; via = q; }
     }
     return via ? [via, target] : [target];
+  }
+
+  // 09/11 (pedido dele: mais rotas nos 4 mapas novos): cada ponto da grade ganha uma classe pela folga em volta: rua larga, beco ou coberto.
+  // Cada viagem sorteia um jeito de ir (beco, rua de fora, miolo, por dentro das casas ou zigue-zague) e cada bot tem o seu preferido.
+  cityNodes() {
+    if (this._cityN) return this._cityN;
+    const M = this.M, A = M.arena, out = [], seen = new Set();
+    const clear = (x, z) => { for (const r of [1.6, 3, 4.6]) { let ok = 0; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; if (standable(M, x + Math.cos(a) * r, z + Math.sin(a) * r)) ok++; } if (ok < 6) return r; } return 6; };
+    for (let x = -A + 3; x <= A - 3; x += 3) for (let z = -A + 3; z <= A - 3; z += 3) {
+      if (!standable(M, x, z)) continue;
+      const c = clear(x, z), kind = c <= 1.6 ? 'alley' : c >= 6 ? 'street' : 'side', cell = kind + Math.round(x / 7) + ':' + Math.round(z / 7);
+      if (seen.has(cell)) continue; seen.add(cell);
+      out.push({ p: [x, floorAt(M, x, z), z], kind, ring: Math.max(Math.abs(x), Math.abs(z)) / A });
+    }
+    for (const q of this.poiList()) if (q[3]) out.push({ p: q.slice(0, 3), kind: 'inside', ring: Math.max(Math.abs(q[0]), Math.abs(q[2])) / A });
+    return (this._cityN = out);
+  }
+  cityRoute(p, target) {
+    const d0 = Math.hypot(target[0] - p.pos[0], target[2] - p.pos[2]);
+    if (d0 < 12) return null;
+    const ai = p.ai, N = this.cityNodes(); if (!N.length) return null;
+    if (ai.cityStyle == null) ai.cityStyle = Math.floor(Math.random() * 5);
+    const STY = ['alley', 'outer', 'center', 'inside', 'zig'], style = Math.random() < 0.55 ? STY[ai.cityStyle] : STY[Math.floor(Math.random() * 5)];
+    const count = d0 > 70 ? 3 : d0 > 34 ? 2 : 1, route = [], last = ai.cityLast || []; let from = [...p.pos];
+    const ux = (target[0] - p.pos[0]) / d0, uz = (target[2] - p.pos[2]) / d0;
+    let side = Math.random() < 0.5 ? -1 : 1;
+    for (let i = 1; i <= count; i++) {
+      const f = i / (count + 1), ax = p.pos[0] + ux * d0 * f, az = p.pos[2] + uz * d0 * f, reach = Math.max(14, d0 * 0.42);
+      let best = null, bs = -1e9;
+      for (const n of N) {
+        const dx = n.p[0] - ax, dz = n.p[2] - az, dm = Math.hypot(dx, dz); if (dm > reach) continue;
+        const a = Math.hypot(n.p[0] - from[0], n.p[2] - from[2]), b = Math.hypot(target[0] - n.p[0], target[2] - n.p[2]); if (a < 6 || b < 5) continue;
+        if (route.some(q => Math.hypot(q[0] - n.p[0], q[2] - n.p[2]) < 7)) continue;
+        const lat = (dx * -uz + dz * ux); // de que lado da linha reta o ponto fica
+        let sc = Math.random() * 9 - Math.abs(dm - reach * 0.55) * 0.25;
+        if (style === 'alley') sc += n.kind === 'alley' ? 26 : n.kind === 'side' ? 8 : 0;
+        else if (style === 'outer') sc += n.ring * 30 + (n.kind === 'street' ? 5 : 0);
+        else if (style === 'center') sc += (1 - n.ring) * 30;
+        else if (style === 'inside') sc += n.kind === 'inside' ? 34 : n.kind === 'alley' ? 7 : 0;
+        else sc += lat * side * 1.1 + (n.kind === 'street' ? 3 : 0);
+        if (last.some(q => Math.hypot(q[0] - n.p[0], q[2] - n.p[2]) < 9)) sc -= 22; // nao repete o caminho da viagem anterior
+        if (sc > bs) { bs = sc; best = n; }
+      }
+      if (best) { route.push(best.p); from = best.p; }
+      if (style === 'zig') side = -side;
+    }
+    ai.cityLast = route.slice();
+    return route.length ? [...route, target] : null;
   }
 
   // canto perto (3-7 m) fora da linha de tiro do alvo, no mesmo piso

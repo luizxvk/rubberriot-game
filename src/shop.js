@@ -81,7 +81,7 @@ function gunModel(camo, ws = null, stamp = null) {
   const W = ws && WSKINS[ws], wpn = W ? W.wpn : WPN;
   const lo = W ? { body: W.of, ws, scope: null, laser: null } : { ...(getLoadouts()[WPN] || {}), scope: null, laser: null }; // so na Loja: arma limpa, sem mira red dot nem laser (pedido dele)
   if (camo) lo.camo = camo;
-  if (stamp) Object.assign(lo, { camo: null, pat: stamp, pat2: stamp, paint: '#2f5b8a', accent: '#d9822b' }); // vitrine da estampa: na Pintura e no Destaque
+  if (stamp) Object.assign(lo, { camo: null, pat: null, pat2: stamp, paint: '#2f5b8a', accent: '#d9822b' }); // vitrine da estampa: so na area do Destaque (09/11, pedido dele)
   const gun = buildGun(wpn, lo);
   const lz = gun.userData.laser; if (lz) lz.beam.removeFromParent();
   const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());

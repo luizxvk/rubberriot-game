@@ -26,6 +26,8 @@ export function toon(color, opts = {}) {
 // contorno so de perto (07/11, pedido dele): alem de OUTLINE_FAR (onde a nevoa ja come quase tudo) o casco nem e desenhado.
 // Valor atualizado todo quadro pelo main.js; 1e9 = sem limite (menus, luneta)
 export const OUTLINE_FAR = { value: 1e9 };
+// 09/11: Ajustes > Contornos. map = ate onde o contorno do cenario e desenhado; thin = molduras e vidros (a maioria dos triangulos)
+export const OUTLINE_CFG = { map: 1e9, thin: 1e9 };
 const outlineMat = new THREE.ShaderMaterial({
   uniforms: { th: { value: 0.045 }, uFar: OUTLINE_FAR, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
   fog: true,

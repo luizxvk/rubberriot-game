@@ -52,6 +52,10 @@ float stampAt(int k, vec2 q) {
 vec3 stampInk(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)) > 0.42 ? c * 0.32 : mix(c, vec3(0.93, 0.91, 0.86), 0.62); }
 `;
 
+// 09/11 (hotfix, travada ao escolher arma): o shader da arma leva so os desenhos em uso. Com os 24 juntos, chamados duas vezes,
+// o driver gastava centenas de ms e muita memoria compilando cada camo com estampa
+export const stampGlsl = (codes) => STAMP_GLSL.replace(/^\s*if \(k == (\d+)\).*$\n/gm, (l, n) => codes.includes(+n) ? l : '');
+
 // miniatura do botao: o mesmo desenho do shader, uma foto por estampa
 const THUMB = new Map();
 let quad = null;

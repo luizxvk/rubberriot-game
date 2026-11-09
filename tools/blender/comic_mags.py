@@ -84,40 +84,91 @@ def build(body, M, kind):
     o = bpy.data.objects.new(me.name, me); bpy.context.scene.collection.objects.link(o)
     return o
 
-# tambor de 40 da Pipoqueira (09/11, pedido dele): gargalo que entra no poco do original + tambor redondo deitado, uma malha so
-def drum(M):
+# tambor (09/11, pedido dele): gargalo que entra no poco + disco deitado com miolo, sulco e aba, uma malha so. lobes > 0 = ressaltos em volta (Pipoqueira)
+def drum(name, neck, cx, cy, cz, r, half, nw, nd, lobes=0):
     bm = bmesh.new()
-    t, b = M['top'], M['bot']
-    r, half = M['w'] * 1.9, M['w'] * 0.62
-    cy, cz, cx = b[1] - r * 0.72, b[2] + M['d'] * 0.08, t[0]
-    neck = [(t[0], t[1], t[2]), (b[0], (b[1] + cy) / 2, (t[2] + cz) / 2), (cx, cy, cz)]
     prev = first = None
-    for c in neck:
-        vs = [bm.verts.new(p) for p in ring(c[0], c[1], c[2], M['w'] * 0.46, M['d'] * 0.46, 3.0)]
+    for c in neck + [(cx, cy, cz)]:
+        vs = [bm.verts.new(p) for p in ring(c[0], c[1], c[2], nw, nd, 3.0)]
         if prev:
             for i in range(N_RING): bm.faces.new((prev[i], prev[(i + 1) % N_RING], vs[(i + 1) % N_RING], vs[i]))
         else: first = vs
         prev = vs
     bm.faces.new(list(reversed(first))); bm.faces.new(prev)
-    SEG = 28
-    prof = [(-half, 0.0), (-half, 0.5), (-half * 0.86, 0.56), (-half * 0.86, 0.84), (-half, 0.9), (-half * 0.94, 1.0), (half * 0.94, 1.0), (half, 0.9), (half * 0.86, 0.84), (half * 0.86, 0.56), (half, 0.5), (half, 0.0)]
+    SEG = 56 if lobes else 32
+    hub = half * 1.09
+    prof = [(-hub, 0.13), (-hub, 0.2), (-half * 0.98, 0.22), (-half, 0.5), (-half * 0.84, 0.56), (-half * 0.84, 0.82), (-half, 0.88), (-half * 0.94, 1.0), (half * 0.94, 1.0), (half, 0.88), (half * 0.84, 0.82), (half * 0.84, 0.56), (half, 0.5), (half * 0.98, 0.22), (hub, 0.2), (hub, 0.13)]
     rings = []
-    for x, k in prof[1:-1]:
-        rings.append([bm.verts.new((cx + x, -(cz + r * k * math.sin(i / SEG * math.tau)), cy + r * k * math.cos(i / SEG * math.tau))) for i in range(SEG)])
-    for a, b2 in zip(rings, rings[1:]):
-        for i in range(SEG): bm.faces.new((a[i], a[(i + 1) % SEG], b2[(i + 1) % SEG], b2[i]))
-    c0, c1 = bm.verts.new((cx - half, -cz, cy)), bm.verts.new((cx + half, -cz, cy))
+    for x, k in prof:
+        row = []
+        for i in range(SEG):
+            f = i / SEG * math.tau
+            bump = 1.0 + (0.075 if lobes and k >= 0.82 and math.cos(lobes * f) > 0.25 else 0.0)
+            row.append(bm.verts.new((cx + r * k * bump * math.sin(f), -(cz + x), cy + r * k * bump * math.cos(f))))  # 09/11 (pedido dele): de frente, o disco olha pra boca do cano
+        rings.append(row)
+    for p, q in zip(rings, rings[1:]):
+        for i in range(SEG): bm.faces.new((p[i], p[(i + 1) % SEG], q[(i + 1) % SEG], q[i]))
+    c0, c1 = bm.verts.new((cx, -(cz - hub), cy)), bm.verts.new((cx, -(cz + hub), cy))
     for i in range(SEG):
         bm.faces.new((c0, rings[0][(i + 1) % SEG], rings[0][i])); bm.faces.new((c1, rings[-1][i], rings[-1][(i + 1) % SEG]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    me = bpy.data.meshes.new('pdrum'); bm.to_mesh(me); bm.free(); me.materials.append(MAT)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); me.materials.append(MAT)
     for p in me.polygons: p.use_smooth = True
-    bpy.context.scene.collection.objects.link(bpy.data.objects.new('pdrum', me))
+    bpy.context.scene.collection.objects.link(bpy.data.objects.new(name, me))
+
+# pente curvo com grade (09/11, foto dele): arco de circulo igual ao pente original, nervuras na lateral e aneis. Medidas tiradas do pente de fabrica
+CURVED = { 'fusil_13': dict(cx=-0.0447, w=0.0655, d=0.195, d2=0.155, y0=0.185, z0=0.07, R=0.733, th=0.827) }
+CURVE_SPAN = { 1: 0.72, 5: 0.9, 3: 1.06, 2: 1.28, 4: 1.45, 6: 1.7 }  # o numero do modelo guarda o atributo (CMAG_STATS); o tamanho cresce junto com as balas
+SIDE_V = [-0.9, -0.5, -0.44, -0.26, -0.2, 0.2, 0.26, 0.44, 0.5, 0.9]
+def curved(body, C, kind):
+    span = CURVE_SPAN[kind]; R = C['R'] * span; th = C['th']; L = R * th
+    slim = {4: 0.84, 6: 0.78}.get(kind, 1.0)  # 09/11 (pedido dele): Extra e Gigante mais finos
+    bands = max(3, int(round(L / 0.1)))
+    ribs = [0.14 + j * (0.74 / (bands - 1)) for j in range(bands)]
+    st = sorted(set([0.0, 0.06, 0.11, 0.9, 0.935, 0.95, 0.985, 1.0] + [round(r + e, 4) for r in ribs for e in (-0.02, -0.011, 0.011, 0.02)]))
+    bm = bmesh.new(); prev = first = None
+    def loop(rv):  # contorno: lateral, frente, lateral, tras. rv = nervura na lateral
+        side = lambda v: 1.17 if rv and 0.25 < abs(v) < 0.45 else 1.0
+        return [(side(v), v) for v in SIDE_V] + [(0.72, 1.0), (0.0, 1.04), (-0.72, 1.0)] + [(-side(v), v) for v in reversed(SIDE_V)] + [(-0.72, -1.0), (0.0, -1.04), (0.72, -1.0)]
+    for s in st:
+        a = th * s
+        hd0 = C['d'] / 2 + (C['d2'] * slim / 2 - C['d'] / 2) * min(1.0, s / 0.2)
+        k = 1.0
+        for r in ribs:
+            if abs(s - r) < 0.0115: k = 1.055
+        if s >= 0.95: k = 1.12
+        elif s >= 0.935: k = 1.03
+        rv = 0.1 < s < 0.92
+        vs = []
+        for u, v in loop(rv):
+            rr = R + v * hd0 * k
+            x, y, z = C['cx'] + u * C['w'] / 2 * k * (slim + (1 - slim) * 0.4), C['y0'] - rr * math.sin(a), C['z0'] - R + rr * math.cos(a)
+            vs.append(bm.verts.new((x, -z, y)))
+        if prev:
+            n = len(vs)
+            for i in range(n): bm.faces.new((prev[i], prev[(i + 1) % n], vs[(i + 1) % n], vs[i]))
+        else: first = vs
+        prev = vs
+    bm.faces.new(list(reversed(first))); bm.faces.new(prev)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new('cmag_%s_%d' % (body, kind)); bm.to_mesh(me); bm.free(); me.materials.append(MAT)
+    for p in me.polygons: p.use_smooth = True
+    bpy.context.scene.collection.objects.link(bpy.data.objects.new(me.name, me))
 
 n = 0
 for body, M in DATA.items():
-    for kd in STYLES: build(body, M, kd); n += 1
-if 'pistol_2' in DATA: drum(DATA['pistol_2'])
+    for kd in STYLES:
+        if body in CURVED: curved(body, CURVED[body], kd)
+        else: build(body, M, kd)
+        n += 1
+if 'pistol_2' in DATA:  # Pipoqueira: encostado no fundo do cabo (y -0,414) e centrado no pente, sem entrar nele
+    M = DATA['pistol_2']; r = M['w'] * 1.9; bx, by, bz = M['bot']
+    drum('pdrum', [tuple(M['top']), (bx, -0.3, (M['top'][2] + bz) / 2)], bx, -0.414 - r + 0.006, bz, r, M['w'] * 0.85, M['w'] * 0.46, M['d'] * 0.46, lobes=8)
+for body, under in (('subfusil_13', -0.14), ('subfusil_8', -0.12)):  # tambor redondo chato (foto dele), 2 tamanhos. under = fundo do poco
+    if body not in DATA: continue
+    M = DATA[body]; x, ty, tz = M['top']
+    for kd, r, half in ((1, 0.24, 0.075), (2, 0.31, 0.095)):
+        drum('cdrum_%s_%d' % (body, kd), [(x, ty, tz), (x, under, tz)], x, under - r + 0.02, tz, r, half, M['w'] * 0.46, M['d'] * 0.46)
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', export_apply=True, export_yup=True)
 print('PENTES', n, os.path.getsize(OUT))

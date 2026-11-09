@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { TracerFx, TRACER_GLOW } from './tracerfx.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving, splitByCell, outlineCells } from './toon.js';
+import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving, splitByCell, outlineCells, OUTLINE_FAR, OUTLINE_CFG } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { standable, floorAt } from '../shared/nav.js';
 import { buildGun, rocketMesh } from './arsenal.js';
@@ -475,8 +475,9 @@ export function buildWorld(scene, M) {
     });
   }
   // 09/11: celular nao desenha o contorno fino das molduras longe (o PC continua igual)
-  let thinHulls = null, thinTick = 0;
-  if (matchMedia('(pointer: coarse)').matches) ready.then(() => { const l = []; root.traverse(o => { if (!o.userData.cellHull || !/trim|glass/.test(o.parent?.name || '')) return; o.geometry.computeBoundingSphere(); o.userData.cx = o.geometry.boundingSphere.center.x; o.userData.cz = o.geometry.boundingSphere.center.z; l.push(o); }); if (l.length) thinHulls = l; });
+  // 09/11: alem do corte do contorno o casco nao desenhava nada, mas ainda custava a chamada e todos os triangulos. Agora sai do desenho (PC e celular)
+  let cellHulls = null, thinTick = 0; const touchThin = matchMedia('(pointer: coarse)').matches ? MAP_THIN_FAR : 1e9;
+  ready.then(() => { const l = []; root.traverse(o => { if (!o.userData.cellHull) return; o.geometry.computeBoundingSphere(); o.userData.cx = o.geometry.boundingSphere.center.x; o.userData.cz = o.geometry.boundingSphere.center.z; o.userData.thin = /trim|glass/.test(o.parent?.name || ''); l.push(o); }); if (l.length) cellHulls = l; });
   paintNight(false); ready.then(() => paintNight(nightOn)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
     root, ready, setNight,
@@ -484,7 +485,7 @@ export function buildWorld(scene, M) {
     // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
     cull(p) {
       sunSpr.position.set(p.x + sunOff.x, p.y + sunOff.y + sunBob, p.z + sunOff.z); // sol/lua sempre dentro do desenho
-      if (thinHulls && ++thinTick % 12 === 0) for (const o of thinHulls) o.visible = Math.hypot(p.x - o.userData.cx, p.z - o.userData.cz) < MAP_THIN_FAR + MAP_CELL * 0.7;
+      if (cellHulls && ++thinTick % 12 === 0) for (const o of cellHulls) o.visible = Math.hypot(p.x - o.userData.cx, p.z - o.userData.cz) < Math.min(OUTLINE_FAR.value, o.userData.thin ? Math.min(OUTLINE_CFG.thin, touchThin) : OUTLINE_CFG.map) + MAP_CELL * 0.55;
       if (!inner) return;
       inner.visible = Math.max(Math.abs(p.x), Math.abs(p.z)) < M.studio + 0.6 || !fdoor || Math.hypot(p.x - fdoor.x, p.z - fdoor.z) < 18 || p.y > 13;
     },

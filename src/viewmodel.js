@@ -570,7 +570,6 @@ export class ViewModel {
       this.akSpinL = spinL;
     }
     this.akSpinR = spinR; // giro no dedo da arma da direita (akimbo e revolver)
-    if (st.crouch) ty -= 0.01 * (1 - st.ads); // agachado a arma desce um pouco, mas mirando fica no centro (a mira da arma batia abaixo da cruz)
     // deslize (31/10, pedido dele, estilo BO3): a direita segura a arma tombada pra esquerda com o cano subindo
     // e a mao esquerda solta e desce ate o chao, raspando. Mirando deslizando a pose some (atira normal)
     this.fSlide = damp(this.fSlide || 0, st.slide && st.ads < 0.3 && this.wpn !== 'fists' ? 1 : 0, st.slide ? 14 : 9, dt);
@@ -667,6 +666,13 @@ export class ViewModel {
     // gadget de baixo do cano em uso (03/11, estilo COD): a arma da uma levantada pra cima e volta suave
     this.gadK = (this.gadK || 0) + ((st.gadget ? 1 : 0) - (this.gadK || 0)) * (1 - Math.exp(-12 * st.dt));
     if (this.gadK > 0.002) { this.rig.rotation.x += this.gadK * 0.16; this.rig.position.y += this.gadK * 0.02; this.rig.position.z += this.gadK * 0.012; }
+    // 09/11 (pedido dele): agachar e pular com a arma em movimento LINEAR (velocidade constante, sem mola). Mirando a pose some: a mira fica no centro
+    { const toward = (v, to, r) => v + Math.max(-r, Math.min(r, to - v));
+      this.crouchL = toward(this.crouchL || 0, st.crouch && !st.slide ? 1 : 0, st.dt / 0.16);
+      this.airL = toward(this.airL || 0, st.air ? 1 : 0, st.dt / (st.air ? 0.14 : 0.11));
+      const free = 1 - Math.min(1, st.ads);
+      if (this.crouchL > 0) { this.rig.position.y -= this.crouchL * 0.03 * free; this.rig.position.x -= this.crouchL * 0.008 * free; this.rig.rotation.z += this.crouchL * 0.11 * free; this.rig.rotation.x -= this.crouchL * 0.035 * free; }
+      if (this.airL > 0) { this.rig.position.y += this.airL * 0.022 * free; this.rig.position.z += this.airL * 0.012 * free; this.rig.rotation.x += this.airL * 0.075 * free; this.rig.rotation.z -= this.airL * 0.03 * free; } }
     if (mlD > 0) { this.rig.position.x += mlD * 0.07; this.rig.position.y -= mlD * 0.2; this.rig.rotation.x -= mlD * 0.45; this.rig.rotation.z -= mlD * 0.55; }
     if (this.akimbo) { // espelho da direita, com o recuo proprio
       this.kick2 = damp(this.kick2 || 0, 0, 12, dt);

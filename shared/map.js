@@ -20,7 +20,18 @@ function builder(arena) {
   const box = (cx, cz, w, d, h, y0 = 0, kind = 'crate', extra = {}) => {
     // forma redonda ou em camadas (06/11, pedido dele: a colisao passava do desenho no Canyon Poeira): a colisao vira degraus
     // DENTRO do desenho. A 1a caixa leva o tipo e as medidas do desenho (vis); as outras sao so colisao ('tier', nao desenha)
-    const T = SHAPE_TIERS[kind];
+    const MB = MODEL_BOXES[kind];
+    if (MB && !extra.vis) { // o modelo gira igual ao desenho: de lado se a caixa e mais larga que funda, meia volta nas sementes impares
+      const vis = { min: [cx - w / 2, y0, cz - d / 2], max: [cx + w / 2, y0 + h, cz + d / 2] }, L = kind === 'truck' ? 4.9 : Math.max(w, d), along = d > w, flip = (extra.seed || 0) % 2;
+      MB.forEach(([x0, x1, a0, a1, z0, z1], i) => {
+        let ax = x0 * L, bx = x1 * L, az = z0 * L, bz = z1 * L;
+        if (flip) { [ax, bx] = [-bx, -ax]; [az, bz] = [-bz, -az]; }
+        if (!along) [ax, bx, az, bz] = [az, bz, -bx, -ax];
+        boxes.push({ min: [cx + ax, y0 + (a0 <= 0.125 ? 0 : a0 * L), cz + az], max: [cx + bx, y0 + a1 * L, cz + bz], ...(i ? { kind: 'tier' } : { kind, ...extra, vis }) }); // o vao de baixo do chassi nao existe na colisao (ninguem entra embaixo)
+      });
+      return;
+    }
+    const T = kind === 'machine' && h >= 3 ? [[0, 0.683, 1]] : SHAPE_TIERS[kind]; // 09/11 (varredura): maquina da Fabrica desenhada com 2,05 m tinha caixa de 3 m
     if (T && !extra.vis) {
       const vis = { min: [cx - w / 2, y0, cz - d / 2], max: [cx + w / 2, y0 + h, cz + d / 2] }, thin = kind === 'cliff';
       T.forEach(([a, b, k, k2 = k], i) => {
@@ -1009,6 +1020,11 @@ function docas() {
 // degraus de colisao por forma: [altura de baixo, de cima, largura] em fracao da caixa. Duna = inscritos na meia esfera do desenho
 // (raio 0,62 da largura, altura 1,05); mesa e paredao = as 3 camadas do desenho (paredao afina so na espessura); pedra = dentro do icosaedro
 export const ROOF_EAVE = 0.35; // beiral do telhado de duas aguas (o desenho do Blender usa o mesmo)
+// 09/11 (pedido dele: hitbox exatamente na moldura): caixas tiradas do volume real do modelo (voxel do .glb), em fracao do comprimento: [x0, x1, y0, y1, z0, z1], frente = -z
+const MODEL_BOXES = {
+  car: [[-0.2, 0.2, 0.075, 0.35, -0.45, 0.425], [-0.175, 0.175, 0.05, 0.475, -0.125, 0.4], [-0.225, 0.225, 0.075, 0.225, -0.5, 0.5], [-0.25, 0.225, 0, 0.275, -0.45, -0.25], [-0.25, 0.225, 0, 0.275, 0.225, 0.425], [-0.15, 0.15, 0.075, 0.5, -0.175, 0.25]],
+  truck: [[-0.205, 0.22, 0.1, 0.325, -0.475, 0.475], [-0.18, 0.195, 0.1, 0.525, -0.2, 0.075], [-0.255, 0.27, 0, 0.275, 0.2, 0.425], [-0.23, 0.245, 0, 0.275, -0.425, -0.2], [-0.255, 0.245, 0.125, 0.225, -0.5, 0.5], [-0.13, 0.145, 0.05, 0.375, -0.45, -0.2]],
+};
 const SHAPE_TIERS = {
   // chafariz redondo: bacia em octogono dentro do circulo + a coluna do meio (08/11: a coluna nao tinha corpo)
   fountain: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92], [1, 2.2, 0.15]],
@@ -1016,7 +1032,8 @@ const SHAPE_TIERS = {
   dune: [[0, 0.35, 0.82], [0.35, 0.7, 0.65], [0.7, 0.95, 0.37]],
   mesa: [[0, 1 / 3, 1], [1 / 3, 2 / 3, 0.93], [2 / 3, 1, 0.86]],
   cliff: [[0, 1 / 3, 1], [1 / 3, 2 / 3, 0.92], [2 / 3, 1, 0.84]],
-  rock: [[0, 0.9, 0.56], [0, 0.5, 0.88, 0.36], [0, 0.5, 0.36, 0.88]], // 08/11: a metade de baixo, a mais larga, acompanha o desenho
+  rock: [[0, 0.82, 0.5], [0, 0.46, 0.74, 0.3], [0, 0.46, 0.3, 0.74]], // 09/11 (varredura hitbox-check): estava 0,2 a 0,4 m maior que o desenho
+  adobe: [[0, 0.91, 1]], // 09/11: o desenho termina em 91% da caixa // 08/11: a metade de baixo, a mais larga, acompanha o desenho
   // cilindro em pe (caixa d'agua, silo): 3 caixas cruzadas, todas dentro do circulo (quina a quina = octogono)
   tank: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92]],
   silo: [[0, 1, 0.707], [0, 1, 0.92, 0.38], [0, 1, 0.38, 0.92]],
@@ -1375,6 +1392,9 @@ export function getMap(id) {
   if (cache[id]) return cache[id];
   const M = BUILDERS[id]();
   if (id !== 'ilha' && id !== 'tinteiro') M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
+  // 09/11: item de chao que caiu dentro de uma peca (carro novo, caixa) vai pro ponto livre mais perto
+  const stuck = (x, z) => M.boxes.some(b => b.min[1] < 1.5 && b.max[1] > 0.3 && x > b.min[0] - 0.45 && x < b.max[0] + 0.45 && z > b.min[2] - 0.45 && z < b.max[2] + 0.45);
+  if (['becos', 'feira', 'largo', 'cortejo'].includes(id)) for (const p of M.pickups) { if (p.pos[1] >= 0.1 || !stuck(p.pos[0], p.pos[2])) continue; fit: for (let r = 0.75; r <= 7; r += 0.75) for (let k = 0; k < 16; k++) { const x = p.pos[0] + Math.cos(k / 16 * Math.PI * 2) * r, z = p.pos[2] + Math.sin(k / 16 * Math.PI * 2) * r; if (Math.abs(x) < M.arena - 1 && Math.abs(z) < M.arena - 1 && !stuck(x, z)) { p.pos = [+x.toFixed(2), p.pos[1], +z.toFixed(2)]; break fit; } } }
   return (cache[id] = M);
 }
 
@@ -1408,7 +1428,7 @@ export function propBoxes(blimps, cars) {
     if (k === 'sentry') out.push({ x: b.pos[0], y: b.pos[1], z: b.pos[2], yaw: 0, hw: 0.42, hl: 0.42, h: 1.75, noRay: true });
     else if (k === 'beacon') out.push({ x: b.pos[0], y: b.pos[1], z: b.pos[2], yaw: 0, hw: 0.22, hl: 0.22, h: 0.75, noRay: true });
   }
-  for (const c of cars || []) if (!c.deadT && !c.seats?.some(Boolean)) out.push({ x: c.pos[0], y: c.pos[1], z: c.pos[2], yaw: c.yaw, hw: 1.1, hl: 1.95, h: 1.4, noRay: true, car: c.id });
+  for (const c of cars || []) if (!c.deadT && !c.seats?.some(Boolean)) { out.push({ x: c.pos[0], y: c.pos[1], z: c.pos[2], yaw: c.yaw, hw: 1.12, hl: 1.95, h: 1.3, noRay: true, car: c.id }); out.push({ x: c.pos[0], y: c.pos[1], z: c.pos[2], yaw: c.yaw, hw: 0.97, hl: 0.3, h: 1.75, noRay: true, car: c.id }); } // 09/11: lataria + para-brisa (medidos no modelo)
   return out;
 }
 function pushDyn(B, pos, vel, rad, height) {
