@@ -525,7 +525,7 @@ export class Hud {
     g.fillStyle = 'rgba(236,233,225,.92)'; g.fillRect(0, 0, 256, 256);
     g.fillStyle = 'rgba(20,18,16,.55)';
     for (const b of M.boxes) {
-      if (b.max[1] - b.min[1] < 1 || b.kind === 'pipe') continue;
+      if (b.max[1] - b.min[1] < 1 || b.kind === 'pipe' || b.kind === 'nogo') continue;
       g.fillRect(128 + b.min[0] * k, 128 + b.min[2] * k, (b.max[0] - b.min[0]) * k, (b.max[2] - b.min[2]) * k);
     }
     this.radarBg = c;

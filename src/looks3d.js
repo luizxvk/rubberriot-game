@@ -3,11 +3,13 @@
 import * as THREE from 'three';
 import { ink, toon, PAL, smoothGeo } from './toon.js';
 import { camoGlsl, camoTime } from './camos.js';
+import { SKIN_CODE2, SKIN_GLSL2, SKIN_GLSL_HELP } from './skins3d.js';
+export { buildSkinFx } from './skins3d.js';
 
 // skin animada do corpo (Loja, 03/11): shader PROPRIO de cada skin (nao e o das camos), no corpo preto todo.
 // Um material por skin pra todos os bonecos (o tempo e o mesmo uniform das camos). camoGlsl(0) = so as funcoes de
 // apoio das camos (ruido, voronoi); skinColor desenha a skin e usa a borda (fr) pra um brilho de contorno.
-export const SKIN_CODE = { lapis: 1, giz: 2, holograma: 3, discoteca: 4, massinha: 5, planta: 6, dragao: 7, tempestade: 8, papelao: 9, trico: 10, aquarela: 11, pixel: 12 };
+export const SKIN_CODE = { lapis: 1, giz: 2, holograma: 3, discoteca: 4, massinha: 5, planta: 6, dragao: 7, tempestade: 8, papelao: 9, trico: 10, aquarela: 11, pixel: 12, ...SKIN_CODE2 };
 // 03/11 (pedido dele): temas que NAO existem em nenhuma camo nem efeito do jogo (as 8 primeiras repetiam lava, galaxia...)
 const SKIN_GLSL = /* glsl */`
 vec3 skinColor(int k, vec3 p, vec3 n, float fr, float t, out vec3 glow) {
@@ -104,9 +106,18 @@ vec3 skinColor(int k, vec3 p, vec3 n, float fr, float t, out vec3 glow) {
     glow = c * 0.2 * (1.0 - gap);
     return mix(c, vec3(0.04), gap);
   }
+  ${SKIN_GLSL2}
   return vec3(1.0);
 }
-`;const SKINMAT = new Map();
+`;
+// 09/11 (bateria de desempenho): cada programa levava as 29 skins (37 mil caracteres) e a 1a partida do PC ficava 30 s
+// parada traduzindo shader. Agora cada skin compila so o proprio bloco
+function skinGlslOf(code) {
+  const end = SKIN_GLSL.lastIndexOf('return vec3(1.0);'), parts = SKIN_GLSL.slice(0, end).split(/(?=\r?\n  if \(k == \d+\) \{)/);
+  const own = parts.find(s => s.trimStart().startsWith(`if (k == ${code}) {`));
+  return own ? parts[0] + own + '\n  ' + SKIN_GLSL.slice(end) : SKIN_GLSL;
+}
+const SKINMAT = new Map();
 export function skinMat(id) {
   const code = SKIN_CODE[id];
   if (!code) return null;
@@ -117,7 +128,7 @@ export function skinMat(id) {
     Object.assign(sh.uniforms, m.userData.u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vCamoPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvCamoPos = position * 2.4;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + camoGlsl(0) + SKIN_GLSL + '\nvec3 gCamoGlow = vec3(0.0);')
+      .replace('#include <common>', '#include <common>\n' + camoGlsl(0) + SKIN_GLSL_HELP + skinGlslOf(code) + '\nvec3 gCamoGlow = vec3(0.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCamoGlow;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         { vec3 sg; vec3 nn = normalize(vNormal); float fr = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 2.0);

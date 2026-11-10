@@ -141,11 +141,12 @@ export const BR = {
 };
 // Tipos de bala (peca "Municao" do Arsenal, por arma; liberadas por desafio). Mods multiplicam os status
 // (mesma regra do arsenal). O servidor aplica fogo, respingo e parede; a marca no minimapa e do cliente.
+export const CONV_RANGE = { 'subfusil_8|auto': 0.55 }; // kit que muda o alcance (o servidor manda): 09/11, pedido dele
 export const AMMO = {
   fire: { dmg: 0.85, burn: 9, burnT: 2, icon: 'local_fire_department' },    // alvo queima: +9 de dano em 2 s (07/11, pedido dele: nerf de 35%, era 14)
   trace: { mark: 3, icon: 'my_location' },                                   // alvo no seu minimapa por 3 s
   boom: { mag: 0.75, kick: 1.2, splash: 3.4, splashK: 0.6, icon: 'flare' },  // dano de AREA (07/11, pedido dele: buff; era raio 2,2 m e 35%): quem esta a 3,4 m do acerto leva ate 60% do tiro
-  ap: { rate: 1.12, pierce: 0.7, wallK: 0.75, icon: 'double_arrow' },        // atravessa parede fina (ate 0,7 m)
+  ap: { rate: 1.12, pierce: 0.7, wallK: 0.75, wallFall: 0.45, icon: 'double_arrow' }, // atravessa parede fina (ate 0,7 m); da 2a parede em diante perde mais dano (09/11, pedido dele)
   // balote (31/10, pedido dele): so escopeta. Um projetil so (sem espalhar), 60% do dano somado dos chumbos,
   // espalha 12% do normal, alcance 2,6x e cai devagar com a distancia
   slug: { only: 'shotgun', slugK: 0.6, spread: 0.12, range: 2.6, icon: 'gps_fixed' },

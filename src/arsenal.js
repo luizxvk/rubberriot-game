@@ -53,7 +53,7 @@ export const CATEGORY = {
   // escopeta: as 3 lunetas do fim da lista so cabem no Bacamarte (LONG_SCOPE)
   shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9', 'sniper_scope_1', 'sniper_scope_2'], chargers: ['shotgun_charguer_1'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
   melee: { bodies: MELEE, scopes: [], chargers: [], handles: [] },
-  sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], scopes: ['sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'] /* 07/11 (pedido dele): Luneta Convencional (sniper_scope_0) saiu; ficam Militar, Termica e Zoom */, chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: [] },
+  sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], scopes: ['sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'] /* 07/11 (pedido dele): Luneta Convencional (sniper_scope_0) saiu; ficam Militar, Termica e Zoom */, chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: ['sniper_handle_1', 'sniper_handle_2', 'sniper_bipod_1', 'sniper_bipod_2'] },
 };
 // Metralhadora (04/11, pedido dele: categoria nova). Miras e empunhaduras do fuzil (sem gadget de baixo do cano: o
 // pente enorme fica embaixo); o pente de cada uma vem do arquivo (lmg_charger_N)
@@ -141,11 +141,14 @@ const LONG_SCOPE = { shotgun_1: ['sniper_scope_1', 'sniper_scope_2'] };
 // cadencia bem maior, cada tiro mais fraco, abre mais e pula mais. Outras armas: so com o OK dele.
 export const CONV_KITS = {
   shotgun_2: { auto: { mode: 'auto', rate: 0.55, dmg: 0.78, spread: 1.15, kick: 1.25, reload: 1.1 } },
-  subfusil_8: { auto: { mode: 'auto', kick: 1.08 } },
+  subfusil_8: { auto: { mode: 'auto', kick: 2.89 } }, // 09/11 (pedido dele): Controle vai pra 32% na barra; o alcance menor esta em CONV_RANGE
+  sniper_2: { auto: { mode: 'auto', rate: 1.25, kick: 1.2, spread: 1.1 } }, // Marretao automatico (09/11, pedido dele): cadencia baixa
   fusil_7: { auto: { mode: 'auto', rate: 0.62, dmg: 0.72, spread: 1.1, kick: 1.2 } }, // Relampago automatica (02/11, pedido dele): cadencia de fuzil comum, cada tiro bem mais fraco que o semi
   fusil_12: { burst: { mode: 'burst', burst: 3, rate: 0.45, dmg: 0.6, kick: 0, spread: 0.9 } }, // Bico de Pena em rajada (03/11, pedido dele): 3 por puxada, coice ZERO, cada bala bem mais fraca
-  sniper_0: { charge: { adsTime: 1.1, move: 0.95 } }, // Luneta: Canhao de Carga (01/11): segura 3 s = abate na hora, qualquer distancia // Dois Toques (SCAR-L) automatica: mesmo dano e cadencia da rajada, so o modo muda (pedido dele 01/11); libera no nivel do modelo
+  // Dois Toques (SCAR-L) automatica: mesmo dano e cadencia da rajada, so o modo muda (pedido dele 01/11); libera no nivel do modelo
 };
+// 09/11 (pedido dele): na pistola o pe da mira abraca o ferrolho: o que assenta e a parte da mira em cima dele, nao as pontas que sobram dos lados
+function sightUnder(id, cx, half, fb) { const a = parts[id].geo.attributes.position; let m = Infinity; for (let i = 0; i < a.count; i++) if (Math.abs(a.getX(i) - cx) < half) m = Math.min(m, a.getY(i)); return Number.isFinite(m) ? m : fb; }
 export const convOptions = (body) => Object.keys(CONV_KITS[body] || {});
 // akimbo: pistola toda; nas compridas so um modelo (pedido dele 01/11)
 const AKIMBO_BODIES = { smg: ['subfusil_5'], shotgun: ['shotgun_2'] };
@@ -699,6 +702,8 @@ function remodelSights() {
     g.translate((b.min.x + b.max.x) / 2 - (gb.min.x + gb.max.x) / 2, b.max.y - gb.max.y, (b.min.z + b.max.z) / 2 - (gb.min.z + gb.max.z) / 2); g.computeBoundingBox();
     parts[h] = { ...p, geo: g, box: g.boundingBox.clone(), comic: true };
   }
+  // snipers (09/11, pedido dele): empunhaduras e bipes do Blender, sem peca de fabrica por baixo
+  for (const h of CATEGORY.sniper.handles) { if (parts[h] || !hasComic(h)) continue; const g = comicGeo(h, uv, uvL); g.computeBoundingBox(); parts[h] = { ...parts.subfusil_handle_2, geo: g, box: g.boundingBox.clone(), comic: true }; }
 }
 // estica o pente de fabrica pra baixo a partir da boca (topo fica no lugar); uma cinta na base marca o tamanho novo
 function buildExtMags() {
@@ -979,11 +984,11 @@ export function ttApply(cfg) {
       if (zn === 'del') return;
       let ge = o.geometry.clone().applyMatrix4(o.matrixWorld); if (ge.index) ge = ge.toNonIndexed();
       for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal') ge.deleteAttribute(k);
-      ge.scale(u, u, u); ge.userData.zn = zn === 'mag' ? 'dark' : zn === 'iron' || zn === 'fixed' ? 'paint' : zn;
+      ge.scale(u, u * (cfg.sy || 1), u); ge.userData.zn = zn === 'mag' ? 'dark' : zn === 'iron' || zn === 'fixed' ? 'paint' : zn;
       (zn === 'mag' ? mag : zn === 'iron' ? iron : zn === 'fixed' ? fixed : body).push(ge);
-    } else if (/^m_/.test(o.name)) marks[o.name.slice(2)] = o.getWorldPosition(new THREE.Vector3()).multiplyScalar(u);
+    } else if (/^m_/.test(o.name)) marks[o.name.slice(2)] = o.getWorldPosition(new THREE.Vector3()).multiplyScalar(u).multiply(new THREE.Vector3(1, cfg.sy || 1, 1));
   });
-  for (const [k, v] of Object.entries(cfg.marks || {})) marks[k] = new THREE.Vector3(...v).multiplyScalar(u); // marcado no editor
+  for (const [k, v] of Object.entries(cfg.marks || {})) marks[k] = new THREE.Vector3(...v).multiplyScalar(u).multiply(new THREE.Vector3(1, cfg.sy || 1, 1)); // marcado no editor
   // regra dele (07/11, pra tudo): camuflagem na area MAIOR, destaque na MENOR. Se o destaque cobre mais que a pintura, as duas trocam
   // 07/11 (pedido dele): TODA arma tem area de destaque e de camuflagem. Modelo todo de metal (MP5, Thompson, Deagle...) pintava
   // inteiro: se o destaque cobre menos de 8%, o PUNHO (perto da marca da empunhadura, abaixo do meio) e a CORONHA (atras do punho) viram destaque
@@ -2195,7 +2200,7 @@ function buildGunParts(wpn, lo) {
         hs.sort((x, y) => x - y);
         if (hs.length) seat = hs[Math.floor(hs.length * (BP.tt ? 0.5 : 0.35))]; // TT: mediana (a checagem mede a mesma coisa)
       }
-      if ((!nat || SCOPE_FWD[lo.body]) && Number.isFinite(seat)) shift.y = seat + (BP.tt ? 0.0015 * BP.u : -0.006) - b.min.y; // mira que andou pra frente assenta de novo no corpo; TT: base 1,5 mm ACIMA do topo real (anti-pisca)
+      if ((!nat || SCOPE_FWD[lo.body]) && Number.isFinite(seat)) shift.y = seat + (BP.tt ? 0.0015 * BP.u : -0.006) - (wpn === 'pistol' && !nat ? sightUnder(id, (b.min.x + b.max.x) / 2, (bodyBox.max.x - bodyBox.min.x) * 0.4, b.min.y) : b.min.y); // mira que andou pra frente assenta de novo no corpo; TT: base 1,5 mm ACIMA do topo real (anti-pisca)
       if (!nat) shift.y += adjV('scope').y;
       // janela livre: nada do corpo (massa de mira, ferrolho, alca) pode passar na frente da lente.
       // Se passar, a mira sobe e ganha um suporte (riser) embaixo.
@@ -2454,6 +2459,10 @@ const GRIP_TRAITS = {
   subfusil_handle_3: { adsTime: 0.86, kick: 0.88, spread: 1.05 },            // angulada: mira rapida
   subfusil_handle_6: { spread: 0.78, kick: 0.9, move: 0.97 },                // curta: tiro de quadril
   fusil_handle_2: { kick: 0.6, spread: 0.88, adsTime: 1.16, move: 0.93 },    // pesada: trava a arma
+  sniper_handle_1: { adsTime: 0.9, kick: 1.08 },                               // colher de pau: mira mais rapido, sacode mais
+  sniper_handle_2: { kick: 0.78, adsTime: 1.05, move: 0.98 },                  // mola: segura o coice
+  sniper_bipod_1: { spread: 0.75, kick: 0.7, adsTime: 1.12, move: 0.93 },      // bipe leve
+  sniper_bipod_2: { spread: 0.6, kick: 0.5, adsTime: 1.24, move: 0.86 },       // bipe pesado: quase nao mexe, anda devagar
   akimbo: { mag: 2, rate: 0.72, dmg: 0.86, spread: 1.15, kick: 1.1, reload: 1.55, move: 0.97 }, // duas pistolas: dobra o pente e alterna as maos; sem mirar
 };
 

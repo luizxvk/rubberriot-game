@@ -5,7 +5,7 @@ import { getMap } from '../shared/map.js';
 import { trackOf, trackAt, trackY } from '../shared/escort.js';
 import fs from 'fs';
 const id = process.argv[2] || 'vila', M = getMap(id);
-const boxes = M.boxes.filter(b => b.kind !== 'tier' && b.kind !== 'roof').map(b => { const v = b.vis || b, o = { k: b.kind, min: v.min, max: v.max }; for (const k of ['roof', 'team', 'seed', 'col', 'door', 'floors', 'sign', 'deck']) if (b[k] !== undefined) o[k] = b[k]; return o; });
+const boxes = M.boxes.filter(b => b.kind !== 'tier' && b.kind !== 'roof' && b.kind !== 'nogo').map(b => { const v = b.vis || b, o = { k: b.kind, min: v.min, max: v.max }; for (const k of ['roof', 'team', 'seed', 'col', 'door', 'floors', 'sign', 'deck']) if (b[k] !== undefined) o[k] = b[k]; return o; });
 let trackS = null;
 if (M.track) { const { len } = trackOf(M); trackS = []; for (let d = 0; d <= len; d += 2) { const p = trackAt(M, d); trackS.push([p.x, trackY(M, p.x, p.z), p.z]); } }
 fs.writeFileSync(new URL('../tools/blender/' + id + '-layout.json', import.meta.url), JSON.stringify({ arena: M.arena, boxes, track: M.track || null, trackS, quayZ: M.quayZ ?? null, studio: M.studio ?? null, deco: M.deco ?? null }));

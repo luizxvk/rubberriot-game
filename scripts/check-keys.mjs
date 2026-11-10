@@ -42,6 +42,11 @@ const { BANNERS } = await import('../shared/banners.js'), bnSrc = fs.readFileSyn
 for (const b of BANNERS) { if (b.mastery) { if (!both('mstStarring')) falta.push('mstStarring'); continue; } /* poster de mestre: desenho mstArt e nome montados em codigo (07/11) */ if (!both('bn_' + b.id)) falta.push('bn_' + b.id); if (!new RegExp(String.raw`^\s*${b.id}: \(\)`, 'm').test(bnSrc)) falta.push('desenho do banner ' + b.id); }
 // miras (04/11): nome proprio nos dois idiomas
 for (const m of fs.readFileSync('src/arsenal.js', 'utf8').match(/SCOPE_NAMED = \[[^\]]+/)[0].matchAll(/'(\w+)'/g)) if (!both('scn_' + m[1])) falta.push('scn_' + m[1]);
+// REGRA dele (09/11): peca de arma nunca aparece com chave crua (gpn_sniper_handle_1). Le as listas do proprio arsenal
+{ const ars = fs.readFileSync('src/arsenal.js', 'utf8'), bloco = (ini) => { const a = ars.indexOf(ini); return a < 0 ? '' : ars.slice(a, ars.indexOf('\n};', a)); };
+  for (const m of ars.matchAll(/\bhandles: \[([^\]]*)\]/g)) for (const [, id] of m[1].matchAll(/'(\w+)'/g)) { const k = id === 'akimbo' ? 'akimbo' : id.startsWith('gd_') ? id : 'gpn_' + id; if (!both(k)) falta.push('nome da empunhadura: ' + k); }
+  for (const [, id] of bloco('export const MUZZLES = {').matchAll(/^\s*(\w+):/gm)) if (!both('mz_' + id)) falta.push('nome do bocal: mz_' + id);
+  for (const [, id] of bloco('export const CONV_KITS = {').matchAll(/\b(\w+): \{ mode:/g)) if (!both('conv_' + id)) falta.push('nome do kit: conv_' + id); }
 // mapa e vilao da noite (03/11): nome nos dois idiomas; sala que abre por porta tambem
 const { MAP_IDS } = await import('../shared/map.js'), { MOBS } = await import('../shared/mobs.js'), { getMap } = await import('../shared/map.js');
 for (const k of MAP_IDS) if (!both('map_' + k)) falta.push('map_' + k);

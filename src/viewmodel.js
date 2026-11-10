@@ -521,6 +521,7 @@ export class ViewModel {
       const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / (sc?.big ? 1 : this.fovK || 1); // escala de FOV afasta a mira tambem; luneta segue enchendo a tela
       let relief = sc ? sc.lensR * VM_SCALE / (half * (sc.big ? 0.78 : 0.14)) : 0.42; // 08/11 (pedido dele): luneta perto do olho como no COD, com a borda do tubo a vista (era 0,62)
       if (pistol && !sc?.big) relief = Math.max(0.6, relief * 1.9);
+      if (pistol && sc?.big) relief = sc.lensR * VM_SCALE / (half * 0.36); // 09/11 (pedido dele): luneta na pistola fica longe do olho, braco esticado; a das snipers nao muda
       if (!sc && g.ironDepth) relief = Math.max(relief, g.ironDepth * VM_SCALE + 0.2); // ferro do TT (07/11): o olho fica atras da alca, nunca dentro da arma
       relief = Math.max(relief, sc?.big ? 0.035 : sc ? 0.09 : 0.12); // luneta pode chegar mais perto (o corte da camera e 0,01)
       // antes: // 07/11 (regra dele): a camera nunca encosta na mira/arma (perto demais o corte da camera atravessava a malha e piscava)
@@ -720,7 +721,8 @@ export class ViewModel {
     if (this.pumpT > 0) { this.pumpT -= st.dt; const u = 1 - Math.min(1, Math.max(0, this.pumpT) / this.pumpDur); pk = u > 0 ? Math.sin(Math.min(1, u) * Math.PI) : 0; }
     if (pk > 0) { pL.z += pk * 0.085; pL.y -= pk * 0.01; this.rig.rotation.x += pk * 0.05; }
     if (st.sprint && pistol) pL.set(-0.24 + Math.sin(this.bobT) * 0.04, -0.4 + Math.cos(this.bobT) * 0.06, -0.3 + Math.sin(this.bobT) * 0.08);
-    if (st.tac || (st.sprint && this.isBp && this.wpn !== 'melee' && this.wpn !== 'fists')) pL.set(-0.2 + Math.sin(this.bobT) * 0.05, -0.2 + Math.cos(this.bobT) * 0.08, -0.35 + Math.sin(this.bobT) * 0.1);
+    const bpHold = this.isBp && ['rifle', 'sniper', 'lmg'].includes(this.wpn); // 09/11 (pedido dele, foto do soldado): variante de fuzil, sniper e LMG corre com a mao de apoio segurando embaixo da arma
+    if (!bpHold && (st.tac || (st.sprint && this.isBp && this.wpn !== 'melee' && this.wpn !== 'fists'))) pL.set(-0.2 + Math.sin(this.bobT) * 0.05, -0.2 + Math.cos(this.bobT) * 0.08, -0.35 + Math.sin(this.bobT) * 0.1);
     if (insp) pL.add(new THREE.Vector3(insp[6], insp[7], insp[8]).applyQuaternion(this.rig.quaternion));
     if (rl > 0) pL.lerp(new THREE.Vector3(pR.x - 0.02, pR.y - 0.12, pR.z + 0.02), rl);
     if (th > 0) pL.lerp(new THREE.Vector3(-0.12, -0.05 + th * 0.1, -0.5), th);
@@ -917,7 +919,11 @@ export class ViewModel {
       const elbow = wrist.clone().addScaledVector(dir, 0.22).lerp(mid0.clone().lerp(p, 0.3), 0.35);
       return [sh, elbow, wrist];
     };
-    this.armR.set(...arm(this.gloveR, pR, new THREE.Vector3(0.38, -0.55, 0.15), new THREE.Vector3(0.35, -0.3, 0.05)));
+    const rArm = arm(this.gloveR, pR, new THREE.Vector3(0.38, -0.55, 0.15), new THREE.Vector3(0.35, -0.3, 0.05));
+    // 09/11 (pedido dele): variante correndo com a arma erguida: o braco direito desce por baixo, sem cobrir a coronha
+    this.bpArmK = damp(this.bpArmK || 0, this.isBp && ['rifle', 'sniper', 'lmg'].includes(this.wpn) && (st.tac || st.sprint) && st.ads < 0.05 ? 1 : 0, 12, st.dt);
+    if (this.bpArmK > 0.001) { rArm[0] = rArm[0].clone().lerp(new THREE.Vector3(0.2, -1.05, 0), this.bpArmK); rArm[1] = rArm[1].clone().lerp(rArm[2].clone().add(new THREE.Vector3(-0.1, -0.3, 0.02)), this.bpArmK); }
+    this.armR.set(...rArm);
     this.armL.set(...arm(this.gloveL, pL, new THREE.Vector3(-0.38, -0.6, 0.05), new THREE.Vector3(-0.3, -0.35, -0.1)));
     this.rig.visible = !hideHands;
     for (const o of [this.gloveR, this.gloveL, this.armR.mesh, this.armL.mesh]) o.visible = !hideHands;

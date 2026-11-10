@@ -1,3 +1,4 @@
+import './glbshrink.js'; // antes de qualquer modelo carregar
 import * as THREE from 'three';
 import { offscreen } from './offscreen.js';
 import { buildWorld, buildObjectives, FX, LASER_BODY, preloadMap } from './world.js';
@@ -782,7 +783,7 @@ function onSnap(s) {
     seen.add(p.id);
     const r = remoteFor(p);
     // trocou de time (infectado): o boneco e' refeito na cor nova
-    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); disposeGun(r.char.gun); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
+    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team;
@@ -799,7 +800,7 @@ function onSnap(s) {
     if (r.char.gun?.userData.provisional && arsenalLoaded()) r.loKey = null; // 08/11: arma montada com pacote faltando: remonta a certa
     if (r.loKey !== loKey) { const was = r.wpn; r.loKey = loKey; r.wpn = p.wpn; r.char.setWeapon(p.wpn, lo); warmLater(r.char.gunHolder); if (was && was !== p.wpn && r.char.gun?.userData.saber) { r.char.gun.userData.saber.ignite(); audio.play('saber_on', { pos: r.pos, vol: 0.6, key: 'sbo' + p.id, max: 1 }); } }
   }
-  for (const [id, r] of G.remotes) if (!seen.has(id)) { scene.remove(r.char.root); disposeGun(r.char.gun); G.remotes.delete(id); }
+  for (const [id, r] of G.remotes) if (!seen.has(id)) { scene.remove(r.char.root); freeChar(r.char); G.remotes.delete(id); }
   // granadas voando
   const alive = new Set();
   for (const n of s.nades || []) {
@@ -1035,7 +1036,7 @@ function onEvent(e) {
             if (life !== G.lifeN || G.player?.alive || G.state !== 'game') return;
             imgs[1] = CATEGORY[e.wpn] ? unlockShot({ wpn: e.wpn, lo: klo }) : null;
             const kLvl = G.snap?.players?.find(x => x.id === e.a)?.lvl || kr.lvl || null, kVar = klo?.cvName || (klo?.ws ? t('ws_' + klo.ws) : kbp ? t(kbp) : null); // nivel de quem te pegou e a variante/skin da arma dele
-            cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, lvl: kLvl, variant: kVar, dist: Math.round(Math.hypot(kr.pos[0] - dpos[0], kr.pos[2] - dpos[2])), head: e.head, t, icon: DEATH_SVG[e.wpn] || null });
+            cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, lvl: kLvl, variant: kVar, hp: e.ahp, dist: Math.round(Math.hypot(kr.pos[0] - dpos[0], kr.pos[2] - dpos[2])), head: e.head, t, icon: DEATH_SVG[e.wpn] || null });
             cm.hidden = false; cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
             audio.play('comic', { ui: true, vol: 0.55 });
           });
@@ -1634,7 +1635,9 @@ function endInputOff() { // acabou: solta o mouse e para os controles (antes mex
   setTouchBoard(false);
 }
 function podButtons(cur) { document.querySelectorAll('#podDances [data-dance]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dance === cur))); }
-function stopPodium() { audio.danceStop(); clearInterval(podTimer); podTimer = 0; if (podium.on) { camera.fov = settings.fov; camera.updateProjectionMatrix(); for (const m of G.blimpMeshes) m.visible = true; if (G.strikes) G.strikes.root.visible = true; for (const g of G.gunDrops.values()) g.visible = true; for (const k of objectives?.pickups || []) k.g.visible = true; } podium.stop(); $('podium').hidden = true; document.body.classList.remove('on-podium'); }
+// 09/11 (pedido dele): nada do modo fica entre a camera e o podio (bonde e trilho da Escolta, bandeiras, zonas, cofre, carros, molas)
+function podProps(on) { if (objectives?.root) objectives.root.visible = on; if (G.heistView?.root) G.heistView.root.visible = on; if (fieldView?.root) fieldView.root.visible = on; if (G.carView) for (const v of G.carView.cars.values()) v.g.visible = on; G.escView?.setStage(!on); }
+function stopPodium() { audio.danceStop(); clearInterval(podTimer); podTimer = 0; if (podium.on) { podProps(true); camera.fov = settings.fov; camera.updateProjectionMatrix(); for (const m of G.blimpMeshes) m.visible = true; if (G.strikes) G.strikes.root.visible = true; for (const g of G.gunDrops.values()) g.visible = true; for (const k of objectives?.pickups || []) k.g.visible = true; } podium.stop(); $('podium').hidden = true; document.body.classList.remove('on-podium'); }
 function showPodium() {
   const E = G.endInfo; if (!E || G.state !== 'game') return;
   const players = G.snap?.players || []; E.players = [...players].filter(p => !p.mob).sort((a, b) => b.score - a.score);
@@ -1943,9 +1946,10 @@ function startAttract() {
 }
 
 const myBanner = () => (bannerOpen(settings.banner) ? settings.banner : BANNER_DEFAULT);
+const freeChar = (c) => (c.dispose ? c.dispose() : disposeGun(c.gun)); // boneco saiu pra sempre: libera a placa (09/11)
 function clearRemotes() {
   replay.reset(scene); document.body.classList.remove('replay');
-  for (const r of G.remotes.values()) { scene.remove(r.char.root); disposeGun(r.char.gun); }
+  for (const r of G.remotes.values()) { scene.remove(r.char.root); freeChar(r.char); }
   G.remotes.clear();
   for (const g of G.gunDrops.values()) { scene.remove(g); disposeGun(g); } G.gunDrops.clear();
   for (const m of G.nadeMeshes.values()) scene.remove(m);
@@ -1997,7 +2001,8 @@ async function warmGuns() {
     // 8 skins animadas. Sem isso a 1a imagem compilava tudo junto: 0,5 s (contra todos) a 1 s (noite) de tela parada.
     // compileAsync usa a compilacao paralela do navegador (KHR_parallel_shader_compile): o carregamento nao trava
     const skins = new THREE.Group(), tiny = new THREE.BoxGeometry(0.01, 0.01, 0.01);
-    for (const id of Object.keys(SKIN_CODE)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
+    const wornSkins = new Set([wornLook()?.skin, ...[...G.remotes.values()].map(r => lookOf(r)?.skin)]); // 09/11: celular so compila as skins em uso (sao 29 programas)
+    for (const id of Object.keys(SKIN_CODE)) if (!isTouch || wornSkins.has(id)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
     skins.position.copy(camera.position); scene.add(skins);
     const airs = [fx.blimpMesh('red'), bomberMesh('red')]; for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular
     uploadWorld(); // 09/11: mapa inteiro sobe pra placa aqui, nao na primeira vez que entra na tela
@@ -2999,7 +3004,7 @@ function frameBody(now, realDt) {
     for (const r of G.remotes.values()) r.char.root.visible = false;
     for (const m of G.blimpMeshes) m.visible = false; if (G.strikes) G.strikes.root.visible = false;
     for (const g of G.gunDrops.values()) g.visible = false; for (const k of objectives?.pickups || []) k.g.visible = false; // arma no chao nao atravessa o tambor
-    if (G.heistView?.root) G.heistView.root.visible = true;
+    podProps(false);
   }
   // com a luneta aberta a cena ja atualizou as matrizes neste quadro: nao percorre tudo de novo
   if (scopeOn && G.scopeDrawn) scene.matrixWorldAutoUpdate = false;

@@ -440,7 +440,7 @@ export function initMenus(o) {
     $('rkMe').innerHTML = k < 0 ? `<span class="rk-big none">${badgeSvg(0, 72)}</span><div><b>${t('rkUnranked')}</b></div>`
       : `<span class="rk-big">${badgeSvg(k, 72)}</span><div><b>${t('rk_' + TIERS[k].id)}</b><small>${t('rkPts', { n: r.rp })}</small>`
         + (nx ? `<span class="xpbar"><i style="width:${Math.round((r.rp - TIERS[k].rp) / (nx.rp - TIERS[k].rp) * 100)}%"></i></span><small>${t('rkNext', { n: nx.rp - r.rp, t: t('rk_' + nx.id) })}</small>` : `<small>${t('rkTop')}</small>`) + '</div>';
-    $('rkTiers').innerHTML = TIERS.map((T, i) => `<li class="${i === k ? 'cur' : ''} ${peak >= i ? 'got' : ''}">${badgeSvg(i, 34)}<span><b>${t('rk_' + T.id)}</b><small>${T.rp}+</small></span><em><small>${t(peak >= i ? 'rkGot' : 'rkReward')}</small>${t(T.prize)} + ${rkReward(T.reward)}</em></li>`).join('');
+    $('rkTiers').innerHTML = TIERS.map((T, i) => `<li class="${i === k ? 'cur' : ''} ${peak >= i ? 'got' : ''}">${badgeSvg(i, 34)}<span><b>${t('rk_' + T.id)}</b><small>${T.rp}+</small></span><em><small>${t(peak >= i ? 'rkGot' : 'rkReward')}</small>${T.list.map(([, v]) => t(v)).join(' + ')}</em></li>`).join('');
     $('rkFind').onclick = () => { audio.play('ui_click', { ui: true }); goMp({ ranked: true }); };
     $('rkBoardGo').onclick = () => { audio.play('ui_click', { ui: true }); openBoard($('rkBoardGo')); };
     $('rkPrizes').onclick = () => { audio.play('ui_click', { ui: true }); openPrizes($('rkPrizes'), Math.max(0, k)); };

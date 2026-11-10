@@ -69,7 +69,7 @@ export class EscortView {
       this.root.add(g); return g;
     };
     this.gates = M.checks.map((f, i) => gate(f * T.len, PAL.paper, String.fromCharCode(65 + i)));
-    gate(T.len, PAL.blue, 'FIM');
+    this.endGate = gate(T.len, PAL.blue, 'FIM'); this.track3d = [sleepers, rails];
     // bonde + circulo do raio
     this.tram = tram(); this.root.add(this.tram);
     this.ringMat = new THREE.MeshBasicMaterial({ color: PAL.red, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
@@ -94,6 +94,8 @@ export class EscortView {
     const col = esc.state === 'push' ? PAL.red : esc.state === 'back' ? PAL.blue : esc.state === 'contest' ? (Math.sin(t * 10) > 0 ? PAL.red : PAL.blue) : PAL.mid;
     this.ringMat.color.setHex(col);
   }
+  // podio (09/11, pedido dele): bonde, trilho e portais saem de cena; a rua fica
+  setStage(on) { for (const o of [this.tram, this.ring, this.endGate, ...this.gates, ...this.track3d]) o.visible = !on; }
   dispose() { this.root.parent?.remove(this.root); freeGeos(this.root); }
 }
 

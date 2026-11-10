@@ -78,14 +78,14 @@ export const LOOKS = {
   gloveCol: [
     { id: '#faf8f2', lvl: 1, r: 0 }, { id: '#e8d9a8', lvl: 1, r: 0 }, { id: '#141210', lvl: 3, r: 0 },
     { id: '#f2c94c', lvl: 4, r: 0 }, { id: '#7fb069', lvl: 6, r: 1 }, { id: '#b07cc6', lvl: 8, r: 1 },
-    { id: '#ef8a5b', lvl: 10, r: 1 }, { id: '#7fd1d8', lvl: 12, r: 1 }, { id: '#6d3df5', lvl: 1, r: 2, acct: true }, { id: '#c9cdd2', lvl: 1, r: 2, rank: 1 }, { id: '#ffcf3a', lvl: 1, r: 2, meta: true },
+    { id: '#ef8a5b', lvl: 10, r: 1 }, { id: '#7fd1d8', lvl: 12, r: 1 }, { id: '#6d3df5', lvl: 1, r: 2, acct: true }, { id: '#c9cdd2', lvl: 1, r: 2, rank: 1 }, { id: '#8c5a2b', lvl: 1, r: 1, rank: 0 }, { id: '#9fe3f0', lvl: 1, r: 2, rank: 3 }, { id: '#ffcf3a', lvl: 1, r: 2, meta: true },
     { id: '#bfb6a6', lvl: 1, r: 0, pass: true }, { id: '#c9e08a', lvl: 1, r: 1, pass: true }, { id: '#d8c08a', lvl: 1, r: 1, pass: true }, { id: '#a8b4c0', lvl: 1, r: 1, pass: true },
   ],
   // camisa: so tons que nao confundem com o time (nada de vermelho nem azul)
   shirt: [
     { id: '#141210', lvl: 1, r: 0 }, { id: '#ece9e1', lvl: 1, r: 0 }, { id: '#5a544d', lvl: 2, r: 0 },
     { id: '#7a4a2a', lvl: 3, r: 0 }, { id: '#55603a', lvl: 5, r: 0 }, { id: '#4a2f4f', lvl: 7, r: 1 },
-    { id: '#2b5f5a', lvl: 9, r: 1 }, { id: '#b8913a', lvl: 1, r: 2, elite: true }, { id: '#6d3df5', lvl: 1, r: 2, acct: true }, { id: '#a8692f', lvl: 1, r: 1, rank: 0 }, { id: '#e3a92b', lvl: 1, r: 2, meta: true },
+    { id: '#2b5f5a', lvl: 9, r: 1 }, { id: '#b8913a', lvl: 1, r: 2, elite: true }, { id: '#6d3df5', lvl: 1, r: 2, acct: true }, { id: '#a8692f', lvl: 1, r: 1, rank: 0 }, { id: '#d9dde2', lvl: 1, r: 2, rank: 1 }, { id: '#f2c94c', lvl: 1, r: 2, rank: 2 }, { id: '#e3a92b', lvl: 1, r: 2, meta: true },
     { id: '#7b5a2f', lvl: 1, r: 0, pass: true }, { id: '#3d3a2c', lvl: 1, r: 1, pass: true }, { id: '#6b4f3a', lvl: 1, r: 1, pass: true }, { id: '#8a7a2f', lvl: 1, r: 1, pass: true },
   ],
   // estampa do short (o fundo continua a cor do time)
@@ -123,6 +123,14 @@ LOOKS.skin = [
   { id: 'trico', lvl: 1, r: 1, shop: true },       // trico de la listrado
   { id: 'aquarela', lvl: 1, r: 2, shop: true },    // aquarela molhada
   { id: 'pixel', lvl: 1, r: 2, shop: true },       // blocos de 8 bits
+  // leva de 09/11 (pedido dele): com pecas 3D em volta (src/skins3d.js)
+  { id: 'nebulosa', lvl: 1, r: 2, shop: true }, { id: 'buraconegro', lvl: 1, r: 2, shop: true }, { id: 'lunar', lvl: 1, r: 1, shop: true },
+  { id: 'ossario', lvl: 1, r: 2, shop: true }, { id: 'caveiraneon', lvl: 1, r: 2, shop: true },
+  { id: 'opart', lvl: 1, r: 1, shop: true }, { id: 'vitral', lvl: 1, r: 2, shop: true },
+  { id: 'chuvadados', lvl: 1, r: 2, shop: true }, { id: 'circuito', lvl: 1, r: 1, shop: true }, { id: 'glitch', lvl: 1, r: 2, shop: true },
+  { id: 'lavalamp', lvl: 1, r: 1, shop: true }, { id: 'vinil', lvl: 1, r: 1, shop: true },
+  // exclusivas da Rankeada, uma por elo
+  { id: 'rk_ferrugem', lvl: 1, r: 1, rank: 0 }, { id: 'rk_prata', lvl: 1, r: 1, rank: 1 }, { id: 'rk_folha', lvl: 1, r: 2, rank: 2 }, { id: 'rk_cristal', lvl: 1, r: 2, rank: 3 }, { id: 'rk_real', lvl: 1, r: 2, rank: 4 },
 ];
 // rosto, chaveiro (na arma) e animacao de morte (05/11, pedido dele)
 LOOKS.face = [

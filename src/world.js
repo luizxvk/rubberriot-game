@@ -117,6 +117,7 @@ export function buildWorld(scene, M) {
     const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], d = b.max[2] - b.min[2];
     const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
     if (b.kind === 'roof') continue; // corpo invisivel do telhado pontudo (o desenho vem com a casa)
+    if (b.kind === 'nogo') continue; // parede invisivel dos vazios fechados (shared/map.js, fillVoids)
     if (b.kind === 'quayedge') continue; // borda do cais: muro invisivel (o desenho e o mar, docksDecor)
     if (b.kind === 'forestedge') continue; // borda da floresta: o desenho e a mata fechada (forestDecor)
     if (b.kind === 'tree') { forestTrees.push(b); continue; } // arvores da floresta: copias (InstancedMesh) no forestDecor
@@ -644,7 +645,7 @@ function nightLights(M) {
   const spots = [], extra = [];
   for (const b of M.boxes) { const h = b.max[1] - b.min[1]; if (b.kind === 'lamp' || (b.kind === 'post' && h >= 3.5 && h <= 6)) spots.push([(b.min[0] + b.max[0]) / 2, b.max[1], (b.min[2] + b.max[2]) / 2, b.min[1]]); }
   if (spots.length < 16) {
-    const add = (x, z) => { if (!standable(M, x, z) || !spots.every(s => Math.hypot(s[0] - x, s[2] - z) > 7)) return; const y = floorAt(M, x, z); spots.push([x, y + 4.2, z, y]); extra.push([x, y, z]); };
+    const add = (x, z) => { if (podiumClear(M, x, z) || !standable(M, x, z) || !spots.every(s => Math.hypot(s[0] - x, s[2] - z) > 7)) return; const y = floorAt(M, x, z); spots.push([x, y + 4.2, z, y]); extra.push([x, y, z]); };
     for (const q of M.zones || []) for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add(q.pos[0] + a * (q.r + 1.5), q.pos[2] + b * (q.r + 1.5));
     for (const p of Object.values(M.flagBase || {})) for (const [a, b] of [[-1, -1], [1, 1]]) add(p[0] + a * 5, p[2] + b * 5);
     for (const s of M.spawns?.ffa || []) add(s[0] + 2.5, s[1] + 2.5);

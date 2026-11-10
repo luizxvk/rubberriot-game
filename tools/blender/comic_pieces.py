@@ -263,6 +263,42 @@ lathe('fh2_pin', [(0.045, 0.0), (0.07, -0.08), (0.074, -0.13), (0.055, -0.2), (0
 for i, z in enumerate((-0.268, -0.284)): torus('fh2_stripe%d' % i, 0.0335, 0.006, (0, 0, z), 'body', P, axis='Z')
 rbox('fh2_clamp', (0.085, 0.16, 0.035), (0, 0, 0.014), 'body', P, bevel=0.012)
 
+# =============================== SNIPERS: empunhaduras e bipes (09/11, pedido dele) ===============================
+# sniper_handle_1: COLHER DE PAU em pe (cabo fino, concha embaixo)
+P = piece('sniper_handle_1')
+lathe('sh1_stick', [(0.03, 0.0), (0.032, -0.05), (0.024, -0.14), (0.022, -0.22), (0.026, -0.26)], 'accent', P, axis='Z', segs=16)
+ball('sh1_bowl', 0.05, (0, 0, -0.3), 'accent', P, sc=(0.95, 0.42, 1.25))
+torus('sh1_ring', 0.03, 0.007, (0, 0, -0.072), 'body', P, axis='Z')
+rbox('sh1_clamp', (0.08, 0.15, 0.034), (0, 0, 0.014), 'body', P, bevel=0.012)
+
+# sniper_handle_2: MOLA gorda com bola de borracha na ponta
+P = piece('sniper_handle_2')
+lathe('sh2_core', [(0.02, 0.0), (0.02, -0.27)], 'body', P, axis='Z', segs=12)
+for i in range(6): torus('sh2_coil%d' % i, 0.038 - i * 0.002, 0.011, (0, 0, -0.04 - i * 0.04), 'accent', P, axis='Z')
+ball('sh2_ball', 0.05, (0, 0, -0.32), 'accent', P)
+rbox('sh2_clamp', (0.08, 0.13, 0.034), (0, 0, 0.014), 'body', P, bevel=0.012)
+
+def bipod_leg(pre, sx, parent, foot):
+    """perna aberta pro lado: dobradica em cima, joelho e pe de desenho"""
+    pipe(pre + '_leg', [(sx * 0.03, 0.0, -0.02), (sx * 0.1, 0.0, -0.17), (sx * 0.15, 0.0, -0.34)], 0.015, 'accent', parent)
+    torus(pre + '_knee', 0.02, 0.007, (sx * 0.1, 0.0, -0.17), 'body', parent, axis='Z')
+    foot(pre, sx, parent)
+
+# sniper_bipod_1: PERNAS DE PAU com sapatinho
+P = piece('sniper_bipod_1')
+def shoe(pre, sx, parent): ball(pre + '_shoe', 0.04, (sx * 0.155, 0.022, -0.37), 'body', parent, sc=(0.9, 1.5, 0.62))
+bipod_leg('bp1l', -1, P, shoe); bipod_leg('bp1r', 1, P, shoe)
+rbox('bp1_hinge', (0.1, 0.12, 0.05), (0, 0, 0.004), 'body', P, bevel=0.012)
+
+# sniper_bipod_2: PE DE GALINHA pesado, tres dedos em cada perna
+P = piece('sniper_bipod_2')
+def claw(pre, sx, parent):
+    for i, a in enumerate((-0.7, 0.0, 0.7)):
+        pipe('%s_toe%d' % (pre, i), [(sx * 0.15, 0.0, -0.34), (sx * 0.15 + math.sin(a) * 0.04, math.cos(a) * 0.05, -0.375), (sx * 0.15 + math.sin(a) * 0.075, math.cos(a) * 0.095, -0.382)], 0.009, 'body', parent)
+bipod_leg('bp2l', -1, P, claw); bipod_leg('bp2r', 1, P, claw)
+ball('bp2_joint', 0.046, (0, 0, -0.006), 'body', P, sc=(1.25, 1, 0.8))
+rbox('bp2_clamp', (0.085, 0.14, 0.03), (0, 0, 0.026), 'accent', P, bevel=0.01)
+
 # =============================== LASERS (pe no z = 0, frente +Y) ===============================
 # laser_1: RAIO DE FICCAO (capsula com aletas que crescem e bulbo na ponta)
 P = piece('laser_1'); zc = 0.045

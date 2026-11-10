@@ -29,7 +29,9 @@ function tryAt(M, solid, cx, cz, yaw) {
     // do pe do tambor ao topo da cabeca: nada na frente
     if (POD_SPOTS.every(S => { const [sx, sz] = w(S.x, 0); return [0.12, S.h * 0.6, S.h + 0.3, S.h + 2.3].every(h => hasLOS(M, eye, [sx, y + h, sz])) && hasLOS(M, eye, [sx + 1, y + 0.12, sz - 1]) && hasLOS(M, eye, [sx - 1, y + 0.12, sz - 1]); })) {
       const [bx, bz] = w(0, 30);
-      return { x: cx, y, z: cz, yaw, d, back: !hasLOS(M, [cx, y + 2, cz], [bx, y + 2, bz]) }; // back: tem cenario atras dos bonecos
+      // wide (09/11, pedido dele): a tela inteira livre, nao so o corredor ate os bonecos; lugar sem isso so entra se nao houver outro
+      const wide = [-6.3, -5.2, 5.2, 6.3].every(lx => { const [px, pz] = w(lx, -2); return [0.5, 2, 3.6].every(h => hasLOS(M, eye, [px, y + h, pz])); });
+      return { x: cx, y, z: cz, yaw, d, wide, back: !hasLOS(M, [cx, y + 2, cz], [bx, y + 2, bz]) }; // back: tem cenario atras dos bonecos
     }
   }
   return null;
@@ -40,14 +42,14 @@ export function podiumSpot(M) {
   if (M._pod !== undefined) return M._pod;
   if (M.podium) { const P = M.podium; return (M._pod = { ...P, y: floorAt(M, P.x, P.z), d: P.d ?? 12 }); }
   const solid = M._podSolid ||= boxGrid(M); let best = null;
-  const score = (s) => s.d * 2 + (s.back ? 10 : 0);
+  const score = (s) => s.d * 2 + (s.back ? 10 : 0) + (s.wide ? 20 : 0);
   for (let r = 0; r * STEP < M.arena; r++) {
     for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
       if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
       for (let a = 0; a < YAWS; a++) {
         const s = tryAt(M, solid, i * STEP, j * STEP, a / YAWS * Math.PI * 2);
         if (!s) continue;
-        if (s.d === DISTS[0] && s.back) return (M._pod = s);
+        if (s.d === DISTS[0] && s.back && s.wide) return (M._pod = s);
         if (!best || score(s) > score(best)) best = s;
       }
     }

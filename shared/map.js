@@ -275,7 +275,7 @@ function fronteira() {
       ffa: [[-66, -66], [66, 66], [-66, 66], [66, -66], [-50, -20], [50, 20], [0, -46], [0, 46], [-30, 0], [30, 0], [-60, 30], [60, -30]],
     },
     flagBase: { red: [0, 0, -64], blue: [0, 0, 64] },
-    zones: [{ id: 'A', pos: [-44, 0, 0], r: 6 }, { id: 'B', pos: [0, 1.2, 0], r: 5 }, { id: 'C', pos: [44, 0, 0], r: 6 }],
+    zones: [{ id: 'A', pos: [-44, 0, 3], r: 6 }, { id: 'B', pos: [0, 1.2, 0], r: 5 }, { id: 'C', pos: [44, 0, -3], r: 6 }], // 09/11: A e C estavam em cima da ponta do muro
     pickups: [
       { kind: 'wpn', wpn: 'sniper', pos: [-50, 7, 0] }, { kind: 'wpn', wpn: 'sniper', pos: [50, 7, 0] },
       { kind: 'wpn', wpn: 'minigun', pos: [0, 1.2, 0] },
@@ -1387,10 +1387,45 @@ export function matchRules(mode, mapId, cfg, baseTime) {
 }
 
 const cache = {};
+// Vazios dos mapas grandes (09/11, pedido dele): casas (ou paredao no Deserto) ocupam o lado virado pro mapa e uma parede invisivel
+// fecha o retangulo inteiro, entao ninguem entra. Medido com scripts/map-vazios.mjs. Lado que nao encosta na borda recua 5 m (fica rua).
+const VOID_FILL = {
+  cortejo: [[56, -76, 78, 72], [-76, -2, -46, 78], [-16, -76, 56, -44]],
+  apito: [[14, -78, 56, -20], [-78, -30, -36, -4], [-78, 18, -52, 54], [56, -48, 80, -10], [2, 58, 40, 80], [54, 48, 80, 80], [-50, 52, -22, 80], [56, 10, 80, 34]],
+  bonde: [[36, 16, 64, 64], [-62, 14, -36, 64], [12, -62, 64, -40]],
+  fronteira: [[-58, 44, -36, 76], [36, 44, 58, 76], [-58, -76, -36, -44], [36, -76, 58, -44]],
+  deserto: [[-130, 108, -44, 130], [46, 108, 130, 130], [108, -130, 130, -62], [-130, -130, -108, -62], [-92, -130, -44, -100], [46, -130, 92, -100], [-130, 62, -86, 92], [70, 62, 104, 92]],
+};
+function fillVoids(M) {
+  const L = VOID_FILL[M.id]; if (!L) return;
+  const A = M.arena, { boxes, box } = builder(A), used = []; let seed = 60, r = 7;
+  const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  const put = (x0, z0, x1, z1) => { // uma casa; canto que ja tem outra fica livre
+    if (x1 - x0 < 6 || z1 - z0 < 6 || used.some(u => x1 > u[0] - 0.4 && x0 < u[2] + 0.4 && z1 > u[1] - 0.4 && z0 < u[3] + 0.4)) return;
+    used.push([x0, z0, x1, z1]); box((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, 8 + rnd() * 5, 0, 'house', { roof: rnd() < 0.55 ? 'peak' : 'flat', seed: seed++ });
+  };
+  const row = (a0, a1, fn) => { for (let a = a0; a < a1 - 6;) { const w = Math.min(a1 - a, 9 + rnd() * 6); fn(a, a + w); a += w + 1.2; } };
+  for (const R of L) {
+    let [x0, z0, x1, z1] = R; const eX0 = x0 <= -A + 2, eX1 = x1 >= A - 2, eZ0 = z0 <= -A + 2, eZ1 = z1 >= A - 2, I = 0.4, D = 13;
+    x0 = eX0 ? -A : x0 + 5; x1 = eX1 ? A : x1 - 5; z0 = eZ0 ? -A : z0 + 5; z1 = eZ1 ? A : z1 - 5;
+    boxes.push({ min: [x0, 0, z0], max: [x1, 40, z1], kind: 'nogo' });
+    if (M.id === 'deserto') { // paredao de rocha nos lados que dao pro mapa
+      const T = 5, H = 10;
+      if (!eX0) box(x0 + T / 2, (z0 + z1) / 2, T, z1 - z0, H, 0, 'cliff'); if (!eX1) box(x1 - T / 2, (z0 + z1) / 2, T, z1 - z0, H, 0, 'cliff');
+      if (!eZ0) box((x0 + x1) / 2, z0 + T / 2, x1 - x0, T, H, 0, 'cliff'); if (!eZ1) box((x0 + x1) / 2, z1 - T / 2, x1 - x0, T, H, 0, 'cliff');
+      continue;
+    }
+    const dX = Math.min(D, x1 - x0 - I * 2), dZ = Math.min(D, z1 - z0 - I * 2);
+    if (!eX0) row(z0 + I, z1 - I, (a, b) => put(x0 + I, a, x0 + I + dX, b)); if (!eX1) row(z0 + I, z1 - I, (a, b) => put(x1 - I - dX, a, x1 - I, b));
+    if (!eZ0) row(x0 + I, x1 - I, (a, b) => put(a, z0 + I, b, z0 + I + dZ)); if (!eZ1) row(x0 + I, x1 - I, (a, b) => put(a, z1 - I - dZ, b, z1 - I));
+  }
+  M.boxes.push(...boxes);
+}
+
 export function getMap(id) {
   if (!BUILDERS[id]) id = 'vila';
   if (cache[id]) return cache[id];
-  const M = BUILDERS[id]();
+  const M = BUILDERS[id](); fillVoids(M);
   if (id !== 'ilha' && id !== 'tinteiro') M.pickups = [...M.pickups.filter(p => p.kind !== 'wpn'), { kind: 'wpn', wpn: 'minigun', pos: MINIGUN_AT[id] || [0, 0, 0] }];
   // 09/11: item de chao que caiu dentro de uma peca (carro novo, caixa) vai pro ponto livre mais perto
   const stuck = (x, z) => M.boxes.some(b => b.min[1] < 1.5 && b.max[1] > 0.3 && x > b.min[0] - 0.45 && x < b.max[0] + 0.45 && z > b.min[2] - 0.45 && z < b.max[2] + 0.45);
@@ -1609,6 +1644,27 @@ export function hasLOS(M, a, b) {
 
 // Linha de visao pra bala perfurante: soma quanto da linha passa por dentro de caixas (paredes).
 // Devolve a espessura total (Infinity se o chao corta a linha).
+// quantas paredes separadas e quantos metros de parede tem entre a e b (bala perfurante, 09/11)
+export function wallSpan(M, a, b) {
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], len = Math.hypot(d[0], d[1], d[2]);
+  if (len < 1e-3) return { sum: 0, n: 0 };
+  if (Math.min(a[1], b[1]) < 0) return { sum: Infinity, n: 0 };
+  const hits = [];
+  for (const bx of M.boxes) {
+    let t0 = 0, t1 = len, miss = false;
+    for (let k = 0; k < 3 && !miss; k++) {
+      const dk = d[k] / len;
+      if (Math.abs(dk) < 1e-9) { if (a[k] < bx.min[k] || a[k] > bx.max[k]) miss = true; continue; }
+      let u = (bx.min[k] - a[k]) / dk, v = (bx.max[k] - a[k]) / dk; if (u > v) [u, v] = [v, u];
+      t0 = Math.max(t0, u); t1 = Math.min(t1, v); if (t0 > t1) miss = true;
+    }
+    if (!miss) hits.push([t0, t1]);
+  }
+  hits.sort((x, y) => x[0] - y[0]); let sum = 0, n = 0, end = -1;
+  for (const [u, v] of hits) { if (u > end + 0.05) n++; if (v > end) { sum += v - Math.max(u, end); end = v; } } // pecas coladas contam como uma parede so
+  return { sum, n };
+}
+
 export function wallThickness(M, a, b) {
   const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const len = Math.hypot(d[0], d[1], d[2]);

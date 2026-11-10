@@ -2,10 +2,10 @@
 // recalculado por frame), luvas brancas, olhos de fatia de torta.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { ink, toon, PAL, wordTexture, smoothGeo } from './toon.js';
+import { ink, toon, PAL, wordTexture, smoothGeo, isSharedGeo } from './toon.js';
 import { buildGun, disposeGun } from './arsenal.js';
 import { cleanLook } from '../shared/looks.js';
-import { eyeTex, buildEyewear, buildHat, buildFace, styleGlove, patternTex, buildFx, skinMat, antiFlicker } from './looks3d.js';
+import { eyeTex, buildEyewear, buildHat, buildFace, styleGlove, patternTex, buildFx, buildSkinFx, skinMat, antiFlicker } from './looks3d.js';
 import { attachCharm, tickCharm } from './charms.js';
 import { applyDance, applyPose } from './dances.js';
 import { ring as fxRing, column as fxColumn, burst as fxBurst, play as fxPlay, disposeFx } from './deathfx.js';
@@ -115,7 +115,7 @@ let STRIPE = null;
 // geometria e material fixos do boneco: uma copia so pra todos (50 bonecos no battle royale = 50x menos memoria
 // nessas pecas; o contorno ja e por geometria, entao vem junto). Ninguem descarta essas pecas.
 const SHARED = new Map();
-function shared(key, make) { let v = SHARED.get(key); if (!v) { v = make(); SHARED.set(key, v); } return v; }
+function shared(key, make) { let v = SHARED.get(key); if (!v) { v = make(); if (v?.isBufferGeometry) v.userData.charShared = true; SHARED.set(key, v); } return v; }
 // luva inteira numa geometria (esfera + punho + aro + dedos), mesmas medidas das pecas soltas de antes
 function gloveGeo(fingers) {
   return shared('gloveGeo' + fingers, () => {
@@ -325,6 +325,8 @@ export class Character {
     if (this.gun && this.gun.userData.charm?.id !== L.charm && L.charm !== 'none') attachCharm(this.gun, L.charm); else if (this.gun && L.charm === 'none') attachCharm(this.gun, null);
     if (this.fx) this.root.remove(this.fx.group);
     this.fx = buildFx(L.fx); if (this.fx) this.root.add(this.fx.group);
+    if (this.skinFx) { this.root.remove(this.skinFx.group); this.skinFx.dispose(); } // pecas 3D da skin nova (09/11)
+    this.skinFx = buildSkinFx(L.skin); if (this.skinFx) this.root.add(this.skinFx.group);
     this.details = []; this.body.traverse(o => { if (o.userData.detail) this.details.push(o); });
     if (this.far) for (const o of this.details) o.visible = false;
   }
@@ -339,6 +341,16 @@ export class Character {
       h.geometry = geo; if (ol) ol.geometry = smoothGeo(geo);
       if (!on) h.quaternion.identity();
     }
+  }
+
+  // 09/11 (bateria de desempenho): cada partida deixava ~300 geometrias na placa (mangueiras, chapeus e mascaras de cada
+  // boneco saiam da cena sem dispose). O que e compartilhado entre bonecos e as armas seguem as regras delas
+  dispose() {
+    const guns = [this.gun, this.gun2h, this.quickKnife].filter(Boolean);
+    for (const g of guns) disposeGun(g);
+    this.skinFx?.dispose();
+    const walk = (o) => { if (guns.includes(o)) return; const g = o.geometry; if (g && !o.isInstancedMesh && !g.userData.charShared && !isSharedGeo(g)) g.dispose(); for (const c of o.children) walk(c); };
+    walk(this.root);
   }
 
   setWeapon(id, lo = null) {
@@ -566,6 +578,7 @@ export class Character {
     this.chute.visible = alive && anim === 'chute';
     // visual: efeito em volta (some de longe e morto), helice gira, enfeite balanca
     if (this.fx) { this.fx.group.visible = alive && !this.far; if (this.fx.group.visible) this.fx.tick(dt, t); }
+    if (this.skinFx) { this.skinFx.group.visible = alive && !this.far; if (this.skinFx.group.visible) this.skinFx.tick(dt, t); }
     const hu = this.hat?.userData;
     if (hu?.spin) hu.spin.rotation.y += dt * (anim === 'sprint' || anim === 'run' ? 22 : 9);
     if (hu?.bob) hu.bob.position.y = (hu.bobY ??= hu.bob.position.y) + Math.sin(t * 4 + this.phase) * 0.03;

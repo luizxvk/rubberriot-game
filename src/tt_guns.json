@@ -8,7 +8,7 @@
  {"id": "pistol_4", "file": "beretta_93r.glb", "nome": "Beretta 93R", "len": 0.24, "grip": 0.85, "rail": [0.5,0.75], "credit": "Low-Poly Beretta 93R by TastyTony (CC-BY 4.0)"},
  {"id": "pistol_5", "file": "webley_fosbery.glb", "nome": "Webley-Fosbery", "len": 0.279, "grip": 0.88, "rail": [0.45,0.7], "credit": "Low-Poly Webley-Fosbery by TastyTony (CC-BY 4.0)"},
  {"id": "pistol_7", "file": "tokarev_tt30.glb", "nome": "Tokarev TT-30", "len": 0.194, "grip": 0.85, "rail": [0.5,0.75], "credit": "Low-Poly Tokarev TT-30 by TastyTony (CC-BY 4.0)"},
- {"id": "pistol_8", "file": "borchardt_c93.glb", "nome": "Borchardt C-93", "len": 0.35, "grip": 0.68, "rail": [0.35,0.55], "credit": "Low-Poly Borchardt C-93 by TastyTony (CC-BY 4.0)", "shape": {"y": 1.25, "x": 0.8}},
+ {"id": "pistol_8", "sy": 1.39, "file": "borchardt_c93.glb", "nome": "Borchardt C-93", "len": 0.35, "grip": 0.68, "rail": [0.35,0.55], "credit": "Low-Poly Borchardt C-93 by TastyTony (CC-BY 4.0)", "shape": {"y": 1.25, "x": 0.8}},
  {"id": "pistol_9", "file": "walther_p38.glb", "nome": "Walther P38", "len": 0.216, "grip": 0.85, "rail": [0.5,0.75], "credit": "Low-Poly Walther P38 by TastyTony (CC-BY 4.0)"},
  {"id": "pistol_10", "file": "colt_saa.glb", "nome": "Colt Single-Action Army", "len": 0.32, "grip": 0.88, "rail": [0.45,0.7], "credit": "Low Poly Colt Single-Action Army by TastyTony (CC-BY 4.0)"},
  {"id": "subfusil_1", "file": "mp40.glb", "nome": "MP40", "len": 0.833, "grip": 0.69, "fore": 0.25, "rail": [0.35,0.6], "credit": "Low-Poly MP40 by TastyTony (CC-BY 4.0)"},

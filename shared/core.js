@@ -1,7 +1,7 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS } from './weapons.js';
-import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallThickness, matchRules, clampArena, headroom } from './map.js';
+import { CONV_RANGE, BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS } from './weapons.js';
+import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallSpan, matchRules, clampArena, headroom } from './map.js';
 import { navPath, floorAt, standable, hop, lowAt, freeNear, warmNav } from './nav.js';
 import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
 import { cleanLook, DANCE_IDS } from './looks.js';
@@ -1056,7 +1056,7 @@ export class Core {
     else if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return 0;
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     const d = Math.sqrt(dist2(eye, v.pos));
-    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1); // balote alcanca mais
+    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1) * (CONV_RANGE[this.bodyOf(p, m.wpn) + '|' + p.los?.[m.wpn]?.conv] || 1); // balote alcanca mais
     if (d > range) return 0;
     if (w.melee) { const now = this.clock || 0; if (now - (p.meleeAt || -9) < 0.3) return 0; p.meleeAt = now; return Math.min(m.dmg, w.dmg); }
     const hb = v.mob ? MOBS[v.mob].hb : null; // vilao da noite: peito e cabeca pela ficha (chefao de 6 m)
@@ -1065,13 +1065,9 @@ export class Core {
     let wallK = 1;
     if (!hasLOS(this.M, eye, chest) && !hasLOS(this.M, eye, head)) {
       // perfurante: passa por parede fina, com menos dano
-      if (am !== 'ap' || Math.min(wallThickness(this.M, eye, chest), wallThickness(this.M, eye, head)) > A.pierce) return 0;
-      wallK = A.wallK;
-    }
-    // Canhao de Carga (kit da Luneta): tiro cheio vale 999 se tem o kit e esperou a carga (2,8 s desde o ultimo)
-    if (m.mega && m.wpn === 'sniper' && p.los?.sniper?.conv === 'charge' && p.los?.sniper?.body === 'sniper_0') {
-      const now = this.clock || 0;
-      if (now - (p.megaAt ?? -9) >= 2.8) { p.megaAt = now; this.event({ k: 'boom', at: [v.pos[0], v.pos[1] + 1, v.pos[2]], mega: 1 }); return 999; }
+      const spC = wallSpan(this.M, eye, chest), spH = wallSpan(this.M, eye, head), sp = spC.sum <= spH.sum ? spC : spH;
+      if (am !== 'ap' || sp.sum > A.pierce) return 0;
+      wallK = A.wallK * A.wallFall ** Math.max(0, sp.n - 1); // 09/11 (pedido dele): 1a parede tira 25%; cada parede a mais tira bem mais
     }
     const tr = bodyTrait(this.bodyOf(p, m.wpn));
     const maxShot = w.dmg * (tr.pellets || w.pellets || 1) * (tr.dmg || 1) * (this.bpOf(p, m.wpn).dmg || 1) * (A.dmg || 1) * wallK * 1.25;
@@ -1166,7 +1162,7 @@ export class Core {
     v.dmgBy = {};
     if (this.mode === 'br') brKill(this, v);
     if (this.bor) borKilled(this, v, a); // pontos do abate; gente so volta na onda seguinte
-    this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, pos: v.pos, bn: suicide ? undefined : this.bnOf(a) });
+    this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, ahp: suicide ? undefined : Math.max(1, Math.ceil(a.hp)), pos: v.pos, bn: suicide ? undefined : this.bnOf(a) });
     // sobrevivente que cai (de qualquer jeito) vira infectado
     if (this.mode === 'infect' && v.team === 'blue' && this.infStarted) this.infect(v, suicide ? null : a);
     if (this.mode === 'ffa' && !suicide && a.kills >= this.limit) this.end(a.name);

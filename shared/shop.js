@@ -61,6 +61,12 @@ export const SHOP_ITEMS = {
   sPixel: { kind: 'skin', r: 'epico', give: ['skin:pixel'] },
   sPapelao: { kind: 'skin', r: 'raro', give: ['skin:papelao'] },
   sTrico: { kind: 'skin', r: 'raro', give: ['skin:trico'] },
+  // leva de 09/11 (pedido dele): espaciais, caveiras, abstratas, digitais e animadas, com pecas 3D
+  sNebulosa: { kind: 'skin', r: 'lendario', give: ['skin:nebulosa'], feat: 1 }, sBuracoNegro: { kind: 'skin', r: 'lendario', give: ['skin:buraconegro'], feat: 1 }, sLunar: { kind: 'skin', r: 'raro', give: ['skin:lunar'] },
+  sOssario: { kind: 'skin', r: 'epico', give: ['skin:ossario'] }, sCaveiraNeon: { kind: 'skin', r: 'lendario', give: ['skin:caveiraneon'], feat: 1 },
+  sOpArt: { kind: 'skin', r: 'raro', give: ['skin:opart'] }, sVitral: { kind: 'skin', r: 'epico', give: ['skin:vitral'] },
+  sChuvaDados: { kind: 'skin', r: 'lendario', give: ['skin:chuvadados'], feat: 1 }, sCircuito: { kind: 'skin', r: 'raro', give: ['skin:circuito'] }, sGlitch: { kind: 'skin', r: 'epico', give: ['skin:glitch'] },
+  sLavaLamp: { kind: 'skin', r: 'raro', give: ['skin:lavalamp'] }, sVinil: { kind: 'skin', r: 'raro', give: ['skin:vinil'] },
   // chapeus da Loja (animados)
   hUfo: { kind: 'hat', r: 'lendario', give: ['hat:ufo'], feat: 1 },
   hNuvem: { kind: 'hat', r: 'lendario', give: ['hat:nuvem'] },
@@ -145,6 +151,11 @@ function seeded(list, seed) {
 // Prateleiras (04/11): o resto do catalogo por tipo, sorteado na semana, sem repetir o que ja esta em cima.
 // O rodizio e so vitrine: a compra confere o catalogo, nao o rodizio.
 export const SHELVES = [['dance', 4], ['banner', 3], ['charm', 2], ['death', 2], ['face', 2], ['bundle', 4], ['react', 4], ['camo', 8], ['skin', 4], ['hat', 4], ['stamp', 6], ['ret', 8]];
+// ofertas do dia (09/11, pedido dele): 15% off. O servidor cobra por aqui
+export const DEAL_OFF = 0.15;
+let dealMemo = { end: 0, ids: new Set() };
+export function isDeal(id, now = Date.now()) { if (now >= dealMemo.end) { const R = shopRotation(now); dealMemo = { end: R.dayEnd, ids: new Set(R.daily) }; } return dealMemo.ids.has(id); }
+export const dealPrice = (id, now = Date.now()) => { const p = shopPrice(id); return p != null && isDeal(id, now) ? Math.round(p * (1 - DEAL_OFF) / 5) * 5 : p; };
 export const shelfOf = (id) => (SHOP_ITEMS[id].react ? 'react' : SHOP_ITEMS[id].kind);
 export function shopRotation(now = Date.now()) {
   const day = Math.floor(now / DAY), week = Math.floor((day + 3) / 7);

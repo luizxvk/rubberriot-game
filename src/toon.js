@@ -255,6 +255,7 @@ export function geo(Ctor, ...args) {
 // tirou um pedaco grande da cena pra sempre (mapa da partida que acabou, arma largada): libera a geometria na placa.
 // Antes o mapa velho ficava inteiro na memoria de video a cada partida nova (02/11). As compartilhadas (geo()) ficam.
 const sharedSet = new WeakSet();
+export const isSharedGeo = (g) => sharedSet.has(g);
 // 09/11 (mapas novos pesados): separa uma malha por celula do chao (pelo centro de cada triangulo), pra o que esta fora da tela nao ser desenhado
 export function splitByCell(g, cell) {
   const s = g.index ? g.toNonIndexed() : g, P = s.attributes.position, n = P.count / 3, cells = new Map();

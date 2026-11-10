@@ -9,7 +9,7 @@ await loadArsenal();
 const q = new URLSearchParams(location.search), pose = q.get('pose') || 'sprint';
 const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.setClearColor(0xc9c4b8); document.body.appendChild(r.domElement);
 const vm = new ViewModel(); vm.camera.fov = +(q.get('fov') || 58); vm.camera.aspect = innerWidth / innerHeight; vm.camera.updateProjectionMatrix();
-vm.setWeapon(q.get('w') || 'rifle', { ...(q.get('body') ? { body: q.get('body') } : {}), ...(q.get('scope') ? { scope: q.get('scope') } : {}), ...(q.get('laser') ? { laser: q.get('laser') } : {}), ...(q.get('handle') ? { handle: q.get('handle') } : {}) }, true);
+vm.setWeapon(q.get('w') || 'rifle', { ...(q.get('body') ? { body: q.get('body') } : {}), ...(q.get('scope') ? { scope: q.get('scope') } : {}), ...(q.get('laser') ? { laser: q.get('laser') } : {}), ...(q.get('handle') ? { handle: q.get('handle') } : {}), ...(q.get('bp') ? { bp: q.get('bp') } : {}) }, true);
 if (pose === 'ads' && vm.gun.userData.scope?.lens) vm.gun.userData.scope.lens.material.uniforms.uOn && (vm.gun.userData.scope.lens.material.uniforms.uOn.value = 1);
 const insp = q.get('t'); if (insp !== null) { if (q.get('streak')) vm.callStreak(q.get('streak')); else vm.inspect(); }
 const N = insp !== null ? Math.round(+insp * 60) : 120;

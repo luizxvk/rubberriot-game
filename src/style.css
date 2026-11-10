@@ -2135,6 +2135,7 @@ body.touchmode .chat-box.touch { position: relative; z-index: 1; }
 body.touchmode .pad-toast { right: auto; left: 50%; translate: -50% 0; bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 70px); }
 /* tela de morte, quadro do meio: a arma de quem te pegou, de lado e colorida, com o nome do modelo embaixo */
 .kc-p img.kc-gun { object-fit: contain; padding: 22px 10px 30px; filter: none; }
+.kc-hp { position: absolute; left: 6px; bottom: 6px; z-index: 2; padding: 0 7px; background: #a83a2c; color: var(--paper); border-radius: 8px; font-family: var(--display); font-weight: 400; font-size: 13px; white-space: nowrap; }
 .kc-lvl { position: absolute; right: 6px; bottom: 6px; z-index: 2; padding: 0 7px; background: var(--ink); color: var(--paper); border-radius: 8px; font-family: var(--display); font-weight: 400; font-size: 13px; }
 .kc-var { position: absolute; left: 6px; top: 26px; z-index: 2; max-width: calc(100% - 12px); padding: 0 6px; background: var(--red); color: var(--paper); border: 2px solid var(--ink); font-family: var(--display); font-weight: 400; font-size: 11px; white-space: nowrap; overflow: hidden; }
 .kc-gname { position: absolute; left: 50%; bottom: 6px; translate: -50% 0; z-index: 1; max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; font-family: var(--display); font-weight: 400; font-size: clamp(14px, 2.2vw, 22px); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; padding: 0 8px; }
@@ -2486,6 +2487,9 @@ body.mode-pve #streaks, body.mode-pve #stkPane, body.mode-pve .t-streak, body.mo
 .st-foot { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'n n' 'k p'; align-items: end; column-gap: 8px; padding: 26px 10px 10px; background: linear-gradient(transparent, rgba(8,10,16,.88) 38%); }
 .st-foot b { grid-area: n; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; font-family: var(--display); font-weight: 400; font-size: 16px; line-height: 1.05; text-transform: uppercase; }
 .st-foot small { grid-area: k; overflow: hidden; white-space: nowrap; font-family: var(--body); font-weight: 800; font-size: 12px; color: rgba(255,255,255,.75); }
+.st-price s, .sp-was { opacity: .72; font-size: .78em; text-decoration-thickness: 2px; text-decoration-color: #ff5a4a; }
+.st-price span { display: inline-flex; align-items: center; gap: 4px; }
+.st-price.deal { flex-direction: column; align-items: flex-end; gap: 0; line-height: 1.05; }
 .st-price { grid-area: p; display: inline-flex; align-items: center; gap: 4px; font-family: var(--display); font-style: normal; font-size: 16px; }
 .shop-tile.hero .st-foot b { font-size: 26px; }
 .shop-tile.hero .st-price { font-size: 22px; }
@@ -3115,7 +3119,7 @@ body:not(.ingame) .tip { z-index: 60; } /* dica aberta no menu nao fica pela met
   .rk-mini { top: -10px; right: -8px; }
   .rk-mini svg { width: 24px; height: 24px; }
   /* multiplayer: rankeada em duas colunas, sem a lista empurrar a tela */
-  #scr-mp > .mp-rank { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); grid-template-areas: "h h" "me tiers" "sub tiers" "find tiers"; grid-template-rows: auto auto auto 1fr; gap: 6px 14px; align-items: start; margin-top: 8px; padding-top: 6px; }
+  #scr-mp > .mp-rank { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); grid-template-areas: "h h" "me tiers" "find tiers" "sub tiers"; grid-template-rows: auto auto auto 1fr; gap: 6px 14px; align-items: start; margin-top: 8px; padding-top: 6px; }
   #scr-mp > .mp-rank h3 { grid-area: h; margin: 0; font-size: 17px; }
   #rkMe { grid-area: me; padding: 6px 8px; gap: 8px; box-shadow: 2px 2px 0 var(--ink); border-width: 2px; }
   .rk-big svg { width: 44px; height: 44px; }
@@ -3126,7 +3130,7 @@ body:not(.ingame) .tip { z-index: 60; } /* dica aberta no menu nao fica pela met
   #scr-mp .rk-tiers .rk-badge svg { width: 24px; height: 24px; }
   #scr-mp .rk-tiers li b { font-size: 13px; }
   #scr-mp .rk-tiers li em { font-size: 11px; }
-  #rkFind { grid-area: find; margin: 0; padding: 8px 10px; font-size: 15px; align-self: end; }
+  #rkFind { grid-area: find; margin: 0; padding: 8px 10px; font-size: 15px; align-self: start; }
   /* arsenal: o painel termina na borda da tela */
   #scr-arsenal { max-width: calc(61vw - 4px); }
   /* lobby: titulo inteiro, armas numa linha so e o elenco com espaco */

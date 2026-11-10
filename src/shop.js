@@ -12,7 +12,7 @@ import { offscreen } from './offscreen.js';
 import { t } from './i18n.js';
 import { me, buyItem, redeemItem } from './rovex.js';
 import { audio } from './audio.js';
-import { SHOP_ITEMS, shopPrice as price, shopRotation as rotation } from '../shared/shop.js';
+import { SHOP_ITEMS, shopPrice as basePrice, dealPrice as price, isDeal, shopRotation as rotation } from '../shared/shop.js';
 import { openZionBuy } from './zionbuy.js';
 import { RET_ROW_LONG, buildGun, buildSight, getLoadouts, RET_PATH, bpLoadout, arsenalLoaded } from './arsenal.js';
 import { BLUEPRINTS } from '../shared/weapons.js';
@@ -327,7 +327,7 @@ function tile(id, size, newTag) {
   return `<button class="shop-tile r-${it.r} ${size} ${mine ? 'owned' : ''}" data-item="${id}" aria-label="${name}, ${t('rar_' + it.r)}, ${mine ? t('shopOwned') : fmt(price(id)) + ' Zions Points'}">
     <span class="st-bg"></span><span class="st-art">${svg(it.kind)}</span>
     ${mine ? `<span class="st-tag own">${t('shopOwned')}</span>` : newTag ? `<span class="st-tag">${t('shopNew')}</span>` : ''}
-    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price">${mine ? '' : canRedeem(id) ? t('shopRedeem') : coin + fmt(price(id))}</em></span>
+    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && isDeal(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : (isDeal(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>`}</em></span>
   </button>`;
 }
 
@@ -391,7 +391,7 @@ function openItem(id, from) {
   // pills do que vem na compra (item unico = 1; pacote = cada peca), cada uma com o tipo
   $('shopPopGives').setAttribute('aria-label', t('shopIncl'));
   $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill ${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'stamp' ? t('stamp_' + v) : s === 'banner' ? t('bn_' + v) : s === 'dance' ? t('dn_' + v) : s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
-  $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : coin + fmt(price(id));
+  $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : (isDeal(id) ? `<s class="sp-was">${fmt(basePrice(id))}</s> ` : '') + coin + fmt(price(id));
   $('shopBuy').textContent = t(mine ? 'shopOwned' : canRedeem(id) ? 'shopRedeem' : 'shopBuy');
   $('shopBuy').disabled = mine;
   pop.hidden = false;
