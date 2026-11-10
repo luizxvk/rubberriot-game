@@ -603,8 +603,11 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     return col * (0.65 + lum * 0.5) + flash * plate * 0.25;
   }
   if (k == 60) { // Rovex: a logo em fileiras alternadas, cada fileira correndo pra um lado; o texto le certo dos dois lados da arma
-    float side = p.x >= 0.0 ? -1.0 : 1.0, ry = floor(p.y * 2.6), alt = mod(ry, 2.0);
-    vec2 q = vec2(p.z * side * 1.0 + alt * 0.5 + t * 0.07 * (alt * 2.0 - 1.0), p.y * 2.6);
+    // 10/11 (pedido dele): as fileiras correm na DIAGONAL (35 graus) e brilhos piscam em volta da logo
+    float side = p.x >= 0.0 ? -1.0 : 1.0, ca = 0.819, sa = 0.574;
+    float du = p.z * side * ca - p.y * sa, dv = p.z * side * sa + p.y * ca;
+    float ry = floor(dv * 2.6), alt = mod(ry, 2.0);
+    vec2 q = vec2(du + alt * 0.5 + t * 0.07 * (alt * 2.0 - 1.0), dv * 2.6);
     vec2 f = fract(q), uv = (f - vec2(0.08, 0.1)) / vec2(0.84, 0.8);
     float inb = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
     float logo = texture2D(uRovexLogo, clamp(uv, 0.0, 1.0)).a * inb;
@@ -612,8 +615,14 @@ vec3 camoColor(int k, vec3 p, float t, float lum, out vec3 glow) {
     float sweep = smoothstep(0.86, 1.0, sin(p.z * 2.6 - p.y * 1.5 - t * 1.9));
     vec3 bg = mix(vec3(0.05, 0.025, 0.13), vec3(0.34, 0.13, 0.72), smoothstep(0.25, 0.8, flow));
     bg = mix(bg, vec3(0.78, 0.45, 1.0), sweep * 0.45);
-    glow = vec3(0.34, 0.13, 0.72) * flow * 0.28 + vec3(0.9, 0.82, 1.0) * logo * (0.3 + sweep * 0.8);
-    return mix(bg * (0.7 + lum * 0.5), vec3(0.98, 0.96, 1.0), logo);
+    // brilhos: estrelinhas de 4 pontas espalhadas numa grade torta, cada uma piscando no proprio tempo
+    vec2 sg = vec2(du, dv) * 5.5, sc = floor(sg), sf = fract(sg) - 0.5;
+    float sh = fract(sin(dot(sc, vec2(127.1, 311.7))) * 43758.5), on = step(0.62, sh) * (1.0 - logo);
+    float tw = pow(max(0.0, sin(t * (2.0 + sh * 3.0) + sh * 40.0)), 6.0);
+    vec2 so = sf - (vec2(fract(sh * 7.3), fract(sh * 13.1)) - 0.5) * 0.5;
+    float spark = on * tw * (smoothstep(0.05, 0.0, abs(so.x) * 6.0 + abs(so.y)) + smoothstep(0.05, 0.0, abs(so.y) * 6.0 + abs(so.x)) + smoothstep(0.09, 0.0, length(so)));
+    glow = vec3(0.34, 0.13, 0.72) * flow * 0.28 + vec3(0.9, 0.82, 1.0) * logo * (0.3 + sweep * 0.8) + vec3(1.0, 0.92, 1.0) * spark * 1.4;
+    return mix(mix(bg * (0.7 + lum * 0.5), vec3(0.98, 0.96, 1.0), logo), vec3(1.0, 0.95, 1.0), clamp(spark, 0.0, 1.0));
   }
   if (k == 31) { // prestigio (refeita 01/11, pedido dele "igual a plasma, com mais efeito"): plasma real violeta e
     // carmim se dobrando, veios de ouro correndo pelas ondas, estrelas douradas piscando e um brilho varrendo a arma

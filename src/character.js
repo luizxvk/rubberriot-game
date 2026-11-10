@@ -19,19 +19,24 @@ function pencilMesh() {
 
 
 const SEG = 10, RAD = 6;
+// contador de quadro das mangueiras (main.js soma 1 por quadro)
+export const HOSE_FRAME = { n: 0 };
+let hosePh = 0;
 
 const hP = new THREE.Vector3(), hT = new THREE.Vector3(), hD = new THREE.Vector3(), hB = new THREE.Vector3(), hN = new THREE.Vector3(), hX = new THREE.Vector3(1, 0, 0), hY = new THREE.Vector3(0, 1, 0), hZ = new THREE.Vector3(0, 0, 1);
 
 // Tubo bezier quadratico: start -> ctrl -> end. Atualiza vertices na mao.
 export class Hose {
   constructor(radius, color, outlineTh = 0.035) {
-    this.r = radius;
+    this.r = radius; this.throttle = 0; this.ph = hosePh++ % 3;
     const count = (SEG + 1) * RAD;
     const pos = new Float32Array(count * 3);
     const idx = [];
     for (let i = 0; i < SEG; i++) for (let j = 0; j < RAD; j++) {
       const a = i * RAD + j, b = i * RAD + (j + 1) % RAD, c = (i + 1) * RAD + j, d = (i + 1) * RAD + (j + 1) % RAD;
-      idx.push(a, c, b, b, c, d);
+      // 10/11: face pra FORA (antes a, c, b virava pra dentro: o contorno preto era desenhado por cima da mangueira inteira;
+      // de dia nao dava pra ver, preto em cima de preto, mas a noite braco e perna ficavam pretos com o corpo aceso)
+      idx.push(a, b, c, b, d, c);
     }
     const mk = () => {
       const g = new THREE.BufferGeometry();
@@ -52,6 +57,8 @@ export class Hose {
   cull() { const s = new THREE.Sphere(new THREE.Vector3(0, 1, 0), 4); for (const m of [this.mesh, this.line]) { m.geometry.boundingSphere = s; m.frustumCulled = true; } }
 
   set(a, c, b) {
+    // 10/11 (desempenho): boneco longe refaz a mangueira 1 quadro em 2 (muito longe, 1 em 3); de perto, todo quadro
+    if (this.throttle && (HOSE_FRAME.n + this.ph) % this.throttle) return;
     const P = this.mesh.geometry.attributes.position.array, N = this.mesh.geometry.attributes.normal.array;
     const PO = this.line.geometry.attributes.position.array;
     const p = hP, t = hT, n = this.n0 || (this.n0 = new THREE.Vector3()), bn = hB, n1 = hN;
@@ -151,7 +158,7 @@ function koNum(n) { if (!KO_NUM.has(n)) KO_NUM.set(n, wordTexture(String(n), { b
 const wX = new THREE.Vector3(), wY = new THREE.Vector3(), wZ = new THREE.Vector3(), wM = new THREE.Matrix4(), WRIST_RATE = 12, WRIST_MAX = 24;
 // Volta pro Caixao (08/11, pedido dele): caixao de desenho animado (oco: paredes + fundo de cetim + tampa com cruz)
 // e lapide. Geometria feita uma vez so; cada morte so cria as malhas. Frente do boneco = -Z, caixao fica atras (+Z).
-export const DEATH_DUR = { pancake: 2.25, caixao: 2.35 }; // quanto tempo o boneco morto fica na tela (padrao 1,4 s)
+export const DEATH_DUR = { derrete: 2.4, pancake: 2.25, caixao: 2.35 }; // quanto tempo o boneco morto fica na tela (padrao 1,4 s)
 let COF = null;
 function coffinGeo() {
   if (COF) return COF;
@@ -308,8 +315,6 @@ export class Character {
       if (!this.baseMat.has(m)) this.baseMat.set(m, m.material);
       m.material = skinMat(L.skin) || this.baseMat.get(m);
     }
-    // com skin o contorno da mangueira cobria a mangueira inteira (de preto nao dava pra ver): some so com skin
-    for (const h of [this.armR, this.armL, this.legR, this.legL]) h.line.visible = !skinMat(L.skin);
     const pt = patternTex(L.pattern);
     this.shorts.material = pt ? toon(tc, { map: pt }) : toon(tc); antiFlicker(this.shorts, 1);
     this.eyes.material = eyeMat(L.eyes); this.eyes.material.polygonOffset || antiFlicker(this.eyes, 2);
@@ -413,6 +418,7 @@ export class Character {
       this.body.traverse(o => { if (o.isMesh && o.material?.uniforms?.th && o.parent?.isMesh) { this.hulls.push(o); o.visible = !hf; } });
     }
     const far = dist > CHAR_LOD.far;
+    const th = hf ? 3 : far ? 2 : 0; for (const h of [this.armR, this.armL, this.legR, this.legL]) if (h) h.throttle = th;
     if (far === this.far) return;
     this.far = far;
     for (const o of this.details) o.visible = !far && !(o === this.nose && this.faceP?.userData.noNose); // nariz debaixo da mascara de casca fica escondido (08/11)
@@ -450,6 +456,23 @@ export class Character {
     const f = this.blot.userData; f.disc.scale.setScalar(0.001 + 0.85 * sm((T - 0.45) / 0.8) * (1 - c));
     f.drops.forEach((m, i) => { const k = (T - 0.3 - i * 0.08) / 0.55; m.visible = k > 0 && k < 1; if (!m.visible) return; const r = 0.2 + 0.25 * k; m.position.set(Math.cos(m.userData.an) * r, Math.max(0.03, m.userData.h * (1 - k * k)), Math.sin(m.userData.an) * r); m.scale.setScalar(0.07 - 0.02 * i * 0.5); });
   }
+  // derretida (10/11, pedido dele: a morte padrao e a dos viloes derretendo): leva o tranco, amolece balancando,
+  // vira borracha preta e escorre numa poca que borbulha; a poca seca no fim. Usa a mesma poca e a mesma tinta da panqueca
+  meltDeath(T, B, sm) {
+    const a = sm(T / 0.14), b = sm((T - 0.14) / 0.95), c = sm((T - 1.8) / 0.55), wob = Math.sin(T * 15) * 0.07 * (1 - b) * a;
+    const sy = (1 + 0.1 * a * (1 - b)) * (1 - 0.95 * b), sx = 1 + 0.75 * b;
+    B.scale.set(sx + wob, Math.max(0.035, sy), sx - wob); B.rotation.set(Math.sin(T * 9) * 0.08 * (1 - b), 0, Math.sin(T * 7) * 0.1 * (1 - b)); B.position.y = -0.04 * b;
+    if (b > 0.42 && !this.blotMats) { this.blotMats = new Map(); B.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) { this.blotMats.set(o, o.material); o.material = BLOT.ink; } }); }
+    B.visible = b < 0.985;
+    if (!this.blot) {
+      const g = this.blot = new THREE.Group(), d = new THREE.Mesh(blotDisc(), BLOT.pool); d.rotation.x = -Math.PI / 2; d.position.y = 0.02; g.add(d); g.userData.disc = d;
+      g.userData.drops = [0, 1, 2, 3, 4].map(i => { const m = new THREE.Mesh(BLOT.drop, BLOT.ink), an = i * 1.26 + 0.3; m.userData = { an, r: 0.12 + (i % 3) * 0.13, t0: 0.85 + i * 0.17 }; g.add(m); return m; });
+      this.root.add(g);
+    }
+    const f = this.blot.userData; f.disc.scale.set(0.001 + 0.95 * sm((T - 0.3) / 0.9) * (1 - c), 0.001 + 0.82 * sm((T - 0.3) / 0.9) * (1 - c), 1);
+    // bolhas de borracha: sobem da poca, incham e estouram
+    f.drops.forEach((m) => { const k = (T - m.userData.t0) / 0.42; m.visible = k > 0 && k < 1 && c < 0.6; if (!m.visible) return; const r = m.userData.r * (1 - c); m.position.set(Math.cos(m.userData.an) * r, 0.03 + 0.02 * k, Math.sin(m.userData.an) * r); m.scale.set(0.045 + 0.05 * k, 0.03 + 0.045 * k, 0.045 + 0.05 * k); });
+  }
   endBlot() {
     if (this.blotMats) { for (const [o, m] of this.blotMats) o.material = m; this.blotMats = null; }
     if (this.blot) { this.root.remove(this.blot); this.blot = null; }
@@ -474,11 +497,12 @@ export class Character {
   }
   endDraw() { const D = this.draw; if (!D) return; for (const p of D.list) { p.o.visible = true; p.o.material = p.m; } this.draw = null; if (this.pencil) this.root.remove(this.pencil); }
   deathAnim(dt) {
-    const T = this.deadT, B = this.body, id = this.look?.death || 'pancake', sm = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, end = sm((T - 1.05) / 0.3);
+    const T = this.deadT, B = this.body, id = this.look?.death || 'derrete', sm = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, end = sm((T - 1.05) / 0.3);
     // efeitos 3D das lendarias (08/11): malhas de shader presas no root (nao giram nem encolhem com o corpo)
     const FX = this.deathFxFor(id);
     if (id === 'caixao') { this.coffinDeath(T, B, FX, sm); return; }
     if (id === 'pancake') { this.blotDeath(T, B, sm); return; }
+    if (id === 'derrete') { this.meltDeath(T, B, sm); return; }
     if (FX) {
       const f = FX.userData;
       if (id === 'anjo') { fxPlay(f.col, T, 0, 1.4); fxPlay(f.ring, T, 0, 0.7); }
@@ -612,10 +636,10 @@ export class Character {
       this.endDraw();
       this.deathAnim(dt);
       this.tag.visible = false;
-      this.root.visible = this.deadT < (DEATH_DUR[this.look?.death || 'pancake'] || 1.4);
+      this.root.visible = this.deadT < (DEATH_DUR[this.look?.death || 'derrete'] || 1.4);
       return;
     }
-    if (this.deadT > 0) { this.endBlot(); if ((this.look?.death || 'pancake') === 'pancake') this.startDraw(); } // voltou da morte
+    if (this.deadT > 0) { this.endBlot(); if (['pancake', 'derrete'].includes(this.look?.death || 'derrete')) this.startDraw(); } // voltou da morte
     if (this.draw) this.tickDraw(dt);
     this.deadT = 0; if (this.deathProp) { this.body.remove(this.deathProp); this.deathProp = null; }
     if (this.deathFx) { this.root.remove(this.deathFx); disposeFx(this.deathFx); this.deathFx = null; this.body.position.z = 0; } // efeitos da lendaria (08/11)

@@ -19,7 +19,11 @@ function fit(e) {
 const run = () => { pending = 0; document.querySelectorAll(FIT).forEach(fit); };
 const later = () => { pending ||= setTimeout(run, 120); };
 export function startFit() {
-  new MutationObserver(later).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  // 10/11 (desempenho no app de PC): na partida a HUD muda todo quadro (municao, relogio, placar) e cada mudanca refazia a busca
+  // e a medida de todo texto da tela. Mudanca dentro da HUD so conta se tiver texto ajustavel nela
+  const SEL = Array.isArray(FIT) ? FIT.join(',') : FIT, QUIET = '#hud, #touch, #board, #mapCurtain, #xpChip, .h-arrow, #chat, #qc';
+  const watch = (recs) => { for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!el) continue; if (!el.closest(QUIET) || el.closest(SEL) || el.querySelector?.(SEL)) { later(); return; } } };
+  new MutationObserver(watch).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
   addEventListener('resize', later); document.fonts?.ready?.then(later);
   later();
 }

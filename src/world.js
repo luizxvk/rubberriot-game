@@ -457,7 +457,7 @@ export function buildWorld(scene, M) {
     sun.color.set(on ? 0xa8b8e6 : day.s[0]); sun.intensity = on ? 0.9 : day.s[1];
     sunSpr.material.map = on ? (setNight.moon ||= moonTexture()) : day.map; sunSpr.material.needsUpdate = true;
     for (const c of clouds) c.visible = !on;
-    if (on && !nightG) { nightG = nightLights(M); root.add(nightG); }
+    if (on && !nightG) { nightG = nightLights(M); root.add(nightG); queueMicrotask(() => freeze(nightG)); }
     if (nightG) nightG.visible = on;
     // postes extras da noite tem colisao (08/11, pedido dele: passava por dentro); so existem enquanto e noite
     M.boxes = M.boxes.filter(b => !b.nightPost);
@@ -479,7 +479,12 @@ export function buildWorld(scene, M) {
   // 09/11: alem do corte do contorno o casco nao desenhava nada, mas ainda custava a chamada e todos os triangulos. Agora sai do desenho (PC e celular)
   let cellHulls = null, thinTick = 0; const touchThin = matchMedia('(pointer: coarse)').matches ? MAP_THIN_FAR : 1e9;
   ready.then(() => { const l = []; root.traverse(o => { if (!o.userData.cellHull) return; o.geometry.computeBoundingSphere(); o.userData.cx = o.geometry.boundingSphere.center.x; o.userData.cz = o.geometry.boundingSphere.center.z; o.userData.thin = /trim|glass/.test(o.parent?.name || ''); l.push(o); }); if (l.length) cellHulls = l; });
-  paintNight(false); ready.then(() => paintNight(nightOn)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
+  paintNight(false); ready.then(() => paintNight(nightOn));
+  // 10/11 (desempenho, pedido dele: "100% mais leve"): o cenario nao se mexe, mas o three recalculava a posicao de cada peca
+  // todo quadro (o maior custo de CPU medido no app de PC). Depois de montado, so o sol e as chamines continuam vivos;
+  // estudio e floresta (mapas escuros) tem decoracao animada propria e ficam como estavam
+  function freeze(g) { if (studio || forest) return; const live = new Set([sunSpr, ...chimneys.map(ch => ch.obj)]); g.updateMatrixWorld(true); g.traverse(o => { if (o === g || live.has(o)) return; let p = o.parent, inLive = false; while (p && p !== root) { if (live.has(p)) { inLive = true; break; } p = p.parent; } if (!inLive) o.matrixAutoUpdate = false; }); }
+  ready.then(() => freeze(root)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
     root, ready, setNight,
     dispose() { M.boxes = M.boxes.filter(b => !b.nightPost && b.kind !== 'trunk'); scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
@@ -823,7 +828,7 @@ export function milkBottle() {
 
 // ---------- efeitos ----------
 // Tracados do tiro (escolha nos Ajustes; cada um ve o tracado escolhido por quem atirou)
-export const TRACER_STYLES = ['chalk', 'fire', 'ink', 'spark', 'rainbow', 'void', 'toxic', 'gold', 'ice', 'none'];
+export const TRACER_STYLES = ['chalk', 'fire', 'ink', 'spark', 'rainbow', 'void', 'toxic', 'gold', 'ice', 'elite', 'none'];
 const TRACERS = {
   fire: { w: 1.6, life: 0.16, grow: 0.8 },     // fogo: miolo amarelo, borda laranja, rabo que esfria
   ink: { w: 2.2, life: 0.22, grow: 0.3 },      // tinta: borrao preto em gotas
@@ -835,6 +840,7 @@ const TRACERS = {
   ice: { w: 1.5, life: 0.22, grow: 0.1 },      // gelo: azul cristalino em facetas
   laser: { w: 2.8, life: 0.2, grow: 0.0 },     // laser (fora da lista: e do modelo Bico Longo): raio vermelho de miolo branco
 };
+TRACERS.elite = { w: 1.9, life: 0.24, grow: 0.3 }; // ELITE (10/11, pedido dele): violeta do Elite, miolo branco, favos correndo e purpurina dourada (so com Elite ativo)
 // modelo que sempre atira laser (tiro e som proprios, ignora o tracado escolhido)
 export const LASER_BODY = null; // 07/11 (pedido dele): a Bico Longo (pistol_5) e o revolver Webley-Fosbery: som de revolver e tracante normal (antes era a pistola de laser)
 // bala visivel: risco curto que voa da boca ate o impacto. seg = comprimento do risco (m), speed = m/s na
@@ -881,15 +887,25 @@ function tracerMaterial(style, len) {
           float facet = step(0.5, fract(t * uLen * 1.2 + vUv.x * 2.0));
           c = mix(vec3(0.45, 0.8, 1.0), vec3(0.92, 0.98, 1.0), max(edge * 0.7, facet * 0.4));
           a = (1.0 - uK * uK) * (0.5 + edge * 0.5);
-        } else {
+        } else if (uS < 8.5) {
           c = mix(vec3(1.0, 0.06, 0.04), vec3(1.0, 0.9, 0.86), smoothstep(0.55, 1.0, edge));
           a = (1.0 - uK) * (0.75 + edge * 0.25);
+        } else {
+          float z = t * uLen * 3.0 - uK * 6.0, cell = abs(fract(z) - 0.5);
+          float hex = smoothstep(0.08, 0.0, abs(cell - 0.38)) * 0.8;
+          float glit = step(0.92, fract(sin(floor(t * uLen * 11.0) * 37.9 + floor(uK * 14.0)) * 7919.3));
+          c = mix(vec3(0.33, 0.15, 0.75), vec3(0.72, 0.58, 1.0), edge);
+          c = mix(c, vec3(1.0), smoothstep(0.75, 1.0, edge) * 0.8);
+          c = mix(c, vec3(1.0, 0.82, 0.35), max(hex * 0.7, glit));
+          a = (1.0 - uK) * (0.6 + edge * 0.4) * head;
         }
         gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
       }`,
   });
 }
 
+// quantidade de particulas (10/11, Ajustes > Video > Efeitos): 0,5 / 1 / 1,4
+export const FX_Q = { k: 1 };
 export class FX {
   constructor(scene) {
     this.scene = scene;
@@ -974,6 +990,7 @@ export class FX {
   }
 
   puff(pos, n = 4, size = 0.35, color = PAL.paper, life = 0.5) {
+    n = Math.max(1, Math.round(n * FX_Q.k));
     for (let i = 0; i < n; i++) {
       const m = new THREE.Mesh(this.puffGeo, toon(color));
       outline(m, 0.08);

@@ -158,6 +158,7 @@ export function partUnlocked(wpn, i, id) {
   if (id && BODY_MIN_LVL[id]) return !!data.unlockAll || unlockLevel() >= BODY_MIN_LVL[id];
   if (data.unlockAll || gifted(id) || wasUnlocked(id)) return true; // presente do treino / desafio antigo ja fechado
   if (id && LOCKED_BY[id]) return unlockDone(LOCKED_BY[id].id);
+  if (id === 'tr:elite') return !!rovexMe?.elite; // tracado ELITE: so com o Elite ativo (10/11)
   if (id && id.startsWith('tr:')) return true; // tracado sem desafio (giz/nenhum)
   if (id && id.startsWith('am:')) return wpnLevel(wpn) >= (AMMO_LVL[id.slice(3)] || 1) || (id === 'am:slug' && !!data.lg?.[keyOf(wpn)]); // balote ja era aberto pra quem usava a escopeta
   if (id && id.startsWith('mz:')) return wpnLevel(wpn) >= (MUZZLE_LVL[id.slice(3)] || 1) || hadOld(wpn, i, id);

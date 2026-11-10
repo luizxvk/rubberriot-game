@@ -8,7 +8,7 @@ import { MASTERY_BODIES } from './banners.js';
 export const DANCE_INFO = {
   volta: { rank: 3, r: 2 }, // rankeada, tema ringue (05/11)
   macarrao: { lvl: 1, r: 0 }, sapateado: { lvl: 1, r: 0 }, charleston: { lvl: 1, r: 0 }, polichinelo: { lvl: 2, r: 0 }, marcha: { lvl: 4, r: 0 }, palmas: { lvl: 6, r: 0 }, mexe: { lvl: 8, r: 0 }, galinha: { lvl: 10, r: 1 }, deslizada: { lvl: 12, r: 1 }, remador: { lvl: 14, r: 1 }, robo: { lvl: 17, r: 1 }, shimmy: { lvl: 20, r: 1 }, bamboleio: { lvl: 23, r: 1 }, lindy: { lvl: 26, r: 1 }, cancan: { lvl: 29, r: 1 }, cossaco: { lvl: 32, r: 1 }, piao: { lvl: 36, r: 1 }, reverencia: { pass: true, r: 2 },
-  cambalhota: { shop: true, r: 2 }, mortal: { shop: true, r: 2 }, ombrinho: { shop: true, r: 1 }, passinho: { shop: true, r: 1 }, cruzadinha: { shop: true, r: 1 }, fiodental: { shop: true, r: 1 }, aponta: { shop: true, r: 1 }, cospefogo: { shop: true, r: 2 }, coracao: { shop: true, r: 2 }, canhao: { shop: true, r: 2 }, raio: { shop: true, r: 2 }, projetor: { shop: true, r: 2 },
+  cambalhota: { shop: true, r: 2 }, mortal: { shop: true, r: 2 }, ombrinho: { shop: true, r: 1 }, passinho: { shop: true, r: 1 }, cruzadinha: { shop: true, r: 1 }, fiodental: { shop: true, r: 1 }, aponta: { shop: true, r: 1 }, cospefogo: { shop: true, r: 2 }, coracao: { shop: true, r: 2 }, canhao: { elite: true, wasShop: true, r: 2 }, raio: { shop: true, r: 2 }, projetor: { elite: true, wasShop: true, r: 2 },
 };
 export const DANCE_IDS = Object.keys(DANCE_INFO), DANCE_DEFAULT = ['charleston', 'macarrao', 'sapateado'];
 
@@ -32,7 +32,7 @@ export const LOOKS = {
     { id: 'horns', lvl: 14, r: 1 },      // chifres
     { id: 'viking', lvl: 16, r: 2 },     // elmo de chifre
     { id: 'fez', lvl: 18, r: 1 },        // fez com franja
-    { id: 'halo', lvl: 22, r: 2 },       // aureola
+    { id: 'halo', lvl: 1, r: 2, elite: true },       // aureola: so com Elite ativo (10/11, pedido dele; antes nivel 22)
     { id: 'crown', lvl: 30, r: 2 },      // coroa
     { id: 'tvhead', lvl: 1, r: 2, elite: true },  // televisao de valvula no lugar do chapeu
     { id: 'jester', lvl: 1, r: 2, elite: true },  // chapeu de bobo da corte
@@ -48,7 +48,7 @@ export const LOOKS = {
     { id: 'sorvete', lvl: 1, r: 1, shop: true },  // duas bolas de sorvete com cereja
     { id: 'alavanca', lvl: 1, r: 2, shop: true }, // alavanca de fliperama
     { id: 'cogumelo', lvl: 1, r: 1, shop: true }, // chapeu de cogumelo
-    { id: 'boina', lvl: 1, r: 2, pass: true },    // A Grande Estreia, nivel 50: boina de diretor
+    { id: 'boina', lvl: 1, r: 2, elite: true },   // boina de diretor: so com Elite ativo (10/11; o Pass segue mostrando no nivel 50)
   ],
   eyes: [
     { id: 'classic', lvl: 1, r: 0 },     // olho de torta
@@ -104,6 +104,10 @@ export const LOOKS = {
     { id: 'water', lvl: 28, r: 2 },      // agua (bolhas e gotas)
     { id: 'ether', lvl: 1, r: 2, elite: true },   // eter sombrio
     { id: 'stink', lvl: 1, r: 1, ch: 'u_lk_stink' },      // fedor verde de desenho (desafio)
+    // efeitos 3D (10/11, pedido dele): malha de verdade, cada um com um movimento proprio
+    { id: 'cubes', lvl: 4, r: 0 }, { id: 'shock', lvl: 6, r: 1 }, { id: 'leaves', lvl: 10, r: 1 }, { id: 'helix', lvl: 14, r: 1 },
+    { id: 'gears', lvl: 16, r: 1 }, { id: 'shards', lvl: 20, r: 2 }, { id: 'atom', lvl: 26, r: 2 },
+    { id: 'elite', lvl: 1, r: 2, elite: true },   // Coroa Elite: so com o Elite ativo
   ],
 };
 
@@ -124,10 +128,10 @@ LOOKS.skin = [
   { id: 'aquarela', lvl: 1, r: 2, shop: true },    // aquarela molhada
   { id: 'pixel', lvl: 1, r: 2, shop: true },       // blocos de 8 bits
   // leva de 09/11 (pedido dele): com pecas 3D em volta (src/skins3d.js)
-  { id: 'nebulosa', lvl: 1, r: 2, shop: true }, { id: 'buraconegro', lvl: 1, r: 2, shop: true }, { id: 'lunar', lvl: 1, r: 1, shop: true },
+  { id: 'nebulosa', lvl: 1, r: 2, elite: true, wasShop: true }, { id: 'buraconegro', lvl: 1, r: 2, shop: true }, { id: 'lunar', lvl: 1, r: 1, shop: true },
   { id: 'ossario', lvl: 1, r: 2, shop: true }, { id: 'caveiraneon', lvl: 1, r: 2, shop: true },
   { id: 'opart', lvl: 1, r: 1, shop: true }, { id: 'vitral', lvl: 1, r: 2, shop: true },
-  { id: 'chuvadados', lvl: 1, r: 2, shop: true }, { id: 'circuito', lvl: 1, r: 1, shop: true }, { id: 'glitch', lvl: 1, r: 2, shop: true },
+  { id: 'chuvadados', lvl: 1, r: 2, elite: true, wasShop: true }, { id: 'circuito', lvl: 1, r: 1, shop: true }, { id: 'glitch', lvl: 1, r: 2, elite: true, wasShop: true },
   { id: 'lavalamp', lvl: 1, r: 1, shop: true }, { id: 'vinil', lvl: 1, r: 1, shop: true },
   // exclusivas da Rankeada, uma por elo
   { id: 'rk_ferrugem', lvl: 1, r: 1, rank: 0 }, { id: 'rk_prata', lvl: 1, r: 1, rank: 1 }, { id: 'rk_folha', lvl: 1, r: 2, rank: 2 }, { id: 'rk_cristal', lvl: 1, r: 2, rank: 3 }, { id: 'rk_real', lvl: 1, r: 2, rank: 4 },
@@ -151,11 +155,12 @@ LOOKS.charm = [
 // Malha reduzida e leve: public/models/src/charm_mst_<corpo>.glb (tools/blender/charm_mst.py)
 for (const b of MASTERY_BODIES) if (b !== 'pistol_11') LOOKS.charm.push({ id: 'mst_' + b, lvl: 1, r: 2, mastery: b }); // Trabuquinho (modelo de producao, fora do TT): so o poster
 LOOKS.death = [
-  { id: 'pancake', lvl: 1, r: 0 }, { id: 'tabua', lvl: 1, r: 0, pass: true }, { id: 'fita', lvl: 1, r: 1, pass: true }, { id: 'anjo', lvl: 1, r: 2, pass: true }, { id: 'sanfona', lvl: 1, r: 1, pass: true },
+  { id: 'derrete', lvl: 1, r: 0 }, // padrao (10/11, pedido dele): derrete numa poca de borracha, igual aos viloes
+  { id: 'pancake', lvl: 1, r: 0 }, { id: 'tabua', lvl: 1, r: 0, pass: true }, { id: 'fita', lvl: 1, r: 1, pass: true }, { id: 'anjo', lvl: 1, r: 2, elite: true }, { id: 'sanfona', lvl: 1, r: 1, pass: true },
   { id: 'balao', lvl: 1, r: 2, shop: true }, { id: 'mola', lvl: 1, r: 2, shop: true }, { id: 'nocaute', lvl: 1, r: 2, rank: 2 },
-  { id: 'caixao', lvl: 1, r: 2, shop: true }, // Volta pro Caixao (08/11, pedido dele): lendaria da Loja
+  { id: 'caixao', lvl: 1, r: 2, elite: true, wasShop: true }, // Volta pro Caixao: so com Elite ativo (10/11, pedido dele; era da Loja)
 ];
-export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none', skin: 'none', face: 'none', charm: 'none', death: 'pancake' };
+export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none', skin: 'none', face: 'none', charm: 'none', death: 'derrete' };
 
 // limpa o que veio de fora: id que nao existe volta pro padrao
 export function cleanLook(l) {
@@ -169,9 +174,14 @@ export function cleanLook(l) {
 export function botLook(id) {
   let h = 2166136261;
   for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
-  const pick = (k) => { const l = LOOKS[k].filter(i => !i.elite && !i.ch && !i.shop && !i.pass); h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; return l[h % l.length].id; };
+  // 10/11: exclusivo (Ranked, mestre da arma, meta, conta Rovex) nunca vai pro bot; antes 5 em 6 bots saiam com a skin da Ranked
+  const next = () => (h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0);
+  const pick = (k) => { const l = LOOKS[k].filter(i => !i.elite && !i.ch && !i.shop && !i.pass && i.rank == null && !i.mastery && !i.meta && !i.acct); next(); return l[h % l.length].id; };
   const out = {};
   for (const k of LOOK_SLOTS) out[k] = pick(k);
   if (h % 3) out.fx = 'none'; // efeito so em 1 de cada 3 bots
+  // skin do boneco com chance media (10/11, pedido dele): 2 em cada 5 bots, sorteada entre as da Loja
+  const skins = LOOKS.skin.filter(i => i.shop);
+  out.skin = next() % 5 < 2 ? skins[next() % skins.length].id : 'none';
   return out;
 }

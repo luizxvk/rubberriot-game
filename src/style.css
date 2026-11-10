@@ -493,7 +493,9 @@ body.touchmode .kit { display: none; }
 #lbPlayers li { position: relative; display: flex; align-items: baseline; gap: 8px; padding: 6px 2px 6px 14px; font-size: 16px; font-weight: 700; }
 #lbPlayers li::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 5px; border-radius: 3px; background: var(--graphite); }
 #lbPlayers li.red::before { background: var(--red); } #lbPlayers li.blue::before { background: var(--blue); }
-#lbPlayers .nm { white-space: nowrap; overflow: hidden; max-width: 58%; }
+/* 10/11 (regra dele: nome completo, nunca cortado): o selo e o "voce · host" descem de linha quando nao cabem */
+#lbPlayers .nm { white-space: nowrap; max-width: 68%; min-width: 0; display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; row-gap: 0; }
+#lbPlayers .nm small { margin-left: 0 !important; }
 #lbPlayers .nm small { font-weight: 600; opacity: .65; margin-left: 4px; font-size: 12px; }
 #lbPlayers .dots { flex: 1; border-bottom: 2px dotted var(--graphite); transform: translateY(-4px); min-width: 12px; }
 #lbPlayers .lv { font-family: var(--display); font-size: 14px; }
@@ -2090,7 +2092,7 @@ body.pad .pad-press { transform: scale(.94) translate(2px, 2px) !important; tran
 
 /* ---------- chat da partida online (01/11) ---------- */
 #chat { display: none; position: fixed; z-index: 8; left: max(18px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px); width: min(400px, 36vw); pointer-events: none; font-family: var(--body); }
-body.chat-on.ingame #chat { display: flex; flex-direction: column; gap: 6px; }
+body.chat-on.ingame #chat, body.chat-log-on.ingame #chat { display: flex; flex-direction: column; gap: 6px; }
 .chat-log { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 14px; font-weight: 700; line-height: 1.3; }
 .chat-log li { max-width: 100%; background: rgba(20,18,16,.74); color: var(--paper); padding: 3px 10px; border-radius: 10px; border: 2px solid rgba(236,233,225,.85); overflow-wrap: anywhere; animation: chatIn .18s ease-out; transition: opacity .6s ease; }
 .chat-log li b { font-family: var(--display); font-weight: 400; margin-right: 4px; color: #e9e2c9; }
@@ -2308,6 +2310,10 @@ body.spawn-prot #hud::before { content: ''; position: fixed; inset: 0; pointer-e
 
 /* lobby: x do host pra tirar alguem da sala (02/11) */
 #lbPlayers li { position: relative; }
+.lb-host { flex: none; width: 24px; height: 24px; margin-left: 6px; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); color: var(--ink); cursor: var(--cur-click); }
+.lb-host svg { width: 14px; height: 14px; fill: currentColor; }
+.lb-host:hover { background: #f2c94c; }
+.lb-host:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 .lb-kick { flex: none; width: 24px; height: 24px; margin-left: 6px; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); color: var(--ink); cursor: var(--cur-click); }
 .lb-kick svg { width: 14px; height: 14px; fill: currentColor; }
 .lb-kick:hover { background: var(--red); color: var(--paper); }
@@ -4270,3 +4276,351 @@ body.touchmode .feed { top: calc(max(10px, env(safe-area-inset-top)) + 80px * va
 @media (max-height: 520px) { .wstats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; margin: 2px 0 3px; } .wstats li:nth-child(n+5) { display: none; } .wstats b { font-size: 12px; } .wstats span { font-size: 8.5px; } }
 @media (max-height: 520px) { .wstats { margin: 0 0 1px; } .wstats li { padding: 0 1px; border-width: 1.5px; display: flex; flex-direction: column; } .wstats b { font-size: 11px; line-height: 1; } .wstats span { font-size: 8px; line-height: 1; } #statBars .fmrow { margin: 0; } }
 #scr-arsenal #catTabs { flex: none; } /* 09/11: a fileira de categorias nunca encolhe ate sumir (celular deitado) */
+
+/* Chat Rapido (10/11): cartao de papel com borda de tinta, frases numeradas; meio da esquerda no PC, em cima no toque */
+.qc { position: fixed; z-index: 9; left: max(18px, env(safe-area-inset-left)); top: 50%; transform: translateY(-50%); width: min(300px, 80vw);
+  background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 5px 5px 0 var(--ink); padding: 10px 10px 8px; font-family: var(--body);
+  animation: qcIn .16s cubic-bezier(.3, 1.5, .5, 1); }
+.qc[hidden] { display: none; }
+@keyframes qcIn { from { transform: translateY(-50%) scale(.92); opacity: 0; } }
+.qc header { display: flex; align-items: center; gap: 8px; padding: 0 2px 6px; border-bottom: 2px solid var(--ink); margin-bottom: 6px; }
+.qc header b { font-family: var(--display); font-size: 16px; }
+.qc header small { flex: 1; font-size: 11px; font-weight: 700; opacity: .6; }
+.qc-x { width: 26px; height: 26px; border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); display: grid; place-items: center; cursor: var(--cur-click); flex: none; }
+.qc-x svg { width: 14px; height: 14px; fill: var(--ink); }
+.qc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.qc ol button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; border: 2px solid transparent; border-radius: 9px; background: none; padding: 5px 6px; font: 700 14px var(--body); color: var(--ink); cursor: var(--cur-click); }
+.qc ol button:hover, .qc ol button.sel { border-color: var(--ink); background: #fff8; }
+.qc ol button.sel { box-shadow: 2px 2px 0 var(--ink); }
+.qc kbd { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: var(--ink); color: var(--paper); font: 400 12px var(--display); }
+body.touchmode .qc { top: calc(max(12px, env(safe-area-inset-top)) + 96px); left: 50%; transform: translateX(-50%); width: min(460px, 70vw); }
+body.touchmode .qc ol { grid-template-columns: 1fr 1fr; }
+body.touchmode .qc ol button { min-height: 40px; }
+@keyframes qcInT { from { opacity: 0; } }
+body.touchmode .qc { animation: qcInT .16s ease-out; }
+#touch .tbtn.quick svg { width: 22px; height: 22px; }
+/* banner Elite (10/11): faixa de brilho varrendo da esquerda pra direita */
+.bnr-esh { animation: bnr-esh 3.2s ease-in-out infinite; }
+@keyframes bnr-esh { 0%, 35% { transform: skewX(-18deg) translateX(0); } 100% { transform: skewX(-18deg) translateX(560px); } }
+@media (prefers-reduced-motion: reduce) { .bnr-esh { animation: none; opacity: 0; } }
+.tr-elite { background: linear-gradient(90deg, #4b2a9e, #f4efff 45%, #ffd25e 55%, #8b5cf6); }
+/* 10/11 (pedido dele): logo RUBBER RIOT menor; na pulsada a ponta saia do cartao. Fonte ~12% menor e o esticao lateral de 4% pra 2,5% */
+.title { scale: .88; } /* encolhe o desenho sem mexer no tamanho de cada layout (o scale nao briga com o transform da pulsada) */
+@keyframes bounce { from { transform: scale(1.025, .96); } to { transform: scale(.98, 1.04) translateY(-3px); } }
+/* presente do Elite (10/11): as 4 variantes do mes em cartoes por raridade + selo de 2x XP */
+.elp-gift { width: min(820px, 100%); }
+.elg-grid { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.elg-card { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 8px 10px; border: 3px solid var(--ink); border-radius: 14px; background: radial-gradient(circle at 50% 35%, #fff 0, var(--rcg, #ddd6fe) 70%); box-shadow: 4px 4px 0 var(--ink); text-align: center; animation: elgIn .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+.elg-card:nth-child(2) { animation-delay: .08s; } .elg-card:nth-child(3) { animation-delay: .16s; } .elg-card:nth-child(4) { animation-delay: .24s; }
+@keyframes elgIn { from { transform: translateY(16px) scale(.9); opacity: 0; } }
+.elg-card.r-comum { --rcg: #d9d4c8; } .elg-card.r-incomum { --rcg: #b8e0b0; } .elg-card.r-raro { --rcg: #a9c8f0; } .elg-card.r-epico { --rcg: #cdb4ff; } .elg-card.r-lendario { --rcg: #ffd98a; }
+.elg-shot { width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; }
+.elg-shot img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(3px 4px 0 rgba(0,0,0,.35)); }
+.elg-shot svg { width: 40%; fill: var(--elite); }
+.elg-card b { font-family: var(--display); font-weight: 400; font-size: 14px; line-height: 1.1; }
+.elg-card small { font-size: 11px; font-weight: 700; opacity: .7; }
+.elg-xp { display: flex; align-items: center; gap: 12px; margin-top: 6px; padding: 8px 12px; border: 3px solid var(--ink); border-radius: 14px; background: linear-gradient(90deg, #ffe48a, #ffc83d); box-shadow: 4px 4px 0 var(--ink); }
+.elg-xp .elp-xp2 { width: 48px; height: 48px; flex: none; }
+.elg-xp span { display: flex; flex-direction: column; } .elg-xp b { font-family: var(--display); font-weight: 400; font-size: 16px; } .elg-xp small { font-size: 12px; font-weight: 700; }
+.elg-note { margin: 4px 0 0; font-size: 12px; font-weight: 700; opacity: .7; text-align: center; }
+@media (max-width: 640px) { .elg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* 10/11: lista completa do Elite (9 premios no jogo): coluna do jogo larga, em 2 colunas, tudo a vista sem rolar */
+@media (min-width: 900px) {
+  .elite-pop:not(.welcome) .elp-box { width: min(1060px, 100%); height: auto; max-height: calc(100dvh - 24px); }
+  .elite-pop:not(.welcome) .elp-cols { grid-template-columns: 2fr 1fr; }
+  .elite-pop:not(.welcome) .elp-cols section:first-child ul { grid-template-columns: 1fr 1fr; }
+  .elite-pop:not(.welcome) .elp-cols li small { font-size: 11.5px; }
+}
+/* 10/11 (regra dele: nome inteiro): palavra comprida (Engrenagens, Flutuantes) encolhe em vez de passar da borda */
+.lk-it b.lk-long { font-size: .84em; letter-spacing: -.01em; }
+.qc header { flex-wrap: wrap; row-gap: 0; }
+.qc header small { order: 3; flex-basis: 100%; }
+/* presente do Elite em tela estreita/baixa: foto mais achatada e titulo menor, botao sempre a vista (sem rolar) */
+@media (max-width: 640px), (max-height: 760px) {
+  .elp-gift .elg-shot { aspect-ratio: 2.4 / 1; }
+  .elp-gift .elp-head h2 { font-size: 26px; }
+  .elp-gift .elp-hex { width: 54px; height: 54px; }
+  .elp-gift .elg-card { padding: 6px 6px 8px; }
+  .elp-gift .elg-xp { padding: 6px 10px; } .elp-gift .elg-xp .elp-xp2 { width: 38px; height: 38px; }
+}
+.qc-x { margin-left: auto; }
+/* toque: painel no meio da tela, compacto (cabe no celular deitado sem passar da borda) */
+body.touchmode .qc { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 72vw); max-height: calc(100dvh - 24px); padding: 8px 10px; }
+body.touchmode .qc header { padding-bottom: 4px; margin-bottom: 4px; }
+body.touchmode .qc ol { gap: 2px 8px; }
+body.touchmode .qc ol button { min-height: 34px; padding: 3px 8px; font-size: 13px; }
+
+/* ---------- chat no lobby (10/11, pedido dele): balão de HQ ----------
+   O #chat entra no rodapé do lobby (chat.js). Tela larga: flutua no meio, embaixo, onde sobra cenário. Nas outras vira
+   uma linha inteira em cima dos botões e empurra o resto pra cima (nada por cima de nada). Chega mensagem: o balão estica
+   de borracha e desce sozinho depois de 6 s; aberto (Enter/T ou o botão), fica. */
+#lobby .lb-actions { position: relative; flex-wrap: wrap; }
+body.chat-on #lobby #chat {
+  display: none; position: relative; left: auto; right: auto; top: auto; bottom: auto; z-index: 1; order: -1; flex: 0 0 100%; width: auto; contain: inline-size;
+  flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 10px 14px 12px; background: var(--paper); border: 4px solid var(--ink); border-radius: 22px;
+  box-shadow: 5px 6px 0 rgba(20,18,16,.5); pointer-events: auto; transform-origin: var(--tail, 50%) 120%;
+}
+body.chat-on #lobby #chat.show { display: flex; animation: lbBalloonIn .46s cubic-bezier(.22, 1.7, .42, 1); }
+body.chat-on #lobby #chat.show.out { animation: lbBalloonOut .2s ease-in forwards; }
+@keyframes lbBalloonIn { from { transform: translateY(14px) scale(.55, .3); opacity: 0; } }
+@keyframes lbBalloonOut { to { transform: translateY(14px) scale(.55, .3); opacity: 0; } }
+/* rabinho do balão apontando pro botão de chat (contorno + papel) */
+body.chat-on #lobby #chat::before, body.chat-on #lobby #chat::after { content: ''; position: absolute; left: calc(var(--tail, 50%) - 12px); top: 100%; border-style: solid; border-color: transparent; }
+body.chat-on #lobby #chat::before { border-width: 14px 13px 0 4px; border-top-color: var(--ink); }
+body.chat-on #lobby #chat::after { margin: -6px 0 0 5px; border-width: 9px 7px 0 2px; border-top-color: var(--paper); }
+#lobby #chat .chat-log { gap: 2px; font-size: 15px; }
+#lobby #chat .chat-log:empty { display: none; }
+#lobby #chat .chat-log li { background: none; border: 0; color: var(--ink); padding: 1px 2px; border-radius: 0; transform-origin: 0 100%; animation: lbChatIn .42s cubic-bezier(.22, 1.6, .42, 1); }
+#lobby #chat .chat-log li.old { opacity: 1; }
+#lobby #chat .chat-log li:nth-last-child(n+5) { display: none; }
+#lobby #chat .chat-log li b { color: var(--ink); }
+#lobby #chat .chat-log li.mate b { color: var(--blue); }
+#lobby #chat .chat-log li.foe b { color: var(--red); }
+#lobby #chat .chat-log li.me, #lobby #chat .chat-log li.sys { background: none; color: var(--graphite); }
+#lobby #chat .chat-row { box-shadow: none; border-width: 3px; }
+@keyframes lbChatIn { 0% { transform: scale(.3, .15); opacity: 0; } 55% { transform: scale(1.05, .94); opacity: 1; } 100% { transform: none; } }
+/* tela larga: o meio da tela, entre o elenco e o painel da direita, fica livre */
+@media (min-width: 1261px) and (min-height: 521px) {
+  body.chat-on #lobby #chat { position: fixed; left: 50%; bottom: max(22px, env(safe-area-inset-bottom)); width: clamp(260px, calc(100vw - 1000px), 440px); margin: 0; contain: none; transform: translateX(-50%); --tail: 50%; }
+  body.chat-on #lobby #chat.show { animation-name: lbBalloonInC; }
+  body.chat-on #lobby #chat.show.out { animation-name: lbBalloonOutC; }
+}
+@keyframes lbBalloonInC { from { transform: translateX(-50%) translateY(16px) scale(.55, .3); opacity: 0; } }
+@keyframes lbBalloonOutC { to { transform: translateX(-50%) translateY(16px) scale(.55, .3); opacity: 0; } }
+
+/* botão de chat do lobby (só em sala online) com o ponto de mensagem nova */
+.lb-chat { position: relative; flex: none; width: 50px; height: 50px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 50%; background: var(--paper); color: var(--ink); box-shadow: 3px 4px 0 var(--ink); cursor: var(--cur-click); }
+.lb-chat svg { width: 24px; height: 24px; fill: currentColor; }
+.lb-chat:hover { background: var(--ink); color: var(--paper); }
+.lb-chat:active { transform: translate(2px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.lb-chat:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+.lb-chat-dot { position: absolute; top: -4px; right: -4px; width: 15px; height: 15px; border-radius: 50%; background: var(--red); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); animation: lbDot .5s cubic-bezier(.22, 1.7, .42, 1); }
+.lb-chat-dot[hidden] { display: none; }
+@keyframes lbDot { from { transform: scale(0); } }
+body:not(.chat-on) .lb-chat { display: none; }
+.lb-mtabs { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.chat-on #lobby #chat.show, body.chat-on #lobby #chat.show.out { animation-duration: .01s; }
+  #lobby #chat .chat-log li, .lb-chat-dot { animation: none; }
+}
+/* tela media (10/11): o balao entra em cima dos botoes; o Arsenal encolhe e rola em vez de empurrar o rodape pra fora */
+@media (min-width: 761px) and (max-width: 1260px) and (min-height: 521px) {
+  #lobby { grid-template-rows: auto minmax(0, auto) minmax(150px, 1fr) auto; }
+  #lobby .lb-pick { min-height: 0; overflow-y: auto; }
+}
+/* celular deitado: o rodape termina acima do "Powered by Rovex" (antes a marca ficava em cima do botao) */
+@media (max-height: 520px) and (orientation: landscape) {
+  #lobby { padding-bottom: calc(max(4px, env(safe-area-inset-bottom)) + 16px); }
+}
+/* 10/11 (regra dele: tudo que nao cabe ROLA no celular): lista do Elite e presente rolam por dentro; o botao fica fora */
+.elp-cols, .elg-scroll, .elp-welcome .elp-one { min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.elg-scroll { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 2px 4px 6px 2px; }
+.elp-gift { overflow: hidden; }
+/* ---------- lobby no celular deitado, refeito do zero (10/11, pedido dele: compacto, sem espaco sobrando, explicando) ----------
+   Topo: letreiro + botao do Elenco (icone + quantos tem na sala; toca e abre a lista por cima, toca fora e fecha).
+   Meio: Partida e Arsenal lado a lado, cada um no TAMANHO DELE (nada esticado; se passar da altura, rola por dentro).
+   Rodape: faixa reta na largura toda, botoes alinhados a direita (sair, chat, iniciar). Nada por cima de nada. */
+.lb-hint { display: none; }
+.lb-castbtn { display: none; }
+@media (max-height: 520px) and (orientation: landscape) {
+  #lobby { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "marq cast" "cfg pick" "act act"; gap: 6px 10px; align-items: start;
+    padding: max(6px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(max(4px, env(safe-area-inset-bottom)) + 16px) max(12px, env(safe-area-inset-left)); }
+  #lobby:has(.lb-pick[hidden]) { grid-template-areas: "marq cast" "cfg ." "act act"; }
+  #lobby:has(.lb-cfg[hidden]) { grid-template-areas: "marq cast" "pick ." "act act"; }
+
+  /* letreiro: mapa + modo (+ sala) numa linha; nome do mapa sempre inteiro */
+  #lobby .lb-marquee { grid-area: marq; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; align-self: center; }
+  #lobby .lb-map { font-size: clamp(19px, 6.4vh, 28px); line-height: 1.05; -webkit-text-stroke-width: 2px; text-shadow: 2px 2px 0 var(--ink); }
+  #lobby .lb-mode { margin: 0; font-size: 11.5px; padding: 1px 8px; border-width: 2px; box-shadow: 2px 2px 0 var(--ink); }
+  #lobby .lb-ver { display: none; }
+
+  /* botao do Elenco */
+  #lobby .lb-castbtn { grid-area: cast; justify-self: end; align-self: center; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 9px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); color: var(--ink); font: 400 13px var(--display); box-shadow: 3px 3px 0 rgba(20,18,16,.5); cursor: var(--cur-click); white-space: nowrap; }
+  #lobby .lb-castbtn svg { width: 19px; height: 19px; fill: currentColor; flex: none; }
+  #lobby .lb-castbtn b { min-width: 22px; padding: 1px 6px; border-radius: 8px; background: var(--ink); color: var(--paper); font: 400 12px var(--display); text-align: center; }
+  #lobby .lb-castbtn[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
+  #lobby .lb-castbtn[aria-expanded="true"] b { background: var(--paper); color: var(--ink); }
+  #lobby .lb-castbtn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(20,18,16,.5); }
+  #lobby .lb-castbtn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+  /* frase de "pra que serve" de cada cartao */
+  #lobby .lb-hint { display: block; flex: none; margin: 0; font-family: var(--body); font-weight: 700; font-size: 11px; line-height: 1.25; color: var(--graphite); text-align: left; }
+  #lobby .lb-cfg.host .lb-hint .g, #lobby .lb-cfg:not(.host) .lb-hint .h { display: none; }
+
+  /* cartoes: mesma borda e sombra */
+  #lobby .lb-pick, #lobby .lb-cfg { justify-self: stretch; align-self: start; width: 100%; height: auto; max-height: 100%; min-height: 0; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 3px 3px 0 rgba(20,18,16,.5); }
+
+  /* Partida: coluna inteira, rola por dentro */
+  #lobby .lb-cfg { grid-area: cfg; }
+  #lobby .lb-cfg .lb-slate { padding: 8px 10px 2px; }
+  #lobby .lb-cfg .lb-slate::before { height: 6px; }
+  #lobby .lb-cfg .lb-slate h3 { font-size: 15px; }
+  #lobby .lb-cfg .lb-slate small { font-size: 10.5px; }
+  #lobby .lb-cfg .lb-hint { padding: 0 10px 2px; }
+  #lobby #lbCfgList { flex: 0 1 auto; padding: 0 8px 4px; touch-action: pan-y; scrollbar-width: none; }
+  #lobby #lbCfgList li { min-height: 30px; padding: 1px 0; }
+  #lobby #lbCfgList .k { font-size: 11.5px; }
+  #lobby #lbCfgList .v { font-size: 13px; }
+  #lobby #lbCfgList .ar { width: 24px; height: 24px; }
+
+  /* Arsenal: titulo + frase, armas enchendo o meio (3 por linha), 4 atalhos com nome embaixo */
+  #lobby .lb-pick { grid-area: pick; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: auto auto auto; grid-template-areas: "t h h h" "l l l l"; align-items: center; gap: 6px; padding: 7px 9px 8px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
+  #lobby .lb-pick .lb-pick-head, #lobby .lb-pick .lb-tabs { display: contents; }
+  #lobby .lb-pick .lb-pick-head h3 { grid-area: t; display: block; margin: 0; font-size: 15px; line-height: 1; }
+  #lobby .lb-pick .lb-hint { grid-area: h; }
+  #lobby .lb-pick .pk-list { grid-area: l; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin: 0; }
+  #lobby .lb-pick .pk-list button { padding: 3px; font-size: 11px; border-width: 2px; }
+  #lobby .lb-pick .pk-list img { width: 100%; height: auto; aspect-ratio: 2.4; max-height: none; object-fit: contain; }
+  #lobby .lb-pick .lb-smith { grid-row: 3; width: auto; height: auto; min-height: 28px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 2px 4px; font-size: 11px; border-width: 2px; border-radius: 8px; box-shadow: 2px 2px 0 rgba(20,18,16,.35); min-width: 0; }
+  #lobby .lb-pick .lb-smith svg { width: 14px; height: 14px; }
+  #lobby .lb-pick .lb-smith span { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; line-height: 1; text-align: center; }
+  #lobby .lb-pick .lb-tabs .lb-smith { background: var(--paper); color: var(--ink); }
+
+  /* Elenco: fechado; aberto = popup no canto de cima, saindo do botao */
+  #lobby .lb-bill { display: none; position: fixed; z-index: 14; top: calc(max(6px, env(safe-area-inset-top)) + 44px); right: max(12px, env(safe-area-inset-right)); width: min(430px, calc(100vw - 24px)); height: auto; max-height: calc(100dvh - max(6px, env(safe-area-inset-top)) - 56px);
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 8px; align-items: center; padding: 8px 10px 6px; border-width: 3px; border-radius: 16px; box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink), 8px 10px 0 6px rgba(20,18,16,.45); transform-origin: calc(100% - 40px) -20px; }
+  #lobby.cast-open .lb-bill { display: grid; animation: castIn .34s cubic-bezier(.22, 1.6, .42, 1); }
+  #lobby.cast-closing .lb-bill { display: grid; animation: castOut .18s ease-in forwards; pointer-events: none; }
+  #lobby .lb-bill > h3 { grid-column: 1; grid-row: 1; margin: 0; padding: 0; border: 0; font-size: 15px; text-align: left; }
+  #lobby .lb-bill > .lb-swap { grid-column: 2; grid-row: 1; margin: 0; font-size: 11px; padding: 2px 8px; }
+  #lobby .lb-bill > .lb-hint { grid-column: 1 / -1; grid-row: 2; margin: 2px 0 3px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); }
+  #lobby .lb-bill > #lbPlayers { grid-column: 1 / -1; grid-row: 3; align-self: stretch; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px 0 0; padding-right: 4px; touch-action: pan-y; scrollbar-width: none; }
+  #lobby #lbPlayers li { padding: 2px 4px 2px 11px; font-size: 12.5px; }
+  #lobby #lbPlayers li::before { top: 5px; bottom: 5px; width: 4px; }
+  #lobby #lbPlayers .lv { font-size: 12px; }
+  #lobby #lbPlayers .stamp { font-size: 10px; }
+  #lobby .lb-bill > .lb-status { grid-column: 1 / -1; grid-row: 4; margin: 3px 0 0; padding-top: 3px; font-size: 10.5px; }
+
+  /* contagem: no lugar da Partida */
+  #lobby .lb-leader { grid-area: cfg; z-index: 3; justify-self: center; align-self: center; width: clamp(90px, 30vh, 120px); }
+
+  /* rodape: sair | chat | iniciar */
+  #lobby .lb-actions { grid-area: act; justify-self: stretch; align-self: end; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 0 12px; }
+  #lobby .lb-actions > .lb-leave { grid-column: 2; grid-row: 2; } #lobby .lb-actions > .lb-chat { grid-column: 3; grid-row: 2; } #lobby .lb-actions > .big { grid-column: 4; grid-row: 2; }
+  /* balao do chat: em cima dos botoes, alinhado a direita, largura de balao (nao a faixa toda) */
+  body.chat-on #lobby .lb-actions > #chat { grid-column: 1 / -1; grid-row: 1; justify-self: end; width: min(420px, 100%); contain: none; }
+  #lobby .lb-actions .big { flex: 0 0 auto; width: auto; min-width: 210px; margin: 0; padding: 8px 18px; font-size: 17px; }
+  #lobby .lb-leave { flex: none; font-size: 13px; padding: 4px 2px; }
+  .lb-chat { width: 40px; height: 40px; }
+  .lb-chat svg { width: 20px; height: 20px; }
+
+  /* balao do chat compacto: 2 linhas fechado, 4 aberto */
+  body.chat-on #lobby #chat { margin-bottom: 10px; padding: 6px 10px 8px; border-width: 3px; border-radius: 14px; }
+  #lobby #chat .chat-log { font-size: 12px; }
+  #lobby #chat .chat-log li:nth-last-child(n+3) { display: none; }
+  #lobby #chat .chat-log.open li:nth-last-child(-n+4) { display: block; }
+  #lobby #chat .chat-quick { gap: 4px; }
+  #lobby #chat .chat-quick button { font-size: 11.5px; padding: 3px 8px; border-width: 2px; box-shadow: 2px 2px 0 var(--ink); }
+  #lobby #chat .chat-row input { font-size: 13px; padding: 3px 6px; }
+  #lobby #chat .chat-send { font-size: 13px; padding: 2px 9px; }
+}
+@keyframes castIn { from { transform: scale(.35, .2); opacity: 0; } 60% { transform: scale(1.02, .98); opacity: 1; } }
+@keyframes castOut { to { transform: scale(.35, .2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #lobby.cast-open .lb-bill, #lobby.cast-closing .lb-bill { animation: none; } }
+/* celular estreito: o botao grande cabe numa linha */
+@media (max-height: 520px) and (orientation: landscape) and (max-width: 720px) { #lobby .lb-actions .big { min-width: 180px; font-size: 15px; padding: 7px 12px; } #lobby .lb-castbtn span { display: none; } }
+/* "Meu Elite" / "Assinar o Elite" abrem a Rovex fora do jogo: icone de abrir externo do lado do texto (10/11, pedido dele) */
+.elp-box a.elp-go { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.elp-go .elp-ext { flex: none; width: 22px; height: 22px; fill: currentColor; }
+@media (max-height: 520px) { .elp-go .elp-ext { width: 18px; height: 18px; } }
+/* presente do Elite (10/11, pedido dele): cartao com o MESMO fundo dos itens da Loja (raios + degrade da raridade),
+   cores das raridades do Mercado Negro (comum cinza, incomum verde, raro azul, epico roxo, lendario laranja) */
+.elg-card.r-comum { --rc1: #e2ded4; --rc2: #8f8a80; --rc3: #3a3731; }
+.elg-card.r-incomum { --rc1: #9be070; --rc2: #3d8f2c; --rc3: #17461a; }
+.elg-card.r-raro { --rc1: #6fd3ff; --rc2: #2468c9; --rc3: #0e2a62; }
+.elg-card.r-epico { --rc1: #db97ff; --rc2: #7b33cc; --rc3: #33105c; }
+.elg-card.r-lendario { --rc1: #ffd36b; --rc2: #e2731f; --rc3: #77290a; }
+.elg-card, .elp-gift .elg-card { position: relative; overflow: hidden; padding: 6px 0 0; gap: 0; color: #fff;
+  background: repeating-conic-gradient(from 0deg at 50% 40%, rgba(255,255,255,.1) 0 7deg, transparent 7deg 20deg), radial-gradient(circle at 50% 40%, var(--rc1) 0%, var(--rc2) 52%, var(--rc3) 100%); }
+.elg-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--rc1); }
+.elg-card .elg-shot { position: relative; z-index: 1; padding: 0 8px; }
+.elg-card b, .elg-card small { position: relative; z-index: 1; align-self: stretch; padding: 0 8px; text-shadow: 0 1px 0 rgba(0,0,0,.6); }
+.elg-card b { padding-top: 16px; color: #fff; text-transform: uppercase; background: linear-gradient(transparent, rgba(8,10,16,.82) 55%); }
+.elg-card small { padding-bottom: 10px; color: rgba(255,255,255,.8); opacity: 1; background: rgba(8,10,16,.82); }
+
+/* novidades 10/11: Mercado Negro ABERTO (selo amarelo do lado do nome + botao de entrar), sem o "Em breve" */
+.np-ticket.open h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.np-ticket.open .np-stamp { position: static; transform: rotate(-5deg); color: #ffc83d; border-color: #ffc83d; font-size: clamp(12px, 1.9vh, 15px); padding: 2px 8px; }
+.np-ticket.open p { padding-right: 0; }
+.np-ticket.open > div { flex: 1; min-width: 0; }
+.np-bm-go { position: relative; z-index: 1; flex: none; padding: 9px 14px; font-family: var(--display); font-size: clamp(13px, 2vh, 16px); line-height: 1.05; color: var(--ink); background: #ffc83d; border: 3px solid var(--paper); border-radius: 12px; box-shadow: 3px 3px 0 rgba(236,233,225,.35); cursor: var(--cur-click); }
+.np-bm-go:hover, .np-bm-go:focus-visible { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 rgba(236,233,225,.5); outline: none; }
+.np-bm-go:active { transform: translate(2px, 2px); box-shadow: 0 0 0 transparent; }
+@media (max-width: 560px) { .np-ticket.open { flex-wrap: wrap; } .np-bm-go { width: 100%; } }
+/* tudo que nao cabe rola (regra dele 10/11): a lista de novidades rola por dentro, o botao do presente fica fora */
+.np-list { overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding: 2px 4px 6px 2px; }
+
+/* ---------- parabens do Elite em sequencia (10/11, pedido dele) ----------
+   Palco com raios girando; cada premio entra pulando da direita e fica com aro dourado enquanto e o mais novo; a fileira
+   anda sozinha pra direita. Cartao de capitulo abre "No Rubber Riot" e "Na Rovex". */
+.elp-box.elw { width: min(1040px, 100%); gap: 10px; }
+.elw-stage { position: relative; overflow: hidden; border: 3px solid var(--ink); border-radius: 18px; background: radial-gradient(circle at 50% 50%, #3b2a7a 0%, #1d1440 70%); box-shadow: inset 0 0 0 3px rgba(255,255,255,.06); }
+.elw-rays { position: absolute; left: 50%; top: 50%; width: 1400px; height: 1400px; margin: -700px 0 0 -700px; background: repeating-conic-gradient(rgba(255,200,61,.10) 0 8deg, transparent 8deg 20deg); animation: bc-spin 30s linear infinite; pointer-events: none; }
+.elw-track { position: relative; list-style: none; margin: 0; display: flex; align-items: stretch; gap: 12px; height: clamp(222px, 42vh, 284px); padding: 24px 45% 22px 18px; overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; touch-action: pan-x; scrollbar-width: none; }
+.elw-track::-webkit-scrollbar { display: none; }
+.elw-card { position: relative; flex: 0 0 clamp(158px, 17vw, 190px); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px; border: 3px solid var(--ink); border-radius: 16px; background: var(--paper); color: var(--ink); text-align: center; box-shadow: 4px 5px 0 var(--ink); overflow-y: auto; scrollbar-width: none; transition: transform .25s, box-shadow .25s; }
+.elw-card.rovex { background: linear-gradient(160deg, #8b5cf6, #4f46e5); color: #fff; }
+.elw-art { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #4f46e5); border: 3px solid var(--ink); }
+.elw-art svg { width: 34px; height: 34px; fill: #fff; }
+.elw-card.rovex .elw-art { background: #fff; } .elw-card.rovex .elw-art svg { fill: #4f46e5; }
+.elw-art .elp-xp2 { width: 64px; height: 64px; } .elw-card .elw-art:has(.elp-xp2) { background: none; border: 0; }
+.elw-art .elp-shot { width: 100%; height: 100%; border: 0; border-radius: 50%; background: #e9e4d6; }
+.elw-card b { font-family: var(--display); font-weight: 400; font-size: 15px; line-height: 1.1; }
+.elw-card small { font-weight: 700; font-size: 11.5px; line-height: 1.3; opacity: .85; }
+.elw-card.elw-sec { flex-basis: clamp(120px, 12vw, 140px); justify-content: center; background: var(--ink); color: var(--paper); border-color: var(--paper); box-shadow: 0 0 0 3px var(--ink), 4px 5px 0 3px rgba(0,0,0,.5); }
+.elw-card.elw-sec.rovex { background: linear-gradient(160deg, #6d28d9, #312e81); }
+.elw-card.elw-sec .elw-art { width: 58px; height: 58px; background: transparent; border-color: var(--paper); }
+.elw-card.elw-sec .elw-art svg { width: 40px; height: 40px; } .elw-card.elw-sec.rovex .elw-art svg .ep-hex-in { fill: #4f46e5; } .elw-card.elw-sec.rovex .elw-art svg .ep-hex-out { fill: none; stroke: #e3c14a; stroke-width: 3.5; } .elw-card.elw-sec.rovex .elw-art svg > path:last-child { fill: #fff6c8; }
+.elw-card.elw-sec b { font-size: 17px; }
+/* entrada: pula da direita, gira de leve e assenta; o mais novo fica com aro dourado e um reflexo passando */
+.elw-card.in { animation: elwIn .55s cubic-bezier(.2, 1.5, .4, 1) both; }
+.elw-card.new { transform: translateY(-4px) scale(1.04); box-shadow: 0 0 0 4px #ffc83d, 5px 7px 0 var(--ink), 0 0 34px 6px rgba(255,200,61,.55); }
+.elw-card.new::after { content: ''; position: absolute; inset: 0; border-radius: 13px; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.65) 50%, transparent 65%); background-size: 260% 100%; animation: elwGlint .7s ease-out .15s both; pointer-events: none; }
+@keyframes elwIn { 0% { opacity: 0; transform: translateX(90px) scale(.35) rotate(10deg); } 60% { opacity: 1; transform: translateX(-6px) scale(1.12) rotate(-3deg); } 100% { transform: translateY(-4px) scale(1.04); } }
+@keyframes elwGlint { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+.elw-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; }
+.elw-count { font-family: var(--display); font-weight: 400; font-size: 17px; color: #5b2fc0; }
+.elw-count.done { font-size: 19px; animation: npStampFlat .45s cubic-bezier(.3, 1.6, .5, 1) both; }
+.elw-skip { padding: 5px 12px; border: 3px solid var(--ink); border-radius: 10px; background: var(--paper); color: var(--ink); font: 800 13px var(--body); box-shadow: 2px 2px 0 var(--ink); cursor: var(--cur-click); }
+.elw-skip:focus-visible, .elw-go:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.elw-go.pop { animation: elwGo .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes elwGo { from { transform: scale(.4); opacity: 0; } }
+@media (max-height: 520px) {
+  .elp-box.elw { gap: 6px; }
+  .elw-track { height: calc(100dvh - 190px); min-height: 170px; padding: 12px 40% 12px 12px; gap: 10px; }
+  .elw-card { flex-basis: 180px; padding: 8px; gap: 4px; }
+  .elw-art { width: 48px; height: 48px; } .elw-art svg { width: 26px; height: 26px; } .elw-art .elp-xp2 { width: 48px; height: 48px; }
+  .elw-card b { font-size: 13.5px; } .elw-card small { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .elw-rays, .elw-card.in, .elw-card.new::after, .elw-go.pop, .elw-count.done { animation: none; } }
+
+/* parabens do Elite: cartao de abertura (selo + nome), setas dos lados e deslizar no toque (10/11, pedido dele) */
+.elw-track { scroll-snap-type: x proximity; scroll-padding-left: 18px; }
+.elw-card { scroll-snap-align: start; }
+.elw-card.elw-hero { flex-basis: clamp(190px, 20vw, 220px); justify-content: center; gap: 8px; background: radial-gradient(circle at 50% 30%, #3b2a7a, #120c2a); color: #fff; border-color: #e3c14a; box-shadow: 0 0 0 3px var(--ink), 0 0 30px 4px rgba(139,92,246,.6); }
+.elw-hero .elw-art { width: 92px; height: 92px; background: none; border: 0; filter: drop-shadow(0 0 14px rgba(139,92,246,.95)); animation: elpGlow 2.4s ease-in-out infinite; }
+.elw-hero .elw-art svg { width: 92px; height: 92px; } .elw-hero .ep-hex-in { fill: #4f46e5; } .elw-hero .ep-hex-out { fill: none; stroke: #e3c14a; stroke-width: 3.5; } .elw-hero .elw-art svg > path:last-child { fill: #fff6c8; }
+.elw-hero b { font-size: 22px; text-shadow: 3px 3px 0 #4f46e5; }
+.elw-hero small { color: #ddd6fe; opacity: 1; }
+.elw-hero em { font-style: normal; font-family: var(--display); font-size: 12px; padding: 2px 10px; border-radius: 99px; background: #e3c14a; color: var(--ink); }
+.elw-nav { position: absolute; top: 50%; z-index: 2; width: 44px; height: 44px; margin-top: -22px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 50%; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); cursor: var(--cur-click); transition: opacity .2s, transform .1s; }
+.elw-nav.prev { left: 8px; } .elw-nav.next { right: 8px; }
+.elw-nav svg { width: 26px; height: 26px; fill: currentColor; }
+.elw-nav:hover:not(:disabled) { background: #ffc83d; }
+.elw-nav:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.elw-nav:disabled { opacity: 0; pointer-events: none; }
+.elw-nav:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+@media (max-height: 520px) { .elw-nav { width: 38px; height: 38px; margin-top: -19px; } .elw-card.elw-hero { flex-basis: 190px; } .elw-hero .elw-art, .elw-hero .elw-art svg { width: 64px; height: 64px; } .elw-hero b { font-size: 18px; } }
+
+/* banner do app de PC (10/11, pedido dele): so no PC e fora do proprio app */
+.elite-promo.dl-promo { background: linear-gradient(120deg, #2f5b8a, #1b3a5e 60%, #141210); }
+.elite-promo.dl-promo .ep-hex { fill: #fff; }
+.elite-promo.dl-promo small { color: #dbe6f3; }
+.elite-promo.dl-promo .ep-chip { color: #1b3a5e; }
+body.touchmode .dl-promo, body.rr-desktop .dl-promo { display: none !important; }
+@media (pointer: coarse) { .dl-promo { display: none !important; } }
+/* 10/11 (print dele: seta solta na partida, as vezes duas): a setinha das fileiras e do menu. Na partida com o menu fechado
+   nenhuma aparece (o arrows.js nem mede la; a que ficou de antes ficava parada na tela) */
+body.ingame:has(#menu[hidden]) .h-arrow, body.ingame:has(#hud:not([hidden])):not(:has(#menu:not([hidden]))) .h-arrow { display: none !important; }

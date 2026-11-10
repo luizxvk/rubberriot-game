@@ -37,7 +37,8 @@ function run() {
 let pending = 0;
 const QUIET = '#hud, #touch, #board, #killfeed, #comic, #dead, #xpChip, #mapCurtain, #rovexMark, .h-arrow';
 const inGame = () => { const h = document.getElementById('hud'), m = document.getElementById('menu'); return !!h && !h.hidden && (!m || m.hidden); };
-function later() { if (pending || inGame()) return; pending = setTimeout(() => requestAnimationFrame(run), 120); }
+function hideAll() { for (const B of BOX.values()) for (const b of Object.values(B)) b.hidden = true; }
+function later() { if (inGame()) { hideAll(); return; } if (pending) return; pending = setTimeout(() => requestAnimationFrame(run), 120); }
 export function startArrows() {
   new MutationObserver((recs) => {
     for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (el && !el.closest(QUIET)) { later(); return; } }

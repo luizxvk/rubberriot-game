@@ -120,6 +120,11 @@ const SFX = {
   siren: ['1930s cartoon police siren wailing up and down with a comedic bell, short alarm, no music, no voice', 3.0],
   cashreg: ['old cash register KA-CHING with coins jingling, cartoon, short and bright, no music, no voice', 1.0],
   // 03/11: sequencias grandes
+  // 10/11 (pedido dele): som de recompensa do Elite (cada premio que entra + fanfarra no fim)
+  reward_card: ['soft warm music box chime with a gentle airy shimmer, smooth and round, calm reward card reveal, quiet, no harsh attack, no noise, no music bed', 0.9],
+  reward_fanfare: ['gentle warm celebratory jingle, soft muted trumpet and celesta playing a short rising melody, smooth and flowing, 1930s cartoon charm, not loud, no drums, no crash', 2.8],
+  reward_section: ['soft rising harp glissando with a warm low tone, smooth and calm, chapter transition, quiet', 1.2],
+  chat_pop: ['very soft round bubble pop with a tiny warm wooden tick, gentle and quiet, speech balloon appearing', 0.5],
   planefly: ['1930s cartoon biplane flying low overhead, buzzing propeller engine passing by with a rattling machine gun strafing burst, comedic, no music, no voice', 5.0],
   trainwhistle: ['loud cartoon steam train whistle toot toot followed by fast chugging locomotive charging closer, comedic 1930s rubber hose cartoon, no music, no voice', 3.5],
   bomberdrone: ['enormous slow airship passing overhead, deep heavy rumbling engine drone that shakes the ground, ominous low frequency, huge and menacing with a faint comedic creak, no music, no voice', 8.0],

@@ -90,6 +90,9 @@ export class Input {
       if (m) this.slotReq = Number(m[1]) - 1;
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
+    // trocou de arma (10/11, bug dele): o alternar ao mirar solta a mira. Senao a akimbo atirava sozinha com a direita e
+    // a corrida ficava travada pela mira presa
+    this.resetAds = () => { this.adsLatch = false; if (this.touch) this.touch.ads = false; this.mouse.ads = false; this.adsBtn?.classList.remove('on'); };
     addEventListener('blur', () => { this.keys.clear(); this.mouse.fire = this.mouse.ads = false; this.adsLatch = false; });
     // mouse travado: o Chrome no Windows as vezes manda um salto falso enorme (mais no 1o evento depois de
     // travar) e a mira "puxava pro chao do nada". Pula o 1o evento e qualquer salto impossivel num evento so.
@@ -139,6 +142,7 @@ export class Input {
       lookX: this.lookX + smx, lookY: this.lookY + smy, padLookX: this.padLookX, padLookY: this.padLookY, touchLookX: this.touchLookX, touchLookY: this.touchLookY,
       fire: A('fire') || t.fire || t.fireL || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
       ads: ads, adsPressed: E('ads') || edge('ADS'),
+      adsHeld: A('ads') || !!pd.ads || (this.settings?.adsMode !== 'toggle' && !!t.ads), // botao de mirar FISICAMENTE segurado (akimbo: gatilho da direita; nunca o alternar)
       sprint: A('sprint') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
       tacPressed: edge('TAC'),
       jumpPressed: E('jump') || edge('JUMP'),
@@ -154,6 +158,7 @@ export class Input {
       streakPressed: E('streak') || edge('STREAK'),
       gadget: A('gadget') || !!t.gadget || !!pd.gadget, gadgetPressed: E('gadget') || edge('GADGET'),
       inspectPressed: E('inspect') || edge('INSPECT'),
+      quickPressed: E('quick') || edge('QUICK'), // Chat Rapido (10/11)
       pingPressed: E('ping') || edge('PING'), // marcar (battle royale): B, botao do meio, direcional esquerdo, botao de toque
       use: A('use') || t.use || !!pd.use,
       mapPressed: E('map') || edge('MAP'),
@@ -184,7 +189,8 @@ const NADE_ICON = {
 const ICON = {
   breath: 'M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z',
   gadget: 'M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z', // peca encaixada (Material Icons 'extension', Apache 2.0): a granada ja usa fogo
-  more: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z', // + (Material Icons): abre os botoes extras
+  more: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+  quick: 'M22 4c0-1.1-.9-2-2-2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h9v-8h7V4zm.5 12h-2.2l1.7-4h-5v6h2v5z', // Material Icons 'quickreply' (Apache 2.0): Chat Rapido (10/11) // + (Material Icons): abre os botoes extras
   field: 'm13.127 14.56 1.43-1.43 6.44 6.443L19.57 21zm4.293-5.73 2.86-2.86c-3.95-3.95-10.35-3.96-14.3-.02 3.93-1.3 8.31-.25 11.44 2.88zM5.95 5.98c-3.94 3.95-3.93 10.35.02 14.3l2.86-2.86C5.7 14.29 4.65 9.91 5.95 5.98zm.02-.02-.01.01c-.38 3.01 1.17 6.88 4.3 10.02l5.73-5.73c-3.13-3.13-7.01-4.68-10.02-4.3z',
   fire: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   ads: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z',
@@ -311,6 +317,7 @@ export function buildTouch(input, root) {
   const lean = (side) => btn(t(side === 'L' ? 't_leanL' : 't_leanR'), 'lean' + side + ' lean', { left: 'calc(max(24px, env(safe-area-inset-left)) + ' + (side === 'L' ? 0 : 104) + 'px)', bottom: 'calc(max(24px, env(safe-area-inset-bottom)) + 162px)', width: '46px', height: '46px' }, () => { input.touch['lean' + side] = true; input.edges.add('LEAN' + side); }, () => { input.touch['lean' + side] = false; });
   input.leanBtns = [lean('L'), lean('R')];
   // chat (so partida online: some pelo CSS sem body.chat-on), embaixo da pausa
+  btn(t('t_quick'), 'quick', { left: 'max(12px, env(safe-area-inset-left))', top: 'calc(max(12px, env(safe-area-inset-top)) + 48px)', width: '48px', height: '40px', borderRadius: '12px' }, () => input.edges.add('QUICK'));
   btn(t('chat_open'), 'chat', { left: 'max(12px, env(safe-area-inset-left))', top: 'calc(max(12px, env(safe-area-inset-top)) + 48px)', width: '48px', height: '40px', borderRadius: '12px' }, () => input.onChat?.());
   applyHudLayout(root, input.settings);
   setFireButton(input);

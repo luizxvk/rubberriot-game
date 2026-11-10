@@ -225,6 +225,11 @@ export function initMenus(o) {
   // ---------- ajustes ----------
   const S = o.settings;
   const defs = [
+    // 10/11 (pedido dele: graficos mais amplos): predefinicao que acerta tudo de uma vez; mexer numa opcao vira "Personalizado"
+    ['seg', 'gfxPreset', 's_gfxPreset', [['perf', 'gp_perf'], ['bal', 'gp_bal'], ['qual', 'gp_qual'], ['ultra', 'gp_ultra'], ['custom', 'gp_custom']]],
+    ['seg', 'fpsCap', 's_fpsCap', [['30', 'fps_30'], ['60', 'fps_60'], ['120', 'fps_120'], ['144', 'fps_144'], ['0', 'fps_max']]],
+    ['toggle', 'dynRes', 's_dynRes'],
+    ['seg', 'fxQ', 's_fxQ', [['low', 'q_low'], ['mid', 'q_mid'], ['high', 'q_high']]],
     ['range', 'fov', 's_fov', 60, 115, 1, v => v + '°'],
     ['range', 'vmFov', 's_vmFov', 45, 75, 1, v => v + '°'],
     ['range', 'fovScale', 's_fovScale', 1, 1.5, 0.05, v => v.toFixed(2) + 'x'],
@@ -275,7 +280,7 @@ export function initMenus(o) {
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
     autoFire: 'play', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', modeTips: 'game',
-    fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
+    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
@@ -311,13 +316,23 @@ export function initMenus(o) {
       }
     }
   };
-  sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); refresh(); o.saveSettings(); });
+  // predefinicoes graficas (10/11): o que cada uma acerta
+  const GFX_PRESETS = {
+    perf: { res: 0.6, aa: 'off', draw: 'near', outl: 'eco', chars: 'low', grain: 0.3, fxQ: 'low', dynRes: true, scopeQ: 'fast' },
+    bal: { res: 0.8, aa: '2x', draw: 'mid', outl: 'near', chars: 'mid', grain: 0.6, fxQ: 'mid', dynRes: true, scopeQ: 'fast' },
+    qual: { res: 0.9, aa: '4x', draw: 'far', outl: 'near', chars: 'high', grain: 0.6, fxQ: 'high', dynRes: false, scopeQ: 'full' },
+    ultra: { res: 1, aa: '8x', draw: 'far', outl: 'full', chars: 'high', grain: 0.6, fxQ: 'high', dynRes: false, scopeQ: 'full' },
+  };
+  const GFX_KEYS = new Set(Object.keys(GFX_PRESETS.perf));
+  sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); if (GFX_KEYS.has(k)) S.gfxPreset = 'custom'; refresh(); o.saveSettings(); });
   sl.addEventListener('click', (e) => {
     if (e.target.closest('#hsOpen')) { audio.play('ui_click', { ui: true }); openHudScale({ value: S.hudScale || 1, onDone: (k, save) => { if (save) { S.hudScale = k; o.saveSettings(); } const out = sl.querySelector('#hsOut'); if (out) out.textContent = Math.round((S.hudScale || 1) * 100) + '%'; } }); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); const tb = sl.querySelector(`.set-tabs [data-sg="${setTab}"]`); tb?.focus({ preventScroll: true }); tb?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } return; }
     const seg = b.parentElement.dataset.seg;
     if (seg) S[seg] = b.dataset.v;
+    if (seg === 'gfxPreset' && GFX_PRESETS[S.gfxPreset]) Object.assign(S, GFX_PRESETS[S.gfxPreset]);
+    else if ((seg && GFX_KEYS.has(seg)) || (b.dataset.t && GFX_KEYS.has(b.dataset.t))) S.gfxPreset = 'custom';
     if (seg === 'lang') { setLang(S.lang); buildSettings(); ui.relang(); }
     if (b.dataset.t) S[b.dataset.t] = !S[b.dataset.t];
     if (b.dataset.xc) S.xhairColor = b.dataset.xc;
@@ -601,12 +616,12 @@ export function initMenus(o) {
       const lock = open ? '' : `<small class="lk-lock">${it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.ch ? t('lookCh') + ': ' + t('ch_' + it.ch, { n: (UNLOCKS.find(u => u.id === it.ch) || {}).n }) : t('lookLvl', { n: it.lvl })}</small>`;
       const rar = `<i class="lk-r r${it.r}">${t('rar' + it.r)}</i>` + (isNew('look|' + lookTab + '|' + it.id) ? newPill(t('chNew')) : '');
       if (swatch) return `<button class="lk-it sw ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}" style="--c:${it.id}" aria-label="${it.id}">${it.elite ? '<i class="lk-r r2">Elite</i>' : it.acct ? '<i class="lk-r r2">Rovex</i>' : ''}${lock}</button>`;
-      return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}"><b>${t('lk_' + lookTab + '_' + it.id)}</b>${rar}${lock}</button>`;
+      return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'} ${peek ? 'peek' : ''}" data-id="${it.id}"><b class="${t('lk_' + lookTab + '_' + it.id).split(' ').some(w => w.length > 9) ? 'lk-long' : ''}">${t('lk_' + lookTab + '_' + it.id)}</b>${rar}${lock}</button>`;
     }).join('');
     markSeen('look|' + lookTab + '|');
     const show = lookPeek ? { ...cur, [lookTab]: lookPeek } : cur;
     const pk = lookPeek && LOOKS[lookTab].find(i => i.id === lookPeek);
-    $('lookNote').textContent = !pk ? t(lookTab === 'charm' ? 'lookCharmNote' : lookTab === 'death' ? 'lookDeathNote' : 'lookTeamNote') : pk.shop ? t('lookPeekShop') : pk.pass ? t('lookPeekPass') : pk.elite ? t('lookPeekElite') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
+    $('lookNote').textContent = !pk ? t(lookTab === 'charm' ? 'lookCharmNote' : lookTab === 'death' ? 'lookDeathNote' : 'lookTeamNote') : pk.elite ? t('lookPeekElite') : pk.shop ? t('lookPeekShop') : pk.pass ? t('lookPeekPass') : pk.acct ? t('lookPeekAcct') : pk.rank != null ? t('rkPeekLook', { t: t('rk_' + TIERS[pk.rank].id) }) : pk.ch ? t('lookPeekCh', { c: t('ch_' + pk.ch, { n: (UNLOCKS.find(x => x.id === pk.ch) || {}).n }) }) : t('lookPeekLvl', { n: pk.lvl });
     o.onLook?.(show, lookTeam);
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; renderLook(); });
     $('lookGrid').querySelectorAll('.lk-it').forEach(b => b.onclick = () => {
@@ -622,7 +637,7 @@ export function initMenus(o) {
     const worn = wornDances(S);
     g.innerHTML = `<div class="dn-slots">${worn.map((d, i) => `<button class="dn-slot ${i === danceSlot ? 'on' : ''}" data-s="${i}"><small>${t('dnSlot', { n: i + 1 })}</small>${t('dn_' + d)}</button>`).join('')}</div>` + DANCE_IDS.map(id => {
       const it = DANCE_INFO[id], open = danceOpen(id), on = worn.includes(id), fx = !!DANCES[id].fx;
-      const lock = open ? '' : `<small class="lk-lock">${it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : t('lookLvl', { n: it.lvl })}</small>`;
+      const lock = open ? '' : `<small class="lk-lock">${it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.elite ? t('eliteOnly') : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : t('lookLvl', { n: it.lvl })}</small>`;
       return `<button class="lk-it ${on ? 'on' : ''} ${open ? '' : 'locked'}" data-d="${id}"><b>${t('dn_' + id)}</b><i class="lk-r r${it.r}">${t('rar' + it.r)}</i>${fx ? `<em class="dn-fx">${t('dnFx')}</em>` : ''}${lock}</button>`;
     }).join('');
     $('lookNote').textContent = t('dnNote');
@@ -639,7 +654,7 @@ export function initMenus(o) {
   function renderBanners() {
     const lv = progressInfo().unlockLevel, cur = S.banner, who = rovex.me?.name || S.name || t('youCap');
     const g = $('lookGrid'); g.classList.remove('swatches'); g.classList.add('banners');
-    g.innerHTML = BANNERS.filter(b => !b.mastery || bannerOpen(b.id)).map(b => { const open = bannerOpen(b.id); /* poster de mestre so aparece liberado */ return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
+    g.innerHTML = BANNERS.filter(b => !b.mastery || bannerOpen(b.id)).map(b => { const open = bannerOpen(b.id); /* poster de mestre so aparece liberado */ return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.elite ? t('eliteOnly') : b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
     $('lookNote').textContent = t('bnNote');
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; g.classList.remove('banners'); renderLook(); });
     g.querySelectorAll('.bn-it').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } S.banner = b.dataset.b; o.saveSettings(); o.bannerChanged?.(); audio.play('swap', { ui: true, vol: 0.6 }); renderBanners(); });
@@ -1029,7 +1044,7 @@ export function initMenus(o) {
       // tracados: os de desafio ficam trancados mostrando o desafio
       p.innerHTML = TRACER_STYLES.map(id => {
         const lk = LOCKED_BY['tr:' + id], open = partUnlocked(cat, 1, 'tr:' + id), cur = (lo.tracer || 'chalk') === id;
-        return `<button class="opt ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'tracer' && preview.v === id ? 'peek' : ''}" data-tr="${id}" ${open ? '' : 'aria-disabled="true"'}><i class="trsw tr-${id}"></i>${t('tr_' + id)}${open || !lk ? '' : `<small class="req-ch">${unlockActive(lk.id) ? t('reqCh') + ': ' + chName(lk) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lk.id) * 100)}%"></i></span>`}</button>`;
+        return `<button class="opt ${cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'tracer' && preview.v === id ? 'peek' : ''}" data-tr="${id}" ${open ? '' : 'aria-disabled="true"'}><i class="trsw tr-${id}"></i>${t('tr_' + id)}${!open && id === 'elite' ? `<small class="req-ch">${t('eliteOnly')}</small>` : ''}${open || !lk ? '' : `<small class="req-ch">${unlockActive(lk.id) ? t('reqCh') + ': ' + chName(lk) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lk.id) * 100)}%"></i></span>`}</button>`;
       }).join('');
       p.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek('tracer', b.dataset.tr === 'chalk' ? null : b.dataset.tr); return; } setPart('tracer', b.dataset.tr === 'chalk' ? null : b.dataset.tr); });
       return;

@@ -85,7 +85,7 @@ wss.on('connection', (ws) => {
       if (m.join && !rooms.has(code)) { ws.send(JSON.stringify({ t: 'err', code: 'noroom' })); joining = false; return; }
       rovexName(m.token).then(acct => {
         if (ws.readyState !== 1) return;
-        const name = String(acct || m.name || 'Player').slice(0, 14);
+        const name = String(acct || m.name || 'Player').slice(0, 24);
         if (m.quick || m.ranked) code = quickRoom(!!m.ranked);
         const target = getRoom(code, m.mode, m.map, Math.max(0, Math.min(15, Number(m.bots) || 0)));
         // sala com 16 pessoas: recusa (bots abrem vaga sozinhos, gente nao)

@@ -9,6 +9,8 @@ import { shopOwned } from './shopstore.js';
 const KEY = 'rr_look_v1';
 export function getLook() {
   let l = null; try { l = JSON.parse(localStorage.getItem(KEY)); } catch { /* sem storage */ }
+  // 10/11: a morte padrao virou a Derretida. Quem estava com a padrao antiga (Borrao de Tinta) passa pra nova uma vez
+  try { if (l && l.death === 'pancake' && !localStorage.getItem('rr_death_v2')) { l.death = 'derrete'; localStorage.setItem(KEY, JSON.stringify(l)); } localStorage.setItem('rr_death_v2', '1'); } catch { /* sem storage */ }
   return cleanLook(l || DEFAULT_LOOK);
 }
 export function saveLook(l) { try { localStorage.setItem(KEY, JSON.stringify(cleanLook(l))); } catch { /* sem storage */ } }
@@ -18,6 +20,8 @@ export function lookOpen(slot, id) {
   const it = LOOKS[slot]?.find(i => i.id === id);
   if (!it) return false;
   if (it.mastery) return masteryDone(it.mastery); // chaveiro de ouro: mestre da arma (07/11)
+  // so com Elite ativo (10/11, pedido dele). wasShop: quem ja tinha comprado com Zions antes continua com o item
+  if (it.elite) return !!rovexMe?.elite || !!progressInfo().unlockAll || (!!it.wasShop && shopOwned(slot + ':' + id));
   if (it.shop) return !!progressInfo().unlockAll || shopOwned(slot + ':' + id); // so da Loja
   if (it.pass) return passHasLook(slot, id); // so do Rovex Pass
   if (it.elite) return !!rovexMe?.elite;
@@ -29,8 +33,9 @@ export function lookOpen(slot, id) {
 }
 
 // danças (05/11): as 3 do podio ficam nos ajustes (vao com a conta). So valem as liberadas; espaco vazio volta pro padrao
-export function danceOpen(id) { const it = DANCE_INFO[id]; if (!it) return false; if (it.rank != null) return !!progressInfo().unlockAll || rankData().peak >= it.rank; if (it.shop) return !!progressInfo().unlockAll || shopOwned('dance:' + id); if (it.pass) return !!progressInfo().unlockAll || passHasDance(id); return !!progressInfo().unlockAll || unlockLevel() >= (it.lvl || 1); }
+export function danceOpen(id) { const it = DANCE_INFO[id]; if (!it) return false; if (it.elite) return !!rovexMe?.elite || !!progressInfo().unlockAll || (!!it.wasShop && shopOwned('dance:' + id)); if (it.rank != null) return !!progressInfo().unlockAll || rankData().peak >= it.rank; if (it.shop) return !!progressInfo().unlockAll || shopOwned('dance:' + id); if (it.pass) return !!progressInfo().unlockAll || passHasDance(id); return !!progressInfo().unlockAll || unlockLevel() >= (it.lvl || 1); }
 export function bannerOpen(id) { const b = BANNERS.find(x => x.id === id); if (!b) return false; if (b.mastery) return masteryDone(b.mastery); // mestre da arma (07/11)
+  if (b.elite) return !!rovexMe?.elite || !!progressInfo().unlockAll; // banner Elite (10/11)
   if (b.shop) return !!progressInfo().unlockAll || shopOwned('banner:' + id); if (b.pass) return passHasBanner(id); return !!progressInfo().unlockAll || unlockLevel() >= b.lvl; }
 export const wornDances = (S) => [0, 1, 2].map(i => { const d = S?.dances?.[i]; return d && danceOpen(d) ? d : DANCE_DEFAULT[i]; });
 

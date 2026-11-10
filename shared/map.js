@@ -1478,12 +1478,43 @@ function pushDyn(B, pos, vel, rad, height) {
   return false;
 }
 
+// 10/11 (desempenho, pedido dele): grade das pecas de colisao. Antes cada movimento, cada "cabe em pe?" e cada raio varriam
+// TODAS as pecas do mapa; agora so as das celulas por onde passam. As pecas nao se mexem: a grade e refeita quando a lista
+// muda (troca de array ou tamanho diferente: postes da noite, troncos)
+const CELL = 4, GRIDS = new WeakMap();
+let gridStamp = 0;
+function gridFor(boxes) {
+  let g = GRIDS.get(boxes);
+  if (g && g.n === boxes.length) return g;
+  g = { n: boxes.length, cells: new Map(), big: [] };
+  boxes.forEach((b, i) => { b._gi = i; }); // ordem original: a colisao resolve na mesma ordem de antes
+  for (const b of boxes) {
+    const x0 = Math.floor(b.min[0] / CELL), x1 = Math.floor(b.max[0] / CELL), z0 = Math.floor(b.min[2] / CELL), z1 = Math.floor(b.max[2] / CELL);
+    if ((x1 - x0 + 1) * (z1 - z0 + 1) > 400) { g.big.push(b); continue; } // peca enorme (chao de area, parede de borda): fica fora da grade
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) { const k = (x + 4096) * 8192 + (z + 4096); let l = g.cells.get(k); if (!l) g.cells.set(k, l = []); l.push(b); }
+  }
+  GRIDS.set(boxes, g);
+  return g;
+}
+// pecas cujo retangulo no chao encosta em [ax0..ax1] x [az0..az1]
+function nearBoxes(boxes, ax0, az0, ax1, az1, out) {
+  out.length = 0;
+  const g = gridFor(boxes), st = ++gridStamp;
+  for (const b of g.big) if (ax1 > b.min[0] && ax0 < b.max[0] && az1 > b.min[2] && az0 < b.max[2]) out.push(b);
+  const x0 = Math.floor(ax0 / CELL), x1 = Math.floor(ax1 / CELL), z0 = Math.floor(az0 / CELL), z1 = Math.floor(az1 / CELL);
+  if ((x1 - x0 + 1) * (z1 - z0 + 1) > g.cells.size) { for (const b of boxes) if (ax1 > b.min[0] && ax0 < b.max[0] && az1 > b.min[2] && az0 < b.max[2] && b._gs !== st) { b._gs = st; out.push(b); } out.sort((a, b) => a._gi - b._gi); return out; } // area maior que o mapa: lista direta
+  for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+    const l = g.cells.get((x + 4096) * 8192 + (z + 4096)); if (!l) continue;
+    for (const b of l) { if (b._gs === st) continue; b._gs = st; if (ax1 > b.min[0] && ax0 < b.max[0] && az1 > b.min[2] && az0 < b.max[2]) out.push(b); }
+  }
+  if (out.length > 1) out.sort((a, b) => a._gi - b._gi);
+  return out;
+}
 // 09/11 (mapas novos pesados): so as pecas perto de quem se move entram na conta. Margem folgada: cobre o passo do tick, subir degrau e peca redonda
-const NEAR_BOXES = [], NEAR_MARGIN = 2;
+const NEAR_BOXES = [], NEAR_MARGIN = 2, HEAD_BOXES = [], RAY_BOXES = [];
 export function moveBody(M, pos, vel, dt, rad, height) {
   const reachX = rad + Math.abs(vel[0] * dt) + NEAR_MARGIN, reachZ = rad + Math.abs(vel[2] * dt) + NEAR_MARGIN, px = pos[0], pz = pos[2];
-  let boxes = NEAR_BOXES; boxes.length = 0;
-  for (const b of M.boxes) if (px + reachX > b.min[0] && px - reachX < b.max[0] && pz + reachZ > b.min[2] && pz - reachZ < b.max[2]) boxes.push(b);
+  let boxes = nearBoxes(M.boxes, px - reachX, pz - reachZ, px + reachX, pz + reachZ, NEAR_BOXES);
   for (const b of boxes) if (overlap(pos, rad, height, b)) { boxes = M.boxes; break; } // ja nasceu dentro de uma peca: o empurrao pode ser longo, confere o mapa inteiro
   let onGround = false;
   const stepAxis = (ax) => {
@@ -1542,7 +1573,7 @@ function bounds(M, pos, rad) {
 }
 
 // cabe em pe aqui? (03/11: duto do Banco Ferradura so passa agachado; levantar la dentro jogava o boneco pra cima do duto)
-export const headroom = (M, pos, rad = 0.4, height = 1.7) => !blockedAbove(M.boxes, pos, rad, height, pos[1]);
+export const headroom = (M, pos, rad = 0.4, height = 1.7) => !blockedAbove(nearBoxes(M.boxes, pos[0] - rad - 1, pos[2] - rad - 1, pos[0] + rad + 1, pos[2] + rad + 1, HEAD_BOXES), pos, rad, height, pos[1]);
 
 function blockedAbove(boxes, pos, rad, height, newY) {
   const p = [pos[0], newY + 0.01, pos[2]];
@@ -1609,7 +1640,10 @@ export function raycast(M, o, d, maxDist = 250) {
     const t = -o[1] / d[1];
     if (t >= 0 && t < best) { best = t; normal = [0, 1, 0]; }
   }
-  for (const b of M.boxes) {
+  // so as pecas no retangulo que o raio cruza (raio curto = poucas celulas; raio do mapa todo cai na lista direta)
+  const ex = o[0] + d[0] * best, ez = o[2] + d[2] * best;
+  const list = nearBoxes(M.boxes, Math.min(o[0], ex) - 0.01, Math.min(o[2], ez) - 0.01, Math.max(o[0], ex) + 0.01, Math.max(o[2], ez) + 0.01, RAY_BOXES);
+  for (const b of list) {
     if (b.kind === 'rope') continue; // corda do ringue: a bala passa entre as cordas
     let tmin = 0, tmax = best, nAxis = -1, nSign = 0, miss = false;
     for (let a = 0; a < 3; a++) {

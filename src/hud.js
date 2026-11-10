@@ -232,7 +232,7 @@ export class Hud {
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
     const R = 84, MAX = 32;
     for (const r of G.remotes.values()) {
-      if (!r.alive || !G.isEnemy(r)) continue;
+      if (!r.alive || !G.isEnemy(r) || r.gh) continue; // Fantasma (10/11): nem passo nem tiro no anel
       const dx = r.pos[0] - p.pos[0], dz = r.pos[2] - p.pos[2], d = Math.hypot(dx, dz);
       if (d > MAX || d < 0.5) continue;
       const shooting = (G.seen.get(r.id) || 0) > G.t + 1.2;
@@ -565,7 +565,7 @@ export class Hud {
     for (const o of snap.players) {
       if (o.id === G.myId || !o.alive) continue;
       if (!G.isEnemy(o)) { dot(o.pos[0], o.pos[2], o.team === 'red' ? '#a83a2c' : '#2f5b8a', 4.5); continue; }
-      if (uav || (G.seen.get(o.id) || 0) > G.t) dot(o.pos[0], o.pos[2], o.team === 'blue' ? '#2f5b8a' : '#e0301e', 5.5); // 09/11 (pedido dele): inimigo na cor do time dele, nunca igual ao seu
+      if ((uav && !o.gh) || (G.seen.get(o.id) || 0) > G.t) dot(o.pos[0], o.pos[2], o.team === 'blue' ? '#2f5b8a' : '#e0301e', 5.5); // 09/11 (pedido dele): inimigo na cor do time dele, nunca igual ao seu
       else if ((G.marked?.get(o.id) || 0) > G.t) { dot(o.pos[0], o.pos[2], '#ffb21a', 5.5); } // bala tracante
     }
     if (snap.mode === 'dom') { for (const z of M.zones) { const s = snap.zones.find(q => q.id === z.id); dot(z.pos[0], z.pos[2], s?.owner === 'red' ? '#a83a2c' : s?.owner === 'blue' ? '#2f5b8a' : '#ece9e1', 6); } const bz = snap.zones.find(q => q.bonus); if (bz) dot(bz.pos[0], bz.pos[2], bz.owner === 'red' ? '#a83a2c' : bz.owner === 'blue' ? '#2f5b8a' : '#e3b23c', 8); }
@@ -669,7 +669,11 @@ export class Hud {
     const evL = Math.max((row?.right || bl?.right || 0) + 10, innerWidth / 2 - 200), evW = Math.max(180, Math.min(400, btnL - 10 - evL));
     document.body.style.setProperty('--tl-ev-l', Math.round(evL) + 'px'); document.body.style.setProperty('--tl-ev-w', Math.round(evW) + 'px');
     if (!cv) return;
-    const top = Math.max(bl?.bottom || 0, chat?.bottom || 0, row?.bottom || 0) + 8;
+    // Chat Rapido (10/11): coluna da esquerda, embaixo do botao do chat (online) ou no lugar dele (solo); o minimapa desce junto
+    const qbEl = document.querySelector('#touch .tbtn.quick');
+    if (qbEl) { const want = chat ? Math.round(chat.bottom + 8) + 'px' : ''; if (qbEl.style.top !== want && (want || qbEl.dataset.moved)) { qbEl.style.top = want || 'calc(max(12px, env(safe-area-inset-top)) + 48px)'; qbEl.style.left = 'max(12px, env(safe-area-inset-left))'; qbEl.dataset.moved = '1'; } }
+    const qb = q('#touch .tbtn.quick');
+    const top = Math.max(bl?.bottom || 0, chat?.bottom || 0, row?.bottom || 0, qb?.bottom || 0) + 8;
     const room = (stick ? stick.top : innerHeight) - top - 8;
     const size = Math.max(46, Math.min(110, room)); // celular baixo: encolhe ate caber acima do analogico
     Object.assign(cv.style, { top: Math.round(top) + 'px', bottom: 'auto', width: size + 'px', height: size + 'px' });

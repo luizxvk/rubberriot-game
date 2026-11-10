@@ -241,6 +241,8 @@ document.addEventListener('click', (e) => {
 }, true);
 
 // foto de uma peca qualquer (popup do Elite: as skins de verdade do pack, a camo, o visual)
+// foto ja pronta, sem esperar (10/11: o presente do Elite abre com a foto no lugar, nunca a caixinha)
+export function pieceShotNow(slot, v) { const h = SHOT.get('pc:' + slot + ':' + v); return h?.length ? h[0] : null; }
 export async function pieceShot(slot, v) {
   const key = 'pc:' + slot + ':' + v;
   if (!SHOT.has(key)) { stage(); MODELS.set(key, [pieceModel(slot, v)]); SHOT.set(key, null); }

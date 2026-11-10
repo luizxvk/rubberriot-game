@@ -114,6 +114,9 @@ export const SKILLS = {
   folego: { lvl: 22, after: 4, regen: 8, icon: 'favorite' },                // vida volta sozinha depois de 4 s sem dano
   fervor: { lvl: 20, hip: 1.5, icon: 'whatshot' },                         // Fervoroso (04/11, pedido dele): atira correndo, sem parar a corrida; o tiro abre mais (hip)
   pavio: { lvl: 26, streak: 1, icon: 'local_fire_department' },             // sequencias custam 1 abate a menos
+  // Fantasma (10/11, pedido dele): dirigivel, radar espiao, bigornas, aviao, mao e sentinela nao te acham; fora do anel de
+  // passos e tiros do inimigo; seus passos nao fazem barulho
+  fantasma: { lvl: 24, ghost: true, icon: 'visibility_off' },
 };
 export const SKILL_SLOTS = 3; // 03/11 (hotfix, pedido dele): 3o espaco de skill
 // Battle royale: colete absorve parte do dano; iris (zona) fecha em fases; o dirigivel solta caixotes.

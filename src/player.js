@@ -175,7 +175,7 @@ export class Player {
     if (!this.owned.includes(id)) return;
     if (this.bagged && id !== 'pistol' && this.owned.includes('pistol')) return; // com a bolsa: so pistola
     audio.preloadGuns(this.owned.map(w => this.lo(w)?.body)); // som de cada arma pronto antes do 1o tiro
-    if (id !== this.wpn) this.lastWpn = this.wpn;
+    if (id !== this.wpn) { this.lastWpn = this.wpn; this.g.input?.resetAds?.(); this.adsK = 0; } // 10/11: troca de arma solta a mira do alternar
     this.wpn = id;
     this.reloadT = 0;
     this.switchT = instant ? 0 : 0.3 * this.sk('maos', 'swap');
@@ -211,6 +211,8 @@ export class Player {
     this.crouch = crouch; // com "agachar segurando" o proximo quadro levanta se a tecla estiver solta
   }
   update(dt, inp) {
+    // akimbo (10/11, bug dele): as duas armas sao gatilho, nunca mira; o alternar ao mirar nao vale (atirava sozinha e travava a corrida)
+    if (inp && inp.adsHeld !== undefined && this.lo(this.wpn)?.handle === 'akimbo') inp = { ...inp, ads: inp.adsHeld };
     const S = this.g.settings;
     if (!this.alive) { this.firing = false; return; }
     // contagem de inicio (todo mundo carregando / 3, 2, 1): da pra olhar em volta, nao da pra se mexer
@@ -431,7 +433,7 @@ export class Player {
       this.stepPhase += dt * rate * Math.min(1.2, hs / 7);
       if (Math.floor(this.stepPhase / Math.PI) !== prev) {
         this.lastStep ^= 1;
-        audio.play(this.lastStep ? 'step' : 'step2', { vol: (this.crouch ? 0.12 : 0.22) + Math.min(0.2, hs * 0.015), rate: 0.95 + Math.random() * 0.1, key: 'steps', max: 2 });
+        if (!this.g.skills?.includes('fantasma')) audio.play(this.lastStep ? 'step' : 'step2', { vol: (this.crouch ? 0.12 : 0.22) + Math.min(0.2, hs * 0.015), rate: 0.95 + Math.random() * 0.1, key: 'steps', max: 2 });
       }
     }
 
@@ -533,7 +535,7 @@ export class Player {
     if (!chargeKit && (this.chargeT > 0 || this.g.vm.charge)) { this.chargeT = 0; this.g.vm.charge = 0; audio.stopKey?.('charge'); }
     if (aki) {
       const T = this.akT ||= [0, 0]; T[0] -= dt; T[1] -= dt;
-      const auto = mode === 'auto', L = onPad ? inp.ads : inp.fire, R = onPad ? inp.fire : inp.ads;
+      const auto = mode === 'auto', L = onPad ? inp.ads : inp.fire, R = onPad ? inp.fire : inp.ads; // 10/11: direita so com o botao segurado (alternar ao mirar fazia a direita atirar sozinha)
       const Lp = onPad ? inp.adsPressed : inp.firePressed, Rp = onPad ? inp.firePressed : inp.adsPressed;
       const want = [auto ? L : Lp, auto ? R : Rp];
       this.firing = (L || R) && !running && this.switchT <= 0;

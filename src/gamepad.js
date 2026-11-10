@@ -85,7 +85,12 @@ export class Pad {
       if (down(bi('sprint'))) this.sprintLatch = !this.sprintLatch;
       if (-ly < 0.3) this.sprintLatch = false;
       I.pad = { mx: lx, mz: -ly, fire: now[bi('fire')], ads: now[bi('ads')], sprint: this.sprintLatch, crouchHeld: now[bi('crouch')], board: now[B.SELECT], use: now[bi('reload')], frag: now[bi('frag')], flash: now[bi('flash')], gadget: now[bi('gadget')] };
-      for (const [id, ev] of [['fire', 'FIRE'], ['ads', 'ADS'], ['jump', 'JUMP'], ['crouch', 'CROUCH'], ['reload', 'RELOAD'], ['cycle', 'NEXT'], ['frag', 'FRAG'], ['flash', 'FLASH'], ['melee', 'MELEE'], ['streak', 'STREAK'], ['inspect', 'INSPECT'], ['field', 'FIELD'], ['ping', 'PING'], ['gadget', 'GADGET']]) if (down(bi(id))) I.edges.add(ev);
+      for (const [id, ev] of [['fire', 'FIRE'], ['ads', 'ADS'], ['jump', 'JUMP'], ['crouch', 'CROUCH'], ['reload', 'RELOAD'], ['cycle', 'NEXT'], ['frag', 'FRAG'], ['flash', 'FLASH'], ['melee', 'MELEE'], ['streak', 'STREAK'], ['inspect', 'INSPECT'], ['field', 'FIELD'], ['ping', 'PING'], ['gadget', 'GADGET'], ['quick', 'QUICK']]) if (down(bi(id))) I.edges.add(ev);
+      // Chat Rapido aberto (10/11): cima/baixo escolhe, A manda, B fecha; nada disso vira acao do jogo
+      if (document.body.classList.contains('qc-open')) {
+        const k = down(B.UP) ? 'up' : down(B.DOWN) ? 'down' : down(B.A) ? 'ok' : down(B.B) ? 'back' : null;
+        if (k) { for (const ev of ['JUMP', 'CROUCH', 'STREAK', 'QUICK', 'INSPECT']) I.edges.delete(ev); dispatchEvent(new CustomEvent('qc-pad', { detail: k })); }
+      }
       if (document.body.classList.contains('mv-voting') && (down(B.LEFT) || down(B.RIGHT))) { I.edges.delete('FIELD'); dispatchEvent(new CustomEvent('mv-pad', { detail: down(B.LEFT) })); } // votar a alteracao da partida (08/11)
       if (down(B.START)) I.edges.add('Escape');
     } else {

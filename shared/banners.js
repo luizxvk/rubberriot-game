@@ -12,6 +12,8 @@ export const BANNERS = [
   { id: 'bilheteria', lvl: 1, pass: 1 }, { id: 'fila', lvl: 1, pass: 1 }, { id: 'claquete', lvl: 1, pass: 1, anim: 1 }, { id: 'tapete', lvl: 1, pass: 1 }, { id: 'cartaz', lvl: 1, pass: 1 }, { id: 'plateia', lvl: 1, pass: 1, anim: 1 }, { id: 'estreia', lvl: 1, pass: 1, anim: 1 },
   // da Loja: animados premium
   { id: 'cortina', lvl: 1, shop: 1, anim: 1 }, { id: 'holofote', lvl: 1, shop: 1, anim: 1 }, { id: 'carrossel', lvl: 1, shop: 1, anim: 1 }, { id: 'vitrola', lvl: 1, shop: 1, anim: 1 }, { id: 'foguete', lvl: 1, shop: 1, anim: 1 }, { id: 'zepelim', lvl: 1, shop: 1, anim: 1 },
+  // Elite (10/11, pedido dele): so com o Elite da Rovex ativo
+  { id: 'elite', lvl: 1, elite: 1, anim: 1 },
 ];
 // mestre da arma (07/11, pedido dele): poster de cinema com a foto da arma, um por modelo de arma de fogo. Quem libera e o
 // progresso (masteryDone em src/progress.js); o servidor aceita como os da Loja (lvl 1)

@@ -644,9 +644,76 @@ function fxTex(kind) {
   return t;
 }
 
+// efeitos 3D (10/11, pedido dele: "mais efeitos, sem ser emoji, 3D, variados e sem repetir" + tema do Elite). Malha de
+// verdade com contorno de tinta; geometria dividida entre todos os bonecos (cache), cada um com o proprio movimento
+const FXG = new Map(), fxGeo = (k, f) => FXG.get(k) || (FXG.set(k, f()), FXG.get(k));
+function gearGeo() { const s = new THREE.Shape(), n = 8; for (let i = 0; i < n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, r = i % 2 ? 0.07 : 0.095; for (const d of [-0.12, 0.12]) s.lineTo(Math.cos(a + d) * r, Math.sin(a + d) * r); } const h = new THREE.Path(); h.absarc(0, 0, 0.03, 0, Math.PI * 2, true); s.holes.push(h); return new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: false }).center(); }
+function leafGeo() { const s = new THREE.Shape(); s.moveTo(0, -0.09); s.quadraticCurveTo(0.07, 0, 0, 0.09); s.quadraticCurveTo(-0.07, 0, 0, -0.09); return new THREE.ShapeGeometry(s, 6); }
+const glow = (m, r, g, b) => { if (m.material.emissive) m.material.emissive.setRGB(r, g, b); };
+const FX3D = {
+  // Atomo: tres orbitas de tinta em eixos diferentes, cada uma com um eletron correndo
+  atom: () => {
+    const g = new THREE.Group(), parts = [], ring = fxGeo('ring', () => new THREE.TorusGeometry(0.7, 0.012, 6, 48)), ball = fxGeo('ball', () => new THREE.IcosahedronGeometry(0.06, 1));
+    [[0.3, 0], [1.25, 0.6], [-1.0, 1.9]].forEach(([rx, rz], i) => {
+      const o = new THREE.Group(); o.rotation.set(rx, 0, rz); o.position.y = 1.15;
+      const r = ink(ring, 0x5fd3ff, 0, { unique: true }); r.material.transparent = true; r.material.opacity = 0.7;
+      const e = ink(ball, [0x5fd3ff, 0xff6fa8, 0xffd25e][i], 0.012); o.add(r, e); g.add(o); parts.push({ o, e, sp: 1.6 + i * 0.5, ph: i * 2 });
+    });
+    return { group: g, tick: (dt, t) => { for (const p of parts) { const a = t * p.sp + p.ph; p.e.position.set(Math.cos(a) * 0.7, Math.sin(a) * 0.7, 0); p.o.rotation.y += dt * 0.4; } } };
+  },
+  // Cubos Flutuantes: cubos que orbitam e capotam em alturas diferentes
+  cubes: () => {
+    const g = new THREE.Group(), parts = [], geo = fxGeo('cube', () => new THREE.BoxGeometry(0.11, 0.11, 0.11)), cs = [0xf2c94c, 0xa83a2c, 0x2f5b8a, 0x7fb069, 0xece9e1, 0xb07cc6];
+    for (let i = 0; i < 6; i++) { const m = ink(geo, cs[i], 0.012); g.add(m); parts.push({ m, a: (i / 6) * Math.PI * 2, y: 0.4 + (i % 3) * 0.6, sp: 0.7 + (i % 2) * 0.4 }); }
+    return { group: g, tick: (dt, t) => { for (const p of parts) { const a = p.a + t * p.sp; p.m.position.set(Math.cos(a) * 0.68, p.y + Math.sin(t * 2 + p.a) * 0.12, Math.sin(a) * 0.68); p.m.rotation.x += dt * 2.2; p.m.rotation.z += dt * 1.6; } } };
+  },
+  // Helice: fita dupla de bolinhas subindo em espiral (DNA de tinta)
+  helix: () => {
+    const g = new THREE.Group(), parts = [], geo = fxGeo('hball', () => new THREE.SphereGeometry(0.045, 8, 6));
+    for (let i = 0; i < 14; i++) { const m = ink(geo, i % 2 ? 0x7fe6ff : 0xff8fb4, 0.01); g.add(m); parts.push({ m, k: Math.floor(i / 2) / 7, side: i % 2 }); }
+    return { group: g, tick: (dt, t) => { for (const p of parts) { const k = (p.k + t * 0.18) % 1, a = k * Math.PI * 4 + p.side * Math.PI + t; p.m.position.set(Math.cos(a) * 0.6, 0.15 + k * 2.1, Math.sin(a) * 0.6); p.m.scale.setScalar(Math.sin(k * Math.PI) * 1.2 + 0.1); } } };
+  },
+  // Cristais: octaedros de gelo girando em volta, acendendo um de cada vez
+  shards: () => {
+    const g = new THREE.Group(), parts = [], geo = fxGeo('oct', () => new THREE.OctahedronGeometry(0.1, 0));
+    for (let i = 0; i < 5; i++) { const m = ink(geo, 0xbfe9ff, 0.012, { unique: true }); m.scale.set(0.8, 1.6, 0.8); g.add(m); parts.push({ m, a: (i / 5) * Math.PI * 2 }); }
+    return { group: g, tick: (dt, t) => { parts.forEach((p, i) => { const a = p.a - t * 0.7; p.m.position.set(Math.cos(a) * 0.72, 1.0 + Math.sin(t * 1.5 + i) * 0.25, Math.sin(a) * 0.72); p.m.rotation.y += dt * 3; const lit = Math.max(0, Math.sin(t * 2.4 - i * 1.25)); glow(p.m, lit * 0.35, lit * 0.55, lit * 0.7); }); } };
+  },
+  // Ondas de Choque: aneis que saem do chao e abrem em volta dos pes
+  shock: () => {
+    const g = new THREE.Group(), parts = [], geo = fxGeo('sring', () => new THREE.TorusGeometry(0.5, 0.02, 6, 40));
+    for (let i = 0; i < 3; i++) { const m = ink(geo, 0xffd25e, 0, { unique: true }); m.rotation.x = Math.PI / 2; m.material.transparent = true; g.add(m); parts.push({ m, k: i / 3 }); }
+    return { group: g, tick: (dt, t) => { for (const p of parts) { const k = (p.k + t * 0.45) % 1; p.m.scale.setScalar(0.5 + k * 1.3); p.m.position.y = 0.05 + k * 0.25; p.m.material.opacity = 1 - k; } } };
+  },
+  // Engrenagens: tres engrenagens de lata girando engatadas atras do ombro
+  gears: () => {
+    const g = new THREE.Group(), parts = [], geo = fxGeo('gear', gearGeo);
+    [[0.0, 1.55, 1.0, 0xb8b2a6], [0.17, 1.7, 0.78, 0xd9a441], [-0.15, 1.78, 0.62, 0x9a968c]].forEach(([x, y, s, c], i) => { const m = ink(geo, c, 0.01); m.position.set(x, y, -0.42); m.scale.setScalar(s * 1.4); g.add(m); parts.push({ m, sp: (i % 2 ? -1 : 1) / s }); });
+    return { group: g, tick: (dt, t) => { g.rotation.y = Math.sin(t * 0.5) * 0.25; for (const p of parts) p.m.rotation.z += dt * 1.8 * p.sp; } };
+  },
+  // Folhas ao Vento: folhas que caem rodopiando num redemoinho
+  leaves: () => {
+    const g = new THREE.Group(), parts = [], geo = fxGeo('leaf', leafGeo), cs = [0xc8642a, 0xe0a83a, 0x9a3a1c, 0x7fb069];
+    for (let i = 0; i < 9; i++) { const m = ink(geo, cs[i % 4], 0, { unique: true }); m.material.side = THREE.DoubleSide; g.add(m); parts.push({ m, a: (i / 9) * Math.PI * 2, k: Math.random(), sp: 0.25 + Math.random() * 0.2 }); }
+    return { group: g, tick: (dt, t) => { for (const p of parts) { p.k = (p.k + dt * p.sp) % 1; const a = p.a + t * 1.1, r = 0.5 + p.k * 0.3; p.m.position.set(Math.cos(a) * r, 2.3 - p.k * 2.2, Math.sin(a) * r); p.m.rotation.set(t * 3 + p.a, t * 2, Math.sin(t * 4 + p.a)); } } };
+  },
+  // Coroa Elite (so com Elite): coroa de favos violeta girando sobre a cabeca, estrela dourada no centro e cristais do Elite em orbita
+  elite: () => {
+    const g = new THREE.Group(), parts = [], hex = fxGeo('ehex', () => new THREE.CylinderGeometry(0.075, 0.075, 0.05, 6)), star = fxGeo('estar', () => new THREE.OctahedronGeometry(0.07, 0)), crown = new THREE.Group();
+    crown.position.y = 2.3; g.add(crown);
+    for (let i = 0; i < 8; i++) { const m = ink(hex, i % 2 ? 0x8b5cf6 : 0xb9a6ff, 0.01); const a = (i / 8) * Math.PI * 2; m.position.set(Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24); m.rotation.set(Math.PI / 2, 0, -a); crown.add(m); }
+    const core = ink(star, 0xffd25e, 0.01); core.scale.set(1, 1.4, 1); core.position.y = 2.3; g.add(core);
+    for (let i = 0; i < 4; i++) { const m = ink(star, 0x8b5cf6, 0.012, { unique: true }); g.add(m); parts.push({ m, a: (i / 4) * Math.PI * 2 }); }
+    return { group: g, tick: (dt, t) => {
+      crown.rotation.y += dt * 0.9; crown.position.y = 2.3 + Math.sin(t * 2) * 0.04; core.rotation.y -= dt * 2.5; core.position.y = crown.position.y;
+      parts.forEach((p, i) => { const a = p.a + t * 1.2; p.m.position.set(Math.cos(a) * 0.7, 1.0 + Math.sin(t * 1.7 + i * 1.6) * 0.45, Math.sin(a) * 0.7); p.m.rotation.y += dt * 4; const lit = 0.5 + 0.5 * Math.sin(t * 3 + i); glow(p.m, 0.25 * lit, 0.1 * lit, 0.5 * lit); });
+    } };
+  },
+};
 // cada efeito: N figurinhas que giram/sobem em volta do corpo; tick(dt, t) anima
 export function buildFx(id) {
   if (!id || id === 'none') return null;
+  if (FX3D[id]) return FX3D[id]();
   const group = new THREE.Group();
   const N = id === 'confetti' ? 10 : id === 'ether' ? 9 : 8;
   const mat = new THREE.SpriteMaterial({ map: fxTex(id), transparent: true, depthWrite: false, blending: THREE.NormalBlending });

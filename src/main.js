@@ -1,10 +1,10 @@
 import './glbshrink.js'; // antes de qualquer modelo carregar
 import * as THREE from 'three';
 import { offscreen } from './offscreen.js';
-import { buildWorld, buildObjectives, FX, LASER_BODY, preloadMap } from './world.js';
+import { buildWorld, buildObjectives, FX, FX_Q, LASER_BODY, preloadMap } from './world.js';
 import { EscortView } from './escortview.js';
 import { rankResult, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
-import { Character, CHAR_LOD } from './character.js';
+import { Character, CHAR_LOD, HOSE_FRAME } from './character.js';
 import { MobChar } from './mobchar.js';
 import { Flashlights } from './flashlight.js';
 import { GunLights } from './gunlights.js';
@@ -42,6 +42,7 @@ import { Pad } from './gamepad.js';
 import { LocalNet, WsNet, SplitNet } from './net.js';
 import { SS } from './ssboot.js';
 import { Chat } from './chat.js';
+import { QuickChat } from './quickchat.js';
 import { audio } from './audio.js';
 import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS } from '../shared/weapons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
@@ -91,7 +92,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, voSubs: true, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, voSubs: true, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -158,7 +159,7 @@ function thermalMask() {
   scopeCam.layers.set(0); scene.overrideMaterial = null; scene.background = bg; scene.fog = fog;
 }
 const vm = new ViewModel();
-const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onCfg: (cfg) => { try { localStorage.setItem('rr_lastcfg', JSON.stringify(cfg)); } catch { /* */ } G.net && G.net.send({ t: 'cfg', ...cfg }); }, onLeave: () => quitGame(), onKick: (id) => G.net && G.net.send({ t: 'kick', id }) });
+const lobby = new Lobby({ onReady: (v) => G.net && G.net.send({ t: 'ready', v }), onStart: () => G.net && G.net.send({ t: 'start' }), onTeam: (team) => G.net && G.net.send({ t: 'team', team }), onCfg: (cfg) => { try { localStorage.setItem('rr_lastcfg', JSON.stringify(cfg)); } catch { /* */ } G.net && G.net.send({ t: 'cfg', ...cfg }); }, onLeave: () => quitGame(), onKick: (id) => G.net && G.net.send({ t: 'kick', id }), onGiveHost: (id) => G.net && G.net.send({ t: 'giveHost', id }) });
 const laserDot = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -185,10 +186,26 @@ let bombBeep = 0;
 const { composer, film, vmPass, setAA } = makePipeline(renderer, scene, camera, vm);
 const menuPipe = makeMenuPipeline(renderer); // Visual e Arsenal com antisserrilhado (07/11)
 
+// resolucao: a escolhida nos Ajustes x a resolucao dinamica (10/11, pedido dele: graficos mais amplos). A dinamica baixa ate 55%
+// quando o FPS cai abaixo da meta na partida e volta subindo devagar quando sobra folga
+const basePR = () => Math.min(devicePixelRatio, isTouch ? 1.5 : 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1);
+let dynK = 1, dynN = 0, dynT = 0, lastDraw = 0;
+function dynResTick(now) {
+  dynN++;
+  if (now - dynT < 1000) return;
+  const fps = dynN * 1000 / (now - dynT); dynN = 0; dynT = now;
+  if (!settings.dynRes || G.state !== 'game' || document.hidden) return;
+  const goal = Math.min(+settings.fpsCap || 60, 60), was = dynK;
+  if (fps < goal * 0.85) dynK = Math.max(0.55, dynK - 0.08);
+  else if (fps > goal * 0.97 && dynK < 1) dynK = Math.min(1, dynK + 0.04);
+  if (dynK !== was) { renderer.setPixelRatio(basePR() * dynK); resize(); }
+}
 function applySettings() {
   document.body.style.setProperty('--hud-k', settings.hudScale || 1); // escala da HUD (08/11)
   document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
-  renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1)); // tela dividida: 2-4 desenhos por quadro
+  renderer.setPixelRatio(basePR() * dynK); // tela dividida: 2-4 desenhos por quadro; dynK = resolucao dinamica (10/11)
+  FX_Q.k = { low: 0.5, mid: 1, high: 1.4 }[settings.fxQ] ?? 1; // particulas (10/11)
+  if (!settings.dynRes && dynK !== 1) { dynK = 1; renderer.setPixelRatio(basePR()); }
   resize();
   { const n = { off: 0, '2x': 2, '4x': 4, '8x': 8 }[settings.aa] ?? (isTouch ? 0 : 4); setAA(n); menuPipe.setAA(n); } // antisserrilhado (07/11)
   { const O = { eco: [40, 12], near: [90, 45], full: [1e9, 1e9] }[settings.outl] || [90, 45]; OUTLINE_CFG.map = O[0]; OUTLINE_CFG.thin = O[1]; const C = { low: [11, 20], mid: [18, 34], high: [34, 1e9] }[settings.chars] || [18, 34]; CHAR_LOD.far = C[0]; CHAR_LOD.hull = C[1]; } // 09/11
@@ -242,8 +259,11 @@ function setLookPreview(look, team) {
 
 const input = new Input(canvas);
 // chat da partida online (Enter/T no PC, balao no celular); o solo nao tem
-const chat = new Chat({ input, canvas, send: (m) => G.net?.send(m), canPlay: () => G.state === 'game' && !G.paused && !replay.on });
+const chat = new Chat({ input, canvas, send: (m) => G.net?.send(m), canPlay: () => (G.state === 'game' && !G.paused && !replay.on) || (G.state === 'lobby' && $('menu').hidden && !$('lobby').hidden) }); // lobby tambem conversa (10/11)
 input.onChat = () => (chat.isOpen ? chat.close() : chat.open());
+chat.onSound = (n) => audio.play(n, { ui: true, vol: 0.8, jitter: 0.03 });
+if (import.meta.env.DEV) window.__chat = chat; // teste do balao do lobby sem servidor
+const qc = new QuickChat({ send: (i) => G.net?.send({ t: 'qc', i }), canPlay: () => G.state === 'game' && !G.paused && !replay.on && !chat.isOpen, keyOf: () => keyName(kbBinds(settings).quick?.[0] || 'KeyY') });
 const pad = new Pad(input);
 // controle ligou/desligou: aviso no canto de baixo; e o placar mostra com o que cada um joga
 const devNow = () => (pad.active ? 'pad' : isTouch ? 'mob' : 'pc');
@@ -532,6 +552,8 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('pocPodio'))
 window.__smithShow = (cat, lo, charm = 'none') => { smithHolder.clear(); const gun = ARS.buildGun(cat, lo); const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; smithHolder.add(gun); if (charm !== 'none' && cat !== 'melee') attachCharm(gun, charm, 1); };
 if (import.meta.env.DEV) window.__applySet = (c) => { Object.assign(settings, { draw: 'mid', outl: 'near', chars: 'mid' }, c); applySettings(); }; // bateria de desempenho
 if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Teste'); // teste de desempenho (08/11): partida solo por script
+// app de PC (10/11): o Electron marca o navegador (RubberRiotDesktop no user agent); some o banner de baixar
+if (/RubberRiotDesktop/.test(navigator.userAgent)) document.body.classList.add('rr-desktop');
 window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
@@ -786,7 +808,7 @@ function onSnap(s) {
     if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
-    r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team;
+    r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team; r.gh = !!p.gh;
     r.kills = p.kills; r.hp = p.hp; r.dn = p.dn || 0; r.rv = p.rv || 0;
     if (r.mob) { r.mh = p.mh; r.hk = p.hk; r.char.setHp(p.hp / (p.mh || 1)); if (p.mob === 'reiTinteiro') r.char.boss({ lid: p.hk ? 1 : 0 }); }
     if (p.pt && p.alive && !r.prot && fx) { r.prot = fx.protBubble(); r.char.root.add(r.prot); } // escudo de nascimento: bolha em volta
@@ -1161,6 +1183,7 @@ function onEvent(e) {
     case 'blimpDown': // dirigivel estourado a tiro: explode, some e a sala pode chamar outra sequencia
       if (!inGame) break;
       fx.explosion(e.pos); fx.explosion([e.pos[0] + 2, e.pos[1] - 1, e.pos[2] + 1]); fx.explosion([e.pos[0] - 2, e.pos[1] + 1, e.pos[2] - 2]);
+      if (!e.sentry) wreckBlimp(e.pos); // 10/11 (pedido dele): o dirigivel cai explodindo em vez de sumir
       fx.word(e.sentry ? 'CRAC!' : 'KABUM!', e.pos, e.sentry ? 1.6 : 3, 0.9);
       if (e.sentry && e.id === G.myId) hud.message(t(e.beacon ? 'beaconDown' : 'sentryDown'), 2.2);
       if (e.beacon && e.owner === G.myId) hud.message(t('beaconLost'), 2.4);
@@ -1221,7 +1244,16 @@ function onEvent(e) {
     case 'slurp': if (inGame) { audio.play('hole', { pos: e.to, vol: 0.6 }); fx.puff([e.to[0], e.to[1] + 0.5, e.to[2]], 6, 0.6, 0x141210, 0.5); } break;
     // ---------- battle royale ----------
     case 'loot': G.brLoot = e.list; brView?.setLoot(e.list); G.brCrates = e.list.filter(l => l[1] === 'crate').map(l => [l[3], l[5]]); break;
-    case 'chat': chat.add(e, e.id === G.myId, !!(MODES[G.mode]?.teams || G.duo) && G.isEnemy({ id: e.id, team: e.team })); if (e.id !== G.myId) audio.play('ui_click', { ui: true, vol: 0.35 }); break;
+    case 'qc': { // Chat Rapido (10/11): cada um le no proprio idioma; balao em cima de quem falou
+      const text = t('qc_' + e.i); if (!text || e.i == null) break;
+      if (chat.logOn) chat.add({ ...e, text }, e.id === G.myId, !!(MODES[G.mode]?.teams || G.duo) && G.isEnemy({ id: e.id, team: e.team }));
+      const r = G.remotes.get(e.id);
+      if (r && r.alive && inGame) fx.word(text, [r.pos[0], r.pos[1] + 2.5, r.pos[2]], 0.9, 2.4);
+      else if (e.id === G.myId && !chat.logOn) hud.message(text, 2);
+      if (e.id !== G.myId) audio.play('ui_hover', { ui: true, vol: 0.4, rate: 1.2 });
+      break;
+    }
+    case 'chat': chat.add(e, e.id === G.myId, !!(MODES[G.mode]?.teams || G.duo) && G.isEnemy({ id: e.id, team: e.team })); if (e.id !== G.myId && G.state !== 'lobby') audio.play('ui_click', { ui: true, vol: 0.35 }); break; /* lobby toca o chat_pop do balao */
     case 'escRound': if (inGame) { const mine = G.myTeam === e.atk; hud.alert(t('es_round2'), t(e.done ? 'es_r2SubDone' : 'es_r2Sub', { n: e.mark }) + ' ' + t(mine ? 'es_youAtk' : 'es_youDef'), mine ? 'red' : 'blue'); audio.play('ringbell', { ui: true, vol: 0.6 }); } break;
     case 'ping': // marcacao (minha ou do parceiro)
       if (e.off) { G.pings.delete(e.id); break; }
@@ -1954,7 +1986,7 @@ function clearRemotes() {
   for (const g of G.gunDrops.values()) { scene.remove(g); disposeGun(g); } G.gunDrops.clear();
   for (const m of G.nadeMeshes.values()) scene.remove(m);
   G.nadeMeshes.clear();
-  while (G.blimpMeshes.length) scene.remove(G.blimpMeshes.pop());
+  while (G.blimpMeshes.length) scene.remove(G.blimpMeshes.pop()); for (const w of G.wrecks || []) scene.remove(w.m); G.wrecks = [];
   G.strikes?.clear();
   if (G.heistView) { G.heistView.dispose(); G.heistView = null; }
   if (G.borView) { G.borView.dispose(); G.borView = null; }
@@ -1979,6 +2011,7 @@ async function startGame(net, name, mpArgs = null) {
   if (mpArgs?.quick && net.room) Object.assign(mpArgs, { room: net.room, quick: false, join: true });
   $('menu').hidden = true;
   if (G.state === 'lobby') lobby.show();
+  chat.enable(net instanceof WsNet, false); // chat da sala ja no lobby (10/11, pedido dele)
   lobbyPickMode = null;
   lobby.setRoom(mpArgs?.room || null, !!rovexMe);
   audio.music(true, 'music');
@@ -1988,26 +2021,34 @@ async function startGame(net, name, mpArgs = null) {
 // Aquecimento: monta as armas que podem aparecer na mao (classe + faca; no gun game a escada toda) na cena
 // da arma e compila os visuais durante o carregamento. Sem isso o celular compilava o shader da camo na
 // 1a vez que a arma surgia (travada da faca no gun game).
-async function warmGuns() {
+// 10/11 (pedido dele: carregamento demorando e travando no Firefox): uma etapa por vez com respiro entre elas (a tela de
+// carregamento continua animando), so as skins de quem esta na partida e teto de 8 s no total: passou, entra assim mesmo
+const breathe = () => new Promise(r => setTimeout(r, 0));
+function warmGuns() { return Promise.race([warmGunsNow(), new Promise(r => setTimeout(r, 8000))]); }
+async function warmGunsNow() {
   try {
-    const list = G.mode === 'gungame' ? G.ladder.map(u => [u.wpn, { ...(G.loadouts[u.wpn] || {}), body: u.body }])
-      : [...new Set([...PRIMARIES, 'pistol', 'melee'])].map(w => [w, G.loadouts[w]]);
+    const seen = new Set(); // escada com o mesmo modelo repetido: monta uma vez so
+    const list = (G.mode === 'gungame' ? G.ladder.map(u => [u.wpn, { ...(G.loadouts[u.wpn] || {}), body: u.body }]).filter(([w, lo]) => { const k = w + ':' + lo.body + ':' + (lo.camo || ''); if (seen.has(k)) return false; seen.add(k); return true; })
+      : [...new Set([...PRIMARIES, 'pistol', 'melee'])].map(w => [w, G.loadouts[w]]));
     const grp = new THREE.Group(); grp.position.set(0, 0, -1);
     for (const [w, lo] of list) { const gun = buildGun(w, lo); if (gun) grp.add(gun); }
     vm.scene.add(grp);
     await compileSafe(vm.scene, vm.camera);
     vm.scene.remove(grp);
+    await breathe();
     // 03/11 (bateria de desempenho): a cena da partida tambem (mapa, bonecos e armas de quem ja esta na sala) + as
     // 8 skins animadas. Sem isso a 1a imagem compilava tudo junto: 0,5 s (contra todos) a 1 s (noite) de tela parada.
     // compileAsync usa a compilacao paralela do navegador (KHR_parallel_shader_compile): o carregamento nao trava
     const skins = new THREE.Group(), tiny = new THREE.BoxGeometry(0.01, 0.01, 0.01);
     const wornSkins = new Set([wornLook()?.skin, ...[...G.remotes.values()].map(r => lookOf(r)?.skin)]); // 09/11: celular so compila as skins em uso (sao 29 programas)
-    for (const id of Object.keys(SKIN_CODE)) if (!isTouch || wornSkins.has(id)) skins.add(new THREE.Mesh(tiny, skinMat(id)));
+    for (const id of Object.keys(SKIN_CODE)) if (wornSkins.has(id)) skins.add(new THREE.Mesh(tiny, skinMat(id))); // 10/11: PC tambem so as em uso (eram 29 programas, o grosso da espera)
     skins.position.copy(camera.position); scene.add(skins);
     const airs = [fx.blimpMesh('red'), bomberMesh('red')]; for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular
+    await breathe();
     uploadWorld(); // 09/11: mapa inteiro sobe pra placa aqui, nao na primeira vez que entra na tela
     await compileSafe(scene, camera);
     scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
+    await breathe();
     warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11): nada de travar na 1a morte
   } catch (e) { console.warn('aquecimento das armas falhou', e); }
 }
@@ -2018,11 +2059,13 @@ async function beginMatch(join) {
   G.state = 'loading'; $('theend').hidden = true; // placar da partida anterior aberto no lobby
   if (ui.fromLobby?.()) { $('menu').hidden = true; ui.go('home'); sendLoadout(); } // comecou com o arsenal aberto: vai com o que montou
   lobby.hide();
+  const lt0 = performance.now(), LT = G.loadTimes = {}; // tempo de cada etapa da carga (10/11: medir o que demora)
   await runLoading({ map: G.M.id, mode: G.duo ? 'duo' : G.bounce ? 'bounce' : G.mode, join });
+  LT.cortina = Math.round(performance.now() - lt0);
   if (G.state !== 'loading') return;
-  await preloadMap(G.M.id); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
-  await warmGuns();
-  hideLoading();
+  await preloadMap(G.M.id); LT.mapa = Math.round(performance.now() - lt0); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
+  await warmGuns(); LT.armas = Math.round(performance.now() - lt0);
+  hideLoading(); LT.total = Math.round(performance.now() - lt0);
   G.state = 'game';
   funil('jogou');
   audio.music(true, matchTrack());
@@ -2038,7 +2081,7 @@ async function beginMatch(join) {
     if (Object.values(G.loadouts || {}).some(l => l?.ammo)) tip('ammo');
   }, 2500);
   document.body.classList.add('ingame');
-  chat.enable(G.net instanceof WsNet);
+  chat.enable(G.net instanceof WsNet, true);
   $('hud').hidden = false;
   input.enabled = true;
   document.body.classList.toggle('bombmode', G.mode === 'bomb');
@@ -2053,7 +2096,7 @@ function backToLobby() {
   audio.music(true, 'music');
   G.paused = false;
   input.enabled = false;
-  document.body.classList.remove('ingame', 'mode-br', 'is-dead', 'stim-rush'); if (!isTouch) document.body.classList.remove('touchmode'); /* 08/11: no celular o visual de toque fica (antes voltava pro layout de PC: cartaz espremido, banners cortados) */ G.stimFx = false; chat.enable(false);
+  document.body.classList.remove('ingame', 'mode-br', 'is-dead', 'stim-rush'); if (!isTouch) document.body.classList.remove('touchmode'); /* 08/11: no celular o visual de toque fica (antes voltava pro layout de PC: cartaz espremido, banners cortados) */ G.stimFx = false; chat.enable(G.net instanceof WsNet, false); /* 10/11: o chat da sala continua no lobby */
   $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   if (document.pointerLockElement) document.exitPointerLock();
   clearRemotes();
@@ -2451,6 +2494,9 @@ function nadeArc(p) {
 function frame() {
   requestAnimationFrame(frame);
   const now = performance.now();
+  const cap = +settings.fpsCap || 0; // limite de FPS (10/11); 0 = sem limite (no app de PC o navegador nao trava em 60)
+  if (cap && now - lastDraw < 1000 / cap - 1.5) return;
+  lastDraw = now; dynResTick(now); HOSE_FRAME.n++;
   const realDt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (!Number.isFinite(G.flashT)) G.flashT = 0;
@@ -2482,6 +2528,7 @@ function useBoostNow() {
 }
 G.useBoost = useBoostNow;
 addEventListener('rovex-me', () => { if (boostSync()) hud.message(t('boostGot'), 2.6); });
+addEventListener('rr-toast', (e) => hud.message(e.detail, 3.2)); // aviso vindo de fora (Instagram, 10/11)
 addEventListener('keydown', (e) => { if (e.repeat || G.state !== 'game' || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return; if (kbBinds(settings).boost?.includes(e.code)) useBoostNow(); });
 // Desafio Elite (09/11): 1 pulso por minuto so em partida, com a aba aberta e o boneco tendo se mexido (AFK nao conta)
 let eliteT = 0, eliteOff = false, elitePos = null;
@@ -2870,6 +2917,7 @@ function frameBody(now, realDt) {
       if (canGo && (inp.jumpPressed || inp.firePressed)) G.net?.send({ t: 'respawn' });
     }
     if (inp.pingPressed && (G.mode === 'br' || G.tutorial?.pingOn) && p.alive && G.state === 'game') makePing(p);
+    if (inp.quickPressed && G.state === 'game' && !(p.adsK > 0.3 && vm.gun?.userData.canted)) qc.toggle(); // Chat Rapido (mirando com a mira 45 o direcional e dela)
     const SR = !p.alive && G.specR && G.specR.alive && !G.spec?.map ? G.specR : null; G.specR = null;
     const RPV = replay.vmState(); // camera final em primeira pessoa: a arma de quem matou, no tempo da gravacao
     if (RPV) vm.update(RPV);
@@ -3191,6 +3239,7 @@ const BOOT_T = performance.now();
     $('boot').classList.add('out'); setTimeout(() => $('boot')?.remove(), 400);
     audio.init();
   }
+  window.__rrBootGoneAt = performance.now() + 400; // 10/11: popups de abertura (Elite, Novidades) so depois do loader sair e o mapa aparecer
   fx = new FX(scene);
   G.fx = fx;
   G.strikes = new StrikeView(scene, fx); // Biplano, Trem, Balao Bombardeiro, Mao do Animador
@@ -3250,16 +3299,54 @@ function smokeCloud(pos, dur) {
 const tmpSmoke = new THREE.Vector3();
 // boneco de noite (07/11): material proprio com brilho (emissive) na cor dele, pra ser visto no escuro sem luz de verdade.
 // Os materiais toon sao compartilhados com o cenario (cache por cor): por isso clona so os do boneco, e devolve de dia
+const NIGHT_LIFT = new THREE.Color(0.1, 0.105, 0.13);
 function nightChar(c, on) {
   if (!c?.root || !!c._night === on) return;
   c._night = on;
   c.root.traverse(o => {
     if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
-    if (on) { if (!o.material.isMeshToonMaterial || o.userData.dayMat) return; const m = o.material.clone(); m.emissive = m.color.clone().multiplyScalar(0.42); o.userData.dayMat = o.material; o.material = m; }
+    if (on) {
+      if (!o.material.isMeshToonMaterial || o.userData.dayMat) return;
+      // 10/11 (pedido dele: "a noite os bonecos ficam todos brancos"): clone() do three NAO leva o onBeforeCompile. Skin, camo e
+      // estampa sao material branco com o desenho no shader: sem o gancho sobrava o branco puro + brilho de 42% do branco
+      const d = o.material, m = d.clone(), sh = !!d.onBeforeCompile;
+      if (sh) { m.onBeforeCompile = d.onBeforeCompile; m.customProgramCacheKey = d.customProgramCacheKey; m.userData = d.userData; }
+      // piso de luar: roupa preta * 0,42 continuava preta e o bot sumia no escuro ("alguns npcs invisiveis", 10/11)
+      m.emissive = m.color.clone().multiplyScalar(sh ? 0.12 : 0.42).add(NIGHT_LIFT); o.userData.dayMat = d; o.material = m;
+    }
     else if (o.userData.dayMat) { o.material.dispose(); o.material = o.userData.dayMat; delete o.userData.dayMat; }
   });
 }
+// dirigivel/biplano derrubado (10/11, pedido dele: "deve ter a animacao de explosao"): a malha sai da lista do snapshot
+// (senao some no proximo quadro) e cai: desinfla, embica de nariz, gira, solta explosoes pelo casco e estoura no chao
+function wreckBlimp(pos) {
+  let best = null, bd = 18 * 18;
+  for (const m of G.blimpMeshes) { const d = m.position.distanceToSquared(tmpV.fromArray(pos)); if (d < bd) { bd = d; best = m; } }
+  if (!best) return;
+  G.blimpMeshes = G.blimpMeshes.filter(m => m !== best);
+  (G.wrecks ||= []).push({ m: best, t: 0, vy: 0, spin: (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.5), boomT: 0.15, s0: best.scale.clone() });
+}
+function tickWrecks(dt) {
+  if (!G.wrecks?.length) return;
+  for (const w of G.wrecks) {
+    const m = w.m; w.t += dt; w.vy -= 9 * dt;
+    m.position.y += w.vy * dt;
+    m.rotation.x += dt * 0.55 * Math.min(1, w.t); m.rotation.y += w.spin * dt; m.rotation.z += w.spin * 0.4 * dt;
+    const k = Math.min(1, w.t / 1.6); m.scale.set(w.s0.x * (1 - 0.25 * k), w.s0.y * (1 - 0.55 * k), w.s0.z * (1 - 0.15 * k)); // desinflando
+    if ((w.boomT -= dt) <= 0) { w.boomT = 0.22 + Math.random() * 0.12; const p = m.position, r = 3 * m.scale.x; fx.explosion([p.x + (Math.random() - 0.5) * r, p.y + (Math.random() - 0.5) * 1.5, p.z + (Math.random() - 0.5) * r]); fx.puff([p.x, p.y, p.z], 3, 1.4, PAL.dark, 0.9); }
+    const down = raycast(G.M, [m.position.x, m.position.y, m.position.z], [0, -1, 0], 300).dist, floor = Number.isFinite(down) ? m.position.y - down : 0;
+    if (m.position.y <= floor + 0.8 || w.t > 6) {
+      w.done = true; const p = [m.position.x, floor + 0.5, m.position.z];
+      fx.explosion(p); fx.explosion([p[0] + 2.5, p[1] + 1, p[2]]); fx.explosion([p[0] - 2, p[1] + 1.5, p[2] + 2]); fx.explosion([p[0], p[1] + 3, p[2] - 2.5]);
+      fx.word('KABRUM!', [p[0], p[1] + 3, p[2]], 4, 1); fx.splat([p[0], 0, p[2]], 6, 0x2a2724);
+      audio.play('explosion', { pos: p, vol: 1, key: 'wreck', max: 2 }); { const d = camera.position.distanceTo(m.position); if (d < 60) G.shake(0.5 * (1 - d / 60)); }
+      scene.remove(m);
+    }
+  }
+  G.wrecks = G.wrecks.filter(w => !w.done);
+}
 function tickNadeFx(dt) {
+  tickWrecks(dt);
   for (const s of G.smokeFx || []) { s.t += dt; s.mat.uniforms.uOp.value = Math.min(0.95, s.t * 1.5) * Math.min(1, (s.dur - s.t) / 2); s.grp.rotation.y += dt * 0.05; if (s.t >= s.dur) { scene.remove(s.grp); s.mat.dispose(); } }
   if (G.smokeFx) G.smokeFx = G.smokeFx.filter(s => s.t < s.dur);
   // dentro da nuvem: veu cinza no filtro de filme (1 passada que ja roda) em vez de dezenas de camadas transparentes na tela toda

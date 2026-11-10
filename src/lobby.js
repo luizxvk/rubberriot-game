@@ -48,8 +48,8 @@ export function cfgRows(c, mapNow = c.map) {
 }
 
 export class Lobby {
-  constructor({ onReady, onLeave, onStart, onTeam, onCfg, onKick }) {
-    this.onKick = onKick;
+  constructor({ onReady, onLeave, onStart, onTeam, onCfg, onKick, onGiveHost }) {
+    this.onKick = onKick; this.onGiveHost = onGiveHost;
     this.onCfg = onCfg; this.cfgPrev = null;
     $('lbModesClose').onclick = () => this.closeModes();
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('lbModes').hidden) this.closeModes(); });
@@ -64,6 +64,10 @@ export class Lobby {
       this.tapT = performance.now(); this.setReady(!this.ready); onReady(this.ready);
     };
     $('lbLeave').onclick = () => { this.closeFriends(); onLeave(); };
+    // celular deitado (10/11, pedido dele): o Elenco fica fechado num botao; tocar abre por cima, tocar fora fecha
+    $('lbCastBtn').onclick = (e) => { e.stopPropagation(); this.cast(!$('lobby').classList.contains('cast-open')); };
+    addEventListener('pointerdown', (e) => { if ($('lobby').classList.contains('cast-open') && !e.target.closest('#lbBill, #lbCastBtn')) this.cast(false); }, true);
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('lobby').classList.contains('cast-open')) this.cast(false); });
     $('lbCopy').onclick = async () => {
       try { await navigator.clipboard.writeText($('lbRoomCode').textContent); } catch { /* sem clipboard */ }
       audio.play('ui_click', { ui: true });
@@ -127,7 +131,13 @@ export class Lobby {
     $('lbLeader').hidden = true;
     $('lobby').hidden = false;
   }
-  hide() { this.closeFriends(); this.closeModes(); $('lbSide').hidden = true; $('lobby').hidden = true; }
+  cast(on) {
+    audio.play(on ? 'ui_click' : 'ui_back', { ui: true });
+    const L = $('lobby'); clearTimeout(this.castT); $('lbCastBtn').setAttribute('aria-expanded', String(on));
+    if (on) { L.classList.remove('cast-closing'); L.classList.add('cast-open'); }
+    else if (L.classList.contains('cast-open')) { L.classList.remove('cast-open'); L.classList.add('cast-closing'); this.castT = setTimeout(() => L.classList.remove('cast-closing'), 190); } // fecha encolhendo pro botao
+  }
+  hide() { $('lobby').classList.remove('cast-open'); this.closeFriends(); this.closeModes(); $('lbSide').hidden = true; $('lobby').hidden = true; }
   get open() { return !$('lobby').hidden; }
 
   setReady(v) {
@@ -287,17 +297,24 @@ export class Lobby {
     const waitN = m.players.filter(p => !p.bot && !p.ready && p.id !== m.host).length;
     if (waitN !== this.waitN) { this.waitN = waitN; this.setReady(this.ready); }
     $('lbReady').disabled = host && (this.counting || waitN > 0);
+    $('lbCastN').textContent = String(m.players.length); // botao do Elenco no celular: quantos tem na sala
     const list = [...m.players].sort((a, b) => (a.team || '').localeCompare(b.team || '') || (a.bot - b.bot));
-    $('lbPlayers').innerHTML = list.map(p => {
+    const html = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span>${host && !me && !p.bot ? `<button class="lb-kick" data-kick="${esc(p.id)}" aria-label="${esc(t('lbKick', { n: p.name }))}" title="${esc(t('lbKick', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>` : ''}</li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span>${host && !me && !p.bot ? `<button class="lb-host" data-host="${esc(p.id)}" aria-label="${esc(t('lbGiveHost', { n: p.name }))}" title="${esc(t('lbGiveHost', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg></button>` : ''}${host && !me && !p.bot ? `<button class="lb-kick" data-kick="${esc(p.id)}" aria-label="${esc(t('lbKick', { n: p.name }))}" title="${esc(t('lbKick', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>` : ''}</li>`;
     }).join('');
+    // 10/11 (pedido dele: "host" piscando e o nome sumindo): a lista vinha inteira de novo 4x/s e reiniciava o selo do
+    // Elite e o carimbo. Agora so redesenha quando algo muda
+    const now = new Set(list.filter(p => p.ready).map(p => p.id));
+    if (html !== this.listHtml) {
+    this.listHtml = html; $('lbPlayers').innerHTML = html;
+    for (const b of $('lbPlayers').querySelectorAll('.lb-host')) b.onclick = () => { audio.play('ui_click', { ui: true }); this.onGiveHost?.(b.dataset.host); };
     // host tira alguem (02/11): sai na hora e pode voltar pelo codigo (a lista redesenha 4x/s, entao um toque so)
     for (const b of $('lbPlayers').querySelectorAll('.lb-kick')) b.onclick = () => { audio.play('ui_back', { ui: true }); this.onKick?.(b.dataset.kick); };
     // carimbo so anima em quem acabou de ficar pronto
-    const now = new Set(list.filter(p => p.ready).map(p => p.id));
     for (const li of $('lbPlayers').children) if (this.okIds.has(li.dataset.id)) li.querySelector('.stamp').style.animation = 'none';
+    }
     for (const id of now) if (!this.okIds.has(id) && this.okIds.size) audio.play('ui_hover', { ui: true, vol: 0.4 });
     this.okIds = now;
 

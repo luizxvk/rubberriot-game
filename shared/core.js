@@ -86,6 +86,9 @@ export function nadeStep(M, n, dt) {
 }
 
 const CITY_ROUTES = ['becos', 'feira', 'largo', 'cortejo'];
+const QC_N = 10; // frases do Chat Rapido (src/quickchat.js)
+// bot provocando (10/11): de vez em quando solta uma do Chat Rapido ao derrubar alguem (seu noob, volta aqui, isso foi sorte...)
+const BOT_TAUNTS = [2, 5, 7, 9];
 export class Core {
   constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false }) {
     this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
@@ -480,7 +483,7 @@ export class Core {
   full() { return this.humans() >= this.cap(); }
 
   join(id, name) {
-    const p = this.addPlayer(id, (name || 'Player').slice(0, 14));
+    const p = this.addPlayer(id, (name || 'Player').slice(0, 24));
     this.balanceBots();
     this.send(id, { t: 'welcome', id, mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, team: p.team, phase: this.phase });
     this.lobbyT = 0;
@@ -558,7 +561,8 @@ export class Core {
   ammoOf(p, wpn) { const a = this.ggBody(p) || wpn === 'melee' || this.brBp(p, wpn) ? null : p.los?.[wpn]?.ammo; return AMMO[a] && (!AMMO[a].only || AMMO[a].only === wpn) ? a : null; } // balote so na escopeta
 
   // host = humano mais antigo na sala (Map guarda a ordem de entrada); saiu, passa pro proximo
-  hostId() { for (const p of this.players.values()) if (!p.bot) return p.id; return null; }
+  // host escolhido (10/11, pedido dele: o host passa o cargo pra quem quiser); saiu, volta pro primeiro humano da sala
+  hostId() { const h = this.hostPick && this.players.get(this.hostPick); if (h && !h.bot) return h.id; for (const p of this.players.values()) if (!p.bot) return p.id; return null; }
 
   humans() { let n = 0; for (const p of this.players.values()) if (!p.bot) n++; return n; }
 
@@ -751,6 +755,13 @@ export class Core {
         const o = this.players.get(m.id);
         if (id !== this.hostId() || !o || o.bot || o.id === id || !this.useLobby) break;
         this.drop(o.id, 'kick');
+        break;
+      }
+      case 'giveHost': {
+        const o = this.players.get(m.id);
+        if (id !== this.hostId() || !o || o.bot || o.mob || o.id === id || !this.useLobby) break;
+        this.hostPick = o.id; this.lobbyT = 0;
+        this.event({ k: 'hostGiven', from: id, to: o.id });
         break;
       }
       // tela de fim: voltar pro lobby (host leva a sala; os outros so marcam, e todo mundo marcado tambem leva)
@@ -985,6 +996,14 @@ export class Core {
         this.event({ k: 'chat', id, name: p.name, team: p.team || null, text });
         break;
       }
+      // Chat Rapido (10/11): so o numero da frase (o texto sai do idioma de quem le); uma a cada 1,2 s
+      case 'qc': {
+        const i = m.i | 0, now = this.clock || 0;
+        if (!(i >= 0 && i < QC_N) || now - (p.qcAt ?? -9) < 1.2) break;
+        p.qcAt = now;
+        this.event({ k: 'qc', id, name: p.name, team: p.team || null, i });
+        break;
+      }
       case 'ping': {
         if ((this.mode !== 'br' && !this.pingAny) || !p.alive) break; // pingAny: treino (passo de marcar)
         const now = this.clock || 0;
@@ -1117,6 +1136,7 @@ export class Core {
     if (!suicide) {
       // abate da propria Torta Atomica nao conta pra sequencia (senao ela se alimentava)
       a.kills++; if (wpn !== 'nuke') a.streak++; a.score += 100;
+      if (a.bot && !a.mob && !v.bot && Math.random() < 0.18 && (this.clock || 0) - (a.qcAt ?? -9) > 20) { a.qcAt = this.clock || 0; this.event({ k: 'qc', id: a.id, name: a.name, team: a.team || null, i: BOT_TAUNTS[Math.floor(Math.random() * BOT_TAUNTS.length)] }); }
       const E = EV(this.mut);
       if (E?.killHeal && a.alive) a.hp = Math.min(a.maxHp || 100, a.hp + E.killHeal); // vampiro: abate enche a vida
       if (E?.fuseKill && a.alive) a.fuse = Math.min(99, (a.fuse || 0) + E.fuseKill); // bomba-relogio: abate da mais pavio
@@ -1503,7 +1523,7 @@ export class Core {
     if (kind === 'blimp' || kind === 'bomber') this.streakGap = STREAK_GAP;
     const A = this.M.arena;
     if (kind === 'anvil') {
-      const targets = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o)).slice(0, 7);
+      const targets = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o) && !hasSkill(o, 'fantasma')).slice(0, 7); // Fantasma: a bigorna nao acha
       const list = targets.map(o => [o.pos[0] + rnd(-1.2, 1.2), 0, o.pos[2] + rnd(-1.2, 1.2)]);
       if (!list.length) list.push([rnd(-A / 2, A / 2), 0, rnd(-A / 2, A / 2)]);
       for (const pos of list) this.anvils.push({ owner: p.id, pos, t: 1.7 + rnd(0, 0.5), streak: true });
@@ -1514,7 +1534,7 @@ export class Core {
     if (kind === 'talc') { const mine = this.talcs.find(u => (this.cfg.teams ? u.team === p.team : u.owner === p.id)); if (mine) mine.t += STREAKS.talc.time; else this.talcs.push({ owner: p.id, team: p.team, t: STREAKS.talc.time }); }
     if (kind === 'anvline') {
       // Linha de Bigornas: reta que passa pelo meio dos inimigos vivos (ou pelo centro), na direcao em que eles estao mais espalhados
-      const en = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o));
+      const en = [...this.players.values()].filter(o => o.alive && !o.inRing && this.enemies(p, o) && !hasSkill(o, 'fantasma'));
       const cx = en.length ? en.reduce((s, o) => s + o.pos[0], 0) / en.length : rnd(-A / 3, A / 3), cz = en.length ? en.reduce((s, o) => s + o.pos[2], 0) / en.length : rnd(-A / 3, A / 3);
       let ang = rnd(0, Math.PI);
       if (en.length > 1) { let sxx = 0, szz = 0, sxz = 0; for (const o of en) { const dx = o.pos[0] - cx, dz = o.pos[2] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; } ang = 0.5 * Math.atan2(2 * sxz, sxx - szz); }
@@ -1598,7 +1618,7 @@ export class Core {
       b.fireT = 0.55;
       let best = null, bd = 1e9;
       for (const v of this.players.values()) {
-        if (!v.alive || !this.enemies(owner, v)) continue;
+        if (!v.alive || !this.enemies(owner, v) || hasSkill(v, 'fantasma')) continue; // Fantasma: o dirigivel nao enxerga
         const c = [v.pos[0], v.pos[1] + 1.1, v.pos[2]];
         const d = dist2(c, b.pos);
         if (d < bd && hasLOS(this.M, b.pos, c)) { bd = d; best = v; }
@@ -1631,7 +1651,7 @@ export class Core {
     const head = [b.pos[0], b.pos[1] + 1.25, b.pos[2]];
     let best = null, bd = S.range * S.range;
     for (const v of this.players.values()) {
-      if (!v.alive || v.inRing || !this.enemies(owner, v)) continue;
+      if (!v.alive || v.inRing || !this.enemies(owner, v) || hasSkill(v, 'fantasma')) continue; // Fantasma: a sentinela nao enxerga
       const c = [v.pos[0], v.pos[1] + 1.1, v.pos[2]], d = dist2(c, head);
       if (d < bd && hasLOS(this.M, head, c)) { bd = d; best = v; }
       // bot inimigo perto que ve a torreta: atira nela (cerca de 22 de dano por segundo cada)
@@ -2475,7 +2495,7 @@ export class Core {
         id: p.id, name: p.name, bot: p.bot, team: p.team, lvl: p.lvl || botLevel(p.id) /* 07/11: banner e tela de morte com o nivel de verdade */, hp: Math.max(0, Math.round(p.hp)), alive: p.alive, pg: p.ping || undefined,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
-        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, gh: hasSkill(p, 'fantasma') ? 1 : undefined, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
                 ...(this.bor ? { mob: p.mob || undefined, mh: p.mob ? p.maxHp : undefined, cs: p.mob ? undefined : Math.round(p.cash || 0), fr: p.frozenT > 0 ? 1 : 0, hk: p.headK > 1.6 ? 1 : undefined } : null), // noite: tipo do vilao, vida cheia (barra do chefao), pontos, congelado, lente/olho exposto
               });
     }

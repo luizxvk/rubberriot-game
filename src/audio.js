@@ -4,6 +4,7 @@ import { SS } from './ssboot.js';
 const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload',
   'hit', 'hitmarker', 'death', 'jump', 'step', 'step2', 'land', 'pickup', 'slide', 'flag', 'capture', 'ui', 'ui_hover',
   'ui_click', 'ui_back', 'iris', 'levelup', 'unlock', 'empty', 'swap', 'ads', 'whoosh', 'headshot', 'killstamp', 'music',
+  'reward_card', 'reward_fanfare', 'reward_section', 'chat_pop', // recompensa do Elite (10/11): sino de cada premio + fanfarra
   'safetick', 'siren', 'cashreg', // Roube o Cofre
   'planefly', 'trainwhistle', 'bomberdrone', 'eraser', 'firedrop', // sequencias grandes (03/11)
   'explosion', 'pan', // existiam mas nao carregavam: granada e bigorna tocavam ruido sintetico

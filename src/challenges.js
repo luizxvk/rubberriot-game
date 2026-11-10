@@ -99,7 +99,8 @@ export function eliteToday() {
 
 // modelos que eram de desafio e agora abrem por nivel (31/10, pedido dele): quem ja tinha fechado o
 // desafio antigo continua com o modelo aberto
-const WAS_CH = { 'am:fire': ['u_am_fire', 40], 'am:trace': ['u_am_trace', 15], 'am:boom': ['u_am_boom', 8], 'am:ap': ['u_am_ap', 35], pistol_10: ['u_revolver', 30], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
+// 10/11 (pedido dele): municao sai daqui. O desafio antigo abria a bala em TODAS as armas; agora e so pelo nivel de cada arma (AMMO_LVL)
+const WAS_CH = { pistol_10: ['u_revolver', 30], subfusil_13: ['u_pk_mp5', 60], shotgun_3: ['u_pk_aa12', 40], fusil_11: ['u_pk_ar', 25] };
 export const wasUnlocked = (id) => !!WAS_CH[id] && (data.career[WAS_CH[id][0]] || 0) >= WAS_CH[id][1];
 // akimbo era desafio por arma (ate 08/11): a contagem antiga segue no save e mantem aberto pra quem fechou
 const WAS_AKIMBO = { pistol: ['u_akimbo', 50], smg: ['u_akimbo_smg', 75], shotgun: ['u_akimbo_sg', 40] };

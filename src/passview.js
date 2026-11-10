@@ -37,7 +37,22 @@ let goTo = null, passIO = null, passRun = 0, pickRun = 0;
 export const passNav = (f) => { goTo = f; };
 export function stopPass() { passRun++; passIO?.disconnect(); paneBusy(document.getElementById('passPane'), false); }
 const shotSlot = (p) => (p.k === 'look' ? p.slot : p.k);
-const putShot = (el, u) => { el.innerHTML = `<img src="${u}" alt="">`; el.classList.add('img'); };
+// 10/11 (pedido dele: a previa da arma ficava embaixo): a foto vem com folga transparente desigual; corta no contorno da peca
+// (pixels com alfa) pra imagem ficar no centro de verdade. Guarda o recorte por URL
+const TRIM = new Map();
+function trimmed(u) {
+  if (TRIM.has(u)) return TRIM.get(u);
+  const p = new Promise((res) => { const im = new Image(); im.onload = () => { try {
+    const w = im.naturalWidth, h = im.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+    const d = g.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 12) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) { res(u); return; }
+    const pad = Math.round(Math.max(x1 - x0, y1 - y0) * 0.04), cw = x1 - x0 + 1 + pad * 2, ch = y1 - y0 + 1 + pad * 2, o = document.createElement('canvas'); o.width = cw; o.height = ch;
+    o.getContext('2d').drawImage(c, x0 - pad, y0 - pad, cw, ch, 0, 0, cw, ch); res(o.toDataURL('image/png'));
+  } catch { res(u); } }; im.onerror = () => res(u); im.src = u; });
+  TRIM.set(u, p); return p;
+}
+const putShot = (el, u) => { el.innerHTML = `<img src="${u}" alt="">`; el.classList.add('img'); trimmed(u).then(v => { const im = el.querySelector('img'); if (im && v !== u) im.src = v; }); };
 const rewardOf = (n, free) => (free ? PASS_FREE[n] : PASS[n - 1]);
 const rarOf = (n, free) => (free ? 'comum' : n % 10 === 0 ? 'lendario' : 'epico');
 

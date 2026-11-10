@@ -66,7 +66,7 @@ function abxTick(c, dt) {
 // reta que passa pelo meio dos inimigos vivos, na direcao em que estao mais espalhados (mesma conta da Linha de Bigornas)
 export function enemyLine(c, p) {
   const A = c.M.arena;
-  const en = [...c.players.values()].filter(o => o.alive && !o.inRing && c.enemies(p, o));
+  const en = [...c.players.values()].filter(o => o.alive && !o.inRing && c.enemies(p, o) && !o.skills?.includes('fantasma')); // Fantasma fora da mira
   const cx = en.length ? en.reduce((s, o) => s + o.pos[0], 0) / en.length : rnd(-A / 3, A / 3), cz = en.length ? en.reduce((s, o) => s + o.pos[2], 0) / en.length : rnd(-A / 3, A / 3);
   let ang = rnd(0, Math.PI);
   if (en.length > 1) { let sxx = 0, szz = 0, sxz = 0; for (const o of en) { const dx = o.pos[0] - cx, dz = o.pos[2] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; } ang = 0.5 * Math.atan2(2 * sxz, sxx - szz); }
@@ -118,7 +118,7 @@ export function strikeUse(c, p, kind) {
   if (kind === 'hand') {
     const S = STREAKS.hand;
     // alvos: os inimigos vivos mais perto de quem chamou (a mao vai de um em um)
-    const en = [...c.players.values()].filter(o => o.alive && !o.inRing && c.enemies(p, o)).sort((x, y) => Math.hypot(x.pos[0] - p.pos[0], x.pos[2] - p.pos[2]) - Math.hypot(y.pos[0] - p.pos[0], y.pos[2] - p.pos[2])).slice(0, S.n);
+    const en = [...c.players.values()].filter(o => o.alive && !o.inRing && c.enemies(p, o) && !o.skills?.includes('fantasma')).sort((x, y) => Math.hypot(x.pos[0] - p.pos[0], x.pos[2] - p.pos[2]) - Math.hypot(y.pos[0] - p.pos[0], y.pos[2] - p.pos[2])).slice(0, S.n);
     c.crafts.push({ id, k: 'hand', owner: p.id, team: p.team, targets: en.map(o => o.id), i: 0, hold: 0, wait: 0, pos: [p.pos[0], 40, p.pos[2]], t: S.life, leave: 0 });
     return true;
   }
@@ -147,7 +147,7 @@ function tickPlane(c, f, owner, dt) {
   // rajada na frente do nariz: puxa pra quem esta no corredor logo adiante (erra um pouco de proposito); so pega quem esta a ceu aberto
   let tx = null;
   for (const v of c.players.values()) {
-    if (!v.alive || !c.enemies(owner, v)) continue;
+    if (!v.alive || !c.enemies(owner, v) || v.skills?.includes('fantasma')) continue; // aviao nao puxa a rajada pro Fantasma
     const rx = v.pos[0] - f.pos[0], rz = v.pos[2] - f.pos[2], ahead = rx * f.dir[0] + rz * f.dir[1], lat = -rx * f.dir[1] + rz * f.dir[0];
     if (ahead > 2 && ahead < S.lead + 14 && Math.abs(lat) < S.lane && (!tx || ahead < tx.ahead)) tx = { ahead, lat, v };
   }

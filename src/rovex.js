@@ -71,14 +71,17 @@ async function call(path, opt = {}) {
 
 // conta logada (null = visitante ou sem rede)
 export let me = null;
+// so no localhost (10/11, pedido dele): ?semElite mostra o jogo como conta SEM Elite (banner de assinar, itens travados)
+const NO_ELITE = import.meta.env.DEV && new URLSearchParams(location.search).has('semElite');
 export async function loadMe() {
-  if (import.meta.env.DEV && FAKE) { me = (await fk()).fakeMe(); try { dispatchEvent(new Event('rovex-me')); } catch { /* */ } loadShop(); return me; }
+  if (import.meta.env.DEV && FAKE) { me = (await fk()).fakeMe(); if (NO_ELITE) me.elite = false; try { dispatchEvent(new Event('rovex-me')); } catch { /* */ } loadShop(); return me; }
   if (!token()) return null;
   try {
     const u = await call('/users/me', { timeout: 5000 });
     // elite = assinatura Elite da Rovex ativa (o servidor ja confere a validade)
-    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 14), elite: !!u.isElite, email: typeof u.email === 'string' ? u.email : '', zions: Number.isFinite(u.zions) ? u.zions : null, zionsPoints: Number.isFinite(u.zionsPoints) ? u.zionsPoints : null, vaultPoints: Number.isFinite(u.vaultPoints) ? u.vaultPoints : 0 } : null; // saldo de Zions Points mostrado na loja
+    me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 24), elite: !!u.isElite, email: typeof u.email === 'string' ? u.email : '', zions: Number.isFinite(u.zions) ? u.zions : null, zionsPoints: Number.isFinite(u.zionsPoints) ? u.zionsPoints : null, vaultPoints: Number.isFinite(u.vaultPoints) ? u.vaultPoints : 0 } : null; // saldo de Zions Points mostrado na loja
   } catch { me = null; }
+  if (me && NO_ELITE) me.elite = false;
   try { dispatchEvent(new Event('rovex-me')); } catch { /* fora do navegador */ } // saldos de Zions na tela atualizam (zbal.js)
   if (me) loadShop(); // o que comprou na Loja + saldos (sem esperar: nao atrasa a entrada)
   return me;
@@ -107,6 +110,24 @@ export async function loadShop() {
     dispatchEvent(new Event('rovex-me'));
     return j;
   } catch { return null; }
+}
+// seguir a Rovex no Instagram (10/11, pedido dele): clicou e foi pro perfil = 1000 Zions Points, uma vez por conta
+// (o Instagram nao deixa conferir quem segue; vale o clique, como ele pediu)
+export async function igReward() {
+  if (import.meta.env.DEV && FAKE) return fakeApply(await (await fk()).instagram());
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/zions/instagram', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: '{}' });
+    const j = await r.json().catch(() => ({}));
+    if (Number.isFinite(j.zionsPoints)) { me.zionsPoints = j.zionsPoints; dispatchEvent(new Event('rovex-me')); }
+    return r.ok ? { ok: true, total: j.total } : { code: j.code || 'erro' };
+  } catch { return { code: 'erro' }; }
+}
+// presente do Elite (10/11): o servidor sorteia 4 variantes do Mercado Negro uma vez por mes de assinatura
+export async function elitePresent() {
+  if (import.meta.env.DEV && FAKE) { const f = await fk(); return f.elitePresente ? f.elitePresente() : null; }
+  if (!token() || !me?.elite) return null;
+  try { return await call('/games/rubber-riot/elite-presente', { method: 'POST', body: {}, timeout: 8000 }); } catch { return null; }
 }
 // resposta da conta falsa: mesmo formato do servidor; atualiza saldo e carteira como as rotas de verdade
 const fakeApply = (j) => { if (me && j) { if (j.itens) me.rrOwned = j.itens; if (Number.isFinite(j.zionsPoints)) me.zionsPoints = j.zionsPoints; if (Number.isFinite(j.zions)) me.zions = j.zions; dispatchEvent(new Event('rovex-me')); } return j; };

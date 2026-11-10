@@ -222,14 +222,21 @@ html.touch-boot .boot { display: grid; }
         <!-- logo oficial do Elite (EliteHexIcon do template-magazine): hexagono + estrela -->
         <svg class="ep-hex" viewBox="0 0 64 64" aria-hidden="true"><path class="ep-hex-in" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path class="ep-hex-out" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path d="M32 18L35.5 26L44 27L38 33L39 42L32 38L25 42L26 33L20 27L28.5 26L32 18Z"/></svg>
         <span class="ep-txt"><b data-i18n="epTitle">Rovex Elite</b><small id="epSub" data-i18n="epSub">Camo e selo exclusivos</small></span>
-        <em class="ep-chip" id="epChip" data-i18n="epChip">XP 2x</em>
+        <em class="ep-chip" id="epChip" data-i18n="epChip">$2,99/mês</em>
+        <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+      </a>
+      <!-- app de PC (10/11, pedido dele): so aparece no PC fora do proprio app (CSS body.touchmode / body.rr-desktop esconde). Icone: Material Icons (Apache 2.0) -->
+      <a class="elite-promo dl-promo" id="dlPromo" href="https://cdn.tryrovex.com/downloads/rubber-riot/Rubber-Riot-Setup.exe" download rel="noopener">
+        <svg class="ep-hex" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6zm8 9-4-4h3V7h2v4h3l-4 4z"/></svg>
+        <span class="ep-txt"><b data-i18n="dlTitle">Rubber Riot pra PC</b><small data-i18n="dlSub">App leve, mais FPS e sem limite de quadros</small></span>
+        <em class="ep-chip" data-i18n="dlChip">Baixar</em>
         <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </a>
       <!-- Instagram da Rovex (05/11, pedido dele). Glifo: Lucide (ISC) -->
       <a class="elite-promo ig-promo" id="igPromo" href="https://www.instagram.com/realrovex/" target="_blank" rel="noopener">
         <svg class="ep-hex" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><path d="M17.5 6.5h.01"/></svg>
-        <span class="ep-txt"><b data-i18n="igTitle">Siga a Rovex</b><small data-i18n="igSub">@realrovex no Instagram</small></span>
-        <em class="ep-chip" data-i18n="igChip">Seguir</em>
+        <span class="ep-txt"><b data-i18n="igTitle">Siga a Rovex</b><small id="igSubTx" data-i18n="igSub">Siga e ganhe 1.000 Zions Points</small></span>
+        <em class="ep-chip" id="igChipTx" data-i18n="igChip">+1.000 ZP</em>
         <svg class="ep-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </a>
       </div>
@@ -446,12 +453,15 @@ html.touch-boot .boot { display: grid; }
       <button class="lb-invite" id="lbInvite" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span data-i18n="lbInvite">Convidar amigos</span></button>
     </div>
   </header>
+  <!-- celular deitado (10/11, pedido dele): o Elenco fecha num botao (icone + quantos tem na sala) e abre por cima ao tocar -->
+  <button type="button" class="lb-castbtn" id="lbCastBtn" aria-expanded="false" aria-controls="lbBill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span data-i18n="lbCast">Elenco da sessão</span><b id="lbCastN">1</b></button>
   <div class="lb-leader" id="lbLeader" hidden aria-live="assertive">
     <svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92"/><circle cx="100" cy="100" r="74"/><path class="sweep" id="lbSweep" d=""/><line x1="100" y1="0" x2="100" y2="200"/><line x1="0" y1="100" x2="200" y2="100"/></svg>
     <b id="lbCount">5</b>
   </div>
-  <div class="lb-bill">
+  <div class="lb-bill" id="lbBill">
     <h3 data-i18n="lbCast">Elenco da sessão</h3>
+    <p class="lb-hint" data-i18n="lbHintBill">Quem está na sala. O carimbo mostra quem já está pronto.</p>
     <button class="lb-swap" id="lbSwap" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg><span data-i18n="sideSwap">Trocar lado</span></button>
     <ol id="lbPlayers"></ol>
     <p class="lb-status" id="lbStatus" aria-live="polite"></p>
@@ -479,16 +489,19 @@ html.touch-boot .boot { display: grid; }
   <!-- configuracao da partida: o host mexe nas setas, a sala toda ve mudar na hora -->
   <div class="lb-cfg" id="lbCfg" hidden>
     <header class="lb-slate"><h3 data-i18n="lbCfg">Partida</h3><small id="lbCfgWho"></small></header>
+    <p class="lb-hint"><span class="h" data-i18n="lbHintHost">Você é o host: as setas mudam modo, mapa e regras pra sala toda.</span><span class="g" data-i18n="lbHintGuest">Só o host muda. Você vê cada troca na hora.</span></p>
     <ul id="lbCfgList"></ul>
   </div>
   <!-- arsenal da sala: troca rapida da principal + o gunsmith inteiro por cima do lobby (icone: Material Icons, Apache 2.0) -->
   <div class="lb-pick" id="lbPick" hidden>
+    <p class="lb-hint" data-i18n="lbHintPick">Toque na arma que você leva pra partida.</p>
     <header class="lb-pick-head"><h3 data-i18n="arsenal">Arsenal</h3><button class="lb-smith" id="lbSmith"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><span data-i18n="lbSmith">Montar arma</span></button><button class="lb-smith" id="lbPocket" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM9 4h6v2H9V4zm11 15H4v-2h16v2zm0-5H4V8h3v2h2V8h6v2h2V8h3v6z"/></svg><span data-i18n="pocket">Bolso</span></button></header>
     <div class="lb-tabs"><button class="lb-smith" id="lbSkills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg><span data-i18n="lbSkills">Skills</span></button><button class="lb-smith" id="lbCh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg><span data-i18n="lbCh">Desafios</span></button></div>
     <div class="pk-list" id="lbPickList" role="radiogroup" data-i18n-aria="lbPickTitle" aria-label="Sua arma"></div>
   </div>
   <div class="lb-actions">
     <button class="lb-leave" id="lbLeave" data-i18n="lbLeave">Sair do lobby</button>
+    <button type="button" class="lb-chat" id="lbChat" data-i18n-aria="chat_open" aria-label="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg><i class="lb-chat-dot" hidden></i></button>
     <button class="big lb-ready" id="lbReady" aria-pressed="false" data-i18n="lbReady">Estou pronto</button>
   </div>
 </section>
