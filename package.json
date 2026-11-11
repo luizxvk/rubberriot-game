@@ -10,7 +10,7 @@
     "check": "node scripts/check-keys.mjs && node scripts/stair-check.mjs",
     "tripo": "node scripts/tripo.mjs",
     "rovex": "node scripts/check-keys.mjs && vite build && node scripts/manter-assets.mjs && node scripts/para-rovex.mjs",
-    "site": "wrangler pages deploy dist --project-name=rubberriot --branch=main --commit-dirty=true"
+    "site": "npx --yes wrangler pages deploy dist --project-name=rubberriot --branch=main --commit-dirty=true"
   },
   "dependencies": {
     "qrcode-generator": "^1.4.4",
