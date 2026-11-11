@@ -8,6 +8,6 @@ if (!existsSync(src)) { console.error('sem dist/: rode vite build'); process.exi
 rmSync(dst, { recursive: true, force: true });
 // 07/11: modelos crus do TastyTony (models/src/tt, so a fonte do preparo no Blender; o jogo carrega o tt_ready) e os sons
 // de teste (sfx/opcoes) nao vao pra Rovex
-const SKIP = [/[\\/]models[\\/]src[\\/]tt([\\/]|$)/, /[\\/]sfx[\\/]opcoes([\\/]|$)/]; // separador do Windows (\) e do resto (/)
+const SKIP = [/[\\/]models[\\/]src[\\/]tt([\\/]|$)/, /[\\/]sfx[\\/]opcoes([\\/]|$)/, /[\\/]_headers$/]; // _headers e so do site proprio (11/11); separador do Windows (\) e do resto (/)
 cpSync(src, dst, { recursive: true, filter: (f) => !SKIP.some(r => r.test(f)) });
 console.log('copiado para', dst);

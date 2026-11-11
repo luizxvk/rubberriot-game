@@ -5,7 +5,10 @@ import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONL
 import { navPath, floorAt, standable, hop, lowAt, freeNear, warmNav } from './nav.js';
 import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
 import { cleanLook, DANCE_IDS } from './looks.js';
+import { rankDelta } from './conta.js';
 // fim da partida em segundos: 0,9 + camera final ~3,5 + podio ~14 (3 s da camera chegando); sala sem lobby ainda mostra OVER_STATS de placar
+// anti-trapaca (11/11): m/s maximo no chao, metros de teleporte num pacote, folga acumulada e angulo da mira (rad, ~70 graus)
+const MOVE_MAX = 24, MOVE_TP = 18, MOVE_SLACK = 14, AIM_MAX = 1.22;
 export const OVER_STATS = 8.5, OVER_LOBBY = 18.5, OVER_NEXT = OVER_LOBBY + OVER_STATS;
 import { bannerOk, botBanner, BANNER_DEFAULT } from './banners.js';
 import { fieldReset, fieldUse, fieldHoleUsed, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
@@ -90,7 +93,7 @@ const QC_N = 10; // frases do Chat Rapido (src/quickchat.js)
 // bot provocando (10/11): de vez em quando solta uma do Chat Rapido ao derrubar alguem (seu noob, volta aqui, isso foi sorte...)
 const BOT_TAUNTS = [2, 5, 7, 9];
 export class Core {
-  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false }) {
+  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false, onFlag = null, onRanked = null }) {
     this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
     this.mut = !ranked && EVENTS[mut] ? mut : null; // evento de fim de semana (regra maluca); rankeada nunca
     this.ranked = ranked; // rankeada (31/10): sala publica so com os modos competitivos; vale pontos de rank
@@ -122,6 +125,8 @@ export class Core {
     this.difficulty = difficulty;
     this.skill = botSkill(difficulty);
     this.send = send;
+    // 11/11 (seguranca): so o servidor passa. onFlag(id, tipo, info) = suspeita de trapaca (so anota); onRanked(lista) = rp do fim da rankeada
+    this.onFlag = onFlag; this.onRanked = onRanked;
     this.players = new Map();
     this.snapT = 0;
     this.botSeq = 0;
@@ -173,7 +178,7 @@ export class Core {
     this.nades = []; this.anvils = []; this.blimps = []; this.uavs = []; this.talcs = []; this.nukes = []; this.streakGap = 0; this.botNukes = 0; this.botBig = {}; fieldReset(this); strikeReset(this); this.rockets = [];
     this.gunDrops = []; this.rockets = [];
     for (const p of this.players.values()) {
-      p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {};
+      p.kills = 0; p.deaths = 0; p.score = 0; p.gunLvl = 0; p.streak = 0; p.ready = []; p.assists = 0; p.dmgBy = {}; p.hitN = 0; p.headN = 0; p.headFlagged = false; p.aimBad = 0; // anti-trapaca: conta de novo a cada partida
       this.spawn(p);
     }
     if (this.mode === 'bomb') {
@@ -646,6 +651,7 @@ export class Core {
   }
 
   spawn(p) {
+    p.mvSkip = (this.clock || 0) + 1.5; p.mvX = 0; // renasceu longe: a proxima posicao nao conta como teleporte
     // montagem/arma trocada durante a vida: so vale agora, no renascimento (pedido dele 03/11)
     if (p.nextLo) { const m = p.nextLo; p.nextLo = null; this.handle(p.id, { ...m, now: true }); }
     p.down = 0; p.reviveT = 0; p.brBp = null; p.brGun = null; // variante pega no BR some ao renascer (bate-volta)
@@ -881,6 +887,7 @@ export class Core {
         if (!Array.isArray(m.pos) || m.pos.length !== 3 || !m.pos.every(Number.isFinite)) return;
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
         if (Math.abs(m.yaw - p.yaw) > 0.02 || Math.abs(m.pos[0] - p.pos[0]) + Math.abs(m.pos[2] - p.pos[2]) > 0.05) p.actAt = this.clock || 0; // mexeu: presente
+        this.moveCheck(p, m.pos);
         p.pos = clampArena(this.M, m.pos); p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
         p.ads = m.ad === 1 ? 1 : 0; p.ca = m.ca === 1 ? 1 : 0; // mirando (04/11): brilho da luneta pros outros; ca = mira de 45 graus (aparece na tela de morte)
         if (p.car && p.seat === 0 && m.car && Array.isArray(m.car.pos) && m.car.pos.every(Number.isFinite) && Number.isFinite(m.car.yaw)) { // quem dirige manda o carro (ate ~1 s de atraso de folga)
@@ -903,6 +910,7 @@ export class Core {
         const v = this.players.get(m.v);
         if (!v || !p.alive || !v.alive || p.down > 0) return; // caido nao atira
         const dmg = this.validHit(p, v, m);
+        if (dmg > 0 && !WEAPONS[m.wpn]?.melee) this.headCheck(p, !!m.head);
         if (dmg > 0) {
           const am = this.ammoOf(p, m.wpn), vpos = [...v.pos];
           this.hitAm = am && am !== 'none' ? am : null; this.damage(v, p, dmg, m.wpn, !!m.head);
@@ -1077,6 +1085,7 @@ export class Core {
     const d = Math.sqrt(dist2(eye, v.pos));
     const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1) * (CONV_RANGE[this.bodyOf(p, m.wpn) + '|' + p.los?.[m.wpn]?.conv] || 1); // balote alcanca mais
     if (d > range) return 0;
+    if (!w.melee) this.aimCheck(p, v, eye, d, m.wpn);
     if (w.melee) { const now = this.clock || 0; if (now - (p.meleeAt || -9) < 0.3) return 0; p.meleeAt = now; return Math.min(m.dmg, w.dmg); }
     const hb = v.mob ? MOBS[v.mob].hb : null; // vilao da noite: peito e cabeca pela ficha (chefao de 6 m)
     const chest = [v.pos[0], v.pos[1] + (hb ? hb.h * 0.55 : 1.1), v.pos[2]], head = [v.pos[0], v.pos[1] + (hb ? hb.head : 1.6), v.pos[2]];
@@ -1094,6 +1103,38 @@ export class Core {
     if (p.budget < dmg) return Math.max(0, p.budget);
     p.budget -= dmg;
     return dmg;
+  }
+
+  // ---------- anti-trapaca (11/11): por enquanto so ANOTA (onFlag); nada e recusado por aqui ----------
+  flag(p, k, info) {
+    if (!p || p.bot || !this.onFlag) return;
+    try { this.onFlag(p.id, k, info); } catch { /* */ }
+  }
+  // posicao que o cliente manda x o tempo que passou no relogio do servidor. Correr com tudo (tatica + estimulante + evento
+  // Hora do Rush + deslize) fica abaixo de MOVE_MAX; o balde MOVE_SLACK engole atraso de rede e pacote juntado.
+  moveCheck(p, np) {
+    const now = this.clock || 0, dt = now - (p.mvAt ?? -9);
+    p.mvAt = now;
+    if (p.car || p.drop > 0 || p.air || (p.mvSkip || 0) > now || this.phase !== 'play' || dt > 2) { p.mvX = 0; return; }
+    const d = Math.hypot(np[0] - p.pos[0], np[2] - p.pos[2]), extra = d - MOVE_MAX * Math.max(0, dt);
+    if (extra > MOVE_TP) { this.flag(p, 'teleporte', { m: Math.round(d * 10) / 10, s: Math.round(dt * 100) / 100 }); p.mvX = 0; return; }
+    p.mvX = Math.max(0, (p.mvX || 0) + extra);
+    if (p.mvX > MOVE_SLACK) { this.flag(p, 'velocidade', { sobra: Math.round(p.mvX * 10) / 10 }); p.mvX = 0; }
+  }
+  // acerto com a mira longe do alvo (mira silenciosa / acerto pelas costas). A direcao e a do ultimo 'state' (ate ~50 ms + ping de atraso)
+  aimCheck(p, v, eye, d, wpn) {
+    if (d < 4) return;
+    const cp = Math.cos(p.pitch), f = [-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp];
+    const c = [v.pos[0] - eye[0], v.pos[1] + 1.1 - eye[1], v.pos[2] - eye[2]], n = Math.hypot(...c) || 1;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (f[0] * c[0] + f[1] * c[1] + f[2] * c[2]) / n)));
+    if (ang < AIM_MAX) return;
+    p.aimBad = (p.aimBad || 0) + 1;
+    if (p.aimBad % 5 === 1) this.flag(p, 'mira', { graus: Math.round(ang * 57.3), m: Math.round(d), wpn, vezes: p.aimBad });
+  }
+  // cabeca demais: >= 85% em 25+ acertos na partida (um aviso por partida)
+  headCheck(p, head) {
+    p.hitN = (p.hitN || 0) + 1; if (head) p.headN = (p.headN || 0) + 1;
+    if (!p.headFlagged && p.hitN >= 25 && (p.headN || 0) / p.hitN >= 0.85) { p.headFlagged = true; this.flag(p, 'cabeca', { acertos: p.hitN, cabeca: p.headN }); }
   }
 
   event(ev) {
@@ -1772,6 +1813,11 @@ export class Core {
     this.over = true; this.overT = this.useLobby ? OVER_LOBBY : OVER_NEXT;
     this.top3 = [...this.players.values()].filter(p => !p.mob).sort((a, b) => b.score - a.score || b.kills - a.kills).slice(0, 3).map(p => p.id);
     this.event({ k: 'end', winner, top: this.top3 });
+    if (this.ranked && this.mode !== 'br' && this.onRanked) { // mesma conta do jogo (src/main.js rankEnd), feita aqui
+      const ps = [...this.players.values()].filter(o => !o.mob), humans = ps.filter(o => !o.bot);
+      const share = ps.length ? humans.length / ps.length : 0;
+      try { this.onRanked(humans.map(o => { const won = winner === o.team || winner === o.name; return { id: o.id, won, ...rankDelta(won, share, (o.score || 0) / 200) }; })); } catch { /* */ }
+    }
   }
 
   // ---------- bots ----------

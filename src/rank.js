@@ -2,7 +2,9 @@
 // fila rankeada (Captura a Bandeira, Dominacao, Escolta). Sala completa com bots: vale menos (decisao dele):
 // o ganho e a perda encolhem pela fracao de gente de verdade na partida. Cada faixa alcancada pela primeira
 // vez libera um premio pra sempre (rkPeak), mesmo se cair de faixa depois.
-import { rankData, rankApply } from './progress.js';
+import { rankData, rankApply, rankSet } from './progress.js';
+import { RANK_WIN, RANK_BONUS, rankDelta } from '../shared/conta.js';
+export { RANK_WIN, RANK_BONUS };
 
 export const TIERS = [
   { id: 'bronze', list: [['shk_face', 'lk_face_olhoroxo'], ['lkt_shirt', 'rkShirtBronze'], ['lkt_gloveCol', 'rkGloveBronze'], ['lkt_skin', 'lk_skin_rk_ferrugem']], c3: '#3d2010', show: ['face:olhoroxo', 'shirt:#a8692f', 'gloveCol:#8c5a2b', 'skin:rk_ferrugem'], prize: 'lk_face_olhoroxo', rp: 0, c1: '#b8743a', c2: '#7a4520', reward: { slot: 'look', tab: 'shirt', id: '#a8692f' } },
@@ -13,17 +15,17 @@ export const TIERS = [
 ];
 export const tierOf = (rp) => { let i = 0; while (i < TIERS.length - 1 && rp >= TIERS[i + 1].rp) i++; return i; };
 // faixa pra mostrar (badge): -1 enquanto nunca jogou rankeada
+// o servidor manda o rp gravado na conta (fim da rankeada / entrada): vale o dele
+export const rankSync = (rp, games) => rankSet(rp, games, tierOf);
 export const myTier = () => { const r = rankData(); return r.games > 0 ? tierOf(r.rp) : -1; };
 export const peakTier = () => rankData().peak;
 
 // resultado de uma partida (31/10, pedido dele: poucos pontos, linear): vitoria = 10 + bonus de desempenho
 // (ate 5); derrota = 0 (nao ganha nem perde). Sala com bots encolhe o ganho (so bots = 35%, metade gente ~67%).
 // Uma faixa a cada ~10-25 vitorias.
-export const RANK_WIN = 10, RANK_BONUS = 5;
+// a conta mora em shared/conta.js: o servidor da partida faz a MESMA conta e grava o rp de verdade (11/11, seguranca)
 export function rankResult(won, humanShare, perf = 0) {
-  const k = 0.35 + 0.65 * Math.max(0, Math.min(1, humanShare));
-  const bonus = won ? Math.min(RANK_BONUS, Math.max(0, Math.round(perf))) : 0;
-  const delta = won ? Math.max(1, Math.round((RANK_WIN + bonus) * k)) : 0;
+  const { delta, k } = rankDelta(won, humanShare, perf);
   return { delta, k, won, base: won ? Math.round(RANK_WIN * k) : 0, bonus: won ? delta - Math.round(RANK_WIN * k) : 0, ...rankApply(delta, tierOf) };
 }
 

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { offscreen } from './offscreen.js';
 import { buildWorld, buildObjectives, FX, FX_Q, LASER_BODY, preloadMap } from './world.js';
 import { EscortView } from './escortview.js';
-import { rankResult, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
+import { rankResult, rankSync, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
 import { Character, CHAR_LOD, HOSE_FRAME } from './character.js';
 import { MobChar } from './mobchar.js';
 import { Flashlights } from './flashlight.js';
@@ -1429,6 +1429,11 @@ function onEvent(e) {
         if (z && p && p.alive && e.team === G.myTeam && Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) < z.r + 0.5) gainXp('zone');
       }
       break;
+    case 'rankSync': { // 11/11 (seguranca): o rp de verdade e o que o servidor gravou na conta
+      rankSync(Number(e.rp), Number(e.games));
+      if (G.rankRes && Number.isFinite(e.rp)) G.rankRes.after = e.rp | 0; // tela do fim mostra o total do servidor
+      break;
+    }
     case 'notReady': // host tentou iniciar com gente sem dar pronto
       $('lbStatus').textContent = t('notReady', { n: e.n });
       break;

@@ -1,0 +1,9 @@
+# Cabecalhos do site proprio (rubberriot.tryrovex.com, Cloudflare Pages). 11/11, seguranca:
+# - frame-ancestors: so a propria Rovex pode embutir o jogo (site falso nao coloca o jogo por baixo de botao enganoso)
+# - HSTS: navegador sempre em https
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: frame-ancestors 'self' https://tryrovex.com https://*.tryrovex.com
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), payment=(), usb=()

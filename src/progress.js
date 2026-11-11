@@ -103,6 +103,13 @@ export function rankApply(delta, tierOf) {
   save(); emit({ kind: 'rank' });
   return { before, after: data.rp, newPeak: data.rkPeak > peakBefore ? data.rkPeak : -1 };
 }
+// 11/11 (seguranca): rp e partidas da rankeada contados pelo servidor; o local so acompanha
+export function rankSet(rp, games, tierOf) {
+  if (!Number.isFinite(rp) || !Number.isFinite(games)) return;
+  data.rp = Math.max(0, rp | 0); data.rkGames = Math.max(data.rkGames | 0, games | 0);
+  if (data.rkGames > 0) data.rkPeak = Math.max(data.rkPeak, tierOf(data.rp));
+  save(); emit({ kind: 'rank' });
+}
 export function setUnlockAll(v) { data.unlockAll = DEBUG && !!v; save(); emit({ kind: 'unlock' }); }
 export function onProgress(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit(ev) { for (const fn of listeners) fn(ev); }

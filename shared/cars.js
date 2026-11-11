@@ -114,7 +114,7 @@ export function carExit(c, p) {
   const i = car.seats.indexOf(p.id);
   if (i >= 0) car.seats[i] = null;
   if (p.alive) { const e = exitPos(car, i >= 0 ? i : 0), y = floorAt(c.M, e[0], e[2]); p.pos = [e[0], Number.isFinite(y) && Math.abs(y - car.pos[1]) < 2.5 ? y : car.pos[1], e[2]]; }
-  p.car = null; p.seat = null;
+  p.car = null; p.seat = null; p.mvSkip = (c.clock || 0) + 1; // desceu do carro: o pulo pra porta nao conta como teleporte
   if (p.bot && p.ai) { p.ai.path = null; p.ai.carCd = 6; }
   c.event({ k: 'car', act: 'out', id: p.id, car: car.id });
 }
