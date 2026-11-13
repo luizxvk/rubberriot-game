@@ -1,8 +1,8 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
-import { CONV_RANGE, BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS } from './weapons.js';
-import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallSpan, matchRules, clampArena, headroom } from './map.js';
-import { navPath, floorAt, standable, hop, lowAt, freeNear, warmNav } from './nav.js';
+import { CONV_RANGE, BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS, isSilenced , SOON_MODES } from './weapons.js';
+import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, SMUGGLE_MAPS, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallSpan, matchRules, clampArena, headroom } from './map.js';
+import { navPath, floorAt, standable, roomy, hop, lowAt, freeNear, warmNav } from './nav.js';
 import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
 import { cleanLook, DANCE_IDS } from './looks.js';
 import { rankDelta } from './conta.js';
@@ -11,7 +11,7 @@ import { rankDelta } from './conta.js';
 const MOVE_MAX = 24, MOVE_TP = 18, MOVE_SLACK = 14, AIM_MAX = 1.22;
 export const OVER_STATS = 8.5, OVER_LOBBY = 18.5, OVER_NEXT = OVER_LOBBY + OVER_STATS;
 import { bannerOk, botBanner, BANNER_DEFAULT } from './banners.js';
-import { fieldReset, fieldUse, fieldHoleUsed, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady } from './field.js';
+import { fieldReset, fieldUse, fieldHoleUsed, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady, botHookTick } from './field.js';
 import { escInit, escTick, escSpawn, escGoal, escSnap, escPos, escTimeout, trainBox } from './escort.js';
 import { EVENTS, EV } from './events.js';
 import { carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, heistPass, heistBotPass, heistCfg, HEIST_MAPS } from './heist.js';
@@ -42,7 +42,9 @@ function segToBody(a, b, feet) {
   return best;
 }
 // mapa automatico (04/11): bandeira e dominacao sorteiam entre o mapa do modo, a Vila/Fronteira e o Canyon Poeira
-const AUTO_POOL = { ctf: ['fronteira', 'vila', 'deserto', 'becos', 'feira', 'largo'], dom: ['vila', 'fronteira', 'deserto', 'becos', 'feira', 'largo'], escort: ['bonde', 'apito', 'cortejo'] };
+const AUTO_POOL = { ctf: ['fronteira', 'vila', 'deserto', 'becos', 'feira', 'largo', 'xilindro'], dom: ['vila', 'fronteira', 'deserto', 'becos', 'feira', 'largo', 'xilindro'], escort: ['bonde', 'apito', 'cortejo'], smuggle: SMUGGLE_MAPS,
+  ffa: ['fabrica', 'xilindro'], tdm: ['vila', 'xilindro'], gungame: ['estaleiro', 'xilindro'], infect: ['refinaria', 'xilindro'] }; // 13/11: Xilindro entra no sorteio dos modos dele
+const MAP_MODES_BLOCK = (id) => !mapAllows(id, 'blitz'); // mapa com lista propria nunca entra no blitz
 const autoMap = (mode) => { const L = AUTO_POOL[mode]; return L ? L[Math.floor(Math.random() * L.length)] : MODE_MAP[mode]; };
 // opcoes do host no lobby: em que modos a meta e o tempo valem (o resto tem regra propria)
 const PATHS_PER_TICK = 3;
@@ -55,7 +57,7 @@ const STREAK_GAP = 4; // s de folga entre uma sequencia acabar e a proxima poder
 const BOT_YIELD = 8; // s que o bot espera com a sala livre quando um jogador tem sequencia guardada (vez dos jogadores, 03/11)
 export const LIMIT_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'bomb'];
 export const TIME_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'gungame', 'ctf', 'dom', 'infect'];
-export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto', 'becos', 'feira', 'largo']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
+export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto', 'becos', 'feira', 'largo', 'xilindro']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
 // kit de sequencias do bot (03/11): uma de cada faixa, sorteada; as grandes novas entram aqui
 const BOT_BIG = ['plane', 'train', 'bomber', 'hand'];
 const BOT_KIT = [['uav', 'milk', 'talc'], ['anvil', 'rpg', 'blimp', 'anvline', 'sentry', 'sentry'], ['plane', 'train', 'blimp'], ['bomber', 'hand', 'nuke']];
@@ -110,10 +112,11 @@ export class Core {
     if (this.blitz) bots = Math.max(bots | 0, BLITZ_MAX - 1); // sala rapida de blitz ja nasce cheia (12x12 desde 07/11)
     { const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(BLITZ_BASE[mode] || mode)); if (this.blitz && !bz.includes(map)) map = bz[Math.floor(Math.random() * bz.length)]; }
     if (!this.blitz && BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
+    if (!mapAllows(map, mode)) map = 'auto'; // 13/11: Xilindro so nos modos dele
     // Noite dos Borroes so no Estudio Tinteiro (e o Tinteiro so nela)
     if (this.mode === 'borroes') map = 'tinteiro';
     else if (this.mode === 'heist') map = HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)];
-    else if (this.mode === 'smuggle') map = 'docas'; // Contrabando: so no Cais
+    else if (this.mode === 'smuggle') map = SMUGGLE_MAPS.includes(map) ? map : 'auto'; // Contrabando: Cais ou Trapiche (auto sorteia)
     else if (this.mode === 'escort' && !ESCORT_MAPS.includes(map)) map = ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]; // escolta precisa de trilho: sala criada com outro mapa quebrava o servidor
     else if (PVE_ONLY.includes(map)) map = 'auto';
     if (this.mode === 'borroes') bots = Math.min(3, bots | 0);
@@ -406,7 +409,7 @@ export class Core {
 
   // configuracao da sala (host no lobby). Refaz modo/mapa/times e a partida do zero; os humanos ficam.
   configure(m) {
-    const mode = MODES[m.mode] ? m.mode : this.modeId();
+    const mode = MODES[m.mode] && !SOON_MODES.includes(m.mode) ? m.mode : SOON_MODES.includes(this.modeId()) ? 'tdm' : this.modeId(); // PvE em breve (13/11): ninguem entra
     const prevMode = this.modeId(), prevRaw = this.mapRaw ?? this.mapPick;
     this.duo = mode === 'duo';
     this.bounce = mode === 'bounce';
@@ -417,10 +420,11 @@ export class Core {
     let map = MAP_OK(m.map) ? m.map : 'auto';
     if (this.blitz && map !== 'auto' && !BLITZ_MAPS.includes(map)) map = 'auto';
     if (BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(this.mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
+    if (!this.blitz && !mapAllows(map, this.mode)) map = 'auto';
     // escolta so roda na Ladeira do Bonde, e a Ladeira so serve pra escolta (o mapa precisa do trilho)
     // escolta: Ladeira ou Vale do Apito (auto sorteia); fora da escolta os mapas de trilho nao entram
     const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(this.mode)); // blitz de mata-mata nao vai pro deserto
-    const map2 = this.blitz ? (bz.includes(map) ? map : bz[Math.floor(Math.random() * bz.length)]) : this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : this.mode === 'heist' ? (HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)]) : this.mode === 'smuggle' ? 'docas' : this.mode === 'borroes' ? 'tinteiro' : ESCORT_MAPS.includes(map) || HEIST_ONLY.includes(map) || PVE_ONLY.includes(map) ? 'auto' : map; // cofre no auto: metade das vezes no Banco Ferradura (o mapa dele)
+    const map2 = this.blitz ? (bz.includes(map) ? map : bz[Math.floor(Math.random() * bz.length)]) : this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : this.mode === 'heist' ? (HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)]) : this.mode === 'smuggle' ? (SMUGGLE_MAPS.includes(map) ? map : SMUGGLE_MAPS[Math.floor(Math.random() * SMUGGLE_MAPS.length)]) : this.mode === 'borroes' ? 'tinteiro' : ESCORT_MAPS.includes(map) || HEIST_ONLY.includes(map) || PVE_ONLY.includes(map) ? 'auto' : map; // cofre no auto: metade das vezes no Banco Ferradura (o mapa dele)
     // mesmo modo e mesma escolha de mapa (so trocou evento, bots, tempo...): o mapa fica (01/11: trocar o evento
     // sorteava outro mapa da escolta no 'auto')
     if (!(mode === prevMode && map === prevRaw && this.M)) { // escolta: o lobby recebe a ESCOLHA (auto), nao o sorteado (02/11: a seta caia em auto = auto e nao trocava)
@@ -471,7 +475,7 @@ export class Core {
     const ilha = this.M.id === 'ilha';
     const modos = (this.ranked ? RANKED_MODES : QUICK_MODES).filter(m => m !== atual && !(ilha && (m === 'br' || m === 'bounce')));
     const mode = modos[Math.floor(Math.random() * modos.length)];
-    const mapas = MAP_IDS.filter(id => id !== 'ilha' && !ESCORT_MAPS.includes(id) && id !== this.M.id && !PVE_ONLY.includes(id) && !HEIST_ONLY.includes(id) && (!BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(MODES[mode]?.base || mode.replace('blitz_', '')))); // a Ladeira so serve a escolta (configure forca)
+    const mapas = MAP_IDS.filter(id => id !== 'ilha' && !ESCORT_MAPS.includes(id) && id !== this.M.id && !PVE_ONLY.includes(id) && !HEIST_ONLY.includes(id) && mapAllows(id, MODES[mode]?.base || mode) && !(mode.startsWith('blitz') && MAP_MODES_BLOCK(id)) && (!BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(MODES[mode]?.base || mode.replace('blitz_', '')))); // a Ladeira so serve a escolta (configure forca)
     this.configure({ mode, map: mode === 'br' || mode === 'heist' || mode === 'smuggle' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
   }
 
@@ -727,7 +731,7 @@ export class Core {
     p.fuse = E?.fuse || 0; // bomba-relogio: pavio no peito
     p.maxHp = p.hp;
     p.owned.add(p.wpn);
-    if (p.bot) { p.field ||= botPickField(); this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; p.ai.route = null; p.ai.departT = rnd(0, 1.6); p.ai.lane = rnd(-1, 1); } // departT/lane: cada um sai numa hora e num corredor (02/11: saiam em fila)
+    if (p.bot) { p.field ||= botPickField(); p.hookPull = null; this.botReload(p, true); p.ai.blind = 0; p.ai.target = null; p.ai.path = null; p.ai.route = null; p.ai.departT = rnd(0, 1.6); p.ai.lane = rnd(-1, 1); } // departT/lane: cada um sai numa hora e num corredor (02/11: saiam em fila)
     // mode vai junto: na troca de modo da sala o 'spawn' chega antes do 'start' e o cliente montava o kit do modo
     // velho (saindo da escada de armas ficava so com uma arma e nao trocava mais)
     this.event({ k: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, wpn: p.wpn, owned: [...p.owned], body: this.ggBody(p), team: p.team, air: !!p.air, mode: this.mode, mut: this.mut });
@@ -1083,7 +1087,7 @@ export class Core {
     else if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return 0;
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     const d = Math.sqrt(dist2(eye, v.pos));
-    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1) * (CONV_RANGE[this.bodyOf(p, m.wpn) + '|' + p.los?.[m.wpn]?.conv] || 1); // balote alcanca mais
+    const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1) * (CONV_RANGE[this.bodyOf(p, m.wpn) + '|' + p.los?.[m.wpn]?.conv] || 1) * (bodyTrait(this.bodyOf(p, m.wpn)).rangeK || 1); // balote alcanca mais; rangeK (13/11): modelo de curta distancia (Simeon North)
     if (d > range) return 0;
     if (!w.melee) this.aimCheck(p, v, eye, d, m.wpn);
     if (w.melee) { const now = this.clock || 0; if (now - (p.meleeAt || -9) < 0.3) return 0; p.meleeAt = now; return Math.min(m.dmg, w.dmg); }
@@ -1139,7 +1143,7 @@ export class Core {
 
   event(ev) {
     // tiro de gente (nao do dirigivel) vira barulho: bot perto ouve e vai ver (some em 3 s)
-    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && !String(this.players.get(ev.id).los?.[ev.wpn]?.muzzle || '').startsWith('silencer')) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
+    if (ev.k === 'shot' && this.players.has(ev.id) && ev.o && !isSilenced(this.players.get(ev.id).los?.[ev.wpn])) (this.noises ||= new Map()).set(ev.id, { pos: [ev.o[0], ev.o[1] - 1.4, ev.o[2]], t: 3 }); // so o ultimo tiro de cada um
     this.send(null, { t: 'ev', ...ev });
   }
 
@@ -1839,6 +1843,7 @@ export class Core {
     }
     // dupla: caido fica no chao esperando o parceiro com a bomba de bicicleta
     if (p.down > 0) { p.vel[0] *= 0.8; p.vel[2] *= 0.8; p.vel[1] -= 24 * dt; p.onGround = moveBody(M, p.pos, p.vel, dt, 0.4, 1.7); p.anim = 'down'; return; }
+    if (botHookTick(this, p, dt)) return; // 13/11: gancho puxando (field.js)
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     if (ai.blind > 0) ai.blind -= dt;
     ai.think -= dt;
@@ -2076,7 +2081,7 @@ export class Core {
     if (d < 8) return g;
     const lane = p.ai.lane ?? 0, off = lane * Math.min(7, (d - 8) * 0.35);
     const x = g[0] - dz / d * off, z = g[2] + dx / d * off;
-    return standable(this.M, x, z) ? [x, g[1], z] : g;
+    return roomy(this.M, x, z) ? [x, g[1], z] : g; // 13/11: o desvio de faixa nao para o bot colado na parede
   }
 
   // Canyon (05/11, pedido dele: os bots so passavam pelo meio). Cada bot tem o seu vao: 2 em 5 pelo oeste, 2 em 5 pelo leste, 1 em 5 pelo meio.

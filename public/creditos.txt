@@ -34,3 +34,65 @@ Modelos do Roube o Cofre (cofre e van), biplano, Dirigivel Bombardeiro, Sentinel
 - "Bell" por Quaternius (CC0) e "Trophy" por CreativeTrio (CC0), via Poly Pizza: chaveiros Sino do Ringue e Estatueta
   https://poly.pizza/m/cILuaO115Y
   https://poly.pizza/m/fLy8KmmD1t
+
+- Armas por TastyTony (https://sketchfab.com/TastyTony), CC-BY 4.0 ("Low-Poly <arma> by TastyTony"):
+  Low-Poly Masuer C96: Bolso Bravo
+  Low-Poly Thompson M1A1: Sapateado
+  Low-Poly Kar98K: Luneta
+  Low-Poly Browning Hi-Power: Estalo
+  Low-Poly APS Stechkin: Pipoqueira
+  Low-Poly Desert Eagle: Canhão de Mão
+  Low-Poly Beretta 93R: Trinca
+  Low-Poly Webley-Fosbery: Bico Longo
+  Low-Poly Tokarev TT-30: pistol_7
+  Low-Poly Borchardt C-93: pistol_8
+  Low-Poly Walther P38: pistol_9
+  Low-Poly Colt Single-Action Army: Bang-Bang
+  Low-Poly MP40: Matraca
+  Low-Poly Sten Gun: Zumbidor
+  Low-Poly HK MP5: Três Tempos
+  Low-Poly Thompson M1928: Furacão
+  Low-Poly Kriss Vector: Cuspideira
+  Low-Poly Owen Gun: Quadril
+  Low-Poly PPSH 41: Dois Toques
+  Low-Poly M3 Grease Gun: Marimbondo
+  Low-Poly M1 Carbine: Martelinho
+  Low-Poly PPD-40: Sanfona
+  Low-Poly FG42: Trovão
+  Low-Poly Famas F1: Trovoada
+  Low-Poly Gewehr 43: Agulha
+  Low-Poly BAR 1918: Pesadão
+  Low-Poly Federov Avtomat: Garoa
+  Low-Poly FN F2000: Quarteto
+  Low-Poly M1 Garand: Relâmpago
+  Low-Poly FN FAL: Bate-Estaca
+  Low-Poly SVT-40: Bico de Pena
+  Low-Poly AK-47 Type 2: Pipocadeira
+  Low-Poly Benelli M4 Super 90: Espirro
+  Low-Poly AA-12: Liquidificador
+  Low-Poly SVD Dragunov: Pica-Pau
+  Low-Poly Barrett M82A1: Marretão
+  Low-Poly SMLE Mk III: sniper_3
+  Low-Poly Mosin Nagant: Mestre-Cuca
+  Low-Poly MG 42: Britadeira
+  Low-Poly Bren Gun: Rolo Compressor
+  Low-Poly Winchester Model 1897: Bacamarte
+  Low-Poly M249 SAW: Debulhadora
+  Low-Poly Lewis Gun: Gramofone
+  Low-Poly Chauchat: Lua Minguante
+  Low-Poly Jansen EM2: Fraque
+  Low-Poly GD RM277: Trombone
+  Low-Poly AS Val: Sussurro
+  Low-Poly Remington Rolling Block: Sentença
+  Low-Poly DSR-1: Lupa
+  Low-Poly PP-19 Bizon: Caracol
+  Low-Poly MP 28: Foxtrote
+  Low-Poly Mac 10: Pernilongo
+  Low-Poly Fox Sterlingworth Philly: Dupla Caipira
+  Low-Poly Spas-15: Atchim
+  Low-Poly Pancor Jackhammer Mk3a1: Bate-Bife
+  Low-Poly Ithaca Mag-10: Canhão de Feira
+  Low-Poly PB: Psiu
+  Low-Poly Mateba 2006m: Ponta-Cabeça
+  Low-Poly Tec-9: Matraquinha
+  Low-Poly Simeon North Model 1826: Pederneira

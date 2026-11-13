@@ -1,7 +1,9 @@
 // Onde o podio fica em cada mapa (05/11, REGRA dele): sempre no proprio mapa, num lugar com espaco pros 3 tambores e pra camera ver.
 // Vale sozinho pra mapa novo: procura do meio pra fora e o `npm run check` trava se o mapa nao tiver lugar. Mapa com lugar ruim
 // pode fixar o seu com M.podium = { x, z, yaw, d }. Sem three aqui: quem desenha e src/podium.js.
-import { hasLOS } from './map.js';
+import { hasLOS as losBullet } from './map.js';
+// 13/11 (print dele, Xilindro): o podio enxergava ATRAVES da grade da cela (a bala passa, a vista nao): aqui tudo tapa
+const hasLOS = (M, a, b) => losBullet(M, a, b, true);
 import { floorAt, standable } from './nav.js';
 
 export const POD_SPOTS = [{ x: 0, h: 1.05 }, { x: 2.5, h: 0.72 }, { x: -2.5, h: 0.42 }]; // 1o no meio; a camera olha pra +z local
@@ -27,7 +29,7 @@ function tryAt(M, solid, cx, cz, yaw) {
     const [x, z] = w(0, -d), eye = [x, y + POD_CAM_Y, z];
     if (Math.abs(x) > M.arena - 1 || Math.abs(z) > M.arena - 1 || solid(x, z, eye[1] - 0.5, eye[1] + 0.5) || floorAt(M, x, z) > eye[1] - 0.6) continue;
     // do pe do tambor ao topo da cabeca: nada na frente
-    if (POD_SPOTS.every(S => { const [sx, sz] = w(S.x, 0); return [0.12, S.h * 0.6, S.h + 0.3, S.h + 2.3].every(h => hasLOS(M, eye, [sx, y + h, sz])) && hasLOS(M, eye, [sx + 1, y + 0.12, sz - 1]) && hasLOS(M, eye, [sx - 1, y + 0.12, sz - 1]); })) {
+    if (POD_SPOTS.every(S => { const [sx, sz] = w(S.x, 0); return [0.12, S.h * 0.6, S.h + 0.3, S.h + 2.3].every(h => hasLOS(M, eye, [sx, y + h, sz])) && hasLOS(M, eye, [sx + 1, y + 0.12, sz - 1]) && hasLOS(M, eye, [sx - 1, y + 0.12, sz - 1]) && [-0.6, 0.6].every(o => [S.h + 0.8, S.h + 1.8].every(h => hasLOS(M, eye, [sx + o, y + h, sz]))); /* 13/11: os lados do corpo tambem (pilar fino passava entre os raios) */ })) {
       const [bx, bz] = w(0, 30);
       // wide (09/11, pedido dele): a tela inteira livre, nao so o corredor ate os bonecos; lugar sem isso so entra se nao houver outro
       const wide = [-6.3, -5.2, 5.2, 6.3].every(lx => { const [px, pz] = w(lx, -2); return [0.5, 2, 3.6].every(h => hasLOS(M, eye, [px, y + h, pz])); });

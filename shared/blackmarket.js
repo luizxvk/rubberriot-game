@@ -13,6 +13,9 @@ export const BM_BODIES = [
   'subfusil_1', 'subfusil_2', 'subfusil_3', 'subfusil_4', 'subfusil_5', 'subfusil_6', 'subfusil_7', 'subfusil_8', 'subfusil_9', 'subfusil_10', 'subfusil_13',
   'fusil_1', 'fusil_2', 'fusil_3', 'fusil_4', 'fusil_5', 'fusil_6', 'fusil_7', 'fusil_11', 'fusil_12', 'fusil_13',
   'shotgun_1', 'shotgun_2', 'shotgun_3', 'sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4', 'lmg_1', 'lmg_2',
+  // 13/11 (pedido dele): leva nova do TastyTony. SEMPRE no fim (a ordem decide o tema e a camo de quem ja existe)
+  'pistol_12', 'pistol_13', 'pistol_14', 'pistol_15', 'subfusil_14', 'subfusil_15', 'subfusil_16', 'fusil_14', 'fusil_15', 'fusil_16',
+  'shotgun_4', 'shotgun_5', 'shotgun_6', 'shotgun_7', 'sniper_5', 'sniper_6', 'lmg_3', 'lmg_4', 'lmg_5',
 ];
 const CAT = (b) => b.startsWith('pistol') ? 'pistol' : b.startsWith('subfusil') ? 'smg' : b.startsWith('fusil') ? 'rifle' : b.startsWith('shotgun') ? 'shotgun' : b.startsWith('sniper') ? 'sniper' : 'lmg';
 
@@ -61,6 +64,27 @@ const THEMES = [
   ['Biscoito', 'Cookie', 4, '#c8964a', '#6a3a14', '#f4dcb0'], ['Safira', 'Sapphire', 2, '#020a2a', '#0a3a8a', '#6ab0ff'],
   ['Circo de Pulgas', 'Flea Circus', 3, '#a3201a', '#f4f0e6', '#2f5b8a'], ['Eclipse Solar', 'Solar Eclipse', 6, '#050402', '#3a2a06', '#ffb21a'],
   ['Tapete Persa', 'Persian Rug', 2, '#4a0a14', '#a8301a', '#e8b84a'], ['Chuva Ácida', 'Acid Rain', 5, '#0a1a06', '#3a6a0a', '#d8ff4a'],
+
+  // 13/11: 38 temas novos (19 armas novas x 2), nenhum repete os de cima
+  ['Lanterna Mágica', 'Magic Lantern', 7, '#140a02', '#ffb43a', '#ffe9b0'], ['Pó de Giz', 'Chalk Dust', 1, '#e8e4dc', '#b8b2a6', '#6a645a'],
+  ['Folha de Ouro', 'Gold Leaf', 2, '#2a1a04', '#c8961a', '#fff0a0'], ['Papel Carbono', 'Carbon Paper', 0, '#0a0c1a', '#1a2a5a', '#5a7ac8'],
+  ['Groselha', 'Redcurrant', 4, '#3a0610', '#b8142e', '#ff9ab0'], ['Musgo Lunar', 'Moon Moss', 6, '#0a140e', '#2a5a3a', '#b0ffcf'],
+  ['Mostarda', 'Mustard', 3, '#3a2a04', '#d8a81a', '#fff0b0'], ['Água-Viva', 'Jellyfish', 7, '#0a0420', '#7a3aff', '#3affe8'],
+  ['Tabaco', 'Tobacco', 5, '#2a1606', '#7a4a1a', '#d8a868'], ['Lápis-Lazúli', 'Lapis Lazuli', 2, '#06103a', '#1a3aa8', '#e8c84a'],
+  ['Caramelo', 'Caramel', 1, '#5a2a06', '#c8781a', '#ffd8a0'], ['Fliperama', 'Pinball', 3, '#1a0a2a', '#ff3a5a', '#ffe03a'],
+  ['Ferro Fundido', 'Cast Iron', 1, '#1a1a1c', '#3a3a3e', '#8a8a92'], ['Melancia', 'Watermelon', 0, '#0a3a14', '#2aa84a', '#ff4a5a'],
+  ['Aurora Boreal', 'Northern Lights', 7, '#020a14', '#2affa0', '#ff5ad8'], ['Terracota', 'Terracotta', 5, '#5a1e0e', '#c8603a', '#f4c8a8'],
+  ['Pólvora', 'Gunpowder', 6, '#0c0a08', '#2a241e', '#ff8a2a'], ['Menta Gelada', 'Iced Mint', 4, '#e0fff4', '#7ae0c0', '#1a8a6a'],
+  ['Lagosta', 'Lobster', 2, '#4a0a06', '#e8401a', '#ffc8a0'], ['Fita Cassete', 'Cassette Tape', 3, '#141414', '#e8e0c8', '#ff6a2a'],
+  ['Cera de Abelha', 'Beeswax', 1, '#4a3206', '#e8b42a', '#fff4c8'], ['Vagalume', 'Firefly', 6, '#06080a', '#1a2a12', '#e8ff5a'],
+  ['Ameixa', 'Plum', 5, '#200616', '#6a1a4a', '#e8a0d0'], ['Gelo Seco', 'Dry Ice', 7, '#e8f4ff', '#a0c8e8', '#ffffff'],
+  ['Cobalto', 'Cobalt', 0, '#020a2a', '#0a3ac8', '#a8c8ff'], ['Ferrugem Azul', 'Blue Rust', 1, '#0a1a2a', '#3a6a8a', '#c87a3a'],
+  ['Pimenta', 'Chili', 4, '#2a0402', '#c81a0a', '#ffd23a'], ['Nevasca', 'Blizzard', 2, '#f4f8ff', '#c8d8e8', '#7a8aa0'],
+  ['Pergaminho', 'Parchment', 3, '#f0e2c0', '#c8a870', '#5a3a1a'], ['Holofote', 'Spotlight', 6, '#08080a', '#2a2a30', '#fff4c0'],
+  ['Hibisco', 'Hibiscus', 5, '#3a0418', '#e81a6a', '#ffd0e0'], ['Malaquita', 'Malachite', 2, '#022014', '#0a8a5a', '#8affc8'],
+  ['Cinema Colorido', 'Technicolor', 7, '#1a0a2a', '#ff3a3a', '#3affff'], ['Areia Movediça', 'Quicksand', 1, '#a8885a', '#6a5030', '#e8d0a0'],
+  ['Laranja Mecânica', 'Clockwork Orange', 0, '#1a0a02', '#ff7a0a', '#f4f0e6'], ['Rubi', 'Ruby', 2, '#2a0206', '#a80a1e', '#ff7a8a'],
+  ['Asfalto', 'Asphalt', 4, '#1c1c1e', '#36363a', '#f2c94c'], ['Fogo-Fátuo', 'Will-o-Wisp', 6, '#020a0a', '#0a3a3a', '#5affd8'],
 ];
 // bonus + onus que se equilibram (12 perfis); as 2 variantes de um modelo nunca pegam o mesmo
 const ARCH = [

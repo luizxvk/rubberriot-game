@@ -25,6 +25,8 @@ function soundEdges(b) {
   while (j > i && Math.abs(d[j]) < th) j--;
   return [i / b.sampleRate, (j + 1) / b.sampleRate];
 }
+// narrador: quantas falas cada situacao tem (vo_<chave>, vo_<chave>_v2, _v3...); scripts/vo-lines/variacoes.json (13/11)
+const VO_ALT = {"start": 3, "win": 3, "lose": 3, "tie": 2, "lastmin": 3, "min2": 2, "overtime": 2, "flagtake_red": 3, "flagtake_blue": 3, "flagcap_red": 3, "flagcap_blue": 3, "flagback": 2, "flagwin_red": 2, "flagwin_blue": 2, "zone_red": 3, "zone_blue": 3, "zones3_red": 2, "zones3_blue": 2, "round_red": 2, "round_blue": 2, "round_next": 2, "vault": 2, "cash_red": 2, "cash_blue": 2, "crate_red": 3, "crate_blue": 3, "bombplant": 2, "bombdefuse": 2, "bomb10": 2, "checkpoint": 2, "tramlast": 2, "outbreak": 2, "lastone": 2, "wave": 2, "supply": 2};
 
 class Audio {
   constructor() {
@@ -165,6 +167,14 @@ class Audio {
   // Fala nova durante outra: a de agora termina e a nova entra em seguida (fila de 1; a mais velha da fila cai).
   voice(key, o = {}) {
     if (!this.ctx || !(this.vol.vo > 0) || this.voBlock?.()) return; // voBlock: main.js cala ele no Campo de treino (regra dele 06/11)
+    // variacoes (13/11, pedido dele): a mesma situacao tem 2-3 falas; sorteia sem repetir a ultima. noBase: so as variacoes
+    if (VO_ALT[key] && !o.picked) {
+      const opts = [o.noBase ? null : key, ...Array.from({ length: VO_ALT[key] - 1 }, (_, i) => key + '_v' + (i + 2))].filter(Boolean), last = (this.voPick ||= {})[key];
+      const pool = opts.length > 1 ? opts.filter(k => k !== last) : opts, pick = pool[Math.floor(Math.random() * pool.length)];
+      if (this.voLast?.[key] > this.ctx.currentTime - 6) return; // a situacao (nao a variacao) nao repete em seguida
+      this.voPick[key] = pick; (this.voLast ||= {})[key] = this.ctx.currentTime;
+      return this.voice(pick, { ...o, picked: true });
+    }
     const n = 'vo_' + key, now = this.ctx.currentTime;
     if (this.voLast?.[key] > now - 6) return;           // mesma fala repetida em seguida nao
     if (!this.buf[n]) { this.load(n).then(() => this.buf[n] && this.voice(key, o)); return; }

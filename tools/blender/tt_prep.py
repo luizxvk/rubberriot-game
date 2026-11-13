@@ -52,7 +52,9 @@ if not MAG_BONES and not MAG_OBJS and not G.get('noMagAuto'):
     for _a in [o for o in scn.objects if o.type == 'ARMATURE']: MAG_BONES |= {b.name for b in _a.data.bones if _rx.search(b.name)}
 for o in [o for o in scn.objects if o.type == 'MESH']:
     if o.name in DROP or any(o.name.startswith(d) for d in DROP): continue
-    ev = o.evaluated_get(deps); me = bpy.data.meshes.new_from_object(ev, depsgraph=deps)
+    # 13/11: rawMesh = ignora o esqueleto (Rolling Block: pose do arquivo girava a coronha em relacao ao cano)
+    if G.get('rawMesh'): me = o.data.copy()
+    else: ev = o.evaluated_get(deps); me = bpy.data.meshes.new_from_object(ev, depsgraph=deps)
     me.transform(o.matrix_world)
     vg = {g.index: g.name for g in o.vertex_groups}
     tmp = bmesh.new(); tmp.from_mesh(me)

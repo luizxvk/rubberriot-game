@@ -42,13 +42,15 @@ export const GG_LADDERS = {
   // 30/10 (noite): escadas novas com as armas novas
   novas: L('pistol_10', 'pistol_9', 'subfusil_13', 'subfusil_1', 'subfusil_5', 'fusil_13', 'fusil_11', 'fusil_12', 'shotgun_3', 'subfusil_9', 'shotgun_2', 'sniper_4', 'sniper_2', 'pistol_3', 'pistol_8', 'melee_7', 'melee_1'),
   pesada: L('pistol_3', 'pistol_7', 'subfusil_10', 'subfusil_1', 'fusil_13', 'fusil_4', 'fusil_12', 'fusil_3', 'shotgun_3', 'shotgun_1', 'shotgun_2', 'sniper_2', 'sniper_0', 'pistol_6', 'pistol_10', 'melee_12', 'melee_3'),
+  // 13/11: escada da leva nova do TastyTony (Psiu ate a Pederneira)
+  leva: L('pistol_12', 'pistol_14', 'subfusil_16', 'subfusil_14', 'subfusil_15', 'fusil_16', 'fusil_14', 'fusil_15', 'shotgun_6', 'subfusil_13', 'fusil_5', 'shotgun_5', 'sniper_6', 'sniper_5', 'pistol_13', 'pistol_15', 'melee_7', 'melee_1'),
   curta: L('pistol_2', 'pistol_1', 'subfusil_13', 'subfusil_2', 'subfusil_6', 'subfusil_4', 'shotgun_3', 'shotgun_2', 'fusil_11', 'subfusil_7', 'shotgun_1', 'fusil_6', 'sniper_1', 'sniper_4', 'pistol_4', 'pistol_9', 'melee_14', 'melee_9'),
 };
 const GG_POOL = {
-  pistol: ['pistol_1', 'pistol_2', 'pistol_3', 'pistol_4', 'pistol_5', 'pistol_6', 'pistol_7', 'pistol_8', 'pistol_9'],
-  smg: ['subfusil_1', 'subfusil_2', 'subfusil_3', 'subfusil_4', 'subfusil_5', 'subfusil_6', 'subfusil_7', 'subfusil_8', 'subfusil_9', 'subfusil_10', 'subfusil_13'], // Tamborzao (subfusil_12) saiu do jogo (04/11)
-  rifle: ['fusil_1', 'fusil_2', 'fusil_3', 'fusil_4', 'fusil_5', 'fusil_6', 'fusil_7', 'fusil_11', 'fusil_12', 'fusil_13'],
-  shotgun: ['shotgun_1', 'shotgun_2', 'shotgun_3'], sniper: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], lmg: ['lmg_1', 'lmg_2'],
+  pistol: ['pistol_1', 'pistol_2', 'pistol_3', 'pistol_4', 'pistol_5', 'pistol_6', 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_12', 'pistol_13', 'pistol_14'],
+  smg: ['subfusil_1', 'subfusil_2', 'subfusil_3', 'subfusil_4', 'subfusil_5', 'subfusil_6', 'subfusil_7', 'subfusil_8', 'subfusil_9', 'subfusil_10', 'subfusil_13', 'subfusil_14', 'subfusil_15', 'subfusil_16'], // Tamborzao (subfusil_12) saiu do jogo (04/11)
+  rifle: ['fusil_1', 'fusil_2', 'fusil_3', 'fusil_4', 'fusil_5', 'fusil_6', 'fusil_7', 'fusil_11', 'fusil_12', 'fusil_13', 'fusil_14', 'fusil_15', 'fusil_16'],
+  shotgun: ['shotgun_1', 'shotgun_2', 'shotgun_3', 'shotgun_4', 'shotgun_5', 'shotgun_6', 'shotgun_7'], sniper: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4', 'sniper_6'], lmg: ['lmg_1', 'lmg_2', 'lmg_3', 'lmg_4', 'lmg_5'],
   melee: ['melee_0', 'melee_1', 'melee_3', 'melee_4', 'melee_7', 'melee_9', 'melee_11', 'melee_12', 'melee_14'],
 };
 const GG_SHAPE = ['pistol', 'pistol', 'smg', 'smg', 'smg', 'rifle', 'rifle', 'rifle', 'shotgun', 'smg', 'rifle', 'shotgun', 'sniper', 'sniper', 'pistol', 'pistol', 'melee', 'melee'];
@@ -71,6 +73,7 @@ export const TEAM_MAX = MAX_PLAYERS / 2;
 // Blitz (02/11, pedido dele): Mata-Mata 12 contra 12, so nos mapas grandes
 export const BLITZ_MAX = 24, TEAM_MAX_BLITZ = 12 /* 07/11 noite (pedido dele): volta pra 12x12 (24), como era; 16x16 pesava */, BLITZ_MAPS = ['fronteira', 'deserto']; // 06/11 (pedido dele): 16x16 e sem a Vila; Canyon so na bandeira/dominacao // Canyon Poeira (04/11) entra no blitz de bandeira/dominacao
 // Blitz (02/11): 12x12 nos mapas grandes em tres regras; o id do modo diz a regra de base. Vale XP em dobro (evento fixo)
+export const SOON_MODES = ['borroes', 'arte']; // 13/11 (pedido dele): PvE fora do ar, cartao com "Em breve"
 export const BLITZ_BASE = { blitz: 'tdm', blitz_ctf: 'ctf', blitz_dom: 'dom' };
 export const BLITZ_XP = 2;
 
@@ -167,6 +170,10 @@ export const FIELD = {
   // quebrar, ai o dano volta pra vida) e a barra cheia conserta ele
   stim: { lvl: 3, need: 220, heal: 40 /* 04/11 (hotfix, pedido dele): era 70 */, dur: 1.5, boost: 1.15, boostT: 6, fov: 7, icon: 'vaccines' }, // 03/11: + correria e FOV aberto por boostT s
   vest: { lvl: 7, need: 300, armor: 60, icon: 'shield' },
+  // Gancho do Palco (13/11, pedido dele: gancho estilo Titanfall). O gancho de bengala do vaudeville que puxava o artista do
+  // palco: mira numa ponta de estrutura ate range m, prende e puxa a speed m/s; barra cheia = uses lancadas seguidas.
+  // Solta sozinho perto da ponta (sobe na beirada) ou no pulo (mantem o embalo). Quem anda e o cliente; o servidor confere alcance e visao
+  hook: { lvl: 11, need: 220, range: 34, speed: 26, uses: 2, maxT: 2.2, cd: 3, icon: 'phishing' }, // cd (13/11, pedido dele): 3 s entre uma ganchada e outra
 };
 export const FIELD_IDS = Object.keys(FIELD);
 export const BLAST = ['frag', 'anvil', 'blimp', 'bomb', 'rpg'];
@@ -248,6 +255,9 @@ export const HEIST = { rounds: 4, time: 180, crack: 15, crackR: 5.5, bags: 8, ba
 // esta aberta; o caixote e pesado (lento, sem correr, sem pular, sem atirar) e da pra PASSAR pra um colega (bola de rugbi).
 // quota = caixotes no barco pra levar a rodada; bagValue 1 = conta caixote
 export const SMUGGLE = { crack: 0.01, bags: 8, bagValue: 1, quota: 5, bankBonus: 25, carrySlow: 0.6, vanR: 3.2, passR: 16, passCone: 0.5, passT: 0.55 };
+// 13/11 (pedido dele): PB ja vem com silenciador e nao troca bocal. Tiro abafado = bocal silenciador OU corpo com silenciador de fabrica
+export const INTEGRAL_SIL = ['pistol_12', 'fusil_16']; // PB e AS Val
+export const isSilenced = (lo) => !!lo && (String(lo.muzzle || '').startsWith('silencer') || INTEGRAL_SIL.includes(lo.body));
 export const BOMB = { round: 100, fuse: 35, plant: 3.2, defuse: 6, siteR: 3.4, defuseR: 1.9, blast: 9, roundEnd: 4.5, swapAfter: 3 };
 
 // Pontaria dos bots por nivel (0.7 molenga, 1 esperto, 1.35 afiado).
@@ -307,7 +317,27 @@ export const BODY_TRAITS = {
   sniper_4: { mode: 'bolt', rate: 1, dmg: 1.05, kick: 1.05 },
   // metralhadoras (04/11): Britadeira (M249) mais leve e rapida; Rolo Compressor (M60) bate mais forte e pesa mais
   lmg_1: { rate: 0.92, dmg: 0.92, kick: 0.95, adsTime: 1.35, move: 0.92 },
-  lmg_2: { rate: 1.12, dmg: 1.15, kick: 1.12, adsTime: 1.5, move: 0.88, mag: 0.8 },                     // ferrolho classico (modelo novo 30/10)
+  lmg_2: { rate: 1.12, dmg: 1.15, kick: 1.12, adsTime: 1.5, move: 0.88, mag: 0.8 },
+  // 13/11 (pedido dele): leva nova do TastyTony. Cada uma com um jeito proprio; numero entre parenteses = balas no pente
+  lmg_3: { rate: 0.86, dmg: 0.9, kick: 1, spread: 1.05, adsTime: 1.25, move: 0.95 },                                   // Debulhadora (M249): a mais rapida e leve (100)
+  lmg_4: { rate: 1.2, dmg: 1.2, kick: 0.88, spread: 0.85, adsTime: 1.45, move: 0.88, mag: 0.47, reload: 0.8 },          // Vitrola (Lewis): disco de 47, firme e certeira, troca o disco rapido
+  lmg_5: { rate: 1.45, dmg: 1.35, kick: 1.3, spread: 1.1, adsTime: 1.3, move: 0.92, mag: 0.2, reload: 0.55 },           // Lua Minguante (Chauchat): meia-lua de 20, lenta e pesada
+  fusil_14: { mode: 'auto', rate: 1.1, dmg: 1.08, kick: 0.95, spread: 0.9, adsTime: 0.95, mag: 0.67 },                 // Cartola (EM2): bullpup agil (20)
+  fusil_15: { mode: 'auto', rate: 1.15, dmg: 1.2, kick: 1.25, spread: 0.85, adsTime: 1.08, move: 0.97, mag: 0.67 },    // Trombone (RM277): bate forte, coice grande (20)
+  fusil_16: { mode: 'auto', rate: 0.8, dmg: 0.88, kick: 0.85, hip: 0.95, mag: 0.67, rangeK: 0.75 },                     // Sussurro (AS Val): silenciador de fabrica, cospe rapido, alcance menor (20)
+  sniper_5: { mode: 'bolt', rate: 1.2, dmg: 1.1, kick: 1.3, mag: 0.2, reload: 0.55, spread: 0.6, hip: 0.6 },                                   // Sentenca (Rolling Block): UM tiro e recarrega
+  sniper_6: { mode: 'bolt', rate: 0.92, dmg: 1, kick: 0.9, adsTime: 0.9, move: 1.02 },                                  // Monoculo (DSR-1): bullpup, mira rapido (5)
+  subfusil_14: { mode: 'auto', rate: 0.95, dmg: 0.9, kick: 0.85, mag: 2, reload: 1.35, adsTime: 1.08 },                // Caracol (Bizon): pente helicoidal de 64
+  subfusil_15: { mode: 'auto', rate: 1.05, dmg: 1.05, kick: 0.9, spread: 0.9, adsTime: 1.05 },                          // Charleston (MP 28): classica e certinha (32)
+  subfusil_16: { mode: 'auto', rate: 0.68, dmg: 0.8, kick: 1.2, spread: 1.3, hip: 0.8, move: 1.05 },                     // Pernilongo (Mac 10): zumbido de quadril (32), tem akimbo
+  shotgun_4: { mode: 'semi', rate: 0.35, dmg: 1.15, kick: 1.6, spread: 0.85, mag: 0.334, reload: 1.1 },                // Dupla Caipira (Fox): cano duplo, 2 tiros seguidos
+  shotgun_5: { mode: 'semi', rate: 0.6, dmg: 0.85, kick: 1.1, reload: 0.85 },                                           // Atchim (Spas-15): semi de pente (6), troca rapido
+  shotgun_6: { mode: 'auto', rate: 0.35, dmg: 0.6, kick: 1.15, spread: 1.1, mag: 1.67, reload: 1.3 },                  // Bate-Bife (Jackhammer): automatica de tambor (10)
+  shotgun_7: { mode: 'semi', rate: 0.75, dmg: 1.25, kick: 2, spread: 0.9, mag: 0.5, reload: 1.05 },                     // Canhao de Feira (Mag-10): calibre 10, 3 tiros
+  pistol_12: { mode: 'semi', rate: 1.05, dmg: 0.94, spread: 0.9, hip: 0.95, kick: 0.85, mag: 0.67 },                    // Psiu (PB): silenciador de fabrica, nao troca bocal (8)
+  pistol_13: { mode: 'semi', rate: 1.9, dmg: 1.55, kick: 1.2, spread: 0.8, mag: 0.5, reload: 1.35 },                    // Ponta-Cabeca (Mateba): revolver de cano baixo, coice menor que os outros (6)
+  pistol_14: { mode: 'auto', rate: 0.6, dmg: 0.66, hip: 0.85, kick: 0.9, spread: 1.15, mag: 1.67 },                     // Matraquinha (Tec-9): automatica (20), tambor de 40, tem akimbo
+  pistol_15: { mode: 'semi', rate: 1.5, dmg: 3.4, spread: 2.2, hip: 1, kick: 2.6, mag: 0.0834, reload: 1.6, rangeK: 0.35, fallR: 40 }, // Pederneira (Simeon North 1826): UM tiro, derruba ate ~5 m, depois perde forca (cai 2,5% por metro)                     // ferrolho classico (modelo novo 30/10)
 };
 // laminas: faca rapida e curta, machado/espada lento e com mais alcance (1 golpe sempre derruba)
 // 15-17 = espadas (04/11): alcance de espada (3,4-3,9 m), mais lentas que faca; Corsario rapido, Lamina Real lenta e longa,

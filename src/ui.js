@@ -256,6 +256,7 @@ export function initMenus(o) {
     ['toggle', 'showFps', 's_fps'],
     ['toggle', 'threatRing', 's_threat'],
     ['toggle', 'autoReload', 's_autoReload'],
+    ['toggle', 'dmgNums', 's_dmgNums'], // 13/11 (pedido dele): numeros de dano que saem do alvo
     ['toggle', 'modeTips', 's_modeTips'], // 07/11: dicas do modo na partida // 07/11 (pedido dele): pente acabou, recarrega sozinho
     ['toggle', 'autoChute', 's_autoChute'],
     ['hudscale'],
@@ -279,7 +280,7 @@ export function initMenus(o) {
     ['range', 'padAccel', 's_padAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%']);
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
-    autoFire: 'play', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', modeTips: 'game',
+    autoFire: 'play', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
     gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
@@ -583,6 +584,7 @@ export function initMenus(o) {
     chargerOptions(lo.body, cat).forEach((id, i) => { if (i > 0) add('charger', id, i, partReq(i, id)); });
     if (cantedFits(cat, lo.body)) add('scope', 'canted', 1, CANTED_LVL, 'canted', t('cantedOn'));
     LASERS.forEach((id, n) => add('laser', id, n + 1, partReq(n + 1, id)));
+    convOptions(lo.body).filter(id => id === 'convMax').forEach(id => add('conv', id, 1, partReq(1, id))); // kit de conversao do ultimo nivel (13/11)
     muzzleOptions(lo.body).forEach(id => add('muzzle', id, 1, MUZZLE_LVL[id] || 1, 'mz:' + id));
     for (const id of AMMO_IDS) if (!AMMO[id].only || AMMO[id].only === cat) add('ammo', id, 1, AMMO_LVL[id] || 1, 'am:' + id, t('am_' + id));
     return out;

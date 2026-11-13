@@ -37,14 +37,16 @@ import { podiumSpot } from '../shared/podiumspot.js';
 import { startPresence } from './presence.js';
 import { metaGet, metaPost, pushSoon, sessionPing, requestReset, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
 import { Hud, STREAK_SVG, DEATH_SVG, BOOM_SVG } from './hud.js';
-import { Input, isTouch, buildTouch, applyHudLayout, setFireButton, lockPointer, setRawMouse } from './input.js';
+import { Input, isTouch, buildTouch, applyHudLayout, applyHudPieces, HUD_PIECES, setFireButton, lockPointer, setRawMouse } from './input.js';
 import { Pad } from './gamepad.js';
 import { LocalNet, WsNet, SplitNet } from './net.js';
 import { SS } from './ssboot.js';
 import { Chat } from './chat.js';
 import { QuickChat } from './quickchat.js';
 import { audio } from './audio.js';
-import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS } from '../shared/weapons.js';
+import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS, isSilenced, INTEGRAL_SIL } from '../shared/weapons.js';
+import { makeHookView } from './hookview.js';
+import { SKILL_ICONS as HOOK_ICONS } from './skillicons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
 import { EV, currentEvent, META, metaWeek } from '../shared/events.js';
 import { wantedPoster, shareFile, ClipRec } from './share.js';
@@ -92,7 +94,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, voSubs: true, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -291,7 +293,7 @@ const G = {
     if (victim) this.plafts = (this.plafts || 0) + 1; // meta da comunidade: todo acerto em boneco e um PLAFT
     hud.hitmark(head);
     audio.play(head ? 'headshot' : 'hitmarker', { vol: head ? 0.75 : 0.55, ui: true, key: 'hitm', max: 2, jitter: 0 });
-    if (dmg) fx.number([point[0], point[1] + 0.3, point[2]], dmg, head);
+    if (dmg && settings.dmgNums !== false) fx.number([point[0], point[1] + 0.3, point[2]], dmg, head); // desligavel em Jogabilidade (13/11)
     if (victim) victim.char.flinch(head);
     if (Math.random() < 0.25) fx.word(head ? 'TOING!' : ['POW!', 'BAM!', 'PAF!', 'TUM!'][Math.floor(Math.random() * 4)], point, head ? 1.6 : 1.1);
   },
@@ -447,6 +449,7 @@ function unlocksAt(wpn, wLevel, pLevel, only = null) {
     const all = { body: C.bodies, scope: [null, ...C.scopes], charger: C.chargers, handle: [null, ...C.handles], laser: [null, ...LASERS] };
     const lists = only === 'body' ? { body: all.body } : only === 'parts' ? (({ body, ...rest }) => rest)(all) : all;
     for (const [slot, list] of Object.entries(lists)) list.forEach((id, i) => { if (id && i > 0 && partReq(i, id) === wLevel) out.push({ slot, id, wpn, name: partName(slot, id) }); });
+    if (only !== 'body' && wLevel === partReq(1, 'convMax') && CATEGORY[wpn].bodies.some(b => convOptions(b).includes('convMax'))) out.push({ slot: 'conv', id: 'convMax', wpn, name: partName('conv', 'convMax') }); // 13/11
     if (only !== 'body') for (const [id, lv] of Object.entries(MUZZLE_LVL)) if (lv === wLevel && CATEGORY[wpn].bodies.some(b => muzzleOptions(b).includes(id))) out.push({ slot: 'muzzle', id, wpn, name: partName('muzzle', id) });
     if (only !== 'body' && wpn !== 'melee') for (const [id, lv] of Object.entries(AMMO_LVL)) if (lv === wLevel && (!AMMO[id].only || AMMO[id].only === wpn)) out.push({ slot: 'ammo', id, wpn, name: t('am_' + id) });
     if (only !== 'body') for (const c of CAMOS) if (c.req && c.req.wpn === wLevel && !c.req.player) out.push({ slot: 'camo', id: c.id, wpn, name: t('camo_' + c.id) });
@@ -621,6 +624,7 @@ function setMap(id) {
   objectives = buildObjectives(scene, G.M);
   brView && brView.dispose(); brView = G.brView = G.M.id === 'ilha' ? new BrView(scene, G.M) : null; // loot, caixote e iris do battle royale
   fieldView && fieldView.dispose(); fieldView = G.fieldView = new FieldView(scene); // molas, buracos e guarda-chuvas
+  if (G.hookView) G.hookView.clear(); else G.hookView = makeHookView(scene, camera); // Gancho do Palco (13/11)
   escView && escView.dispose(); escView = G.escView = G.M.track ? new EscortView(scene, G.M) : null; // trilho e Bonde da Tinta (escolta)
   flash && flash.dispose(); flash = G.M.theme === 'tinteiro' ? new Flashlights(scene) : null; gunL?.dispose(); gunL = new GunLights(scene); if (import.meta.env.DEV) window.__GL = gunL; // estudio escuro: todo mundo de lanterna
   hud.setMap(G.M);
@@ -723,7 +727,7 @@ function streakVoice(kind, friendly) {
   if (kind !== 'nuke' && now - voStreakAt < 9000) return;
   voStreakAt = now;
   if (kind === 'nuke' || friendly || Math.random() < 0.5) return audio.voice(kind);
-  let n; do n = 1 + Math.floor(Math.random() * 6); while (n === voWarnLast);
+  let n; do n = 1 + Math.floor(Math.random() * 7); while (n === voWarnLast); // 7 avisos (13/11)
   voWarnLast = n; audio.voice(n === 1 ? 'enemystreak' : 'enemystreak' + n);
 }
 // narrador dos modos (06/11, pedido dele: "time azul roubou o dinheiro do cofre", "time vermelho capturou a bandeira"):
@@ -734,7 +738,7 @@ function modeVoice(key, prio) {
   if (!key) return;
   const now = performance.now();
   if (!prio && now - voModeAt < 5000) return;
-  voModeAt = now; audio.voice(key);
+  voModeAt = now; audio.voice(key, { noBase: key.startsWith('crate_') && G.M?.heistPts?.drop === 'truck' }); // Vila Muamba: a fala original diz 'barco' (13/11)
 }
 const teamKey = (base, team) => team === 'red' || team === 'blue' ? base + '_' + team : null;
 // trilha da partida (06/11, pedido dele): modo novo tem musica propria no tema; depois o mapa; senao sorteia entre as 4 de sempre
@@ -948,13 +952,13 @@ function onEvent(e) {
       break;
     case 'shot': {
       if (e.id === G.myId) break;
-      if (e.id !== 'blimp') G.seen.set(e.id, G.t + 2.2);
+      if (e.id !== 'blimp' && !isSilenced(G.remoteLo.get(e.id)?.[e.wpn])) G.seen.set(e.id, G.t + 2.2); // 13/11 (pedido dele): silenciador (posto ou de fabrica) nao acende no minimapa; outro bocal ou sem bocal acende
       else { const bm = G.blimpMeshes.find(m => m.userData.dg && m.position.distanceToSquared(tmpV.fromArray(e.o)) < 900); if (bm) { bm.userData.aim = e.e; bm.userData.dg.aim(e.e, 1); bm.updateMatrixWorld(true); e.o = bm.userData.dg.muzzle.getWorldPosition(new THREE.Vector3()).toArray(); } } // o tiro sai da boca da metralhadora
       const r = G.remotes.get(e.id);
       if (G.specVm && G.specVm.startsWith(e.id + '|') && !G.player?.alive) vm.fire((WEAPONS[e.wpn]?.kick || 1) * 1.3);
       const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && (rBody === 'pistol_10' || rBody === 'pistol_5') /* Bico Longo virou revolver (06/11) */, aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
       const rTr = lzBody ? 'laser' : tracerOf(G.remoteLo.get(e.id)?.[e.wpn]), rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : aaBody ? 'aa12' : audio.gunSound(rBody, e.wpn); // som proprio do modelo
-      const rSilOn = String(G.remoteLo.get(e.id)?.[e.wpn]?.muzzle || '').startsWith('silencer'), rSil = rSilOn && !lzBody ? audio.silSound(e.wpn) : null;
+      const rSilOn = isSilenced(G.remoteLo.get(e.id)?.[e.wpn]), rSil = rSilOn && !lzBody ? (INTEGRAL_SIL.includes(rBody) ? audio.gunSound(rBody, null) : null) || audio.silSound(e.wpn) : null; // 13/11: silenciador de fabrica (Psiu, Sussurro) = tiro abafado proprio
       audio.play(rSil || rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2, muffle: rSilOn && !rSil, dry: !!rSil });
       const rg = r?.char.gun?.userData; if (rg?.drum) rg.drum.rotation.z += Math.PI / 3; // tambor do revolver gira no boneco tambem
       if (e.e) {
@@ -1014,6 +1018,7 @@ function onEvent(e) {
       if (inGame && G.mode !== 'borroes') hud.feed(html, e.a === G.myId || e.v === G.myId); // noite dos borroes: sem killfeed (pedido dele)
       if (inGame && !G.tutorial && !G.range) { if (e.a === G.myId && e.v !== G.myId) wpnTrack(e.wpn, G.player?.lo(e.wpn)?.body, { k: 1, hk: e.head ? 1 : 0 }); if (e.v === G.myId && G.player?.wpn) wpnTrack(G.player.wpn, G.player.lo(G.player.wpn)?.body, { d: 1 }); } // Arsenal: numeros de cada arma
       if (e.a === G.myId && inGame) {
+        if (e.v !== G.myId) hud.hitmark(!!e.head, true); // hitmarker de abate (13/11)
         chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head, streak: e.streak || 0, body: G.player?.lo(e.wpn)?.body }); // body: desafio de um modelo (gadgets)
         G.player?.scavenge?.(); // skill catador
         // multiabate: 3 derrubados em 4 s (desafio de elite)
@@ -1220,13 +1225,14 @@ function onEvent(e) {
     // ---------- equipamento de campo ----------
     case 'field': {
       const pos = e.id === G.myId ? G.player?.pos : posOf(e.id);
-      if (e.id === G.myId) { if (e.kind === 'hole' && G.player) G.player.holeCd = Math.max(G.player.holeCd || 0, 1.1); /* buraco abre e da 1 s pra ver onde ficou, depois puxa quem ficar em cima (08/11) */ G.fieldK = 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); G.stimBoostT = FIELD.stim.boostT; if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
+      if (e.kind === 'hook' && e.id !== G.myId && e.at && inGame) G.hookView?.remote(() => { const q = posOf(e.id); return q ? new THREE.Vector3(q[0], q[1] + 1.3, q[2]) : null; }, e.at); // corda de quem lancou
+      if (e.id === G.myId) { if (e.kind === 'hole' && G.player) G.player.holeCd = Math.max(G.player.holeCd || 0, 1.1); /* buraco abre e da 1 s pra ver onde ficou, depois puxa quem ficar em cima (08/11) */ G.fieldK = e.kind === 'hook' && e.left > 0 ? 1 : 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); G.stimBoostT = FIELD.stim.boostT; if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
       // estimulante = chiado da bomba de ar; colete = o som de pegar item (sem som proprio ainda)
-      if (inGame) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind === 'stim' ? 'pump' : e.kind === 'vest' ? 'pickup' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
+      if (inGame && !(e.kind === 'hook' && e.id === G.myId)) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind === 'stim' ? 'pump' : e.kind === 'vest' ? 'pickup' : e.kind === 'hook' ? 'whoosh' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
       break;
     }
     case 'vestBreak': if (e.id === G.myId && inGame) { hud.message(t('vestBreak'), 1.6); audio.play('balloon', { ui: true, vol: 0.5, rate: 1.3 }); } break;
-    case 'fieldFail': if (e.id === G.myId && inGame) { hud.message(t(e.why === 'akimbo' ? 'fieldAkimbo' : 'fieldFail'), 1.6); audio.play('empty', { vol: 0.4 }); } break;
+    case 'fieldFail': if (e.id === G.myId && inGame) { hud.message(t(e.why === 'akimbo' ? 'fieldAkimbo' : e.why === 'hookFar' ? 'hookFar' : e.why === 'hookCd' ? 'hookCd' : 'fieldFail'), 1.6); audio.play('empty', { vol: 0.4 }); } break;
     case 'fieldReady': if (e.id === G.myId && inGame) { G.fieldK = 1; audio.play('fieldready', { ui: true, vol: 0.5 }); hud.stampText(t('fieldStamp', { w: t('fd_' + G.field) }), t('fieldStampSub')); } break; // mesmo carimbo do 'Virou panqueca' (04/11)
     case 'tomaPick': if (e.id === G.myId && inGame) { hud.message(t('tomaPick'), 1.4); audio.play('pickup', { ui: true, vol: 0.5 }); } break;
     case 'umbBreak': { // guarda-chuva levou tiro demais: estoura e some
@@ -2647,6 +2653,24 @@ function frameBody(now, realDt) {
   objectives.update(G.t, G.snap, G.mode, (id) => id === G.myId ? { me: true } : G.remotes.get(id), hud.dc?.id);
   escView?.update(G.t, dt, G.snap?.esc); escHud(G.snap?.esc);
   fieldView?.update(G.t, dt, G.snap, G.remotes);
+  // Gancho do Palco (13/11): corda, e a mira da ponta em tempo real (verde alcanca, vermelho longe demais) com barra cheia
+  if (G.hookView) {
+    G.hookView.update(dt);
+    // 13/11 (pedido dele): nada do gancho dentro da mira da arma (so fora do ADS); depois de uma ganchada, 3 s de espera com contagem
+    const cdLeft = Math.max(0, ((G.player?.hookCd || 0) - performance.now()) / 1000);
+    const HA = G.player?.hookAim, show = G.state === 'game' && G.field === 'hook' && (G.fieldK ?? 0) >= 1 && !!HA && !G.player?.hook && G.player?.alive && !G.killcam && (G.player?.adsK ?? 0) < 0.3;
+    G.hookView.marker(show && !HA.none && cdLeft <= 0, HA?.p, HA?.ok);
+    const hr = $('hookRet');
+    if (hr) {
+      const pill = show && cdLeft > 0; // 13/11 b (pedido dele): na mira so o pontinho; a pilula so aparece contando a espera
+      if (hr.hidden === pill) hr.hidden = !pill;
+      if (pill) {
+        const ok = !!HA.ok && cdLeft <= 0, txt = cdLeft > 0 ? Math.ceil(cdLeft) + ' s' : ok ? Math.round(HA.dist) + ' m' : t('hookFar');
+        hr.classList.toggle('far', !ok); hr.classList.toggle('cd', cdLeft > 0); if (hr.lastChild.textContent !== txt) hr.lastChild.textContent = txt;
+        if (!hr.dataset.ico) { hr.firstChild.innerHTML = HOOK_ICONS.phishing; hr.dataset.ico = '1'; }
+      }
+    }
+  }
   // barra do equipamento (enche com pontos e abates, vem do servidor no snapshot); guarda-chuva fecha sozinho
   if (G.shieldT > 0 && (G.shieldT -= dt) <= 0) vm.umbOn = false;
   if (G.field) {
@@ -2662,6 +2686,7 @@ function frameBody(now, realDt) {
         clearTimeout(G.fhT); G.fhT = setTimeout(() => fh.classList.remove('announce'), 1800);
       }
     }
+    if (isTouch) { const rd = t('fhReadyTag'); if (fh.dataset.rd !== rd) fh.dataset.rd = rd; } // celular: selo pronto pulsa com a etiqueta
     const key = isTouch ? '' : G.pad?.active ? t('fh_pad') : 'Z';
     if ($('fhKey').textContent !== key) $('fhKey').textContent = key;
   }
@@ -2974,10 +2999,24 @@ function frameBody(now, realDt) {
       laserDot.visible = true;
     } else laserDot.visible = false;
     hud.frame(p, realDt, settings);
+    { // 13/11 (pedido dele): aviso de quem pegou objetivo/sequencia SEMPRE abaixo do painel do objetivo do modo (Contrabando, Cofre, Bonde, Bomba...)
+      const now = performance.now();
+      if (now - (G.evTopT || 0) > 250) { G.evTopT = now;
+        const ev = $('evStack'); let low = 0;
+        for (const id of ['hsBar', 'escBar', 'bombBar']) { const e = $(id); if (!e || e.hidden || getComputedStyle(e).display === 'none') continue; const r = e.getBoundingClientRect(); if (r.height && r.left < innerWidth / 2 + 120 && r.right > innerWidth / 2 - 120 && r.top < innerHeight * 0.4) low = Math.max(low, r.bottom); }
+        const want = low ? Math.round(low + 8) + 'px' : ''; if (ev && ev.style.top !== want) ev.style.top = want;
+        // equipamento de campo (13/11, pedido dele: menor e fora do meio): no PC ao lado da vida, no celular ao lado do analogico
+        // 13/11 (pedido dele): PC volta pro centro de baixo como era; so o celular encaixa ao lado do analogico
+        const fh = $('fieldHud'), anchor = isTouch ? document.querySelector('#touch .stick') : null;
+        if (fh && !isTouch && fh.classList.contains('docked')) fh.classList.remove('docked');
+        if (isTouch) applyHudPieces(document.body.classList.contains('hudedit') ? heLayout : settings.hudLayout); // peca criada depois (minimapa, sequencias) ganha o lugar salvo
+        if (fh && anchor) { const r = anchor.getBoundingClientRect(); if (r.width) { fh.classList.add('docked'); fh.style.setProperty('--fh-x', Math.round(r.right + 14) + 'px'); fh.style.setProperty('--fh-b', Math.round(innerHeight - r.bottom + (isTouch ? 6 : 0)) + 'px'); } } }
+    }
     { // anel de recarga em volta da mira
-      const on = p.alive && p.reloadT > 0 && p.reloadDur > 0, rr = $('reloadRing');
+      const rf = Math.max(0, ...(p.akRefill || [0])), spinOn = rf > 0 && p.akRefillD > 0; // 13/11: o giro da Sentenca no akimbo tambem enche o anel
+      const on = p.alive && ((p.reloadT > 0 && p.reloadDur > 0) || spinOn), rr = $('reloadRing');
       if (on !== rr.classList.contains('on')) rr.classList.toggle('on', on);
-      if (on) $('rrBar').style.strokeDashoffset = (100 * p.reloadT / p.reloadDur).toFixed(1);
+      if (on) $('rrBar').style.strokeDashoffset = (100 * (p.reloadT > 0 ? p.reloadT / p.reloadDur : rf / p.akRefillD)).toFixed(1);
     }
     if (settings.xhair === 'dyn') { // mira dinamica: troca o formato quando muda a arma ou o jeito de atirar
       const mode = p.stats(p.wpn).st.mode || (WEAPONS[p.wpn]?.auto ? 'auto' : 'semi'), xk = p.wpn + mode;
@@ -3105,15 +3144,17 @@ let heSel = null;
 function heSelect(elx) { // botao tocado: o controle Tamanho passa a valer so pra ele
   heSel?.classList.remove('he-sel'); heSel = elx; elx?.classList.add('he-sel');
   const S = $('heScale'); S.disabled = !elx;
-  S.value = elx ? heLayout.size[elx.dataset.hid] ?? heLayout.scale ?? 1 : 1;
+  S.value = elx ? heLayout.size[heId(elx)] ?? (elx.dataset.hp ? 1 : heLayout.scale ?? 1) : 1;
 }
+const heId = (elx) => elx.dataset.hid || elx.dataset.hp;
+const heApply = () => applyHudLayout($('touch'), { hudLayout: heLayout }); // botoes + pecas do HUD (vida, minimapa...)
 function openHudEditor() {
   heLayout = JSON.parse(JSON.stringify(settings.hudLayout || {}));
   heLayout.pos = heLayout.pos || {}; heLayout.size = heLayout.size || {}; heSelect(null);
   $('pause').hidden = true; $('hudEdit').hidden = false;
   document.body.classList.add('hudedit');
   $('heAlpha').value = heLayout.alpha ?? 1;
-  applyHudLayout($('touch'), { hudLayout: heLayout });
+  heApply();
 }
 function closeHudEditor(save) {
   heSelect(null);
@@ -3125,23 +3166,37 @@ function closeHudEditor(save) {
 }
 $('pauseHud').onclick = openHudEditor;
 $('heSave').onclick = () => { audio.play('pickup', { ui: true, vol: 0.5 }); closeHudEditor(true); };
-$('heReset').onclick = () => { heLayout = { pos: {}, size: {} }; settings.hudLayout = null; buildTouch(input, $('touch')); heSelect(null); $('heAlpha').value = 1; };
-$('heScale').oninput = (e) => { if (!heSel) return; heLayout.size[heSel.dataset.hid] = +e.target.value; applyHudLayout($('touch'), { hudLayout: heLayout }); };
+$('heReset').onclick = () => { heLayout = { pos: {}, size: {} }; settings.hudLayout = null; buildTouch(input, $('touch')); heSelect(null); $('heAlpha').value = 1; hud.tlT = 0; };
+$('heScale').oninput = (e) => { if (!heSel) return; heLayout.size[heId(heSel)] = +e.target.value; heApply(); };
 $('heAlpha').oninput = (e) => { heLayout.alpha = +e.target.value; applyHudLayout($('touch'), { hudLayout: heLayout }); };
 // arrastar: so no modo de edicao (captura antes do botao reagir)
 $('touch').addEventListener('pointerdown', (e) => {
   if (!document.body.classList.contains('hudedit')) return;
-  const elx = e.target.closest('[data-hid]');
+  // botao da camada de toque; senao, peca do HUD por baixo do dedo (vida, municao, minimapa, sequencias, chat, equipamento: a menor ganha)
+  let elx = e.target.closest('[data-hid]');
+  if (!elx) {
+    const hit = Object.values(HUD_PIECES).map(P => P.q()).filter(Boolean).map(x => [x, x.getBoundingClientRect()])
+      .filter(([, r]) => r.width && e.clientX >= r.left - 6 && e.clientX <= r.right + 6 && e.clientY >= r.top - 6 && e.clientY <= r.bottom + 6)
+      .sort((a, b) => a[1].width * a[1].height - b[1].width * b[1].height)[0];
+    elx = hit?.[0];
+  }
   if (!elx) return;
   e.preventDefault(); e.stopPropagation();
   heSelect(elx);
   const x0 = e.clientX, y0 = e.clientY; let dragging = false; // toque parado so seleciona; arrastar move
+  const piece = !elx.dataset.hid, cs = getComputedStyle(elx);
+  const l0 = parseFloat(cs.left) || 0, t0 = parseFloat(cs.top) || 0, r0 = elx.getBoundingClientRect(); // peca: arrasto relativo, sem sair da tela
   const move = (ev) => {
     if (!dragging && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return;
     dragging = true;
-    const x = Math.max(4, Math.min(96, ev.clientX / innerWidth * 100)), y = Math.max(6, Math.min(94, ev.clientY / innerHeight * 100));
-    heLayout.pos[elx.dataset.hid] = [+x.toFixed(1), +y.toFixed(1)];
-    applyHudLayout($('touch'), { hudLayout: heLayout });
+    if (piece) {
+      const dx = Math.max(-r0.left, Math.min(innerWidth - r0.right, ev.clientX - x0)), dy = Math.max(-r0.top, Math.min(innerHeight - r0.bottom, ev.clientY - y0));
+      heLayout.pos[heId(elx)] = [+((l0 + dx) / innerWidth * 100).toFixed(2), +((t0 + dy) / innerHeight * 100).toFixed(2)];
+    } else {
+      const x = Math.max(4, Math.min(96, ev.clientX / innerWidth * 100)), y = Math.max(6, Math.min(94, ev.clientY / innerHeight * 100));
+      heLayout.pos[heId(elx)] = [+x.toFixed(1), +y.toFixed(1)];
+    }
+    heApply();
   };
   const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
   addEventListener('pointermove', move); addEventListener('pointerup', up);
@@ -3304,20 +3359,27 @@ function smokeCloud(pos, dur) {
 const tmpSmoke = new THREE.Vector3();
 // boneco de noite (07/11): material proprio com brilho (emissive) na cor dele, pra ser visto no escuro sem luz de verdade.
 // Os materiais toon sao compartilhados com o cenario (cache por cor): por isso clona so os do boneco, e devolve de dia
-const NIGHT_LIFT = new THREE.Color(0.1, 0.105, 0.13);
+// 13/11 (pedido dele: "ainda ficam esbranquiçados, precisa ficar a mesma cor do dia"): o brilho somado (emissive) lavava a
+// cor pro branco. Agora o boneco multiplica a luz que recebe pelo ganho dia/noite (world.nightGain): mesma cor do dia, sem
+// somar branco nenhum. O gancho do shader encadeia o da skin/camo/estampa (clone() do three nao leva o onBeforeCompile)
+const NIGHT_GAIN = { value: new THREE.Vector3(1, 1, 1) };
 function nightChar(c, on) {
   if (!c?.root || !!c._night === on) return;
   c._night = on;
+  if (on && world?.nightGain) NIGHT_GAIN.value.copy(world.nightGain());
   c.root.traverse(o => {
     if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
     if (on) {
       if (!o.material.isMeshToonMaterial || o.userData.dayMat) return;
-      // 10/11 (pedido dele: "a noite os bonecos ficam todos brancos"): clone() do three NAO leva o onBeforeCompile. Skin, camo e
-      // estampa sao material branco com o desenho no shader: sem o gancho sobrava o branco puro + brilho de 42% do branco
-      const d = o.material, m = d.clone(), sh = !!d.onBeforeCompile;
-      if (sh) { m.onBeforeCompile = d.onBeforeCompile; m.customProgramCacheKey = d.customProgramCacheKey; m.userData = d.userData; }
-      // piso de luar: roupa preta * 0,42 continuava preta e o bot sumia no escuro ("alguns npcs invisiveis", 10/11)
-      m.emissive = m.color.clone().multiplyScalar(sh ? 0.12 : 0.42).add(NIGHT_LIFT); o.userData.dayMat = d; o.material = m;
+      const d = o.material, m = d.clone(), prev = d.onBeforeCompile, key = d.customProgramCacheKey?.bind(d);
+      m.userData = d.userData;
+      m.onBeforeCompile = (sh, r) => {
+        if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev.call(d, sh, r);
+        sh.uniforms.uNightGain = NIGHT_GAIN;
+        sh.fragmentShader = 'uniform vec3 uNightGain;' + String.fromCharCode(10) + sh.fragmentShader.replace('#include <opaque_fragment>', 'outgoingLight *= uNightGain;' + String.fromCharCode(10) + '#include <opaque_fragment>');
+      };
+      m.customProgramCacheKey = () => (key ? key() : '') + '|night';
+      o.userData.dayMat = d; o.material = m;
     }
     else if (o.userData.dayMat) { o.material.dispose(); o.material = o.userData.dayMat; delete o.userData.dayMat; }
   });

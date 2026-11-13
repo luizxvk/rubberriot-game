@@ -2,7 +2,7 @@
 // 5197 no ar. Escreve podio.json e uma foto por mapa (cilindros vermelhos = lugar dos bonecos).
 const { chromium } = require('../../template-magazine/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const ALL = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'bonde', 'apito', 'ferradura', 'tinteiro', 'deserto', 'docas', 'moeda', 'becos', 'feira', 'largo', 'cortejo'];
+const ALL = ['xilindro', 'trapiche', 'vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'bonde', 'apito', 'ferradura', 'tinteiro', 'deserto', 'docas', 'moeda', 'becos', 'feira', 'largo', 'cortejo'];
 (async () => {
   const out = process.argv[2], maps = process.argv[3] ? process.argv[3].split(',') : ALL; fs.mkdirSync(out, { recursive: true });
   const b = await chromium.launch({ channel: 'chrome', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] }), rows = [];

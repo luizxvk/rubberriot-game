@@ -227,6 +227,12 @@ export function buildTouch(input, root) {
   document.body.classList.add('touchmode');
   root.hidden = false;
   const stick = el('div', 'stick'); const knob = el('i'); stick.appendChild(knob); root.appendChild(stick);
+  // trava da corrida (13/11, pedido dele, estilo COD Mobile): correndo, aparece o cadeado em cima do analogico; arrastou ate ele,
+  // a corrida trava e segue sozinha mesmo soltando o dedo. Encostou no analogico de novo = destrava e volta a andar do jeito dele
+  const lockEl = el('b', 'sprint-lock'); lockEl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM9 8V6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9z"/></svg>'; stick.appendChild(lockEl);
+  let sprintLock = false;
+  input.sprintUnlock = () => { if (!sprintLock) return; sprintLock = false; stick.classList.remove('locked', 'sprint'); knob.style.transform = ''; input.touch.mx = input.touch.mz = 0; input.touch.sprint = false; }; // morreu/renasceu: solta a trava
+  const setLock = (on) => { sprintLock = on; stick.classList.toggle('locked', on); if (on) { input.touch.mx = 0; input.touch.mz = 1; input.touch.sprint = true; knob.style.transform = 'translate(0px, -50px)'; stick.classList.add('sprint'); } };
   stick.dataset.hid = 'stick';
   const btn = (label, cls, style, down, up) => {
     const b = el('button', 'tbtn ' + cls); b.innerHTML = NADE_ICON[cls.split(' ')[0]] || svg(ICON[cls.split(' ')[0] || 'fire']); b.setAttribute('aria-label', label); Object.assign(b.style, style);
@@ -277,7 +283,7 @@ export function buildTouch(input, root) {
 
   // analogico: empurrar ate a borda = corre
   let sid = null, cx = 0, cy = 0;
-  stick.addEventListener('pointerdown', (e) => { e.preventDefault(); sid = e.pointerId; stick.setPointerCapture(sid); const r = stick.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; move(e); });
+  stick.addEventListener('pointerdown', (e) => { e.preventDefault(); if (sprintLock) setLock(false); sid = e.pointerId; stick.setPointerCapture(sid); const r = stick.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; move(e); });
   const move = (e) => {
     if (e.pointerId !== sid) return;
     let dx = (e.clientX - cx) / 60, dy = (e.clientY - cy) / 60;
@@ -290,9 +296,12 @@ export function buildTouch(input, root) {
     if (!sprint && input.touch.sprint && -dy < 0.3) input.touch.sprint = false;
     if (sprint) input.touch.sprint = true;
     stick.classList.toggle('sprint', input.touch.sprint);
+    // dedo la em cima, no cadeado (1,9 raio acima do centro): trava
+    stick.classList.toggle('lock-near', input.touch.sprint && (cy - e.clientY) / 60 > 1.55);
+    if (input.touch.sprint && (cy - e.clientY) / 60 > 1.9 && Math.abs(e.clientX - cx) / 60 < 0.9) { stick.classList.add('lock-armed'); } else stick.classList.remove('lock-armed');
   };
   stick.addEventListener('pointermove', move);
-  const end = (e) => { if (e.pointerId !== sid) return; sid = null; knob.style.transform = ''; input.touch.mx = input.touch.mz = 0; input.touch.sprint = false; stick.classList.remove('sprint'); };
+  const end = (e) => { if (e.pointerId !== sid) return; sid = null; const arm = stick.classList.contains('lock-armed'); stick.classList.remove('lock-armed', 'lock-near'); if (arm && e.type === 'pointerup') { setLock(true); return; } knob.style.transform = ''; input.touch.mx = input.touch.mz = 0; input.touch.sprint = false; stick.classList.remove('sprint'); };
   stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
 
   // resto da tela direita = olhar
@@ -351,8 +360,39 @@ export function applyHudLayout(root, S) {
     const sz = L.size?.[elx.dataset.hid]; // tamanho proprio de cada botao (08/11, pedido dele); sem ele, vale o geral antigo
     if (sz) elx.style.setProperty('--tb-scale', sz); else elx.style.removeProperty('--tb-scale');
     const pos = L.pos?.[elx.dataset.hid];
-    if (!pos) continue;
+    if (!pos) { delete elx.dataset.heMoved; continue; }
+    elx.dataset.heMoved = '1'; // o touchLayout (hud.js) nao reposiciona quem o jogador moveu
     Object.assign(elx.style, { left: pos[0] + '%', top: pos[1] + '%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' });
+  }
+  applyHudPieces(L);
+}
+
+// 13/11 (pedido dele, so celular): pecas do HUD fora da camada de toque tambem movem e mudam de tamanho no editor.
+// Posicao = canto do quadro em % da tela (o arrasto e relativo, entao os transform/scale proprios de cada uma seguem valendo);
+// tamanho = propriedade scale (multiplica a escala geral da HUD onde ela ja vale).
+export const HUD_PIECES = {
+  hp: { q: () => document.querySelector('#hud .hud-bl'), hk: 1 },
+  ammo: { q: () => document.querySelector('#hud .hud-br'), hk: 1 },
+  radar: { q: () => document.querySelector('#hud canvas.radar'), hk: 1 },
+  stk: { q: () => document.querySelector('#touch .tstk'), hk: 1 },
+  chatlog: { q: () => document.getElementById('chat') },
+  fieldhud: { q: () => document.getElementById('fieldHud') },
+};
+export function applyHudPieces(L) {
+  if (!isTouch) return;
+  for (const [id, P] of Object.entries(HUD_PIECES)) {
+    const e = P.q(); if (!e) continue;
+    if (e.dataset.hp !== id) e.dataset.hp = id;
+    const k = L?.size?.[id], pos = L?.pos?.[id];
+    const sc = k ? (P.hk ? 'calc(var(--hud-k, 1) * ' + k + ')' : String(k)) : '';
+    if (e.style.scale !== sc) e.style.scale = sc;
+    if (pos) {
+      const l = pos[0] + '%', t2 = pos[1] + '%';
+      if (e.style.left !== l || e.style.top !== t2 || !e.dataset.heMoved) Object.assign(e.style, { left: l, top: t2, right: 'auto', bottom: 'auto' });
+      e.dataset.heMoved = '1';
+    } else if (e.dataset.heMoved) { // Restaurar: volta pro lugar automatico
+      delete e.dataset.heMoved; Object.assign(e.style, { left: '', top: '', right: '', bottom: '' });
+    }
   }
 }
 function el(tag, cls) { const e = document.createElement(tag); if (cls) e.className = cls; return e; }

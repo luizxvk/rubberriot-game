@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { carStep, seatPos, rayCar } from '../shared/cars.js';
 import { moveBody, raycast, rayPlayer, hasLOS, wallThickness, headroom } from '../shared/map.js';
 import { standable, floorAt } from '../shared/nav.js';
-import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, HEIST, SMUGGLE, bodyTrait, STREAK_FREE, GADGETS, gadgetOf } from '../shared/weapons.js';
+import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, HEIST, SMUGGLE, bodyTrait, STREAK_FREE, GADGETS, gadgetOf, isSilenced, INTEGRAL_SIL } from '../shared/weapons.js';
 import { EV } from '../shared/events.js';
 import { BOR } from '../shared/mobs.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout, isSaber, meleeBody } from './arsenal.js';
@@ -18,6 +18,7 @@ import { wpnTrack } from './progress.js';
 import { LASER_BODY } from './world.js';
 import { t } from './i18n.js';
 import { isTouch } from './input.js';
+import { HOOK_OUT } from './hookview.js';
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 // slots (teclas 1, 2, 3...): arma principal primeiro, pistola em 2, faca por ultimo
@@ -91,6 +92,7 @@ export class Player {
     this.pickLo = null; // renasceu: volta pras proprias armas
     this.ggBody = ev.body || null;
     this.pos = [...ev.pos]; this.vel = [0, 0, 0]; this.recoilP = 0; this.recoilY = 0;
+    this.adsK = 0; this.g.input?.resetAds?.(); this.g.input?.sprintUnlock?.(); this.akRefill = [0, 0]; this.akT = [0, 0]; // 13/11 (bug dele: sensibilidade estranha ate trocar de arma): a mira da vida anterior (alternar) nao passa pra proxima
     // bate-volta: nasce caindo; o paraquedas abre no pulo (no celular abre sozinho, ajuste)
     this.air = !!ev.air; this.chute = false; this.cutChute = false;
     this.yaw = ev.yaw; this.pitch = 0;
@@ -403,7 +405,7 @@ export class Player {
     if (inp.jumpPressed && this.onGround && !this.mantle) { this.vel[1] = 7.4 * Math.sqrt(this.sk('mola', 'jump')) * (EV(this.g.snap?.mut)?.jump || 1); this.onGround = false; audio.play('jump', { vol: 0.45 }); }
     // contagem do inicio: quem esta no ar fica parado ate soltar todo mundo
     const hold = air && this.g.snap?.freeze > 0;
-    if (hold) this.vel = [0, 0, 0]; else this.vel[1] -= 24 * (EV(this.g.snap?.mut)?.grav || 1) * dt;
+    if (hold) this.vel = [0, 0, 0]; else if (!this.hookPull(dt, inp)) this.vel[1] -= 24 * (EV(this.g.snap?.mut)?.grav || 1) * dt; // 13/11: Gancho do Palco puxando = sem gravidade
     if (air) this.vel[1] = Math.max(this.vel[1], -(this.chute ? BR.bounce.chute : BR.bounce.freefall));
     const vy = this.vel[1];
     this.wasGround = this.onGround;
@@ -457,10 +459,11 @@ export class Player {
     if (inp.reloadPressed) this.startReload();
     // toque: com o pente vazio recarrega sozinho (o tiro automatico nunca "aperta" com o pente vazio,
     // entao a arma ficava parada em 0 ate achar o botao de recarregar)
-    { const am = this.ammo[this.wpn]; if ((this.g.settings?.autoReload ?? isTouch) && am && /* 07/11: opcao nos Ajustes (antes so no celular) */ am.mag === 0 && am.reserve > 0 && this.reloadT <= 0 && this.switchT <= 0) this.startReload(); }
+    { const am = this.ammo[this.wpn]; if (am && am.mag === 0 && !this.g.vm.gun?.userData.spinLoad && ((this.g.settings?.autoReload ?? isTouch) || this.stats(this.wpn).mag === 1) && /* 13/11 (pedido dele): arma de 1 tiro (Sentenca, Pederneira) recarrega sozinha depois do tiro */ /* 07/11: opcao nos Ajustes (antes so no celular) */ am.mag === 0 && am.reserve > 0 && this.reloadT <= 0 && this.switchT <= 0) this.startReload(); }
     // faca rapida (V / botao): golpe com a lamina equipada, sem largar a arma
     this.meleeCd = (this.meleeCd || 0) - dt;
     if (inp.meleePressed && this.meleeCd <= 0 && this.switchT <= 0 && this.throwT <= 0) this.melee();
+    this.hookAim = this.g.field === 'hook' && this.alive && !this.g.down ? this.hookAimCalc() : null; // 13/11: mira do gancho em tempo real
     if (inp.fieldPressed) this.useField();
     this.fieldPhysics(dt);
     if (inp.inspectPressed && this.reloadT <= 0 && this.adsK < 0.1 && !this.sprint) this.g.vm.inspect();
@@ -506,6 +509,7 @@ export class Player {
       if (this.reloadT <= 0 && a) {
         const need = mag - a.mag, take = Math.min(need, a.reserve);
         a.mag += take; a.reserve -= take;
+        if (mag === 1) this.fireT = Math.min(this.fireT, 0); // 13/11 (pedido dele): arma de 1 tiro (Sentenca, Pederneira) atira assim que a bala entra
         this.g.hud.weapon(this);
       }
     }
@@ -533,6 +537,10 @@ export class Player {
     const loS = this.wpn === 'sniper' ? this.lo('sniper') : null, chargeKit = loS?.conv === 'charge' && loS?.body === 'sniper_0';
     // fora dela: carga zera e os circulos somem (antes ficavam girando na arma seguinte)
     if (!chargeKit && (this.chargeT > 0 || this.g.vm.charge)) { this.chargeT = 0; this.g.vm.charge = 0; audio.stopKey?.('charge'); }
+    // Sentenca no akimbo (13/11, pedido dele): cada arma que atira da um giro de 360 e ja volta com a bala, sozinha, no PC e no toque
+    const spin = !!this.g.vm.gun?.userData.spinLoad, RF = this.akRefill ||= [0, 0];
+    if (spin) for (const i of [0, 1]) if (RF[i] > 0 && (RF[i] -= dt) <= 0) { const hs = this.akAmmo(a); if (hs && a.reserve > 0) { a.reserve--; a.mag++; if (aki) hs[i]++; else a.ak = null; this.g.hud?.weapon?.(this); } }
+    const spinShot = (i) => { if (!spin || !a || a.reserve <= 0 || RF[i] > 0) return 0; const d = W.reload * st.reload * this.sk('maos', 'reload'); RF[i] = d; this.akRefillD = d; this.g.vm.spinLoad(i === 0 ? 'L' : 'R', d); audio.play('reload', { vol: 0.5, rate: 1.9 }); return d; };
     if (aki) {
       const T = this.akT ||= [0, 0]; T[0] -= dt; T[1] -= dt;
       const auto = mode === 'auto', L = onPad ? inp.ads : inp.fire, R = onPad ? inp.fire : inp.ads; // 10/11: direita so com o botao segurado (alternar ao mirar fazia a direita atirar sozinha)
@@ -540,14 +548,16 @@ export class Player {
       const want = [auto ? L : Lp, auto ? R : Rp];
       this.firing = (L || R) && !running && this.switchT <= 0;
       const can = this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !running;
+      // Sentenca no akimbo (13/11, pedido dele): cada arma que atira da um giro de 360 e ja volta com a bala (a outra segue atirando)
       for (const i of [0, 1]) {
         if (!want[i] || !can || T[i] > 0) continue;
-        if (a && a.mag !== Infinity && a.mag <= 0) { if (a.reserve > 0) this.startReload(); else audio.play('empty', { vol: 0.5 }); break; }
+        if (!spin && a && a.mag !== Infinity && a.mag <= 0) { if (a.reserve > 0) this.startReload(); else audio.play('empty', { vol: 0.5 }); break; }
         const hands = this.akAmmo(a); // cada mao tem o seu pente: a vazia nao atira, a outra segue
         if (hands && hands[i] <= 0) { audio.play('empty', { vol: 0.4 }); continue; }
         this.g.vm.forceSide = i === 0 ? 'L' : 'R';
         if (hands) hands[i]--; // antes do tiro: o HUD atualiza dentro dele
         this.shoot(W, st); this.fireT = 0; T[i] = W.rate * st.rate * 2;
+        { const d = spinShot(i); if (d) T[i] = d; } // a arma que girou atira de novo assim que volta (sem esperar a cadencia)
       }
     } else if (chargeKit) {
       // Canhao de Carga (kit da Luneta, 01/11): segurando carrega ate 3 s; soltando atira. Carga cheia = abate na hora
@@ -562,13 +572,15 @@ export class Player {
       this.g.vm.charge = (this.chargeT || 0) / 3;
     } else if (trigger && this.fireT <= 0 && this.switchT <= 0 && this.reloadT <= 0 && this.sprintOut <= 0 && !running && (!W.spin || this.spinK >= 1)) {
       if (a && a.mag !== Infinity && a.mag <= 0) {
-        if (a.reserve > 0) this.startReload();
+        if (spin && (RF[0] > 0 || RF[1] > 0)) { /* Sentenca no akimbo: a bala vem no giro, sem recarga cheia */ }
+        else if (a.reserve > 0) this.startReload();
         else if (inp.firePressed) audio.play('empty', { vol: 0.5 });
       } else if (W.melee) {
         if (this.meleeCd <= 0) this.melee();
       } else {
         this.shoot(W, st);
-        if (mode === 'bolt') { this.g.vm.bolt(W.rate * st.rate); this.boltSfxT = 0.22; }
+        if (spin) spinShot(this.g.vm.akSide ? 0 : 1); // toque: as duas alternam; a que atirou gira e recarrega
+        else if (mode === 'bolt' && mag > 1) { this.g.vm.bolt(W.rate * st.rate); this.boltSfxT = 0.22; } // 1 tiro: sem ferrolho (a recarga ja e o ciclo)
         // escopeta de bomba (nao a automatica AA-12, nem duas na mao): puxa a bomba depois do tiro
         if (this.wpn === 'shotgun' && mode !== 'auto' && this.lo(this.wpn)?.body !== 'shotgun_3' && this.lo(this.wpn)?.handle !== 'akimbo') { this.g.vm.pump?.(W.rate * st.rate); this.pumpSfxT = 0.18; } // clack-clunk do ferrolho logo depois do tiro
         if (mode === 'burst') { this.burstLeft--; this.fireT = this.burstLeft > 0 ? W.rate * st.rate * 0.6 : W.rate * st.rate * 2.4; }
@@ -637,6 +649,7 @@ export class Player {
   useField() {
     const g = this.g, F = FIELD[g.field];
     if (!F || !this.alive || g.inRing || g.down) return; // ringue = so soco; caido nao usa
+    if (g.field === 'hook') return this.fireHook();
     if (g.field === 'umbrella' && this.lo(this.wpn)?.handle === 'akimbo' && (g.fieldK ?? 0) >= 1) { audio.play('empty', { vol: 0.4 }); g.hud?.message?.(t('fieldAkimbo'), 1.6); return; } // 08/11 (regra dele): arma akimbo equipada = sem guarda-chuva (o servidor tambem barra)
     if ((g.fieldK ?? 0) < 1) { audio.play('empty', { vol: 0.4 }); return; } // barra ainda nao encheu (pontos/abates)
     const o = this.eyePos(), cp = Math.cos(this.pitch);
@@ -647,6 +660,67 @@ export class Player {
     for (let k = 0; k < 16 && dist > 1 && !standable(g.M, o[0] + d[0] * dist, o[2] + d[2] * dist); k++) dist -= 0.7;
     const at = [o[0] + d[0] * dist, 0, o[2] + d[2] * dist];
     g.net.send({ t: 'field', kind: g.field, at });
+  }
+  // ---------- Gancho do Palco (13/11, pedido dele: estilo Titanfall) ----------
+  // Ponta mirada: parede = a BEIRADA de cima dela (sobe na estrutura), chao/teto/topo = o ponto. ok = dentro do alcance
+  hookAimCalc() {
+    const g = this.g, F = FIELD.hook, o = this.eyePos(), cp = Math.cos(this.pitch);
+    const d = [-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp];
+    const h = raycast(g.M, o, d, F.range + 30);
+    if (!Number.isFinite(h.dist)) return { ok: false, none: true, p: [o[0] + d[0] * F.range, o[1] + d[1] * F.range, o[2] + d[2] * F.range] };
+    const p = [o[0] + d[0] * h.dist, o[1] + d[1] * h.dist, o[2] + d[2] * h.dist], n = h.normal || [0, 1, 0];
+    let at = p, ledge = null;
+    if (Math.abs(n[1]) < 0.5) { // parede: procura o topo logo acima do ponto (ate 5,5 m), 45 cm pra dentro
+      const q = [p[0] - n[0] * 0.45, p[1] + 6, p[2] - n[2] * 0.45], v = raycast(g.M, q, [0, -1, 0], 6.6);
+      if (Number.isFinite(v.dist) && v.normal && v.normal[1] > 0.5) {
+        const ty = q[1] - v.dist;
+        // a ponta: a quina de fora, um tico acima (o servidor confere a visao ate ela)
+        const e = [p[0] + n[0] * 0.12, ty + 0.3, p[2] + n[2] * 0.12];
+        if (ty >= p[1] - 0.2 && ty - p[1] <= 5.5 && hasLOS(g.M, o, e)) { at = e; ledge = [-n[0], -n[2]]; }
+      }
+    }
+    const dist = Math.hypot(at[0] - o[0], at[1] - o[1], at[2] - o[2]);
+    return { ok: dist <= F.range && dist > 2.2, p: at, ledge, dist, far: dist > F.range };
+  }
+  fireHook() {
+    const g = this.g, a = this.hookAim;
+    if ((g.fieldK ?? 0) < 1) { audio.play('empty', { vol: 0.4 }); return; }
+    if (this.hook) return; // ja puxando
+    if (performance.now() < (this.hookCd || 0)) { audio.play('empty', { vol: 0.4 }); return; } // 13/11 (pedido dele): 3 s depois de cada ganchada
+    if (!a?.ok) { audio.play('empty', { vol: 0.4 }); g.hud?.message?.(t('hookFar'), 1.2); return; }
+    g.net.send({ t: 'field', kind: 'hook', to: a.p.map(v => Math.round(v * 100) / 100) });
+    this.hook = { p: a.p, ledge: a.ledge, t: 0, stuck: 0, prevD: null };
+    this.endSlide?.(false); this.mantle = null;
+    g.vm?.hookThrow?.(); g.vm?.hookHold?.(true);
+    this.hookRope = g.hookView?.self(a.p, () => g.vm?.hookHandNdc?.());
+    audio.play('whoosh', { vol: 0.6, rate: 0.75 });
+  }
+  // puxada: true enquanto puxa (sem gravidade). Solta perto da ponta, no pulo (com embalo), travado ou no tempo maximo
+  hookPull(dt, inp) {
+    const H = this.hook; if (!H) return false;
+    H.t += dt;
+    if (!this.alive || this.g.down || this.g.mySeat) { this.hookEnd(false); return false; }
+    if (H.t < HOOK_OUT) return false; // a bengala ainda voando
+    if (H.t >= HOOK_OUT && !H.caught) { H.caught = true; audio.play('pan', { vol: 0.35, rate: 1.6, pos: H.p }); this.g.shake?.(0.08); }
+    const F = FIELD.hook, tg = [H.p[0], H.p[1] + (H.ledge ? 0.75 : -0.3), H.p[2]];
+    const dx = tg[0] - this.pos[0], dy = tg[1] - (this.pos[1] + 0.9), dz = tg[2] - this.pos[2], d = Math.hypot(dx, dy, dz) || 1e-3;
+    if (inp.jumpPressed && H.t > HOOK_OUT + 0.12) { this.hookEnd(true); return false; }
+    if (d < 1.25 || H.t > F.maxT) { this.hookEnd(false); return false; }
+    H.stuck = H.prevD != null && H.prevD - d < F.speed * dt * 0.12 ? H.stuck + dt : 0; H.prevD = d;
+    if (H.stuck > 0.25) { this.hookEnd(false); return false; } // preso em algo no caminho
+    const sp = F.speed * Math.min(1, 0.35 + (H.t - HOOK_OUT) / 0.2), k = 1 - Math.exp(-11 * dt); // arranque elastico (borracha esticando)
+    this.vel[0] += (dx / d * sp - this.vel[0]) * k; this.vel[1] += (dy / d * sp - this.vel[1]) * k; this.vel[2] += (dz / d * sp - this.vel[2]) * k;
+    this.onGround = false; this.sprint = false; this.tac = false; this.crouch = false;
+    return true;
+  }
+  hookEnd(jump) {
+    const H = this.hook; if (!H) return;
+    this.hook = null; this.g.hookView?.release(this.hookRope); this.hookRope = null; this.g.vm?.hookHold?.(false);
+    this.hookCd = performance.now() + (FIELD.hook?.cd ?? 3) * 1000;
+    if (H.ledge && !jump) { this.vel[1] = Math.max(this.vel[1], 6.2); this.vel[0] = H.ledge[0] * 4.5; this.vel[2] = H.ledge[1] * 4.5; } // chegou na beirada: sobe e anda pra cima dela
+    else if (jump) { this.vel[1] = Math.max(this.vel[1] * 0.6, 0) + 5.5; } // soltou no pulo: mantem o embalo pra frente (Titanfall)
+    else { this.vel[0] *= 0.55; this.vel[1] *= 0.4; this.vel[2] *= 0.55; }
+    audio.play('jump', { vol: 0.35, rate: 0.9 });
   }
   // mola e buraco do proprio jogador (a posicao e do cliente): pisou na mola voa, entrou no buraco sai no outro
   fieldPhysics(dt) {
@@ -771,7 +845,7 @@ export class Player {
     }
     const bodyNow = this.lo(this.wpn)?.body; // som proprio de modelo: revolver, AA-12 e o laser do Bico Longo
     const laser = this.wpn === 'pistol' && bodyNow === LASER_BODY;
-    const silOn = String(this.lo(this.wpn)?.muzzle || '').startsWith('silencer'), sil = silOn && !laser ? audio.silSound(this.wpn) : null; // silenciador: som proprio da categoria (sem eco)
+    const silOn = isSilenced(this.lo(this.wpn)), sil = silOn && !laser ? (INTEGRAL_SIL.includes(bodyNow) ? audio.gunSound(bodyNow, null) : null) || audio.silSound(this.wpn) : null; // 13/11: silenciador de fabrica = tiro abafado proprio // silenciador: som proprio da categoria (sem eco)
     audio.play(sil || (laser ? 'laser' : (bodyNow === 'pistol_10' || bodyNow === 'pistol_5') ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn)), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: silOn && !sil, dry: !!sil });
     audio.duck(0.6, 0.25);
 
@@ -797,7 +871,8 @@ export class Player {
       const hit = this.traceTargets(o, d.toArray(), 250, ammo === 'ap');
       if (i === 0 || hit.player) firstEnd = hit.point;
       if (hit.player) {
-        const fall = slug ? Math.max(0.55, 1 - hit.dist / 110) * (W.pellets || 1) * AMMO.slug.slugK : this.wpn === 'shotgun' || st.pellets ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'pistol' && this.lo(this.wpn)?.handle === 'akimbo' ? Math.max(0.7, 1 - hit.dist / 140) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
+        const fallR = bodyTrait(this.lo(this.wpn)?.body || '').fallR; // 13/11: Simeon North (pederneira) perde dano rapido com a distancia
+        const fall = fallR ? Math.max(0.3, 1 - hit.dist / fallR) : slug ? Math.max(0.55, 1 - hit.dist / 110) * (W.pellets || 1) * AMMO.slug.slugK : this.wpn === 'shotgun' || st.pellets ? Math.max(0.2, 1 - hit.dist / 24) : this.wpn === 'pistol' && this.lo(this.wpn)?.handle === 'akimbo' ? Math.max(0.7, 1 - hit.dist / 140) : this.wpn === 'smg' || this.wpn === 'pistol' ? Math.max(0.6, 1 - hit.dist / 90) : 1;
         if (!victim || victim === hit.player) { victim = hit.player; total += W.dmg * fall * dmgK * (hit.wall ? AMMO.ap.wallK : 1); head ||= hit.head; hitPoint = hit.point; }
       } else if (hit.normal) g.fx.impact(hit.point, hit.normal);
       if (i < (this.wpn === 'shotgun' || st.pellets ? 6 : 3)) g.fx.bullet(muzzleScreen.toArray(), hit.point, laser ? 'laser' : tracerOf(this.lo(this.wpn)), this.wpn); // uma bala por tiro (escopeta: os chumbos)

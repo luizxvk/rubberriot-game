@@ -3,7 +3,7 @@
 // num iframe (?ss=<tela>&pad=<controle>) falando com ela pelo window.__ssHost, em JSON igual ao multiplayer.
 // Todo mundo joga como convidado, junto no vermelho contra os bots (etapa 2: conta Rovex por tela).
 import { Core, MAP_IDS } from '../shared/core.js';
-import { ESCORT_MAPS, HEIST_ONLY } from '../shared/map.js';
+import { ESCORT_MAPS, HEIST_ONLY, mapAllows, SMUGGLE_MAPS } from '../shared/map.js';
 import qrcode from 'qrcode-generator';
 import { API, STANDALONE } from './rovex.js';
 import './split.css';
@@ -29,7 +29,7 @@ const T = EN ? {
 const fmt = (s, n) => s.replace('{n}', n);
 const MODES = Object.keys(T.modes);
 const DIFFS = [0.7, 1, 1.35];
-const mapsFor = (mode) => ['auto', ...(mode === 'escort' ? ESCORT_MAPS : mode === 'heist' ? [...HEIST_ONLY, ...MAP_IDS.filter(m => m !== 'ilha')] : MAP_IDS.filter(m => m !== 'ilha' && !ESCORT_MAPS.includes(m)))];
+const mapsFor = (mode) => ['auto', ...(mode === 'escort' ? ESCORT_MAPS : mode === 'smuggle' ? SMUGGLE_MAPS : mode === 'heist' ? [...HEIST_ONLY, ...MAP_IDS.filter(m => m !== 'ilha')] : MAP_IDS.filter(m => m !== 'ilha' && !ESCORT_MAPS.includes(m) && mapAllows(m, mode)))];
 
 let cfg = { mode: 'tdm', map: 'auto', bots: 6, difficulty: 1, two: 'h' }; // two: como dividir com 2 jogadores (h = em cima e embaixo, v = lado a lado)
 try { cfg = { ...cfg, ...JSON.parse(localStorage.getItem('rr_ss_cfg') || '{}') }; } catch { /* */ }

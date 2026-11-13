@@ -14,7 +14,7 @@ const other = (t) => (t === 'red' ? 'blue' : 'red');
 
 // cofre no ponto A da bomba (chao de pe garantido); van na base do sul
 export function heistPoints(M) {
-  if (M.heistPts) return { vault: clear(M, M.heistPts.vault[0], M.heistPts.vault[1], 1.6), van: [M.heistPts.van[0], floorAt(M, M.heistPts.van[0], M.heistPts.van[1]), M.heistPts.van[1]] }; // mapa com pontos proprios (Cais: pilha e barco)
+  if (M.heistPts) return { vault: clear(M, M.heistPts.vault[0], M.heistPts.vault[1], 1.6), van: [M.heistPts.van[0], floorAt(M, M.heistPts.van[0], M.heistPts.van[1]), M.heistPts.van[1]], ...(M.heistPts.drop ? { drop: M.heistPts.drop } : {}) }; // drop (13/11): a entrega e um caminhao (Vila Muamba), nao o barco // mapa com pontos proprios (Cais: pilha e barco)
   const s = BOMB_SITES[M.id] || { A: [M.zones[0].pos[0], M.zones[0].pos[2]] };
   // van no meio de onde o ataque nasce (na ponta do mapa ficava longe demais: quem carregava morria no caminho)
   // (o ponto de nascimento mais perto do centro deles: e chao de verdade; a media caia em cima de tanque na Refinaria)

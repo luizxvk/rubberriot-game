@@ -2,8 +2,8 @@
 // estas funcoes na mensagem 'field', no dano (guarda-chuva bloqueia), no tick e no snapshot.
 // Quem anda e o cliente (posicao e dele): mola e buraco do humano ele mesmo aplica; dos bots, o servidor.
 import { FIELD, FIELD_IDS } from './weapons.js';
-import { floorAt, standable } from './nav.js';
-import { hasLOS } from './map.js';
+import { floorAt, standable, roomy } from './nav.js';
+import { hasLOS, moveBody } from './map.js';
 
 let seq = 0;
 const near = (a, b, r) => (a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2 < r * r && Math.abs(a[1] - b[1]) < 1.6;
@@ -40,6 +40,20 @@ export function fieldUse(c, p, m) {
   else if (p.field === 'hole') { const a = [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]]; c.holes.push({ id: ++seq, a, b: holeExit(c.M, a), t: F.dur, owner: p.id }); } // b = saida ja sorteada (09/11): fica desenhada no chao
   else if (p.field === 'stim') { if (p.hp >= (p.maxHp || 100) && !(p.burn)) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } p.stimT = F.dur; p.burn = null; }
   else if (p.field === 'vest') { if ((p.armor || 0) >= F.armor) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } p.armor = F.armor; }
+  else if (p.field === 'hook') { // 13/11: Gancho do Palco. to = ponta mirada; confere alcance e visao (volta 30 cm pro olho: o ponto e na superficie)
+    const to = Array.isArray(m.to) && m.to.length === 3 && m.to.every(Number.isFinite) ? m.to : null;
+    const d = to ? Math.hypot(to[0] - eye[0], to[1] - eye[1], to[2] - eye[2]) : Infinity;
+    const back = to && d > 0.5 ? to.map((v, i) => v + (eye[i] - v) / d * 0.3) : null;
+    if (!to || d > F.range + 2 || !hasLOS(c.M, eye, back)) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id, why: 'hookFar' }); return; }
+    if ((c.clock || 0) < (p.hookNext || 0)) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id, why: 'hookCd' }); return; } // 13/11: espera entre ganchadas (o cliente conta do fim da puxada; aqui conta do lancamento, com folga)
+    p.hookNext = (c.clock || 0) + F.cd;
+    p.mvSkip = Math.max(p.mvSkip || 0, (c.clock || 0) + F.maxT + 1); // puxada passa do limite de velocidade do anti-trapaca
+    p.hookUses = (p.hookUses ?? F.uses) - 1;
+    if (p.hookUses > 0) { c.event({ k: 'field', id: p.id, kind: 'hook', at: to, left: p.hookUses }); return; } // ainda tem lancada: a barra fica cheia
+    p.hookUses = undefined; p.fieldCharge = 0;
+    c.event({ k: 'field', id: p.id, kind: 'hook', at: to, left: 0 });
+    return;
+  }
   else if (p.field === 'anvil') { if (!at) { c.send(p.id, { t: 'ev', k: 'fieldFail', id: p.id }); return; } c.anvils.push({ owner: p.id, pos: at, t: F.fall }); c.event({ k: 'anvilWarn', list: [at] }); }
   p.fieldCharge = 0;
   c.event({ k: 'field', id: p.id, kind: p.field, at });
@@ -97,7 +111,8 @@ export function fieldSnap(c) {
 }
 
 // bots: cada um sai com um equipamento sorteado e usa com criterio, so com a barra cheia (como todo mundo)
-export const botPickField = () => FIELD_IDS[Math.floor(Math.random() * FIELD_IDS.length)];
+const BOT_FIELDS = FIELD_IDS; // 13/11 (pedido dele): bot tambem usa o gancho, so pra ponto no CHAO (ele nao tem rota pelo alto)
+export const botPickField = () => BOT_FIELDS[Math.floor(Math.random() * BOT_FIELDS.length)];
 export function botField(c, p, t) {
   const hpK = p.hp / (p.maxHp || 80), d = t ? Math.hypot(t.pos[0] - p.pos[0], t.pos[2] - p.pos[2]) : 99;
   let at = null, go = false;
@@ -107,7 +122,59 @@ export function botField(c, p, t) {
   else if (p.field === 'anvil') { go = !!t && d > 8 && d < FIELD.anvil.range && Math.random() < 0.25; at = t && [...t.pos]; } // alvo a vista, longe do proprio pe
   else if (p.field === 'spring') { go = !!t && d < 9 && hpK < 0.8 && Math.random() < 0.4; at = [...p.pos]; } // pula fora do aperto
   else if (p.field === 'hole') go = !!t && hpK < 0.45 && Math.random() < 0.5; // apanhando: foge pelo buraco
+  else if (p.field === 'hook') { // 13/11 (pedido dele): foge apanhando, encurta distancia do alvo longe ou atravessa o mapa sem alvo
+    if (p.hookPull || p.inRing || (c.clock || 0) < (p.hookNext || 0)) return;
+    let g = null; const role = p.ai?.role, goal = p.ai?.goal;
+    if (t && hpK < 0.4 && Math.random() < 0.5) g = [p.pos[0] - (t.pos[0] - p.pos[0]) / d * 26, 0, p.pos[2] - (t.pos[2] - p.pos[2]) / d * 26];
+    else if (t && d > 16 && role !== 2 && Math.random() < 0.3) g = [t.pos[0] + (p.pos[0] - t.pos[0]) / d * 7, 0, t.pos[2] + (p.pos[2] - t.pos[2]) / d * 7]; // ancora (role 2) fica longe
+    else if (!t && Array.isArray(goal) && Math.hypot(goal[0] - p.pos[0], goal[2] - p.pos[2]) > 22 && Math.random() < 0.12) g = goal;
+    const to = g && botHookSpot(c, p, g[0], g[2]);
+    if (!to) return;
+    const was = p.hookNext;
+    fieldUse(c, p, { kind: 'hook', to }); // mesma conferencia do jogador: alcance, visao, espera de 3 s e as 2 lancadas
+    if (p.hookNext !== was) { p.hookPull = { to, t: 0, stuck: 0, prevD: Infinity }; if (p.ai) p.ai.path = null; }
+    return;
+  }
   if (!go) return;
   fieldUse(c, p, { kind: p.field, at });
   if (p.field === 'hole' && !fieldReady(p)) { const h = c.holes[c.holes.length - 1], to = h.b; if (to) { p.pos = [...to]; p.holeCd = 1.5; p.ai.path = null; holeNext(c, h); c.event({ k: 'slurp', id: p.id, from: h.a, to }); } } // entra na hora
+}
+
+// ---------- gancho dos bots (13/11, pedido dele) ----------
+// Limites: so chao de verdade dentro da arena (standable/roomy: fora da borda, zona proibida e teto baixo nao valem), nunca
+// telhado (y ate 1,6 m e no maximo 1,5 m acima/abaixo do pe do bot), dentro do alcance, a vista e com o corpo passando reto.
+const HOOK_OUT = 0.14; // o mesmo voo da cabeca do cliente (hookview.js)
+function botHookSpot(c, p, gx, gz) {
+  const F = FIELD.hook, eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]], dx = gx - p.pos[0], dz = gz - p.pos[2], L = Math.hypot(dx, dz);
+  if (L < 7) return null;
+  const far = Math.min(L, F.range - 3);
+  for (let k = 0; k < 8; k++) {
+    const s2 = far * (1 - k * 0.09); if (s2 < 7) break;
+    const x = p.pos[0] + dx / L * s2, z = p.pos[2] + dz / L * s2;
+    if (!roomy(c.M, x, z)) continue;
+    const y = floorAt(c.M, x, z);
+    if (y > 1.6 || Math.abs(y - p.pos[1]) > 1.5) continue;
+    if (!hasLOS(c.M, eye, [x, y + 0.6, z]) || !hasLOS(c.M, [p.pos[0], p.pos[1] + 0.8, p.pos[2]], [x, y + 0.8, z])) continue;
+    return [Math.round(x * 100) / 100, Math.round((y + 0.05) * 100) / 100, Math.round(z * 100) / 100];
+  }
+  return null;
+}
+// puxada do bot no servidor: true enquanto puxa (o resto da IA espera). Solta perto da ponta, travado ou no tempo maximo
+export function botHookTick(c, p, dt) {
+  const H = p.hookPull; if (!H) return false;
+  const F = FIELD.hook;
+  if (!p.alive || p.down > 0 || p.inRing) { p.hookPull = null; return false; }
+  H.t += dt;
+  if (H.t < HOOK_OUT) { p.vel[0] = p.vel[2] = 0; p.vel[1] = Math.max(p.vel[1] - 24 * dt, -20); p.onGround = moveBody(c.M, p.pos, p.vel, dt, 0.4, 1.7); return true; } // corda voando
+  const dx = H.to[0] - p.pos[0], dy = H.to[1] - p.pos[1], dz = H.to[2] - p.pos[2], d = Math.hypot(dx, dy, dz) || 1;
+  if (d < 1.25 || H.t > F.maxT || H.stuck > 0.25) { // chegou: segue com um pouco do embalo
+    p.hookPull = null; p.vel = [dx / d * F.speed * 0.3, Math.max(0, dy / d * F.speed * 0.3), dz / d * F.speed * 0.3]; if (p.ai) { p.ai.path = null; p.ai.think = 0; }
+    return false;
+  }
+  H.stuck = d > H.prevD - F.speed * dt * 0.25 ? H.stuck + dt : 0; H.prevD = d;
+  const k = F.speed / d;
+  p.vel = [dx * k, dy * k + 1.2, dz * k]; // um tico pra cima: nao raspa o chao no caminho
+  p.onGround = moveBody(c.M, p.pos, p.vel, dt, 0.4, 1.7);
+  p.anim = 'fall';
+  return true;
 }

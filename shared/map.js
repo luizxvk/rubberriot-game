@@ -1017,6 +1017,159 @@ function docas() {
   };
 }
 
+// ---------- Xilindró (13/11, pedido dele: presídio fechado e frenético, no jeito do Operation Locker) ----------
+// Faixa comprida (36 x 80 m) entre muralhas. Pavilhão fechado no meio (teto a 8 m) e os pátios de banho de sol nas pontas,
+// onde cada time nasce. Dentro: galeria central (10 m) com as celas dos dois lados (grade: a bala passa, o corpo não; porta
+// aberta pra se esconder), balcão em cima das celas (escada nas 4 pontas) e, por fora das celas, os corredores dos armários,
+// ligados à galeria por 3 travessas. Três entradas em cada ponta (corredor, galeria, corredor) = rota curta e briga o tempo todo.
+// Só Mata-Mata, Contra Todos, Bandeira, Dominação, Escada de Armas e Infectado (MAP_MODES).
+function xilindro() {
+  const A = 40, { boxes, box, stairs } = builder(A);
+  const W = 18, Z0 = 24, H = 8, CB = 9.6, HB = 5, BAL = 3.6, BY = 3.7; // meia largura, ponta do pavilhao, teto, fundo das celas, frente das celas (grade), beira do balcao, altura do balcao
+  for (const s of [-1, 1]) box(0, s * (A + 1), W * 2 + 2, 2, 10, 0, 'pwall'); // muralha das pontas (concreto, nao a palicada padrao)
+  for (const s of [-1, 1]) { box(s * (W + 0.5), 0, 1, A * 2, 10, 0, 'pwall'); boxes.push({ min: [s > 0 ? W + 1 : -A - 2, 0, -A - 2], max: [s > 0 ? A + 2 : -W - 1, 40, A + 2], kind: 'nogo' }); } // muralha + fora do mapa
+  // pontas do pavilhao: 3 portas (corredor, galeria, corredor)
+  for (const s of [-1, 1]) {
+    const z = s * Z0, seg = (x0, x1) => box((x0 + x1) / 2, z, x1 - x0, 0.6, H, 0, 'pwall');
+    seg(-W, -15.4); seg(-12.6, -1.6); seg(1.6, 12.6); seg(15.4, W);
+    for (const [x0, x1] of [[-15.4, -12.6], [-1.6, 1.6], [12.6, 15.4]]) box((x0 + x1) / 2, z, x1 - x0, 0.6, H - 3, 3, 'pwall'); // verga em cima de cada porta
+  }
+  box(0, 0, W * 2, Z0 * 2 + 0.6, 0.6, H, 'proof'); // teto do pavilhao (fino: o radar mostra o chao)
+  // celas: 12 de cada lado, 3,6 m cada; as travessas (z = -12, 0, 12) sao corredor no lugar da cela
+  const CELL = 3.6, cells = [], cross = [-12, 0, 12];
+  for (let i = 0; i < 12; i++) { const zc = -21.6 + CELL * (i + 0.5); if (!cross.some(c => Math.abs(c - zc) < 2)) cells.push(zc); }
+  for (const s of [-1, 1]) {
+    const xb = s * CB, xf = s * HB, xm = s * (CB + HB) / 2, dep = CB - HB;
+    // fundo das celas: parede ate o teto, com as 3 travessas abertas (porta de 2,8 m)
+    let z0 = -Z0;
+    for (const c of cross) { box(xb, (z0 + c - 1.4) / 2, 0.4, c - 1.4 - z0, H, 0, 'pwall'); box(xb, c, 0.4, 2.8, H - 3, 3, 'pwall'); z0 = c + 1.4; }
+    box(xb, (z0 + Z0) / 2, 0.4, Z0 - z0, H, 0, 'pwall');
+    // divisorias (pe-direito da cela 3,4) e grade com porta aberta no meio
+    const edges = new Set();
+    for (const zc of cells) { edges.add(+(zc - CELL / 2).toFixed(2)); edges.add(+(zc + CELL / 2).toFixed(2)); }
+    for (const c of cross) { edges.add(c - 1.4); edges.add(c + 1.4); }
+    for (const e of edges) box(xm, e, dep, 0.3, BY - 0.3, 0, 'pwall');
+    for (const zc of cells) {
+      for (const k of [-1, 1]) box(xf, zc + k * (CELL / 2 + 0.65) / 2, 0.16, CELL / 2 - 0.65, BY - 0.3, 0, 'cellbars'); // porta de 1,3 m no meio
+      box(xf, zc, 0.16, 1.3, BY - 0.3 - 2.3, 2.3, 'cellbars'); // grade em cima da porta
+      box(s * (CB - 0.65), zc - 0.3, 0.9, 2.1, 1.7, 0, 'bunk'); // beliche no fundo
+      if ((Math.round(zc * 10) + (s > 0 ? 1 : 0)) % 3 === 0) box(s * (HB + 0.9), zc + 1.05, 0.7, 0.7, 0.75, 0, 'crate'); // banquinho/caixote em algumas
+    }
+    // balcao em cima das celas (anda-se por cima), parapeito na beira e pilares por baixo da beira
+    box(s * (BAL + CB) / 2, 0, CB - BAL, Z0 * 2 - 0.6, 0.3, BY - 0.3, 'gallery');
+    for (const [a, b] of [[-Z0 + 0.3, -18.3], [-15.2, 15.2], [18.3, Z0 - 0.3]]) box(s * (BAL + 0.08), (a + b) / 2, 0.12, b - a, 1.0, BY, 'prail');
+    for (const z of [-20, -10, 0, 10, 20]) box(s * (BAL + 0.2), z, 0.32, 0.32, BY - 0.3, 0, 'pillar');
+    // escadas da galeria pro balcao nas duas pontas (sobem pra fora, chegam do lado da beira do balcao)
+    for (const e of [-1, 1]) stairs(s * 2.85, e * 9.6, 0, e, 1.4, 10, BY / 10, 0.62, 'step');
+  }
+  // galeria central: mesa do guarda no meio, mesas do refeitorio e carrinhos de roupa
+  box(0, 0, 3.4, 1.6, 1.15, 0, 'counter');
+  for (const z of [-6.5, 6.5]) { box(0, z, 1.4, 3, 0.8, 0, 'table'); for (const x of [-1.2, 1.2]) box(x, z, 0.45, 3, 0.48, 0, 'bench'); }
+  for (const [x, z] of [[-1.6, -17], [1.6, 17], [2, -21.5], [-2, 21.5]]) box(x, z, 1.4, 1, 1.25, 0, 'crate');
+  // corredores dos armarios (por fora das celas): fileira na muralha, ilhas no meio, bancos
+  for (const s of [-1, 1]) {
+    const xo = s * (W - 0.35), xi = s * 13.7;
+    for (const [a, b] of [[-23, -16], [-10, -2], [2, 10], [16, 23]]) box(xo, (a + b) / 2, 0.7, b - a, 2.2, 0, 'locker');
+    for (const [a, b] of [[-19, -14], [-7, -3], [3, 7], [14, 19]]) box(xi, (a + b) / 2, 1.3, b - a, 2.2, 0, 'locker'); // armario dos dois lados
+    for (const z of [-11.5, 11.5]) box(s * 13.7, z, 0.5, 2.6, 0.48, 0, 'bench');
+    box(s * 11.4, s * -20, 1.4, 1, 1.25, 0, 'crate'); box(s * 15.8, s * 0.2, 1.2, 1.2, 1.2, 0, 'crate');
+  }
+  // patios (pontas): arquibancada de concreto na muralha, barreiras, mesas, cerca de arame, guarita
+  for (const s of [-1, 1]) {
+    const zc = s * (Z0 + A) / 2;
+    for (let i = 0; i < 3; i++) box(-W + 0.45 + 0.9 * i, zc, 0.9, 9, 1.5 - 0.5 * i, 0, 'concrete'); // arquibancada (3 degraus encostados na muralha oeste)
+    for (const [x, z] of [[-6, Z0 + 5], [6, Z0 + 5], [-11, Z0 + 10], [11, Z0 + 10], [0, Z0 + 9]]) box(x, s * z, z === Z0 + 9 ? 4 : 2.6, 0.7, 1.05, 0, 'concrete'); // barreiras
+    for (const x of [-12, 12]) box(x, s * (Z0 + 3.2), 1.4, 2.6, 0.8, 0, 'table');
+    for (const [x0, x1] of [[-W, -4.5], [4.5, W - 6]]) box((x0 + x1) / 2, s * (Z0 + 13), x1 - x0, 0.12, 3.2, 0, 'chainfence'); // cerca que corta o patio (vao no meio e na ponta leste)
+    box(W - 2.2, s * (A - 2.2), 3, 3, 6, 0, 'tower', { team: s < 0 ? 'red' : 'blue' }); // guarita
+    box(14, s * (Z0 + 6), 0.25, 0.25, 3.2, 0, 'post'); // tabela de basquete
+  }
+  for (const s of [-1, 1]) for (const x of [-9, 9]) box(x, s * (Z0 + 1.6), 0.35, 0.35, 4.2, 0, 'lamp');
+  for (const s of [-1, 1]) box(0, s * (Z0 + A + 0.3) / 2, W * 2 + 1, A - Z0 - 0.3, 0.6, 10, 'proof'); // 13/11 b (pedido dele): patios cobertos tambem, o presidio fica todo fechado (teto em cima da muralha)
+  return {
+    id: 'xilindro', arena: A, boxes, theme: 'xilindro',
+    spawns: {
+      red: [[-8, -35], [8, -35], [-14, -35], [14, -33], [0, -37], [-4, -31], [4, -31], [-12, -30]],
+      blue: [[-8, 35], [8, 35], [-14, 35], [14, 33], [0, 37], [-4, 31], [4, 31], [-12, 30]],
+      ffa: [[-9.5, -31.5], [8, -30], [-8, 30], [8, 30], [-13.7, -12], [13.7, 12], [-11, 0], [11, 0], [0, -14], [0, 14], [-3, 3], [3, -3], [-15, 21], [15, -21]],
+    },
+    flagBase: { red: [0, 0, -35.5], blue: [0, 0, 35.5] },
+    zones: [{ id: 'A', pos: [-11.6, 0, -6], r: 3.6 }, { id: 'B', pos: [0, 0, 3], r: 3.6 }, { id: 'C', pos: [11.6, 0, 6], r: 3.6 }],
+    pickups: [
+      { kind: 'hp', pos: [-11.5, 0, -12] }, { kind: 'hp', pos: [11.5, 0, 12] }, { kind: 'hp', pos: [0, 0, -12] }, { kind: 'hp', pos: [0, 0, 12] },
+    ],
+  };
+}
+
+// ---------- Vila Muamba (id trapiche; 13/11 b, pedido dele: 2o mapa do Contrabando refeito numa VILA) ----------
+// Uma rua so (norte-sul) com casas dos dois lados, becos entre elas e os quintais por tras. No SUL o caminhao de fuga
+// (entrega, onde o ataque nasce); no NORTE o casarao do contrabandista: entra pela frente, pelos lados e pelos fundos, e a
+// pilha de caixotes esta la dentro (defesa nasce no quintal de tras). No meio da rua a pracinha com o chafariz quebra a
+// linha de tiro; tres casas dao pra entrar (duas com 2o andar), o resto e cobertura. Todo caminho passa por briga curta.
+function trapiche() {
+  const A = 34, { boxes, box, walls, walkIn } = builder(A);
+  walls();
+  // caminhao de fuga no fim da rua (sul): a entrega e atras dele
+  box(0, -29.5, 2.7, 5.1, 2.5, 0, 'truck', { seed: 0 });
+  // casas da rua: oeste (porta pro leste) e leste (porta pro oeste). Fileiras: z -19,5 / -9 / 7; pracinha entre -5 e 3
+  walkIn(-10.5, -19.5, 10, 7, '+x', { col: 0xe9c9a4 });
+  box(-10.5, -9, 10, 8, 6.5, 0, 'house', { roof: 'peak', seed: 2 });
+  walkIn(-10.5, 7, 10, 8, '+x', { floors: 2, col: 0xd9a98a });
+  box(10.5, -19.5, 10, 7, 7, 0, 'house', { roof: 'flat', seed: 3 });
+  walkIn(10.5, -9, 10, 8, '-x', { floors: 2, col: 0xe8b98f });
+  walkIn(10.5, 7, 10, 8, '-x', { col: 0xdcae86 });
+  // casarao do contrabandista (norte): porta larga na frente, portas dos lados e dos fundos; telhado; a pilha dentro
+  const CZ0 = 16, CZ1 = 29, CX = 12, CH = 6, col = 0xe4c19c, wl = (cx, cz, w, d, h, y0 = 0) => box(cx, cz, w, d, h, y0, 'hwall', { col });
+  for (const s0 of [-1, 1]) wl(s0 * (CX + 2) / 2 + s0 * 0.1, CZ0, CX - 2 + 0.2, 0.4, CH); // frente: porta de 4 m no meio
+  wl(0, CZ0, 4, 0.4, CH - 3.2, 3.2);
+  for (const s0 of [-1, 1]) wl(s0 * (CX + 1.3) / 2 + s0 * 0.1, CZ1, CX - 1.3 + 0.2, 0.4, CH); // fundos: porta de 2,6 m
+  wl(0, CZ1, 2.6, 0.4, CH - 2.8, 2.8);
+  for (const s0 of [-1, 1]) { // lados: porta de 3 m
+    wl(s0 * CX, (CZ0 + 0.2 + 20.5) / 2, 0.4, 20.5 - CZ0 - 0.2, CH); wl(s0 * CX, (23.5 + CZ1 - 0.2) / 2, 0.4, CZ1 - 0.2 - 23.5, CH);
+    wl(s0 * CX, 22, 0.4, 3, CH - 3, 3);
+  }
+  box(0, (CZ0 + CZ1) / 2, CX * 2 + 0.8, CZ1 - CZ0 + 0.8, 0.3, CH, 'hroof', { col });
+  box(0, 24, 3.5, 2.5, 1.2, 0, 'cratepile'); // a pilha (os caixotes soltos vem do jogo)
+  for (const [x, z] of [[-7, 26], [7, 26], [-7, 19.5], [7, 19.5]]) box(x, z, 2.2, 2.2, 1.5, 0, 'crate');
+  box(7.4, 19.3, 1.4, 1.4, 1.1, 1.5, 'crate');
+  for (const x of [-7.5, 7.5]) box(x, 28.1, 6, 1.1, 2.6, 0, 'shelf');
+  box(-3.5, 19.8, 1.4, 2.6, 0.8, 0, 'table');
+  // rua: chafariz na pracinha, carro parado, carroca e caixotes (nenhuma linha reta do caminhao ate o casarao)
+  box(0, -1, 4, 4, 1.1, 0, 'fountain');
+  box(2.6, -8, 2.4, 4.6, 2.2, 0, 'car', { seed: 1 });
+  box(-1.8, 8.5, 2, 1.2, 1.6, 0, 'cart');
+  for (const [x, z] of [[-2.2, -16], [2.4, -21], [2.2, 12.6]]) box(x, z, 2.2, 2.2, 1.5, 0, 'crate');
+  box(-9, -1, 2.6, 2.2, 2.7, 0, 'kiosk');
+  box(9.8, -1, 1, 3.2, 0.8, 0, 'bench'); // um banco so, longe da parede da casa (o bot enroscava no vao)
+  for (const [x, z] of [[-5.2, -26], [5.2, -26], [-5.2, -13.8], [5.2, 12], [-5.2, 13.6], [5.2, -1]]) box(x, z, 0.35, 0.35, 4.2, 0, 'lamp');
+  // quintais (oeste e leste): carro, galpao, cerca viva, carroca, barraca, barris e caixotes
+  box(-22, -20, 2.4, 4.6, 2.2, 0, 'car', { seed: 2 });
+  box(-28, -8, 6, 6, 3.5, 0, 'house', { roof: 'flat', seed: 5 });
+  box(-20, -2, 1, 5, 1.15, 0, 'hedge'); box(-26, 13, 6, 1, 1.15, 0, 'hedge'); box(-22, 16.5, 8, 1, 1.15, 0, 'hedge');
+  box(-22, 8, 2, 1.2, 1.6, 0, 'cart'); box(-18, 22, 2, 1.2, 1.6, 0, 'cart');
+  for (const [x, z] of [[-24, 2], [-30, 10], [-24, 25], [-17.5, 28]]) box(x, z, 2.2, 2.2, 1.5, 0, 'crate');
+  for (const [x, z] of [[-31, -26], [-27, 19], [-30, 30]]) box(x, z, 1.3, 1.3, 1.3, 0, 'barrel');
+  box(27, -20, 6, 6, 3.5, 0, 'house', { roof: 'flat', seed: 6 });
+  box(22, -6, 2.4, 4.6, 2.2, 0, 'car', { seed: 3 });
+  box(25, 5, 3.2, 1.6, 2.5, 0, 'stall');
+  box(26, -12, 6, 1, 1.15, 0, 'hedge'); box(22, 17, 8, 1, 1.15, 0, 'hedge');
+  for (const [x, z] of [[30, -2], [19.5, 13.5], [26, 24], [18, 27.5]]) box(x, z, 2.2, 2.2, 1.5, 0, 'crate');
+  box(29, 13, 2.6, 1.5, 1.5, 0, 'dumpster');
+  for (const [x, z] of [[31, 24], [20, -27], [30, -30]]) box(x, z, 1.3, 1.3, 1.3, 0, 'barrel');
+  return {
+    id: 'trapiche', arena: A, boxes, theme: 'muamba',
+    heistPts: { vault: [0, 24], van: [0, -25.2], drop: 'truck' }, // pilha (dentro do casarao) e caminhao (fim da rua)
+    spawns: {
+      red: [[-7, -30], [7, -30], [-11, -31], [11, -31], [-4, -32.5], [4, -32.5], [-15, -29], [15, -29]],
+      blue: [[-6, 31.5], [6, 31.5], [-12, 31.5], [12, 31.5], [0, 32], [-18, 31], [18, 31], [-24, 31.5]],
+      ffa: [[-28, -28], [28, -28], [-28, 0], [28, 0], [0, -11], [-25, 20], [25, 20], [0, 20], [-14, -1], [14, -1]],
+    },
+    flagBase: { red: [0, 0, -24], blue: [0, 0, 31.5] },
+    zones: [{ id: 'A', pos: [-22, 0, 0], r: 4 }, { id: 'B', pos: [0, 0, -4], r: 4 }, { id: 'C', pos: [22, 0, 0], r: 4 }],
+    pickups: [{ kind: 'hp', pos: [-20, 0, -12] }, { kind: 'hp', pos: [18, 0, -2] }, { kind: 'hp', pos: [0, 0, 14] }],
+  };
+}
+
 // degraus de colisao por forma: [altura de baixo, de cima, largura] em fracao da caixa. Duna = inscritos na meia esfera do desenho
 // (raio 0,62 da largura, altura 1,05); mesa e paredao = as 3 camadas do desenho (paredao afina so na espessura); pedra = dentro do icosaedro
 export const ROOF_EAVE = 0.35; // beiral do telhado de duas aguas (o desenho do Blender usa o mesmo)
@@ -1354,9 +1507,13 @@ function cortejo() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo };
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo, xilindro, trapiche };
+// 13/11 (pedido dele): mapa que so roda em alguns modos. Fora deles nao aparece na lista nem no sorteio
+export const MAP_MODES = { xilindro: ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect'] };
+export const mapAllows = (id, mode) => !MAP_MODES[id] || MAP_MODES[id].includes(mode);
+export const SMUGGLE_MAPS = ['docas', 'trapiche']; // Contrabando: Cais do Sol Poente e Trapiche
 export const PVE_ONLY = ['tinteiro']; // Noite dos Borroes: so a noite usa (e a noite so usa ele)
-export const HEIST_ONLY = ['ferradura', 'moeda', 'docas']; // mapas de objetivo proprio (Cofre / Contrabando): fora da lista dos outros modos
+export const HEIST_ONLY = ['ferradura', 'moeda', 'docas', 'trapiche']; // mapas de objetivo proprio (Cofre / Contrabando): fora da lista dos outros modos
 // Canyon Poeira (04/11): mapa grande so pra bandeira e dominacao (normal e blitz); nos outros modos nao entra
 export const BIG_OBJ_ONLY = ['deserto', 'becos', 'feira', 'largo'], BIG_OBJ_MODES = ['ctf', 'dom']; // mapa feito pro Roube o Cofre (fora dele nao entra na lista)
 export const ESCORT_MAPS = ['bonde', 'apito', 'cortejo']; // mapas com trilho (so a escolta usa)
@@ -1375,10 +1532,10 @@ export const BOMB_SITES = {
   ferradura: { A: [0, -2], B: [-12.5, 8] }, // cofre no fosso do subsolo
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
-const MINIGUN_AT = { largo: [0, 1.5, 0], cortejo: [-34, 0.5, 34], moeda: [0, 0, -16], docas: [0, 0, 0], deserto: [0, 3.3, 0], ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+const MINIGUN_AT = { xilindro: [6.6, 3.7, 0], trapiche: [0, 0, 13.5], largo: [0, 1.5, 0], cortejo: [-34, 0.5, 34], moeda: [0, 0, -16], docas: [0, 0, 0], deserto: [0, 3.3, 0], ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 // mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
 // So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
-const MAP_PACE = { estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
+const MAP_PACE = { xilindro: { goal: 1.25, time: 1.15 }, estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };
 export function matchRules(mode, mapId, cfg, baseTime) {
   const base = { limit: cfg.limit, time: cfg.time || baseTime };
   const pace = (mode === 'ffa' || mode === 'tdm') && MAP_PACE[mapId];
@@ -1634,7 +1791,7 @@ function shapeHit(b, o, d, tmin, tmax) {
   return { t: t0, n: [n[0] / l, n[1] / l, n[2] / l] };
 }
 
-export function raycast(M, o, d, maxDist = 250) {
+export function raycast(M, o, d, maxDist = 250, seeAll = false) { // seeAll (13/11): grade, alambrado e corda tambem tapam (camera do podio)
   let best = maxDist, normal = null;
   if (d[1] < 0) {
     const t = -o[1] / d[1];
@@ -1644,7 +1801,7 @@ export function raycast(M, o, d, maxDist = 250) {
   const ex = o[0] + d[0] * best, ez = o[2] + d[2] * best;
   const list = nearBoxes(M.boxes, Math.min(o[0], ex) - 0.01, Math.min(o[2], ez) - 0.01, Math.max(o[0], ex) + 0.01, Math.max(o[2], ez) + 0.01, RAY_BOXES);
   for (const b of list) {
-    if (b.kind === 'rope') continue; // corda do ringue: a bala passa entre as cordas
+    if (!seeAll && (b.kind === 'rope' || b.kind === 'cellbars' || b.kind === 'chainfence')) continue; // corda do ringue, grade da cela e alambrado (13/11): a bala passa entre as barras
     let tmin = 0, tmax = best, nAxis = -1, nSign = 0, miss = false;
     for (let a = 0; a < 3; a++) {
       if (Math.abs(d[a]) < 1e-9) { if (o[a] < b.min[a] || o[a] > b.max[a]) { miss = true; break; } continue; }
@@ -1668,12 +1825,12 @@ export function raycast(M, o, d, maxDist = 250) {
   return { dist: best >= maxDist ? Infinity : best, normal };
 }
 
-export function hasLOS(M, a, b) {
+export function hasLOS(M, a, b, seeAll = false) {
   const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const len = Math.hypot(d[0], d[1], d[2]);
   if (len < 1e-3) return true;
   d[0] /= len; d[1] /= len; d[2] /= len;
-  return raycast(M, a, d, len).dist === Infinity;
+  return raycast(M, a, d, len, seeAll).dist === Infinity;
 }
 
 // Linha de visao pra bala perfurante: soma quanto da linha passa por dentro de caixas (paredes).

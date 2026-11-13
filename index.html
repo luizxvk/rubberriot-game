@@ -346,13 +346,14 @@ html.touch-boot .boot { display: grid; }
     <!-- 08/11 (pedido dele): Missoes = aba de missoes diarias + aba de desafios (como era) -->
     <div class="mis-tabs" role="tablist"><button role="tab" data-mtab="mis" aria-selected="true" data-i18n="misTab">Missões diárias</button><button role="tab" data-mtab="ch" aria-selected="false" data-i18n="challenges">Desafios</button></div>
     <div id="misPane">
-      <ul class="ch-list" id="eliteChBox" hidden></ul>
       <div class="ch-head"><h3 data-i18n="misTab">Missões diárias</h3><small id="misReset"></small></div>
       <ul class="ch-list mis-list" id="misList"></ul>
       <p class="shop-note" id="misNote"></p>
     </div>
     <div id="chPane" hidden>
     <div class="elite-card" id="chElite"></div>
+    <!-- 13/11 (pedido dele): Desafio Elite (5 dias de Rovex Elite) mora na aba Desafios, junto do desafio de elite -->
+    <ul class="ch-list" id="eliteChBox" hidden></ul>
     <div class="ch-head"><h3 data-i18n="chDaily">Do dia</h3><small id="chReset"></small></div>
     <ul class="ch-list" id="chDaily"></ul>
     <div class="ch-head"><h3 data-i18n="chCareerU">Desbloqueios</h3></div>
@@ -535,6 +536,8 @@ html.touch-boot .boot { display: grid; }
   <ol class="feed" id="feed" aria-live="polite"></ol>
   <!-- recarga: anel fino em volta da mira enchendo linear durante a troca do pente -->
   <svg class="reload-ring" id="reloadRing" viewBox="0 0 64 64" aria-hidden="true"><circle class="rr-ink" cx="32" cy="32" r="26"/><circle class="rr-bar" id="rrBar" cx="32" cy="32" r="26" pathLength="100"/></svg>
+  <!-- 13/11: mira do Gancho do Palco (icone Material Icons "phishing" + distancia ou "longe demais") -->
+  <div class="hook-ret" id="hookRet" hidden><svg viewBox="0 0 24 24" aria-hidden="true"></svg><b></b></div>
   <div class="cross x-cross" id="cross"><i></i><i></i><i></i><i></i><b class="xd"></b><u class="xr"></u></div>
   <div class="hitmark" id="hitmark"></div>
   <div class="reticle" id="reticle"></div>
@@ -596,7 +599,7 @@ html.touch-boot .boot { display: grid; }
     <button id="heReset" data-i18n="heReset">Restaurar</button>
     <button id="heSave" class="he-save" data-i18n="heSave">Salvar</button>
   </div>
-  <p class="he-hint" data-i18n="heHint">Arraste qualquer botão ou o analógico pra onde preferir.</p>
+  <p class="he-hint" data-i18n="heHint">Arraste qualquer botão, o analógico, a vida, a munição, o minimapa, as sequências, o chat ou o equipamento. Toque num deles pra mudar o tamanho.</p>
 </div>
 
 <!-- guia de instalacao: aparece quando o navegador nao oferece o atalho de instalar -->

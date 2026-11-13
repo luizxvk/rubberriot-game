@@ -11,7 +11,7 @@ import { makeGun } from './guns.js';
 import { SIGHT_KIND, sightGeoFor, loadComic, comicGeo, hasComic } from './sights.js';
 import { t, wName } from './i18n.js';
 import { camoGlsl, camoTime, camoById, rovexLogoU, bmUniforms } from './camos.js';
-import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS, GADGETS, WSKINS, baseBody } from '../shared/weapons.js';
+import { bodyTrait, bpMods, BLUEPRINTS, AMMO, WEAPONS, GADGETS, WSKINS, baseBody, INTEGRAL_SIL } from '../shared/weapons.js';
 import { bpUnlocked, progressInfo, passLevel, passHasStamp } from './progress.js';
 import { STAMPS, stampGlsl, stampCode } from './stamps.js';
 import { RET_PASS } from './pass.js';
@@ -47,17 +47,17 @@ export const SWORDS = [
   { node: 'Katana', id: 'melee_17', blade: /Blade|Sharp/i, flipEdge: true }, // fio vinha virado pra tras (04/11)
 ];
 export const CATEGORY = {
-  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10', 'pistol_11'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (abre no ultimo nivel da arma)
-  smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_13'] /* Tamborzao saiu (04/11) */, scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
-  rifle: { bodies: [...range('fusil_', 1, 7), /* Trovao de Lata (fusil_9) saiu 04/11 */ 'fusil_11', 'fusil_12', 'fusil_13'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'gd_flame', 'gd_shot'] },
+  pistol: { bodies: [...range('pistol_', 1, 6), 'pistol_7', 'pistol_8', 'pistol_9', 'pistol_10', 'pistol_11', 'pistol_12', 'pistol_13', 'pistol_14', 'pistol_15'], scopes: ['pistol_scope_5', 'subfusil_scope_2', 'subfusil_scope_6', 'subfusil_scope_9'], chargers: [...range('pistol_charger_', 1, 6), 'pistol_charger_7', 'pistol_charger_8', 'pistol_charger_9', 'pistol_charger_12', 'pistol_charger_14'], handles: ['akimbo'] }, // akimbo: segunda pistola na outra mao (abre no ultimo nivel da arma)
+  smg: { bodies: [...range('subfusil_', 1, 10), 'subfusil_13', 'subfusil_14', 'subfusil_15', 'subfusil_16'] /* Tamborzao saiu (04/11); 14-16 leva 13/11 */, scopes: ['subfusil_scope_1', 'subfusil_scope_2', 'subfusil_scope_5', 'subfusil_scope_6', 'subfusil_scope_7', 'subfusil_scope_8', 'subfusil_scope_9', 'subfusil_scope_10', 'fusil_scope_1', 'fusil_scope_7'], chargers: [...range('subfusil_charguer_', 1, 10), 'subfusil_charger_11', 'subfusil_charger_14', 'subfusil_charger_15', 'subfusil_charger_16'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'fusil_handle_2'] },
+  rifle: { bodies: [...range('fusil_', 1, 7), /* Trovao de Lata (fusil_9) saiu 04/11 */ 'fusil_11', 'fusil_12', 'fusil_13', 'fusil_14', 'fusil_15', 'fusil_16'], scopes: ['fusil_scope_1', 'fusil_scope_2', 'fusil_scope_4', 'fusil_scope_5', 'fusil_scope_6', 'fusil_scope_7', 'subfusil_scope_5', 'subfusil_scope_7', 'sniper_scope_1'], chargers: ['fusil_charger_1', ...range('fusil_charguer_', 2, 7), 'fusil_charger_8', 'fusil_charger_9', 'fusil_charger_14', 'fusil_charger_15', 'fusil_charger_16'], handles: ['fusil_handle_2', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6', 'gd_flame', 'gd_shot'] },
   // escopeta: as 3 lunetas do fim da lista so cabem no Bacamarte (LONG_SCOPE)
-  shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9', 'sniper_scope_1', 'sniper_scope_2'], chargers: ['shotgun_charguer_1'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
+  shotgun: { bodies: ['shotgun_1', 'shotgun_2', 'shotgun_3', 'shotgun_4', 'shotgun_5', 'shotgun_6', 'shotgun_7'], scopes: ['subfusil_scope_2', 'subfusil_scope_6', 'fusil_scope_7', 'subfusil_scope_9', 'sniper_scope_1', 'sniper_scope_2'], chargers: ['shotgun_charguer_1'], handles: ['akimbo', 'subfusil_handle_2', 'subfusil_handle_3', 'subfusil_handle_6'] },
   melee: { bodies: MELEE, scopes: [], chargers: [], handles: [] },
-  sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4'], scopes: ['sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'] /* 07/11 (pedido dele): Luneta Convencional (sniper_scope_0) saiu; ficam Militar, Termica e Zoom */, chargers: ['sniper_charger_1', 'sniper_charger_2'], handles: ['sniper_handle_1', 'sniper_handle_2', 'sniper_bipod_1', 'sniper_bipod_2'] },
+  sniper: { bodies: ['sniper_0', 'sniper_1', 'sniper_2', 'sniper_3', 'sniper_4', 'sniper_5', 'sniper_6'], scopes: ['sniper_scope_1', 'sniper_scope_2', 'fusil_scope_6'] /* 07/11 (pedido dele): Luneta Convencional (sniper_scope_0) saiu; ficam Militar, Termica e Zoom */, chargers: ['sniper_charger_1', 'sniper_charger_2', 'sniper_charger_6'], handles: ['sniper_handle_1', 'sniper_handle_2', 'sniper_bipod_1', 'sniper_bipod_2', 'akimbo' /* so a Sentenca (AKIMBO_BODIES); no FIM pra nao mudar o nivel das outras */] },
 };
 // Metralhadora (04/11, pedido dele: categoria nova). Miras e empunhaduras do fuzil (sem gadget de baixo do cano: o
 // pente enorme fica embaixo); o pente de cada uma vem do arquivo (lmg_charger_N)
-CATEGORY.lmg = { bodies: ['lmg_1', 'lmg_2'], scopes: [...CATEGORY.rifle.scopes], chargers: ['lmg_charger_1', 'lmg_charger_2'], handles: CATEGORY.rifle.handles.filter(h => !h.startsWith('gd_')) };
+CATEGORY.lmg = { bodies: ['lmg_1', 'lmg_2', 'lmg_3', 'lmg_4', 'lmg_5'], scopes: [...CATEGORY.rifle.scopes], chargers: ['lmg_charger_1', 'lmg_charger_2', 'lmg_charger_3', 'lmg_charger_5'], handles: CATEGORY.rifle.handles.filter(h => !h.startsWith('gd_')) };
 // So uma peca (mira, pente, empunhadura), pintada como na arma: foto do banner de desbloqueio
 export function buildPartPreview(id, lo = {}) {
   const p = parts[id];
@@ -121,7 +121,7 @@ export function partName(slot, id) {
   if (slot === 'charger' && DRUM_MAGS[id]?.ext) return t(id.endsWith('_2') ? 'extMag2' : 'extMag');
   if (slot === 'charger' && DRUM_MAGS[id]) return t('drumMag');
   if (slot === 'charger' && id.startsWith('lmg_')) return t('lmgBox'); // metralhadora: caixa de fita (04/11)
-  if (slot === 'charger') return t('mgn_' + n); // 08/11 (pedido dele): nome proprio, nada de "Pente 2"
+  if (slot === 'charger') { const k1 = 'mgi_' + id, s1 = t(k1); if (s1 !== k1) return s1; const k2 = 'mgn_' + n, s2 = t(k2); return s2 !== k2 ? s2 : t('mgn_13'); } // 08/11 (pedido dele): nome proprio, nada de "Pente 2"; 13/11: pente da leva nova com nome dele (mgi_), nunca a chave crua
   if (slot === 'conv') return t('conv_' + id);
   if (slot === 'muzzle') return t('mz_' + id);
   if (slot === 'laser') return t(id === 'light_1' ? 'lightTac' : id === 'laser_2' ? 'laserTac' : 'laserDot');
@@ -144,6 +144,7 @@ export const CONV_KITS = {
   subfusil_8: { auto: { mode: 'auto', kick: 2.89 } }, // 09/11 (pedido dele): Controle vai pra 32% na barra; o alcance menor esta em CONV_RANGE
   sniper_2: { auto: { mode: 'auto', rate: 1.25, kick: 1.2, spread: 1.1 } }, // Marretao automatico (09/11, pedido dele): cadencia baixa
   fusil_7: { auto: { mode: 'auto', rate: 0.62, dmg: 0.72, spread: 1.1, kick: 1.2 } }, // Relampago automatica (02/11, pedido dele): cadencia de fuzil comum, cada tiro bem mais fraco que o semi
+  subfusil_3: { convMax: { mode: 'auto', burst: 0, rate: 1.15, dmg: 0.9, kick: 1.2, spread: 1.05 } }, // Tres Tempos automatica (13/11, pedido dele): libera no ULTIMO nivel da arma; rajada vira fogo continuo, cada bala um pouco mais fraca
   fusil_12: { burst: { mode: 'burst', burst: 3, rate: 0.45, dmg: 0.6, kick: 0, spread: 0.9 } }, // Bico de Pena em rajada (03/11, pedido dele): 3 por puxada, coice ZERO, cada bala bem mais fraca
   // Dois Toques (SCAR-L) automatica: mesmo dano e cadencia da rajada, so o modo muda (pedido dele 01/11); libera no nivel do modelo
 };
@@ -151,10 +152,13 @@ export const CONV_KITS = {
 function sightUnder(id, cx, half, fb) { const a = parts[id].geo.attributes.position; let m = Infinity; for (let i = 0; i < a.count; i++) if (Math.abs(a.getX(i) - cx) < half) m = Math.min(m, a.getY(i)); return Number.isFinite(m) ? m : fb; }
 export const convOptions = (body) => Object.keys(CONV_KITS[body] || {});
 // akimbo: pistola toda; nas compridas so um modelo (pedido dele 01/11)
-const AKIMBO_BODIES = { smg: ['subfusil_5'], shotgun: ['shotgun_2'] };
+const AKIMBO_BODIES = { smg: ['subfusil_5', 'subfusil_16' /* Mac 10 (13/11, pedido dele) */], shotgun: ['shotgun_2'], sniper: ['sniper_5'] /* Sentenca (13/11, pedido dele) */ };
+export const SPIN_LOAD = ['sniper_5']; // recarga = giro de 360 da arma (13/11)
 export function handleFits(body, cat, id) { if (GADGETS[id]) return GADGETS[id].body === body; return id !== 'akimbo' || cat === 'pistol' || !!AKIMBO_BODIES[cat]?.includes(body); }
+const NO_SCOPE = ['pistol_15']; // 13/11: Pederneira (pederneira de 1826): o cao atravessava toda mira; so a alca de ferro
 export function scopeFits(body, cat, id) {
   if (!id) return cat !== 'sniper';
+  if (NO_SCOPE.includes(body)) return IRONS[id] !== undefined || id === 'iron_own';
   if (id === nativePart(body, 'scope')) return true;
   if (LONG_SCOPE[body]) { if (LONG_SCOPE[body].includes(id)) return true; } else if (id.startsWith('sniper_scope') && cat !== 'sniper') return false;
   const b = parts[id]?.box, r = SCOPE_LEN[cat];
@@ -586,7 +590,7 @@ export const MUZZLES = { // na ordem do nivel da arma que abre (progress.js MUZZ
   silencer: { spread: 0.96, kick: 0.95, adsTime: 1.08, move: 0.98, dmg: 0.94, flash: 0.15, quiet: true }, // silenciador: quase sem clarao e abafado; dano e mira mais lentos
   silencer2: { spread: 0.94, kick: 0.9, adsTime: 1.12, move: 0.96, dmg: 0.95, flash: 0.08, quiet: true }, // supressor pesado (04/11): mais comprido e grosso, segura mais o coice, pesa mais
 };
-const MUZZLE_BAN = ['sniper_0', 'sniper_2', 'sniper_3', 'pistol_5', 'pistol_11']; // + serrada (03/11) // Luneta, Marretao, Ping Velho e Bico Longo: sem bocal (pedido dele 01/11)
+const MUZZLE_BAN = ['sniper_0', 'sniper_2', 'sniper_3', 'pistol_5', 'pistol_11', 'pistol_12' /* PB: silenciador de fabrica (13/11) */, 'fusil_16' /* AS Val: idem */, 'sniper_5' /* Rolling Block */, 'pistol_15' /* Simeon North: pederneira (13/11) */, 'shotgun_4' /* Fox: cano duplo (13/11) */]; // + serrada (03/11) // Luneta, Marretao, Ping Velho e Bico Longo: sem bocal (pedido dele 01/11)
 export const muzzleFits = (body) => !!body && !body.startsWith('melee') && !!parts[body] && !MUZZLE_BAN.includes(body);
 export const muzzleOptions = (body) => (muzzleFits(body) ? Object.keys(MUZZLES) : []);
 // ponta do cano no modelo: centro e raio dos vertices da frente (z minimo = boca)
@@ -668,13 +672,15 @@ function muzzleGeo(id, r, len, uvA, uvB) {
 export const DRUM_MAGS = { pistol_drum: { body: 'pistol_2', rounds: 40, reload: 1.55, adsTime: 1.14, move: 0.95, kick: 0.92 },
   // tambores redondos (09/11, foto dele): Sanfona e Dois Toques, dois tamanhos
   cdrum_subfusil_13_1: { body: 'subfusil_13', rounds: 50, name: 'drumM', reload: 1.3, adsTime: 1.1, move: 0.97, kick: 0.96 }, cdrum_subfusil_13_2: { body: 'subfusil_13', rounds: 71, name: 'drumL', reload: 1.55, adsTime: 1.18, move: 0.93, kick: 0.92 },
+  // Matraquinha (Tec-9, 13/11 pedido dele): tambor de 40 (Blender, comic_mags.py), tem akimbo
+  cdrum_pistol_14_1: { body: 'pistol_14', rounds: 40, name: 'drumMag', reload: 1.45, adsTime: 1.12, move: 0.96, kick: 0.94 },
   cdrum_subfusil_8_1: { body: 'subfusil_8', rounds: 50, name: 'drumM', reload: 1.3, adsTime: 1.1, move: 0.97, kick: 0.96 }, cdrum_subfusil_8_2: { body: 'subfusil_8', rounds: 71, name: 'drumL', reload: 1.55, adsTime: 1.18, move: 0.93, kick: 0.92 },
   // pentes estendidos da Cuspideira (04/11, pedido dele): o pente de fabrica esticado pra baixo (mesma boca e largura:
   // encaixa no mesmo poco, sem malha cruzando). magK = multiplica o pente; ext = quanto estica a altura
   subfusil_ext_1: { body: 'subfusil_5', of: 'subfusil_charguer_5', ext: 1.45, magK: 1.4, reload: 1.12, adsTime: 1.05, move: 0.98, kick: 1 },
   subfusil_ext_2: { body: 'subfusil_5', of: 'subfusil_charguer_5', ext: 1.95, magK: 1.8, reload: 1.25, adsTime: 1.1, move: 0.96, kick: 0.97 },
   // caixa refrigerada da Metralhadora (05/11, pedido dele): mesmas balas, mas leva bem mais tiro ate esquentar. heatK = calor por tiro
-  lmg_ext_1: { body: 'lmg_1', of: 'lmg_charger_1', ext: 1.22, magK: 1, heatK: 0.6, reload: 1.15, adsTime: 1.06, move: 0.97, kick: 1 },
+  lmg_ext_1: { body: 'lmg_1', of: 'lmg_charger_1', ext: 1.22, magK: 1.8 /* 13/11 (pedido dele): 180 balas (era 100) */, heatK: 0.6, reload: 1.15, adsTime: 1.06, move: 0.97, kick: 1 },
   lmg_ext_2: { body: 'lmg_2', of: 'lmg_charger_2', ext: 1.22, magK: 1.3, heatK: 0.6, reload: 1.15, adsTime: 1.06, move: 0.97, kick: 1 },
 };
 // troca de modelo das lunetas (04/11, pedido dele): a Militar ganha o desenho da Termica e a Termica o da Militar.
@@ -998,14 +1004,32 @@ export function ttApply(cfg) {
       for (const ge of body) { if (ge.userData.zn !== 'paint') continue; ge.computeBoundingBox(); const c = ge.boundingBox.getCenter(new THREE.Vector3());
         if ((Math.abs(c.z - gz) < bl * (pistol ? 0.18 : 0.07) && c.y < midY) || (!pistol && c.z > gz + bl * 0.12)) ge.userData.zn = 'accent'; }
     } }
+  // tipCut (13/11, pedido dele: Lupa): freio de boca do modelo sai quando um bocal nosso entra. Triangulos ate tipCut metros da
+  // boca viram a peca 'tip' (so aparece sem bocal); o cano comprido que passa por dentro continua (o bocal encosta nele)
+  const tip = [];
+  if (cfg.tipCut) {
+    const z0 = geoBox(body).min.z + cfg.tipCut * u;
+    for (let gi = body.length - 1; gi >= 0; gi--) {
+      const ge = body[gi], q = ge.attributes.position, nq = ge.attributes.normal, keep = [], cut = [];
+      for (let i = 0; i < q.count; i += 3) (q.getZ(i) < z0 && q.getZ(i + 1) < z0 && q.getZ(i + 2) < z0 ? cut : keep).push(i);
+      if (!cut.length) continue;
+      const mk = (list) => { const g2 = new THREE.BufferGeometry(), P3 = [], N3 = []; for (const i of list) for (let k = 0; k < 3; k++) { P3.push(q.getX(i + k), q.getY(i + k), q.getZ(i + k)); N3.push(nq.getX(i + k), nq.getY(i + k), nq.getZ(i + k)); } g2.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g2.setAttribute('normal', new THREE.Float32BufferAttribute(N3, 3)); g2.userData.zn = ge.userData.zn; return g2; };
+      tip.push(mk(cut)); if (keep.length) body[gi] = mk(keep); else body.splice(gi, 1);
+    }
+  }
   const swapZ = ttSwap(body);
-  for (const ge of [...body, ...mag, ...iron, ...fixed]) { let z = ge.userData.zn; if (swapZ && (z === 'paint' || z === 'accent')) z = z === 'paint' ? 'accent' : 'paint'; setUV(ge, uv[z] || uv.paint); }
+  for (const ge of [...body, ...mag, ...iron, ...fixed, ...tip]) { let z = ge.userData.zn; if (swapZ && (z === 'paint' || z === 'accent')) z = z === 'paint' ? 'accent' : 'paint'; setUV(ge, uv[z] || uv.paint); }
   if (!body.length) return false;
   const id = cfg.id, cid = id.replace(/_(\d+)$/, '_charger_$1');
   ttForget(id, cid);
   const geo = mergeGeometries(body); geo.computeBoundingBox();
   const P = parts[id] = { magOwn: !!cfg.magOwn, noIron: !!cfg.noIron, geo, box: geo.boundingBox.clone(), ww2: true, camoGreen: true, metal: cfg.metal || '#2a2724', noCharger: !mag.length, tt: true, u, adj: cfg.adj || {} };
   if (fixed.length) P.fixedGeo = mergeGeometries(fixed);
+  if (tip.length) P.tipGeo = mergeGeometries(tip);
+  // 13/11 (pedido dele): magHand = a mao esquerda segura o PENTE (pente de lado da Sten/Zumbidor, MP28), nao o guarda-mao
+  if (cfg.magHand && mag.length) { const mb = geoBox(mag); P.magHand = mb.getCenter(new THREE.Vector3()); P.magHand.y = mb.min.y + (mb.max.y - mb.min.y) * 0.45; }
+  if (cfg.foreOnMag) P.tubeMag = true;
+  if (cfg.foreOnMag && mag.length && marks.fore) marks.fore.y = geoBox(mag).min.y + 0.022; // 13/11 (Caracol): pente embaixo do cano, a empunhadura encosta no fundo dele (antes entrava no pente e piscava)
   if (cfg.cantZ != null) P.cantZ = cfg.cantZ * u; // onde a mira de 45 graus fica no comprimento da arma (metros do modelo)
   if (marks.muzzle) P.axisX = marks.muzzle.x; // eixo do cano: mira, bocal e laser centram nele
   const bb = P.box, blen = bb.max.z - bb.min.z, pr = profile(id);
@@ -1723,6 +1747,51 @@ function anchor(slot, box) {
   if (slot === 'scope') return new THREE.Vector3(c.x, box.min.y, c.z);
   return new THREE.Vector3(c.x, box.max.y, c.z); // carregador e punho encaixam pelo topo
 }
+// corte da ponta do pente (13/11): raio pra CIMA saindo de dentro do pente acha o fundo do poco em cada fatia; o pente fica so
+// TRIM_IN da altura do corpo pra dentro dele, e o que esta dentro afina 6% em volta do centro do pente (sem parede colada = sem piscar)
+const trimCache = new Map(), rayBody = {};
+function trimMag(mm, body, origin, cid) {
+  mm.updateMatrix();
+  const key = body + '|' + cid + '|' + mm.matrix.elements.map(v => v.toFixed(4)).join(',');
+  if (trimCache.has(key)) return trimCache.get(key);
+  const src = mm.geometry.index ? mm.geometry.toNonIndexed() : mm.geometry, M = mm.matrix.clone(), Mi = M.clone().invert();
+  const pos = src.attributes.position, n = pos.count, W = new Float32Array(n * 3), v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(M).add(origin); W[i * 3] = v.x; W[i * 3 + 1] = v.y; W[i * 3 + 2] = v.z; }
+  const bx = new THREE.Box3(); for (let i = 0; i < n; i++) bx.expandByPoint(v.set(W[i * 3], W[i * 3 + 1], W[i * 3 + 2]));
+  const rb = rayBody[body] ||= new THREE.Mesh(parts[body].geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  const rc = new THREE.Raycaster(), up = new THREE.Vector3(0, 1, 0), NS = 12, cut = [], cxm = (bx.min.x + bx.max.x) / 2, czm = (bx.min.z + bx.max.z) / 2;
+  const bb = parts[body].box, inset = (bb.max.y - bb.min.y) * 0.025;
+  for (let k = 0; k <= NS; k++) {
+    const z = bx.min.z + (bx.max.z - bx.min.z) * (0.04 + 0.92 * k / NS); let y = Infinity;
+    for (const fx of [0.25, 0.5, 0.75]) { rc.set(new THREE.Vector3(bx.min.x + (bx.max.x - bx.min.x) * fx, bx.min.y - 0.001, z), up); const h = rc.intersectObject(rb, false)[0]; if (h) y = Math.min(y, h.point.y); }
+    cut.push(y);
+  }
+  if (!cut.some(Number.isFinite)) { trimCache.set(key, null); return null; }
+  for (let k = 0; k <= NS; k++) if (!Number.isFinite(cut[k])) { let j = 1; while (!Number.isFinite(cut[k]) && j <= NS) { for (const q of [k - j, k + j]) if (q >= 0 && q <= NS && Number.isFinite(cut[q])) { cut[k] = cut[q]; break; } j++; } }
+  const yAt = (z) => { const t = Math.max(0, Math.min(NS, ((z - bx.min.z) / (bx.max.z - bx.min.z) - 0.04) / 0.92 * NS)), a = Math.floor(t), b2 = Math.min(NS, a + 1); return cut[a] + (cut[b2] - cut[a]) * (t - a); };
+  const names = Object.keys(src.attributes), A = names.map(nm => src.attributes[nm]);
+  const vert = (i) => ({ w: [W[i * 3], W[i * 3 + 1], W[i * 3 + 2]], a: A.map(at => { const o = []; for (let c = 0; c < at.itemSize; c++) o.push(at.array[i * at.itemSize + c]); return o; }) });
+  const f = (P) => P.w[1] - yAt(P.w[2]);
+  const lerp = (P, Q, t) => ({ w: P.w.map((x, c) => x + (Q.w[c] - x) * t), a: P.a.map((ar, j) => ar.map((x, c) => x + (Q.a[j][c] - x) * t)) });
+  const clip = (poly, c, keepBelow) => { const out = []; for (let i = 0; i < poly.length; i++) { const P = poly[i], Q = poly[(i + 1) % poly.length], fp = f(P) - c, fq = f(Q) - c, inP = keepBelow ? fp <= 0 : fp >= 0, inQ = keepBelow ? fq <= 0 : fq >= 0; if (inP) out.push(P); if (inP !== inQ) out.push(lerp(P, Q, fp / (fp - fq))); } return out; };
+  const outW = [], outA = names.map(() => []); let changed = false;
+  const emit = (poly, inside) => { for (let i = 1; i + 1 < poly.length; i++) for (const P of [poly[0], poly[i], poly[i + 1]]) {
+    let w = P.w; if (inside && f(P) > 1e-6) { w = [cxm + (w[0] - cxm) * 0.94, w[1], czm + (w[2] - czm) * 0.94]; }
+    outW.push(w); P.a.forEach((ar, j) => outA[j].push(...ar)); } };
+  for (let i = 0; i < n; i += 3) {
+    const T = [vert(i), vert(i + 1), vert(i + 2)], fs = T.map(f);
+    if (fs.every(x => x <= 0)) { emit(T, false); continue; }
+    changed = true;
+    const keep = clip(T, inset, true); if (keep.length < 3) continue;
+    const lo2 = clip(keep, 0, true), hi2 = clip(keep, 0, false);
+    if (lo2.length >= 3) emit(lo2, false); if (hi2.length >= 3) emit(hi2, true);
+  }
+  if (!changed) { trimCache.set(key, null); return null; }
+  const g = new THREE.BufferGeometry(), P3 = new Float32Array(outW.length * 3);
+  outW.forEach((w, i) => { v.set(w[0], w[1], w[2]).sub(origin).applyMatrix4(Mi); P3[i * 3] = v.x; P3[i * 3 + 1] = v.y; P3[i * 3 + 2] = v.z; });
+  names.forEach((nm, j) => g.setAttribute(nm, nm === 'position' ? new THREE.BufferAttribute(P3, 3) : new THREE.BufferAttribute(new Float32Array(outA[j]), A[j].itemSize)));
+  g.computeBoundingBox(); trimCache.set(key, g); if (typeof window !== 'undefined' && window.__trimLog) window.__trimLog.push([body, cid, n, outW.length, +((bx.max.y - Math.max(...cut.filter(Number.isFinite))) / (bb.max.y - bb.min.y)).toFixed(3)]); return g;
+}
 // perfil do corpo: pra cada fatia em Z, o ponto mais baixo e o mais alto (pelos triangulos)
 const profiles = {};
 function profile(body) {
@@ -2108,6 +2177,7 @@ function buildGunParts(wpn, lo) {
   add(lo.body, null, mat, lo.handle && parts[lo.handle] && parts[lo.body].geoNoFore || null); // com empunhadura: suporte de fabrica sai, o punho entra reto
   const ironUp = !!parts[lo.body].ironGeo && (!lo.scope || !!IRONS[lo.scope]); // TT: ferro so aparece sem mira acoplada (com mira ele sai pra nao atrapalhar)
   if (ironUp) { const im = new THREE.Mesh(parts[lo.body].ironGeo, mat); /* 07/11 (pedido dele): mira de ferro SEM traco preto (perto do olho entupia o entalhe) */ im.position.copy(origin).multiplyScalar(-1); inner.add(im); }
+  if (parts[lo.body].tipGeo && !(lo.muzzle && MUZZLES[lo.muzzle] && muzzleFits(lo.body))) { const tm = new THREE.Mesh(parts[lo.body].tipGeo, mat); tm.position.copy(origin).multiplyScalar(-1); outline(tm, 0.0045); inner.add(tm); } // 13/11: freio de fabrica (Lupa) so sem bocal
   if (parts[lo.body].fixedGeo) { const fm = new THREE.Mesh(parts[lo.body].fixedGeo, mat); fm.position.copy(origin).multiplyScalar(-1); outline(fm, 0.0055); inner.add(fm); } // 09/11 (pedido dele): pente em cima fica com qualquer mira
   // revolver: tambor e cao como pecas proprias (giram no tiro)
   const anim = {};
@@ -2246,9 +2316,15 @@ function buildGunParts(wpn, lo) {
       scopeInfo = { big, kind, zoom: SCOPE_ZOOM[id] || (big ? 2.6 + sightLen(parts[id]) * 1.6 : 1.55), eye, len: sl * sc * S, lensR: lensR * S, lens, lift, tilt };
     }
   }
+  // 13/11 (pedido dele: pente da Lua Minguante piscando): a ponta do pente que entra no corpo e cortada (fica so um pouco dentro)
+  // e o pedaco de dentro afina, entao a parede do pente nunca fica colada na parede do poco
+  if (magMesh && !isPistol && !topMag(lo.body) && !parts[lo.body].magOwn && !parts[lo.body].magHand && !parts[lo.body].tubeMag && !DRUM_MAGS[lo.charger]) {
+    const tg = trimMag(magMesh, lo.body, origin, lo.charger);
+    if (tg) { for (const c of [...magMesh.children]) magMesh.remove(c); magMesh.geometry = tg; outline(magMesh, toonGun ? 0.0042 : 0.0035); }
+  }
   const muzzle = new THREE.Object3D();
   muzzle.position.set(cx, bodyBox.max.y - h * 0.28, bodyBox.min.z).sub(origin).multiplyScalar(S);
-  let mzInfo = null, mzFit = null;
+  let mzInfo = INTEGRAL_SIL.includes(lo.body) ? { id: 'integral', flash: 0.12, quiet: true } : null, mzFit = null; // PB (13/11): silenciador de fabrica = sem clarao
   if (lo.muzzle && MUZZLES[lo.muzzle] && muzzleFits(lo.body)) {
     // bocal no lugar da ponta: encaixa um pouco pra tras da boca (cobre o bico original) e sai pra frente (-z)
     const T = barrelTip(lo.body), pal = paletteReader(gunTex);
@@ -2286,6 +2362,11 @@ function buildGunParts(wpn, lo) {
   } else {
     const pr = profile(lo.body), z = parts[lo.body].fore ?? bodyBox.min.z + len * 0.3; // marca do guarda-mao quando existe
     hs = new THREE.Vector3(cx, pr.lo[sliceOf(pr, z)] + 0.06, z);
+    if (parts[lo.body].magHand) hs = parts[lo.body].magHand.clone(); // 13/11: mao no pente (Zumbidor, MP28)
+    if (parts[lo.body].magHand && magMesh) { // 13/11 b (pedido dele): a mao segura a PONTA do pente de lado, reta (como o soldado segura a Sten)
+      magMesh.updateMatrix(); const mb = magMesh.geometry.boundingBox.clone().applyMatrix4(magMesh.matrix); mb.min.add(origin); mb.max.add(origin);
+      hs = new THREE.Vector3(mb.min.x + (mb.max.x - mb.min.x) * 0.2, (mb.min.y + mb.max.y) / 2, (mb.min.z + mb.max.z) / 2);
+    }
   }
   gripL.position.copy(hs).sub(origin).multiplyScalar(S);
   if (isPistol) gripL.position.set(-0.03, -0.05, 0.01);
@@ -2322,7 +2403,7 @@ function buildGunParts(wpn, lo) {
   if (parts[lo.body].neon) { const nm = new THREE.Mesh(parts[lo.body].neon, NEON_MAT); nm.position.copy(origin).multiplyScalar(-1); inner.add(nm); }
   holder.add(muzzle, gripR, gripL);
   const laser = lo.laser && LASER_DEF[lo.laser] ? addLaser(holder, lo, origin, isPistol, magMesh, partMat) : null;
-  holder.userData = { sightGap: gunSightGap, body: lo.body, id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, canted: cantedInfo, iron, ironTilt: ironUp && lo.scope === IRON_OWN ? parts[lo.body].ironTilt || 0 : 0, ironDepth: ironUp && lo.scope === IRON_OWN ? (parts[lo.body].ironDepth || 0) * S : 0, ironYaw: ironUp && lo.scope === IRON_OWN ? parts[lo.body].ironYaw || 0 : 0, mat, laser, stats: loadoutStats(wpn, statsLo), drum: anim.drum || null, hammer: anim.hammer || null, sawed: !!parts[lo.body]?.sawed, gripCol: gi ? { z0: (gi.z0 - origin.z) * S, z1: (gi.z1 - origin.z) * S, lo: (gi.lo - origin.y) * S, top: (bodyBox.min.y + h * 0.42 - origin.y) * S } : null /* cabo detectado (mao que segura, 06/11) */, toon: toonGun ? { mag: magMesh, magTop: magMesh?.geometry.boundingBox.max.y ?? 0, magC: magMesh ? magMesh.geometry.boundingBox.getCenter(new THREE.Vector3()) : null, magP0: magMesh?.position.clone() || null, bell } : null, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
+  holder.userData = { spinLoad: SPIN_LOAD.includes(lo.body) && lo.handle === 'akimbo' /* so no akimbo (pedido dele) */, sideMag: !lo.handle && !!parts[lo.body].magHand, sightGap: gunSightGap, body: lo.body, id: wpn, muzzle, muzzleDev: mzInfo, gripR, gripL, spin: null, scope: scopeInfo, canted: cantedInfo, iron, ironTilt: ironUp && lo.scope === IRON_OWN ? parts[lo.body].ironTilt || 0 : 0, ironDepth: ironUp && lo.scope === IRON_OWN ? (parts[lo.body].ironDepth || 0) * S : 0, ironYaw: ironUp && lo.scope === IRON_OWN ? parts[lo.body].ironYaw || 0 : 0, mat, laser, stats: loadoutStats(wpn, statsLo), drum: anim.drum || null, hammer: anim.hammer || null, sawed: !!parts[lo.body]?.sawed, gripCol: gi ? { z0: (gi.z0 - origin.z) * S, z1: (gi.z1 - origin.z) * S, lo: (gi.lo - origin.y) * S, top: (bodyBox.min.y + h * 0.42 - origin.y) * S } : null /* cabo detectado (mao que segura, 06/11) */, toon: toonGun ? { mag: magMesh, magTop: magMesh?.geometry.boundingBox.max.y ?? 0, magC: magMesh ? magMesh.geometry.boundingBox.getCenter(new THREE.Vector3()) : null, magP0: magMesh?.position.clone() || null, bell } : null, bolt: anim.bolt ? { g: anim.bolt, z0: anim.bolt.position.z, travel: parts[lo.body].bolt.travel } : null };
   // 08/11 (print dele: compensador gigante tampando o ADS): em arma de boca larga o bocal chegava a 11% do comprimento e em 8 armas
   // subia acima da linha de mira. Limita o diametro e, se ainda passar, encolhe ate ficar abaixo da linha do olho
   if (mzFit) {
@@ -2446,10 +2527,11 @@ const styleOf = (id, list) => {
 
 // akimbo nas compridas: duas na mao, o dobro de bala, recarga bem mais lenta (troca os dois pentes), sem mirar
 // fator sobre a cadencia do akimbo: pistola pesada ganha mais com as duas maos, a automatica ja dispara rapido e ganha menos
-const AKIMBO_PISTOL_RATE = { pistol_1: 0.95, pistol_2: 1.06, pistol_3: 0.8, pistol_4: 1, pistol_5: 0.86, pistol_6: 1.03, pistol_7: 0.92, pistol_8: 0.88, pistol_9: 0.97, pistol_10: 0.9, pistol_11: 0.84 };
+const AKIMBO_PISTOL_RATE = { pistol_1: 0.95, pistol_2: 1.06, pistol_3: 0.8, pistol_4: 1, pistol_5: 0.86, pistol_6: 1.03, pistol_7: 0.92, pistol_8: 0.88, pistol_9: 0.97, pistol_10: 0.9, pistol_11: 0.84, pistol_12: 0.95, pistol_13: 0.86, pistol_14: 1.06, pistol_15: 0.8 };
 const AKIMBO_LONG = {
   smg: { mag: 2, rate: 0.78, dmg: 0.82, spread: 1.35, kick: 1.15, reload: 2.1, move: 0.95 },
   shotgun: { mag: 2, rate: 0.85, dmg: 0.9, spread: 1.2, kick: 1.1, reload: 1.9, move: 0.95 },
+  sniper: { mag: 2, rate: 1, dmg: 0.92, spread: 0.45, hip: 0.35, kick: 1.1, reload: 1, move: 0.95 }, // Sentenca nas duas maos (13/11): so atira do quadril, entao o quadril e bem preciso
 };
 const GRIP_HOLD = { lmg: 0.45, rifle: 0.7, smg: 0.7 };
 const GRIP_TRAITS = {

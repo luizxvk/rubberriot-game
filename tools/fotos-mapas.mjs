@@ -7,7 +7,7 @@ import { getMap, raycast, MAP_IDS, hasLOS } from '../shared/map.js';
 import { standable, floorAt } from '../shared/nav.js';
 const require = createRequire('file:///D:/Desktop/fokusstudios/template-magazine/package.json');
 const { chromium } = require('playwright');
-const OVERRIDE = { estaleiro: { c: [-19, 2, 11], t: [6, 2.2, -3] }, bonde: { c: [14, 2, 30], t: [20, 1.6, -8] } }; // { mapa: { c: [x,y,z], t: [x,y,z] } }: ajuste manual de um mapa
+const OVERRIDE = { trapiche: { c: [-2.6, 2, -23], t: [1, 2.4, 14] }, xilindro: { c: [-2.4, 2, -21], t: [1.5, 2.6, 6] }, estaleiro: { c: [-19, 2, 11], t: [6, 2.2, -3] }, bonde: { c: [14, 2, 30], t: [20, 1.6, -8] } }; // { mapa: { c: [x,y,z], t: [x,y,z] } }: ajuste manual de um mapa
 function bestView(M) {
   const anchors = [...(M.zones || []).map(z => z.pos), ...Object.values(M.flagBase || {}), [0, 0, 0]];
   let best = null;

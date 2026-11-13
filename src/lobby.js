@@ -5,9 +5,9 @@ import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { TEAM_MAX, TEAM_MAX_BLITZ, MODES, BR } from '../shared/weapons.js';
 import { LIMIT_MODES, TIME_MODES, MAP_IDS, RANKED_MODES } from '../shared/core.js';
-import { HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES } from '../shared/map.js';
+import { HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, SMUGGLE_MAPS } from '../shared/map.js';
 import { HEIST_MAPS } from '../shared/heist.js';
-import { BLITZ_BASE, BLITZ_MAPS } from '../shared/weapons.js';
+import { BLITZ_BASE, BLITZ_MAPS, SOON_MODES } from '../shared/weapons.js';
 import { currentEvent } from '../shared/events.js';
 
 const $ = (id) => document.getElementById(id);
@@ -29,8 +29,8 @@ export function cfgRows(c, mapNow = c.map) {
     const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     return [
-      ['mode', Object.keys(MODES), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['docas'] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && x !== 'cortejo' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? 'docas' : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + mapNow))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['mode', Object.keys(MODES).filter(k => !SOON_MODES.includes(k)), c.mode, (v) => modeName(v)],
+      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['auto', ...SMUGGLE_MAPS] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && x !== 'cortejo' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && mapAllows(x, raw) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? (SMUGGLE_MAPS.includes(c.map) ? c.map : 'auto') /* 13/11: marcava o Cais mesmo com o Trapiche escolhido */ : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + mapNow))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
       // horario (07/11, pedido dele): Roubo ao Cofre de dia ou de noite
       ...(!night ? [['tod', ['day', 'night'], c.tod || 'day', (v) => t(v === 'night' ? 'todNight' : 'todDay')]] : []),
@@ -187,8 +187,9 @@ export class Lobby {
       $('lbModes').dataset.cat = cat;
       $('lbModesSub').textContent = t('mcatd_' + cat);
       const list = MODE_CATS.find(([k]) => k === cat)[1].filter(k => MODES[k]);
-      g.innerHTML = list.map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}">${HOT_MODES.includes(k) ? `<i class="hot-pill">${esc(t('hotPill'))}</i>` : ''}<b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em>${BLITZ_BASE[k] ? `<i class="blitz-pill">${esc(t('blitzPill'))}</i>` : ''}<small>${esc(modeDesc(k))}</small></button>`).join('');
+      g.innerHTML = list.map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}"${SOON_MODES.includes(k) ? ' class="soon" aria-disabled="true"' : ''}>${SOON_MODES.includes(k) ? `<i class="soon-pill">${esc(t('soonPill'))}</i>` : ''}${HOT_MODES.includes(k) ? `<i class="hot-pill">${esc(t('hotPill'))}</i>` : ''}<b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em>${BLITZ_BASE[k] ? `<i class="blitz-pill">${esc(t('blitzPill'))}</i>` : ''}<small>${esc(modeDesc(k))}</small></button>`).join('');
       for (const b of g.querySelectorAll('[data-m]')) b.onclick = () => {
+        if (b.classList.contains('soon')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } // PvE em breve
         const v = b.dataset.m; this.closeModes();
         if (v === c.mode) return;
         audio.play('ui_click', { ui: true });
@@ -302,7 +303,7 @@ export class Lobby {
     const html = list.map(p => {
       const me = p.id === myId;
       const tag = [me ? t('lbYou') : p.bot ? t('lbBot') : '', p.id === m.host ? t('lbHost') : ''].filter(Boolean).join(' · ');
-      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span>${host && !me && !p.bot ? `<button class="lb-host" data-host="${esc(p.id)}" aria-label="${esc(t('lbGiveHost', { n: p.name }))}" title="${esc(t('lbGiveHost', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg></button>` : ''}${host && !me && !p.bot ? `<button class="lb-kick" data-kick="${esc(p.id)}" aria-label="${esc(t('lbKick', { n: p.name }))}" title="${esc(t('lbKick', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>` : ''}</li>`;
+      return `<li class="${p.team || ''} ${p.ready ? 'ok' : ''} ${me ? 'me' : ''}" data-id="${esc(p.id)}"><span class="nm">${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${esc(p.name)}${p.elite ? eliteTag() : ''}${tag ? `<small>${tag}</small>` : ''}</span><span class="dots"></span><span class="stamp">${t('lbReadyStamp')}</span><span class="lv">${p.pr ? `<em class="prest">★${p.pr > 1 ? p.pr : ''}</em> ` : ''}${t('lvlShort', { n: p.lvl })}</span><span class="lb-acts">${host && !me && !p.bot ? `<button class="lb-host" data-host="${esc(p.id)}" aria-label="${esc(t('lbGiveHost', { n: p.name }))}" title="${esc(t('lbGiveHost', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg></button>` : ''}${host && !me && !p.bot ? `<button class="lb-kick" data-kick="${esc(p.id)}" aria-label="${esc(t('lbKick', { n: p.name }))}" title="${esc(t('lbKick', { n: p.name }))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>` : ''}</span></li>`;
     }).join('');
     // 10/11 (pedido dele: "host" piscando e o nome sumindo): a lista vinha inteira de novo 4x/s e reiniciava o selo do
     // Elite e o carimbo. Agora so redesenha quando algo muda

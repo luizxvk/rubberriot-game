@@ -31,9 +31,10 @@ function grid(M) {
     let f = 0;
     for (const b of near(x, z)) {
       if (x < b.min[0] || x > b.max[0] || z < b.min[2] || z > b.max[2]) continue;
+      if (b.kind === 'nogo') { f = -1; break; } // 13/11: fora do mapa (atras da muralha) nao e chao de 40 m: o bot sorteava destino la e empurrava a parede
       if ((b.min[1] <= f + 0.05 || b.deck) && b.max[1] > f) f = b.max[1]; // deck: tabuleiro de viaduto que o trilho cruza (sobe pela rampa)
     }
-    floor[cz * N + cx] = f;
+    floor[cz * N + cx] = Math.max(0, f); if (f < 0) block[cz * N + cx] = 1;
   }
   // bloqueio: algo na altura do corpo encostando no raio do bot (parede, quina, cano baixo)
   for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
@@ -46,7 +47,20 @@ function grid(M) {
       block[i] = 1; break;
     }
   }
-  return (M._nav = { A, N, floor, block, low });
+  // 13/11 (pedido dele: bots raspando/flicando na parede, todos os mapas): celula colada em parede custa mais no A*, entao
+  // a rota corre pelo MEIO do corredor e da porta. wall = 2 (vizinha bloqueada), 1 (a 2 celulas de uma)
+  const wall = new Uint8Array(N * N);
+  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
+    const i = cz * N + cx; if (block[i]) continue;
+    let w = 0;
+    for (let dz = -2; dz <= 2 && w < 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const x = cx + dx, z = cz + dz; if (x < 0 || z < 0 || x >= N || z >= N || !block[z * N + x]) continue;
+      if (Math.abs(floor[z * N + x] - floor[i]) > STEP && floor[z * N + x] < floor[i]) continue; // beirada de onde se desce nao e parede
+      w = Math.max(w, Math.max(Math.abs(dx), Math.abs(dz)) <= 1 ? 2 : 1); if (w === 2) break;
+    }
+    wall[i] = w;
+  }
+  return (M._nav = { A, N, floor, block, low, wall });
 }
 
 const cellOf = (g, x, z) => [Math.max(0, Math.min(g.N - 1, Math.floor((x + g.A) / CELL))), Math.max(0, Math.min(g.N - 1, Math.floor((z + g.A) / CELL)))];
@@ -68,6 +82,11 @@ export function standable(M, x, z) {
   if (Math.abs(x) > M.arena - 0.6 || Math.abs(z) > M.arena - 0.6) return false;
   const g = grid(M), [cx, cz] = cellOf(g, x, z);
   return walk(g, cx, cz) && !g.low[cz * g.N + cx];
+}
+// longe de parede (13/11): ponto de destino do bot que nao fica colado em nada (senao ele para raspando a parede)
+export function roomy(M, x, z) {
+  const g = grid(M), [cx, cz] = cellOf(g, x, z);
+  return standable(M, x, z) && !g.wall[cz * g.N + cx];
 }
 // teto baixo aqui (o bot anda agachado)
 export function lowAt(M, x, z) {
@@ -113,7 +132,7 @@ function clear(g, a, b, noLow = false) {
   for (let i = 1; i <= n; i++) {
     const x = a[0] + dx * i / n, z = a[1] + dz * i / n;
     // a celula e as vizinhas do "corredor" (o bot tem largura)
-    for (const [ox, oz] of [[0, 0], [0.35, 0.35], [-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35]]) {
+    for (const [ox, oz] of [[0, 0], [0.7, 0.7], [-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7]]) { // 13/11: folga de ~0,35 m alem do raio (a reta nao raspa quina)
       const cx = Math.floor(x + 0.5 + ox), cz = Math.floor(z + 0.5 + oz);
       if (!walk(g, cx, cz) || (noLow && g.low[cz * g.N + cx])) return false;
     }
@@ -212,7 +231,7 @@ export function navPath(M, from, to, maxNodes = 60000, noLow = false) {
       if (!pass(g, x, z, nx, nz)) continue;
       if (noLow && g.low[nz * N + nx] && !g.low[z * N + x]) continue; // nao entra no duto (se ja esta dentro, sai)
       if (dx && dz && (!pass(g, x, z, x + dx, z) || !pass(g, x, z, x, z + dz))) continue; // nao corta quina
-      const nk = nz * N + nx, c = ck + (dx && dz ? 1.414 : 1) * (g.low[nk] ? 2 : 1); // agachado anda mais devagar
+      const nk = nz * N + nx, c = ck + (dx && dz ? 1.414 : 1) * (g.low[nk] ? 2 : 1) * (globalThis.__OLDNAV ? 1 : g.wall[nk] === 2 ? 1.9 : g.wall[nk] ? 1.3 : 1); // agachado anda mais devagar; colado na parede custa mais (13/11)
       if (seen[nk] === ep && c >= cost[nk]) continue;
       seen[nk] = ep; cost[nk] = c; came[nk] = k;
       hpush(S, c + h(nx, nz), nk);

@@ -28,7 +28,11 @@ const THEME = {
   // Casa da Moeda (04/11, refeita): calcamento mais frio, ruas onde as ruas dela estao, arvores so na praca
   moeda: { sky: 0xd2d6d0, ground: ['#bcc0b4', '#646a60'], roadList: [[12, 124, -30, 0], [8, 124, 30, 0], [124, 10, 0, 42], [40, 26, 0, -38]], trees: [[-14, -17], [14, -17], [-40, -46], [40, -46]] },
   // Cais do Sol Poente (04/11): docas no por do sol, mas na paleta do jogo (laranja e rosa desbotados, nada saturado)
+  // Vila Muamba (13/11 b): vila de reboco quente, terra batida na rua
+  muamba: { sky: 0xe6d8bc, ground: ['#cdbf9f', '#857659'], fog: [60, 200], trees: [] },
   docas: { sky: 0xf0b48c, ground: ['#b99c78', '#6d5a46'], fog: [50, 160], docks: true, trees: [] },
+  // Xilindro (13/11): presidio de concreto, ceu de chumbo; chao de cimento do patio e do pavilhao
+  xilindro: { sky: 0xc4c6c2, ground: ['#b8b6ae', '#6c6a64'], fog: [40, 140], trees: [] },
   // Canyon Poeira (04/11): deserto grande, ceu de fim de tarde quente, areia dourada; nevoa longe (mapa aberto)
   deserto: { sky: 0xeed7ae, ground: ['#e3c48f', '#b08a52'], fog: [90, 300], desert: true, trees: [] },
   // refinaria: areia do deserto, ceu quente
@@ -487,6 +491,13 @@ export function buildWorld(scene, M) {
   ready.then(() => freeze(root)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
     root, ready, setNight,
+    // 13/11 (pedido dele: "a noite os bonecos ainda ficam esbranquiçados, precisa ficar a mesma cor do dia"): ganho por canal
+    // = luz do dia / luz da noite (ceu + sol). O boneco multiplica a luz que recebe por isso e sai com a cor exata do dia
+    nightGain() {
+      const L = (h, hi, sc, si) => new THREE.Color(h).multiplyScalar(hi).add(new THREE.Color(sc).multiplyScalar(si));
+      const d = L(day.h[0], day.h[2], day.s[0], day.s[1]), n = L(0x8494c8, 0.8, 0xa8b8e6, 0.9);
+      return new THREE.Vector3(...['r', 'g', 'b'].map(k => Math.min(4, Math.max(0.6, d[k] / Math.max(1e-3, n[k])))));
+    },
     dispose() { M.boxes = M.boxes.filter(b => !b.nightPost && b.kind !== 'trunk'); scene.remove(root); freeGeos(root); }, // mapa velho sai da memoria de video
     // camera fora do estudio e longe da porta da floresta: o miolo nao aparece (parede de 12 m), nem desenha
     cull(p) {
@@ -1217,7 +1228,7 @@ function docksDecor(root, M) {
   const stone = toon(0x8b8478), cap = toon(0x6e6a63);
   const lip = (x, z, w, d) => { const m = ink(new THREE.BoxGeometry(w, 1, d), 0x8b8478, 0.05); m.material = stone; m.position.set(x, -0.5, z); root.add(m); const c = ink(new THREE.BoxGeometry(w + 0.2, 0.2, d + 0.2), 0x6e6a63, 0.03); c.material = cap; c.position.set(x, 0.1, z); root.add(c); };
   lip(0, A + 1.4, A * 2 + 3, 0.8); lip(-A - 1.4, (QZ + A + 1) / 2, 0.8, A + 1 - QZ); lip(A + 1.4, (QZ + A + 1) / 2, 0.8, A + 1 - QZ);
-  for (const sx of [-1, 1]) lip(sx * 35.5, QZ - 0.4, 47, 0.8); // frente do cais (dos lados do barco)
+  { const BW = (M.boatW || 24) / 2; for (const sx of [-1, 1]) lip(sx * (BW + (A + 1 - BW) / 2), QZ - 0.4, A + 1 - BW, 0.8); } // frente do cais (dos lados do barco; 13/11: largura do barco de cada mapa)
 }
 const DOCKS = {
   // barco de carga: casco vermelho escuro afundado no mar, borda branca; o conves (topo) e chao
@@ -1673,8 +1684,8 @@ function tripoModel(file) {
 
 // ---------- mapas modelados no Blender (06/11) ----------
 // pecas que o .glb NAO desenha (ficam as do jogo): carro do Tripo (chega depois) e o frontao com a placa pintada em canvas
-const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
-const MAP_GLB = { vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
+const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], trapiche: ['car', 'truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
+const MAP_GLB = { xilindro: 'xilindro.glb', trapiche: 'trapiche.glb', vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
 const MAP_CELL = 40, MAP_SPLIT_MIN = 12000; // so malha pesada de verdade e dividida (celula de 40 m): dividir as leves gastava mais em chamadas de desenho do que economizava em triangulos (ver mapModel)
 const MAP_THIN_FAR = 42; // celular: contorno de acabamento (moldura e vidro) so ate aqui; numa tela pequena nem da pra ver e sao centenas de milhares de triangulos
 const MAPM = new Map(), MAPG = new Map(); // MAPG: modelo ja pronto (o mapa monta direto com ele, sem as caixas antes)

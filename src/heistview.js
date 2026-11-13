@@ -147,7 +147,7 @@ export class HeistView {
     this.vanRing = new THREE.Mesh(this.vanRingGeo, new THREE.MeshBasicMaterial({ color: 0x2e7d32, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }));
     this.vanRing.rotation.x = -Math.PI / 2; this.vanRing.position.set(H.van[0], H.van[1] + 0.06, H.van[2]); this.root.add(this.vanRing);
     this.vLbl = label(t('smPile'), '#a83a2c'); this.vLbl.position.set(H.vault[0], H.vault[1] + 5, H.vault[2]); this.root.add(this.vLbl);
-    this.nLbl = label(t('smBoat'), '#2e7d32'); this.nLbl.position.set(H.van[0], H.van[1] + 4.5, H.van[2]); this.root.add(this.nLbl);
+    this.nLbl = label(t(H.drop === 'truck' ? 'smTruck' : 'smBoat'), '#2e7d32'); this.nLbl.position.set(H.van[0], H.van[1] + 4.5, H.van[2]); this.root.add(this.nLbl);
   }
   // passe no ar: arco do ponto de quem jogou ate o colega (ou ate o chao)
   pass(e) { this.flights ||= []; this.flights.push({ from: e.from, to: e.to, at: e.at, dur: e.dur || 0.55, t: 0 }); }

@@ -28,6 +28,8 @@ TH = {
   'feira': {'walls': ['e9c9a4', 'e3d3a8', 'd2c6a6', 'e0b890'], 'wood': 'a0794f', 'woodd': '6b4a2c', 'woodl': 'c9a77a', 'stone': 'cfc6b2', 'stoned': '9a917e', 'slate': '7a4a34', 'rock': '9a8b74', 'sky': 'e4dac0'},
   'largo': {'walls': ['dcd6c8', 'c9cdb4', 'bfc8cc', 'd9c7a8'], 'wood': '8a6a4a', 'woodd': '5d4a3a', 'woodl': 'b89a74', 'stone': 'b9bcb2', 'stoned': '7e847a', 'slate': '3a3d3a', 'rock': '8a857c', 'sky': 'd2d6d0'},
   'cortejo': {'walls': ['e9d3a8', 'e3c3a6', 'c9d0bc', 'bfc8cc', 'e8d69a', 'd9b9a0'], 'wood': '9a7a52', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'c2bcb0', 'stoned': '8a847a', 'slate': '4a4540', 'rock': '8a857c', 'sky': 'dcd6c6'},
+  'xilindro': {'walls': ['e6dfcc'], 'wood': '8a6a4a', 'woodd': '5d4a3a', 'woodl': 'b89a74', 'stone': 'b9b6ae', 'stoned': '8a877e', 'slate': '3a3836', 'rock': '8a857c', 'sky': 'c4c6c2'},
+  'trapiche': {'walls': ['e9c9a4', 'd9a98a', 'e8b98f', 'dcae86'], 'wood': '9d8263', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'b9b2a4', 'stoned': '8b8478', 'slate': '5f4a3e', 'rock': '8a857c', 'sky': 'f0d2b0'},
   'fronteira': {'walls': ['e3cfae', 'd9b48f', 'e8dcc0', 'cfa98a', 'ddc59a'], 'wood': '94704a', 'woodd': '5e4128', 'woodl': 'bf9c70', 'stone': 'c2b49a', 'stoned': '948670', 'slate': '7a4a34', 'rock': '9a8b74', 'sky': 'dcd8cc'},
 }[MAP]
 EAVE = 0.35
@@ -214,7 +216,7 @@ def deck(b):
     for s in (mn[2], mx[2]) if along else (mn[0], mx[0]):
         if along: box(WOODD, [mn[0] - 0.02, mn[1] - 0.25, s - 0.09], [mx[0] + 0.02, mn[1] + 0.001, s + 0.09])
         else: box(WOODD, [s - 0.09, mn[1] - 0.25, mn[2] - 0.02], [s + 0.09, mn[1] + 0.001, mx[2] + 0.02])
-INDUSTRIAL = ('fabrica', 'refinaria', 'estaleiro', 'docas')
+INDUSTRIAL = ('fabrica', 'refinaria', 'estaleiro', 'docas', 'xilindro')  # trapiche saiu (13/11 b): virou vila
 def step(b):
     mx, mn = b['max'], b['min']
     body, nose = ('steel', 'crane_yellow') if MAP in INDUSTRIAL else (WOODL, WOODD)  # industrial: degrau de aco com quina amarela (mat criado no topo, antes do desenho)
@@ -1420,6 +1422,96 @@ SAND = mat('sandbag', 'b7a37c')
 wallfn = border if MAP in ('vila', 'becos', 'feira', 'largo', 'cortejo') else seawall if MAP == 'estaleiro' else brickwall if MAP in ('fabrica', 'ferradura', 'moeda', 'bonde') else (lambda b: concrete(b) if min(b['max'][0] - b['min'][0], b['max'][2] - b['min'][2]) < 0.7 else brickwall(b)) if MAP == 'apito' else tinfence if MAP == 'refinaria' else (lambda b: palisade(b) if b['max'][1] - b['min'][1] >= 5 else mureta(b))
 pillarfn = gantry_leg if MAP == 'estaleiro' else ibeam if MAP == 'fabrica' else derrick_leg if MAP == 'refinaria' else concrete if MAP == 'apito' else post
 
+# ---------- Xilindro (13/11, pedido dele): presidio de concreto pintado, grades, beliches, armarios, balcao e alambrado ----------
+PGREEN, PCREAM, PSTRIPE, PMATT, PLOCK, PLOCKD = mat('prison_green', '7d8a78'), mat('prison_cream', 'e6dfcc'), mat('prison_stripe', '2a2724'), mat('prison_matt', 'ece6d6'), mat('prison_locker', '8fa0a6'), mat('prison_locker_d', '5f6c72')
+PIRON = mat('prison_iron', '2c2a27')
+def pwall(b):
+    """parede de presidio: barra de baixo verde-cinza (ate 1,2 m), cima creme, faixa preta entre as duas (2 cm pra fora)"""
+    mn, mx = b['min'], b['max']; h = mx[1] - mn[1]
+    if mn[1] < 0.5 and h > 1.8:
+        sp = mn[1] + 1.2
+        box(PGREEN, mn, [mx[0], sp, mx[2]]); box(PCREAM, [mn[0], sp, mn[2]], mx)
+        box(PSTRIPE, [mn[0] - 0.02, sp - 0.05, mn[2] - 0.02], [mx[0] + 0.02, sp + 0.05, mx[2] + 0.02])
+    else: box(PCREAM if mn[1] > 0.5 else PGREEN, mn, mx)
+def cellbars(b):
+    """grade de cela: barras redondas a cada 13 cm e 3 travessas (a colisao e a caixa; a bala passa)"""
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w > d; Lg = w if along else d; a0 = mn[0] if along else mn[2]
+    n = max(1, int(Lg / 0.13))
+    for k in range(n + 1):
+        t = a0 + 0.04 + k * (Lg - 0.08) / n
+        cyl(PIRON, (t, c[2]) if along else (c[0], t), 0.022, mn[1] + 0.001, mx[1] - 0.001, 6)
+    for yy in (mn[1] + 0.06, (mn[1] + mx[1]) / 2, mx[1] - 0.06):
+        if along: box(PIRON, [mn[0], yy - 0.04, c[2] - 0.045], [mx[0], yy + 0.04, c[2] + 0.045])
+        else: box(PIRON, [c[0] - 0.045, yy - 0.04, mn[2]], [c[0] + 0.045, yy + 0.04, mx[2]])
+def bunk(b):
+    """beliche de ferro: 4 pes de cano, 2 estrados com colchao listrado"""
+    mn, mx = b['min'], b['max']
+    for x in (mn[0] + 0.05, mx[0] - 0.05):
+        for z in (mn[2] + 0.05, mx[2] - 0.05): cyl(PIRON, (x, z), 0.035, mn[1], mx[1], 6)
+    for y0 in (mn[1] + 0.35, mn[1] + 1.2):
+        box(PIRON, [mn[0] + 0.01, y0, mn[2] + 0.01], [mx[0] - 0.01, y0 + 0.06, mx[2] - 0.01])
+        box(PMATT, [mn[0] + 0.07, y0 + 0.06, mn[2] + 0.12], [mx[0] - 0.07, y0 + 0.2, mx[2] - 0.12])
+        for k in range(1, 6):
+            z = mn[2] + 0.12 + k * (mx[2] - mn[2] - 0.24) / 6
+            box(PSTRIPE, [mn[0] + 0.07, y0 + 0.2, z - 0.035], [mx[0] - 0.07, y0 + 0.21, z + 0.035])
+def locker(b):
+    """fileira de armarios de aco: frestas entre as portas, respiros em cima e tampa"""
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w > d; Lg = w if along else d; a0 = mn[0] if along else mn[2]
+    box(PLOCK, mn, mx)
+    n = max(1, int(Lg / 0.55))
+    for k in range(n + 1):
+        t = a0 + k * Lg / n; t = min(max(t, a0 + 0.03), a0 + Lg - 0.03)
+        if along: box(PLOCKD, [t - 0.012, mn[1] + 0.06, mn[2] - 0.02], [t + 0.012, mx[1] - 0.06, mx[2] + 0.02])
+        else: box(PLOCKD, [mn[0] - 0.02, mn[1] + 0.06, t - 0.012], [mx[0] + 0.02, mx[1] - 0.06, t + 0.012])
+    for k in range(n):
+        t = a0 + (k + 0.5) * Lg / n
+        for j in range(3):
+            yy = mx[1] - 0.3 - j * 0.07
+            if along: box(PSTRIPE, [t - 0.14, yy - 0.015, mn[2] - 0.015], [t + 0.14, yy + 0.015, mx[2] + 0.015])
+            else: box(PSTRIPE, [mn[0] - 0.015, yy - 0.015, t - 0.14], [mx[0] + 0.015, yy + 0.015, t + 0.14])
+    box(PLOCKD, [mn[0] - 0.035, mx[1], mn[2] - 0.035], [mx[0] + 0.035, mx[1] + 0.05, mx[2] + 0.035])
+def gallery(b):
+    """balcao de cima das celas: laje de concreto, beira de aco escuro do lado da galeria e chapas em baixo"""
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+    box(CONC, mn, mx)
+    ex = mn[0] if c[0] > 0 else mx[0]; sg = -1 if c[0] > 0 else 1
+    box(STEELD, [min(ex, ex + sg * 0.05), mn[1] - 0.03, mn[2] + 0.01], [max(ex, ex + sg * 0.05), mx[1] + 0.02, mx[2] - 0.01])
+def prail(b):
+    """parapeito do balcao: corrimao, travessa do meio e montantes a cada 1,2 m (montante mais fino: sem face no mesmo plano)"""
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w > d; Lg = w if along else d; a0 = mn[0] if along else mn[2]
+    box(STEEL, [mn[0], mx[1] - 0.06, mn[2]], mx)
+    if along: box(STEEL, [mn[0], mn[1] + 0.48, mn[2] + 0.02], [mx[0], mn[1] + 0.53, mx[2] - 0.02])
+    else: box(STEEL, [mn[0] + 0.02, mn[1] + 0.48, mn[2]], [mx[0] - 0.02, mn[1] + 0.53, mx[2]])
+    n = max(1, int(Lg / 1.2))
+    for k in range(n + 1):
+        t = min(max(a0 + k * Lg / n, a0 + 0.04), a0 + Lg - 0.04)
+        if along: box(STEELD, [t - 0.03, mn[1], mn[2] + 0.025], [t + 0.03, mx[1] - 0.06, mx[2] - 0.025])
+        else: box(STEELD, [mn[0] + 0.025, mn[1], t - 0.03], [mx[0] - 0.025, mx[1] - 0.06, t + 0.03])
+def chainfence(b):
+    """alambrado: postes a cada 2,5 m, cano em cima, trama de arame (vertical e horizontal em planos diferentes) e arame farpado"""
+    mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); along = w > d; Lg = w if along else d; a0 = mn[0] if along else mn[2]
+    P = lambda t, y0, y1, th: box(PIRON, [t - th, y0, c[2] - th], [t + th, y1, c[2] + th]) if along else box(PIRON, [c[0] - th, y0, t - th], [c[0] + th, y1, t + th])
+    for k in range(int(Lg / 2.5) + 1):
+        t = min(max(a0 + k * Lg / max(1, int(Lg / 2.5)), a0 + 0.05), a0 + Lg - 0.05); cyl(PIRON, (t, c[2]) if along else (c[0], t), 0.05, mn[1], mx[1] + 0.35, 8)
+    for k in range(int(Lg / 0.22) + 1): P(a0 + 0.02 + k * (Lg - 0.04) / int(Lg / 0.22), mn[1] + 0.05, mx[1] - 0.05, 0.006)
+    for j in range(int(h / 0.22) + 1):
+        yy = mn[1] + 0.05 + j * (h - 0.1) / int(h / 0.22)
+        if along: box(PIRON, [mn[0], yy - 0.006, c[2] - 0.01], [mx[0], yy + 0.006, c[2] + 0.01])
+        else: box(PIRON, [c[0] - 0.01, yy - 0.006, mn[2]], [c[0] + 0.01, yy + 0.006, mx[2]])
+    tube(STEELD, 'x' if along else 'z', (mx[1] + 0.02, c[2] if along else c[0]), 0.035, a0, a0 + Lg, 8)
+    for k in range(int(Lg / 0.3)):
+        t = a0 + (k + 0.5) * Lg / int(Lg / 0.3)
+        if along: obox(PIRON, (t, mx[1] + 0.22, c[2]), (0.32, 0.02, 0.02), rz=40 if k % 2 else -40)
+        else: obox(PIRON, (c[0], mx[1] + 0.22, t), (0.02, 0.02, 0.32), rx=40 if k % 2 else -40)
+def proof(b):
+    """teto do pavilhao: laje escura com luminarias penduradas em fileiras (2 cm abaixo da laje)"""
+    mn, mx = b['min'], b['max']
+    box(CONCD, mn, mx)
+    for x in (-13.8, 0.0, 13.8):
+        z = mn[2] + 3
+        while z < mx[2] - 2:
+            box(PAPER, [x - 0.5, mn[1] - 0.12, z - 0.18], [x + 0.5, mn[1] - 0.02, z + 0.18]); z += 6
+
 DRAW = {'house': house, 'rock': rock, 'tower': tower, 'roof': lambda b: None, 'crate': crate, 'post': slimpost if MAP in ('ferradura', 'moeda') else post, 'pillar': pillarfn, 'vat': vat, 'machine': machine, 'pipe': lowpipe if MAP == 'refinaria' else pipe, 'concrete': concrete, 'silo': silo, 'derrick': derrick, 'marble': marble, 'column': column, 'rail': rail, 'counter': counter, 'bankroof': bankroof, 'duct': duct, 'coreto': coreto, 'coretoroof': coretoroof, 'bench': bench, 'hedge': hedge, 'lamp': lamp, 'dumpster': dumpster, 'car': lambda b: None, 'container': container, 'contshell': contshell, 'contdoor': contdoor, 'gantry': gantry, 'platform': deck, 'bridge': catwalk if MAP == 'fabrica' else concrete if MAP == 'apito' else deck, 'step': step, 'tank': tank,
         'wall': wallfn, 'hwall': hwall, 'hfloor': lambda b: box(WOODL, [b['min'][0] + 0.02, b['min'][1] + 0.005, b['min'][2] + 0.02], [b['max'][0] - 0.02, b['max'][1] - 0.005, b['max'][2] - 0.02]), 'hroof': lambda b: box(STONE, b['min'], b['max']), 'table': table,
         'quayedge': lambda b: None, 'boat': boat, 'boatcabin': boatcabin, 'boatstack': boatstack, 'plank': plank, 'shed': shed, 'shedroof': shedroof, 'cratepile': cratepile, 'forklift': forklift, 'barrel': barrel, 'bollard': bollard, 'railcar': railcar, 'crane': crane_leg, 'cranebeam': gantry,
@@ -1510,6 +1602,7 @@ def clothesline(x0, y, z0, x1, y1, z1, seed):
         if alongx: box(m, [u - hw, y - hh, z0 - t], [u + hw, y - 0.012, z0 + t])
         else: box(m, [x0 - t, y - hh, u - hw], [x0 + t, y - 0.012, u + hw])
 skipped = {}
+DRAW.update({'pwall': pwall, 'cellbars': cellbars, 'bunk': bunk, 'locker': locker, 'gallery': gallery, 'prail': prail, 'chainfence': chainfence, 'proof': proof})  # Xilindro (13/11)
 for b in L['boxes']:
     fn = DRAW.get(b['k'])
     if fn: fn(b)
@@ -1613,6 +1706,8 @@ CAMS = {'vila': (('alto', (52, -52, 48), (0, 0, 0)), ('rua', (0, -30, 2.2), (0, 
         'ilha': (('alto', (120, -120, 110), (0, 0, 0)), ('porto', (-40, 40, 2), (-66, 66, 4)), ('soluco', (40, -40, 2), (64, -70, 5)), ('brejo', (-70, 0, 2), (-88, 0, 3))),
         'deserto': (('alto', (130, -130, 110), (0, 0, 0)), ('ponte', (-20, -30, 2), (0, 0, 3)), ('base', (20, 90, 2), (0, 112, 4)), ('mesa', (-70, 30, 2), (-96, 52, 4))),
         'becos': (('alto', (72, -72, 60), (0, 0, 0)), ('beco', (-9, -30, 2.0), (-9, 0, 3))), 'feira': (('alto', (80, -80, 64), (0, 0, 0)), ('mercado', (-20, -14, 2.2), (0, 0, 3))), 'largo': (('alto', (84, -84, 68), (0, 0, 0)), ('largo', (0, -28, 2.2), (0, 0, 3))), 'cortejo': (('alto', (84, -84, 68), (0, 0, 0)), ('avenida', (-12, 8, 2.2), (30, 8, 3))),
+        'xilindro': (('alto', (46, -62, 52), (0, 0, 0)), ('galeria', (0, -20, 1.7), (0, 10, 2.5)), ('celas', (-3, -6, 4.3), (-8, 6, 1.5)), ('patio', (10, -38, 2), (-4, -26, 2.5)), ('armarios', (-13.7, -22, 1.7), (-13.7, 4, 1.5))),
+        'trapiche': (('alto', (40, -40, 34), (0, 0, 0)), ('rua', (0, -24, 1.7), (0, 10, 2)), ('casarao', (0, 8, 1.7), (0, 24, 3)), ('quintal', (-28, -26, 1.7), (-24, 10, 2))),
         'fronteira': (('alto', (72, -72, 62), (0, 0, 0)), ('forte', (14, 50, 2.2), (0, 70, 5)), ('meio', (-30, 12, 2.2), (30, -4, 3)), ('casas', (-44, -6, 6), (-58, -22, 3)))}[MAP]
 for nm, loc, tgt in CAMS:
     cam.location = Vector(loc); cam.rotation_euler = (Vector(tgt) - cam.location).to_track_quat('-Z', 'Y').to_euler()

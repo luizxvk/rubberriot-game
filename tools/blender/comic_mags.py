@@ -19,7 +19,7 @@ def ring(cx, cy, cz, hw, hd, n=3.2, axis='y', ny=0.0, nz=1.0):  # contorno super
         a = i / N_RING * math.tau
         c, s = math.cos(a), math.sin(a)
         u, v = hw * math.copysign(abs(c) ** (2 / n), c), hd * math.copysign(abs(s) ** (2 / n), s)
-        pts.append((cx, -(cz + v), cy + u) if axis == 'x' else (cx + u, -(cz + v * nz), cy + v * ny))  # 09/11: anel de lado com a inclinacao do pente
+        pts.append((cx, -(cz + v), cy + u) if axis == 'x' else (cx + u, -cz, cy + v) if axis == 'z' else (cx + u, -(cz + v * nz), cy + v * ny))  # 13/11: 'z' = tubo ao longo do cano (Caracol/Bizon)  # 09/11: anel de lado com a inclinacao do pente
     return pts
 
 def center(M, t):  # linha central do original (t = 0 boca, 1 fundo do original; passa de 1 no pente longo seguindo a tangente)
@@ -46,6 +46,7 @@ def build(body, M, kind):
     S = STYLES[kind]
     rnd = random.Random(body + str(kind))
     span = S['span']
+    if M.get('axis') == 'z': span = 0.72 + (span - 0.72) * 0.68  # 13/11: tubo embaixo do cano (Caracol) nao passa da boca
     taper = rnd.uniform(0.9, 0.97) - S['wedge']
     if S['ribs'] == 1: ribs = [rnd.uniform(0.42, 0.6)]
     elif S['ribs'] == 2: ribs = [rnd.uniform(0.3, 0.42), rnd.uniform(0.58, 0.72)]
@@ -70,7 +71,7 @@ def build(body, M, kind):
         ty, tz = b0[1] - a0[1], b0[2] - a0[2]; L = math.hypot(ty, tz) or 1.0
         ny, nz = -tz / L, ty / L
         if nz < 0: ny, nz = -ny, -nz
-        if M.get('axis', 'y') == 'x': ny, nz = 0.0, 1.0
+        if M.get('axis', 'y') in ('x', 'z'): ny, nz = 0.0, 1.0
         vs = [bm.verts.new(p) for p in ring(c[0], c[1], c[2], hw0 * kw, hd0 * kd * max(0.6, nz), S['n'], M.get('axis', 'y'), ny, nz)]
         if prev:
             for i in range(N_RING): bm.faces.new((prev[i], prev[(i + 1) % N_RING], vs[(i + 1) % N_RING], vs[i]))
@@ -164,6 +165,9 @@ for body, M in DATA.items():
 if 'pistol_2' in DATA:  # Pipoqueira: encostado no fundo do cabo (y -0,414) e centrado no pente, sem entrar nele
     M = DATA['pistol_2']; r = M['w'] * 1.9; bx, by, bz = M['bot']
     drum('pdrum', [tuple(M['top']), (bx, -0.3, (M['top'][2] + bz) / 2)], bx, -0.414 - r + 0.006, bz, r, M['w'] * 0.85, M['w'] * 0.46, M['d'] * 0.46, lobes=8)
+if 'pistol_14' in DATA:  # 13/11 (pedido dele): Matraquinha (Tec-9) com tambor de 40, estilo da Pipoqueira: gargalo no poco e tambor embaixo
+    M = DATA['pistol_14']; r = M['w'] * 1.75; x, ty, tz = M['top']; under = M['mid'][1] - M['h'] * 0.08
+    drum('cdrum_pistol_14_1', [(x, ty, tz), (x, under, tz)], x, under - r + 0.01, tz, r, M['w'] * 0.8, M['w'] * 0.46, M['d'] * 0.46, lobes=8)
 for body, under in (('subfusil_13', -0.14), ('subfusil_8', -0.12)):  # tambor redondo chato (foto dele), 2 tamanhos. under = fundo do poco
     if body not in DATA: continue
     M = DATA[body]; x, ty, tz = M['top']

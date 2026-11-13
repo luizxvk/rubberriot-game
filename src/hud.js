@@ -72,6 +72,7 @@ export class Hud {
     const W = WEAPONS[p.wpn];
     // nome do MODELO na mao (antes era o da categoria: todo fuzil aparecia como Trovao); variante = nome dela
     const lo = p.lo?.(p.wpn), bp = p.brBp?.[p.wpn];
+    document.body.classList.toggle('akimbo-on', lo?.handle === 'akimbo'); // 13/11 (pedido dele): duas na mao nao mira = some o botao de mirar no toque
     this.el.wname.textContent = bp ? t(bp) : lo?.body ? partName('body', lo.body) : wName(p.wpn);
     const a = p.ammo[p.wpn];
     const mag = a ? a.mag : 0;
@@ -129,8 +130,10 @@ export class Hud {
       const mag = p.stats().mag;
       const key = isTouch && !p.g.pad?.active ? '' : bindLabel(null, 'reload', p.g.pad?.active ? 1 : 0); // tecla remapeada
       if (a.mag === 0 && a.reserve <= 0) { txt = t('ammoOut'); cls = 'out'; }
+      // 13/11 (pedido dele): arma de 1-2 tiros (Sentenca, akimbo dela, Pederneira) recarrega sozinha: nem municao baixa nem 'recarregar'
+      else if (a.mag === 0 && mag <= 2) { /* nada */ }
       else if (a.mag === 0) { txt = key ? t('ammoReloadKey', { k: key }) : t('ammoReload'); cls = 'empty'; }
-      else if (a.mag <= Math.max(2, Math.ceil(mag * 0.25))) { txt = a.reserve > 0 && key ? t('ammoLowKey', { k: key }) : t('ammoLow'); cls = 'low'; } // com a tecla (pedido dele 01/11, estilo COD)
+      else if (mag > 2 && a.mag <= Math.max(2, Math.ceil(mag * 0.25))) { txt = a.reserve > 0 && key ? t('ammoLowKey', { k: key }) : t('ammoLow'); cls = 'low'; } // com a tecla (pedido dele 01/11, estilo COD)
     } else if (p.alive && p.reloadT > 0) { txt = t('ammoReloading'); cls = 'busy'; }
     if (el.textContent !== txt) el.textContent = txt;
     el.className = 'ammo-alert ' + cls;
@@ -450,10 +453,31 @@ export class Hud {
     setTimeout(() => el.remove(), 1300);
   }
 
-  hitmark(head) {
+  // 13/11 (pedido dele: "mais dinamico, animado e fluido"): 4 tracos que estouram pra fora com mola e recolhem sumindo;
+  // acerto em seguida (combo) abre mais e treme; cuca = amarelo com anel; abate = vermelho, grosso, gira e solta a onda
+  hitmark(head, kill) {
     const h = this.el.hit;
-    h.classList.remove('on', 'head'); void h.offsetWidth;
-    h.classList.add('on'); if (head) h.classList.add('head');
+    if (!h.firstChild) h.innerHTML = '<b class="hm-ring"></b><i></i><i></i><i></i><i></i>';
+    const now = performance.now();
+    this.hmCombo = now - (this.hmT || 0) < 320 ? Math.min(5, (this.hmCombo || 0) + 1) : 0; this.hmT = now;
+    h.className = 'hitmark on' + (head ? ' head' : '') + (kill ? ' kill' : '');
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !h.animate) { h.getAnimations?.().forEach(a => a.cancel()); h.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 260 }); return; }
+    const c = this.hmCombo, out = (kill ? 17 : head ? 14 : 11) + c * 1.8, dur = kill ? 620 : head ? 460 : 380;
+    const rot = kill ? 90 : (Math.random() - 0.5) * (6 + c * 3); // leve torcida a cada acerto: nunca igual ao anterior
+    for (const a of h.getAnimations({ subtree: true })) a.cancel();
+    const E = 'cubic-bezier(.2, .9, .3, 1)', SP = 'cubic-bezier(.25, 1.6, .4, 1)'; // easing por etapa (o geral distorcia o tempo todo)
+    h.animate([{ transform: `rotate(${rot * 0.4}deg) scale(${kill ? 1.5 : 1.25})`, opacity: 1, easing: E }, { transform: `rotate(${rot}deg) scale(1)`, opacity: 1, offset: 0.3 }, { transform: `rotate(${rot}deg) scale(1)`, opacity: 1, offset: 0.62, easing: 'ease-in' }, { transform: `rotate(${rot}deg) scale(.92)`, opacity: 0 }],
+      { duration: dur });
+    [...h.querySelectorAll('i')].forEach((arm, k) => {
+      const ang = 45 + k * 90, j = (Math.random() - 0.5) * 2; // cada braco com um tico de diferenca: parece desenhado a mao
+      arm.animate([
+        { transform: `rotate(${ang}deg) translateY(-4px) scaleY(.4)`, easing: SP },
+        { transform: `rotate(${ang + j}deg) translateY(-${out}px) scaleY(1.1)`, offset: 0.28, easing: E },
+        { transform: `rotate(${ang + j}deg) translateY(-${out}px) scaleY(1)`, offset: 0.62, easing: 'ease-in' },
+        { transform: `rotate(${ang + j}deg) translateY(-${out + 3}px) scaleY(.55)` },
+      ], { duration: dur });
+    });
+    if (head || kill) h.firstChild.animate([{ transform: 'scale(.3)', opacity: 0.95 }, { transform: `scale(${kill ? 2.4 : 1.7})`, opacity: 0 }], { duration: kill ? 480 : 340, easing: 'cubic-bezier(.1, .7, .3, 1)' });
   }
 
   stampText(text, sub) {
@@ -659,21 +683,31 @@ export class Hud {
     if (now - (this.tlT || 0) < 250) return;
     this.tlT = now;
     const q = (s) => { const e = document.querySelector(s); if (!e || e.hidden || getComputedStyle(e).display === 'none') return null; const r = e.getBoundingClientRect(); return r.width ? r : null; };
-    const bl = q('.hud-bl'), chat = q('#touch .tbtn.chat'), stick = q('#touch .stick'), cv = this.radarCv;
-    if (this.tstk && bl) Object.assign(this.tstk.style, { left: Math.round(bl.left) + 'px', top: Math.round(bl.bottom + 6) + 'px' });
+    // 13/11: o que o jogador moveu no editor de HUD (data-he-moved) fica onde ele pos e sai da pilha automatica
+    const mv = (s2) => !!document.querySelector(s2)?.dataset.heMoved;
+    const blMoved = mv('#hud .hud-bl'), bl = q('.hud-bl'), blA = blMoved ? null : bl;
+    // 13/11 (print dele): o botao do chat (fixo a 48 px do topo) ficava em cima da vida quando ela era mais alta: desce pra baixo dela
+    { const ce = document.querySelector('#touch .tbtn.chat'), r = ce && q('#touch .tbtn.chat');
+      if (ce && r && blA && !ce.dataset.heMoved && r.right > bl.left && r.left < bl.right && r.top < bl.bottom + 6) ce.style.top = Math.round(bl.bottom + 8) + 'px'; }
+    const chat = q('#touch .tbtn.chat'), stick = q('#touch .stick'), cv = this.radarCv;
+    // fileira de sequencias: embaixo da vida; se o chat desceu pra la, ela fica do lado dele ([chat][sequencias])
+    const chatUnder = chat && blA && chat.top >= bl.bottom && chat.left < bl.right && chat.right > bl.left;
+    if (this.tstk && blA && !this.tstk.dataset.heMoved) Object.assign(this.tstk.style, { left: Math.round(chatUnder ? chat.right + 8 : bl.left) + 'px', top: Math.round(chatUnder ? chat.top : bl.bottom + 6) + 'px' });
     const row = q('#touch .tstk');
     // avisos do meio descem pra baixo da fileira (no celular baixo eles passavam por cima dela)
     document.body.style.setProperty('--tl-msg', Math.round(Math.max(innerHeight * 0.2, (row?.bottom || 0) + 8)) + 'px');
     // pilha de avisos: comeca depois da fileira e para antes do arco de botoes da direita
     const btnL = Math.min(innerWidth - 150, ...[...document.querySelectorAll('#touch .tbtn')].map(b => b.getBoundingClientRect()).filter(r => r.width && r.top < innerHeight * 0.55 && r.left > innerWidth * 0.5).map(r => r.left));
-    const evL = Math.max((row?.right || bl?.right || 0) + 10, innerWidth / 2 - 200), evW = Math.max(180, Math.min(400, btnL - 10 - evL));
+    const evL = Math.max((row?.right || bl?.right || 0) + 10, innerWidth / 2 - 200), evW = Math.max(180, Math.min(400, innerWidth - 2 * evL, (btnL - innerWidth / 2 - 10) * 2)); // centralizada: a mesma folga dos dois lados
     document.body.style.setProperty('--tl-ev-l', Math.round(evL) + 'px'); document.body.style.setProperty('--tl-ev-w', Math.round(evW) + 'px');
     if (!cv) return;
     // Chat Rapido (10/11): coluna da esquerda, embaixo do botao do chat (online) ou no lugar dele (solo); o minimapa desce junto
     const qbEl = document.querySelector('#touch .tbtn.quick');
-    if (qbEl) { const want = chat ? Math.round(chat.bottom + 8) + 'px' : ''; if (qbEl.style.top !== want && (want || qbEl.dataset.moved)) { qbEl.style.top = want || 'calc(max(12px, env(safe-area-inset-top)) + 48px)'; qbEl.style.left = 'max(12px, env(safe-area-inset-left))'; qbEl.dataset.moved = '1'; } }
+    if (qbEl && !qbEl.dataset.heMoved) { const want = chat ? Math.round(chat.bottom + 8) + 'px' : ''; if (qbEl.style.top !== want && (want || qbEl.dataset.moved)) { qbEl.style.top = want || 'calc(max(12px, env(safe-area-inset-top)) + 48px)'; qbEl.style.left = 'max(12px, env(safe-area-inset-left))'; qbEl.dataset.moved = '1'; } }
     const qb = q('#touch .tbtn.quick');
-    const top = Math.max(bl?.bottom || 0, chat?.bottom || 0, row?.bottom || 0, qb?.bottom || 0) + 8;
+    if (cv.dataset.heMoved) { if (cv.style.width !== '110px') Object.assign(cv.style, { width: '110px', height: '110px' }); return; } // minimapa movido: tamanho fixo (o editor muda pelo scale)
+    const col = (r, s2) => (r && !mv(s2) ? r.bottom : 0); // so entra na pilha quem ficou no lugar automatico
+    const top = Math.max(blA?.bottom || 0, col(chat, '#touch .tbtn.chat'), col(row, '#touch .tstk'), col(qb, '#touch .tbtn.quick'), 0) + 8;
     const room = (stick ? stick.top : innerHeight) - top - 8;
     const size = Math.max(46, Math.min(110, room)); // celular baixo: encolhe ate caber acima do analogico
     Object.assign(cv.style, { top: Math.round(top) + 'px', bottom: 'auto', width: size + 'px', height: size + 'px' });

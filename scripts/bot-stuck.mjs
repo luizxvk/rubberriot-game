@@ -2,7 +2,7 @@
 // node scripts/bot-stuck.mjs [segundos]
 import { Core } from '../shared/core.js';
 const SECS = Number(process.argv[2]) || 180;
-for (const [mode, map] of [['tdm', 'vila'], ['ffa', 'fabrica'], ['ctf', 'fronteira'], ['dom', 'vila']]) {
+for (const [mode, map] of (process.argv[3] ? JSON.parse(process.argv[3]) : [['tdm', 'vila'], ['ffa', 'fabrica'], ['ctf', 'fronteira'], ['dom', 'vila']])) { // 13/11: lista opcional em JSON
   const c = new Core({ mode, map, bots: 8, lobby: false, send: () => {} });
   const hist = new Map(), spots = new Map();
   let stuck = 0, windows = 0;

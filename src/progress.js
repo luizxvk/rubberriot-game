@@ -142,7 +142,7 @@ export const MUZZLE_LVL = { comp: 5, flash: 10, brake: 15, silencer: 21, silence
 export const AMMO_LVL = { fire: 7, slug: 9, trace: 12, boom: 17, ap: 23 };
 const STEP = { scope: [2, 3], handle: [3, 4], charger: [4, 4], laser: [6, 5], body: [2, 3] };
 const slotOf = (id) => !id ? 'body' : /scope/.test(id) ? 'scope' : /laser/.test(id) ? 'laser' : /handle|akimbo|^gd_/.test(id) ? 'handle' : /charg|drum|_ext_/.test(id) ? 'charger' : 'body';
-export function partReq(i, id) { if (id === 'akimbo') return MAX_WPN_LEVEL; /* 08/11, pedido dele: ultimo nivel da arma */ if (i <= 0) return 1; const [a, b] = STEP[slotOf(id)]; return Math.min(MAX_WPN_LEVEL, a + (i - 1) * b); }
+export function partReq(i, id) { if (id === 'akimbo' || id === 'convMax') return MAX_WPN_LEVEL; /* convMax (13/11, pedido dele): kit da Tres Tempos no ultimo nivel */ /* 08/11, pedido dele: ultimo nivel da arma */ if (i <= 0) return 1; const [a, b] = STEP[slotOf(id)]; return Math.min(MAX_WPN_LEVEL, a + (i - 1) * b); }
 // regra antiga (curva, passo 1,5 e bocais), so pro que a conta ja tinha aberto antes do hotfix
 const OLD_MZ = { comp: 3, flash: 6, brake: 9, silencer: 13, silencer2: 16 };
 const oldLv = (xp) => { let n = 1; while (n < 20 && xp >= Math.round(350 * n + 40 * n ** 2)) n++; return n; };
