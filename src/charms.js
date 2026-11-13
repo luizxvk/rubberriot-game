@@ -56,9 +56,15 @@ export function attachCharm(gun, id, side = -1) {
   const zR = u.gripR?.position.z ?? box.max.z - size.z * 0.35, zL = u.gripL?.position.z ?? zR - size.z * 0.3, x0 = side < 0 ? box.min.x - 1 : box.max.x + 1, dir = -side;
   // lateral alta do corpo, perto de quem atira (o braco esquerdo passa por baixo). Arma curta (pistola): um pouco a frente do cabo
   const long = Math.abs(zL - zR) > size.z * 0.2; let zs = 0, lo = null, hi = null;
-  // arma curta sem malha nesse ponto: vai recuando ate achar o corpo
-  for (let k = CHARM.station; k > 0 && lo === null; k -= 0.1) {
-    zs = long ? zR + (zL - zR) * k : zR - size.z * 0.18;
+  // arma curta sem malha nesse ponto: vai recuando ate achar o corpo.
+  // 14/11 (pedido dele: "ainda estao juntos"): o contador de abates tem o lugar dele no meio do receptor; o chaveiro so precisa da
+  // argolinha (cabe ate no guarda-mao fino), entao ELE sai de perto: pula os pontos a menos de ~meio contador + 5 cm do contador
+  const kc = u.kc, kcZ = kc?.position.z, kcGap = kc ? kc.scale.x * 0.7 + 0.05 : 0;
+  const ks = [CHARM.station, 0.65, 0.75, 0.85, 0.95, 0.45, 0.35, 0.25, 0.15];
+  for (const k of ks) {
+    if (lo !== null) break;
+    zs = long ? zR + (zL - zR) * k : zR - size.z * (0.18 + (k - CHARM.station));
+    if (kc && Math.abs(zs - kcZ) < kcGap) continue;
     for (let i = 0; i <= 14; i++) { const y = box.min.y + size.y * (i / 14); if (hitBody(gun, body, x0, dir, y, zs)) { lo ??= y; hi = y; } }
     if (!long) break;
   }

@@ -81,8 +81,11 @@ export class DanceFx {
     if (F.kind === 'trail') { // rastro do giro da cambalhota: arco branco no plano do giro, varre junto e some
       const g = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: 0xfaf8f2, transparent: true, depthWrite: false, side: THREE.DoubleSide });
       const arc = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.06, 6, 40, Math.PI * 1.4), mat); arc.rotation.y = Math.PI / 2; g.add(arc);
-      g.position.copy(ch.root.localToWorld(new THREE.Vector3(0, 1.2, -0.9))); g.quaternion.copy(q); this.root.add(g);
-      this.bolts.push({ m: g, t: 0, life: F.life || 1.3, set: (k) => { mat.opacity = Math.sin(Math.min(1, k) * Math.PI) * 0.85; arc.rotation.x = (F.spin || -1) * k * Math.PI * 2; } }); return; }
+      // 14/11 (pedido dele: desenhava o circulo inverso): o meio do corpo gira quase parado (dances.js flip) e o pe faz um circulo de ~1 m
+      // em volta dele. O arco fica CENTRADO no corpo, na altura do meio do salto, e gira no sentido do flip (sp = dir)
+      const sp = F.spin || 1; g.position.copy(ch.root.localToWorld(new THREE.Vector3(0, 1.75, 0)));
+      g.quaternion.copy(q); this.root.add(g);
+      this.bolts.push({ m: g, t: 0, life: F.life || 1.3, set: (k) => { mat.opacity = Math.sin(Math.min(1, k) * Math.PI) * 0.85; const u = Math.min(1, k); arc.rotation.x = sp * u * u * (3 - 2 * u) * Math.PI * 2; } }); return; } // mesma curva do giro do corpo (flip: sm)
     if (F.kind === 'bolt') { const end = ch.root.localToWorld(new THREE.Vector3(0, 2.1, 0)); this.bolt(end.clone().add(V.set(0.5, 9, 0.3)), end); this.puff('spark', end, [0, 1, 0], 16, 2, 3.2); return; }
     if (F.kind === 'card') { this.card(at, dir, F.word || 'BANG!'); return; }
     this.puff(F.kind, at, dir.toArray(), F.n || 1, F.spread ?? 0.6, F.speed ?? 3);

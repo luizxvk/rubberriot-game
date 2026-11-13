@@ -8,7 +8,7 @@ export const WEAPONS = {
   lmg:     { name: 'Metralhadora', slot: 8, dmg: 23 /* 04/11 (hotfix, pedido dele): era 31 */, moveK: 0.72, runK: 0.62, slideK: 0.6 /* so com ela na mao: anda, corre e escorrega bem mais devagar */, heat: { shots: 45, cool: 0.42, wait: 0.35, kick: 0.8 } /* 05/11 (pedido dele): 45 tiros seguidos superaquece e trava ate esfriar; o coice cresce com o calor */, rate: 0.085, mag: 100, reserve: 200, reload: 4.2, spread: 0.028, auto: true, zoom: 1.45, kick: 0.046 /* 05/11 (pedido dele): era 0,024 */, range: 240, recoil: [[1.1, 0.25], [1, -0.3], [1.1, 0.35], [0.9, -0.35], [1, 0.2], [0.9, -0.25]] },
   shotgun: { name: 'Bacamarte',  slot: 4, dmg: 17, pellets: 10, rate: 0.7, mag: 6, reserve: 36, reload: 1.9, spread: 0.085, auto: false, zoom: 1.2, kick: 0.11, range: 45, recoil: [[1, 0.1]] },
   minigun: { name: 'Moedor',     slot: 5, dmg: 19, rate: 0.028, mag: 140, reserve: 280, reload: 2.6, spread: 0.05, auto: true, zoom: 1, kick: 0.02, spin: 0.35, noAds: true, range: 200, recoil: [[0.25, 0.25], [0.25, -0.25], [0.3, 0.18], [0.25, -0.2]] }, // 07/11 (pedido dele): bem menos coice, um pouco mais de dano (era 16)
-  melee:   { name: 'Lâmina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 2.6, melee: true, noAds: true, recoil: [[0, 0]] },
+  melee:   { name: 'Lâmina', slot: 7, dmg: 150, rate: 0.7, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.02, range: 1.7, melee: true, noAds: true, recoil: [[0, 0]] },
   sniper:  { name: 'Luneta',     slot: 6, dmg: 150, rate: 1.05, mag: 5, reserve: 25, reload: 2.1, spread: 0.04, adsSpread: 0, auto: false, zoom: 4, kick: 0.16, range: 400, recoil: [[1, 0.15]] },
   // punhos (battle royale): 3 socos derrubam quem esta sem colete (34 x 3 = 102)
   // Bazuca (03/11, sequencia de 6 abates): 2 foguetes; acerto direto derruba, a explosao pega quem estiver perto
@@ -16,7 +16,7 @@ export const WEAPONS = {
   // gadgets de baixo do cano (03/11): nomes pro placar de abates; o tiro deles nao e arma de mao
   flame:   { name: 'Lança-Chamas', slot: 0, dmg: 3, rate: 0.1, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: true, zoom: 1, kick: 0, range: 8, gadget: true, recoil: [[0, 0]] },
   ubshot:  { name: 'Escopetinha', slot: 0, dmg: 13, pellets: 8, rate: 0.5, mag: 2, reserve: 0, reload: 0, spread: 0.075, auto: false, zoom: 1, kick: 0.2, range: 30, gadget: true, recoil: [[1, 0]] },
-  fists:   { name: 'Punhos', slot: 8, dmg: 34, rate: 0.42, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.015, range: 2.3, melee: true, noAds: true, recoil: [[0, 0]] },
+  fists:   { name: 'Punhos', slot: 8, dmg: 34, rate: 0.42, mag: Infinity, reserve: Infinity, reload: 0, spread: 0, auto: false, zoom: 1, kick: 0.015, range: 1.5, melee: true, noAds: true, recoil: [[0, 0]] },
 };
 
 // Escada de armas: modelos especificos, comeca na pistola, encurtada (estilo COD).
@@ -104,7 +104,7 @@ export const LETHALS = ['frag', 'tomahawk', 'thermo'], TACTICALS = ['flash', 'sm
 // 30/10: Cuca Dura (apelona) e Pe de Pano sairam (pedido dele)
 // 07/11 (pedido dele): so UMA skill (Maos Rapidas) e UM equipamento (Guarda-chuva) liberados no nivel 1; o resto abre pelo nivel da conta
 export const SKILLS = {
-  maos: { lvl: 1, reload: 0.75, swap: 0.7, icon: 'pan_tool' },             // recarrega e troca de arma mais rapido
+  maos: { lvl: 1, reload: 0.75, swap: 0.7, climb: 0.7, icon: 'pan_tool' }, // recarrega, troca de arma e (14/11, pedido dele) escala mais rapido
   mola: { lvl: 4, jump: 1.3, icon: 'height' },                              // pula mais alto
   carrinho: { lvl: 5, slide: true, icon: 'sledding' },                      // agachar correndo = desliza (so com ela equipada; pedido dele 30/10)
   borracha: { lvl: 6, move: 1.08, icon: 'directions_run' },                 // anda e corre mais rapido
@@ -343,7 +343,8 @@ export const BODY_TRAITS = {
 // 15-17 = espadas (04/11): alcance de espada (3,4-3,9 m), mais lentas que faca; Corsario rapido, Lamina Real lenta e longa,
 // Katana no meio (a melhor no conjunto, por isso abre por nivel)
 const ML = [[0.6, 2.4], [1.0, 3.0], [0.55, 2.3], [1.15, 3.3], [1.05, 3.0], [0.62, 2.5], [0.95, 2.9], [0.85, 3.0], [0.55, 2.3], [1.0, 2.9], [0.5, 2.2], [1.0, 3.0], [0.9, 3.2], [0.95, 2.9], [1.0, 3.0], [0.8, 3.4], [1.2, 3.9], [0.9, 3.7], [0.85, 3.7]]; // 18 = Sabre de Neon: igual a Katana, um tico mais rapido
-ML.forEach(([rate, range], i) => { BODY_TRAITS['melee_' + i] = { mode: 'semi', rate: rate / 0.7, range }; });
+// 13/11 (pedido dele: 'ta mt longe', estilo facada do COD): alcance de todas as laminas x0,65 -> faca ~1,5 m, pesada ~2 m, espada ~2,5 m
+ML.forEach(([rate, range], i) => { BODY_TRAITS['melee_' + i] = { mode: 'semi', rate: rate / 0.7, range: Math.round(range * 0.65 * 100) / 100 }; });
 // Skins de MODELO da Loja (04/11, pedido dele: Futuristic Weapon Pack). Trocam o desenho de um corpo e mais nada: o
 // corpo da skin (body) usa os stats do original (of), entao nao da vantagem. Posse: 'wskin:<id>' (shopstore). No Arsenal
 // a skin vira uma variante com o nome dela, no modelo original. Pra skin nova: uma linha aqui + o desenho (arsenal.js

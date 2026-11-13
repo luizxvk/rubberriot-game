@@ -37,6 +37,9 @@ import { kbBinds, padBinds, setKb, setPad, resetBinds, keyName, padName, ACTIONS
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
 import { LOOKS } from '../shared/looks.js';
 import { getLook, saveLook, lookOpen } from './lookstore.js';
+import { KC_IDS, getKc, setKc } from './killcounter.js';
+import { STK_IDS, STK_FREE, STK_MAX, STK_ANIM, getStickers, setStickers, stickerThumb } from './stickers.js';
+import { shopOwned } from './shopstore.js';
 import { syncOpen, isNew, anyNew, markSeen, newPill } from './newstuff.js';
 import { TIERS, badgeSvg, myTier, peakTier, tierOf as tierFor } from './rank.js';
 import { prizePreview } from './shop.js';
@@ -261,6 +264,7 @@ export function initMenus(o) {
     ['toggle', 'autoChute', 's_autoChute'],
     ['hudscale'],
     ['xhair'],
+    ['retglow'], // brilho da reticula (14/11, pedido dele): com previa ao vivo do shader de verdade
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
   // mouse (so no PC, igual as opcoes do COD): suavizacao, aceleracao, entrada crua e a arma acompanhando o giro
@@ -272,7 +276,7 @@ export function initMenus(o) {
     ['toggle', 'rawMouse', 's_rawMouse'],
     ['toggle', 'gunSway', 's_gunSway']);
   // mira assistida: toque e controle; tiro automatico so no toque (os dois ligados por padrao)
-  if (isTouch) defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssist'], ['toggle', 'autoFire', 's_autoFire']);
+  if (isTouch) defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssist'], ['toggle', 'autoFire', 's_autoFire'], ['toggle', 'adsFireBtn', 's_adsFireBtn'], ['toggle', 'fireLBtn', 's_fireLBtn']); // 13/11: botoes de mirar-e-atirar e tiro da esquerda
   else defs.splice(defs.findIndex(d => d[1] === 'invertY'), 0, ['toggle', 'aimAssist', 's_aimAssistPad']);
   // controle (03/11, pedido dele): as mesmas do mouse (sensibilidade, suavizacao, aceleracao)
   defs.push(['range', 'padSens', 's_padSens', 0.3, 2.5, 0.05, v => v.toFixed(2)], ['range', 'padAdsSens', 's_padAds', 0.3, 1.5, 0.05, v => v.toFixed(2)],
@@ -280,10 +284,10 @@ export function initMenus(o) {
     ['range', 'padAccel', 's_padAccel', 0, 1, 0.05, v => Math.round(v * 100) + '%']);
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
-    autoFire: 'play', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
-    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
+    autoFire: 'play', adsFireBtn: 'touch', fireLBtn: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
+    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
-  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
+  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[0] === 'retglow' ? 'retglow' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
   const padOn = () => [...(navigator.getGamepads?.() || [])].some(Boolean);
   const TABS = isTouch ? ['touch', ...(padOn() ? ['pad'] : []), 'play', 'video', 'audio', 'game'] : ['ctrl', 'pad', 'play', 'video', 'audio', 'game']; // play: Jogabilidade (09/11, pedido dele)
@@ -293,6 +297,7 @@ export function initMenus(o) {
   S.unlockAll = progressInfo().unlockAll;
   const buildSettings = () => { sl.innerHTML = `<nav class="set-tabs" role="tablist">${TABS.map(g => `<button role="tab" data-sg="${g}" aria-selected="${g === setTab}">${t('sg_' + g)}</button>`).join('')}</nav><div class="set-body">` + defs.filter(d => grp(d) === setTab).map(d => {
     if (d[0] === 'range') return `<label class="field"><span>${t(d[2])} <b data-out="${d[1]}"></b></span><input type="range" data-k="${d[1]}" min="${d[3]}" max="${d[4]}" step="${d[5]}"></label>`;
+    if (d[0] === 'retglow') return `<div class="field rg-field"><span>${t('s_retGlow')} <b id="rgOut">${Math.round((S.retGlow ?? 1) * 100)}%</b></span><div class="rg-row"><canvas id="rgPrev" width="240" height="160" aria-label="${t('s_retGlowPrev')}"></canvas><input type="range" id="rgIn" min="0" max="1" step="0.05" value="${S.retGlow ?? 1}" aria-label="${t('s_retGlow')}"></div></div>`;
     if (d[0] === 'hudscale') return `<div class="field"><span>${t('s_hudScale')} <b id="hsOut">${Math.round((S.hudScale || 1) * 100)}%</b></span><button type="button" class="hs-open" id="hsOpen">${t('hsPreview')}</button></div>`;
     if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
     if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : t(l)}</button>`).join('')}</div></div>`;
@@ -310,6 +315,7 @@ export function initMenus(o) {
       if (d[0] === 'range') { sl.querySelector(`[data-k="${d[1]}"]`).value = S[d[1]]; sl.querySelector(`[data-out="${d[1]}"]`).textContent = d[6](Number(S[d[1]])); }
       if (d[0] === 'seg') sl.querySelectorAll(`[data-seg="${d[1]}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === S[d[1]]));
       if (d[0] === 'toggle') sl.querySelector(`[data-t="${d[1]}"]`).setAttribute('aria-checked', !!S[d[1]]);
+      if (d[0] === 'retglow') { const i = sl.querySelector('#rgIn'); if (i) { i.value = S.retGlow ?? 1; sl.querySelector('#rgOut').textContent = Math.round((S.retGlow ?? 1) * 100) + '%'; o.retPreview?.(sl.querySelector('#rgPrev')); } }
       if (d[0] === 'xhair') {
         sl.querySelectorAll('[data-seg="xhair"] button').forEach(b => b.classList.toggle('on', b.dataset.v === (S.xhair || 'cross')));
         sl.querySelectorAll('[data-xc]').forEach(b => b.setAttribute('aria-pressed', b.dataset.xc === (S.xhairColor || XH_COLORS[0])));
@@ -325,7 +331,7 @@ export function initMenus(o) {
     ultra: { res: 1, aa: '8x', draw: 'far', outl: 'full', chars: 'high', grain: 0.6, fxQ: 'high', dynRes: false, scopeQ: 'full' },
   };
   const GFX_KEYS = new Set(Object.keys(GFX_PRESETS.perf));
-  sl.addEventListener('input', (e) => { const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); if (GFX_KEYS.has(k)) S.gfxPreset = 'custom'; refresh(); o.saveSettings(); });
+  sl.addEventListener('input', (e) => { if (e.target.id === 'rgIn') { S.retGlow = Number(e.target.value); o.saveSettings(); refresh(); return; } const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); if (GFX_KEYS.has(k)) S.gfxPreset = 'custom'; refresh(); o.saveSettings(); });
   sl.addEventListener('click', (e) => {
     if (e.target.closest('#hsOpen')) { audio.play('ui_click', { ui: true }); openHudScale({ value: S.hudScale || 1, onDone: (k, save) => { if (save) { S.hudScale = k; o.saveSettings(); } const out = sl.querySelector('#hsOut'); if (out) out.textContent = Math.round((S.hudScale || 1) * 100) + '%'; } }); return; }
     const b = e.target.closest('button'); if (!b) return;
@@ -347,8 +353,8 @@ export function initMenus(o) {
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee'];
-  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'paint', 'accent'];
-  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', visual: 'slot_visual', canted: 'slot_canted', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_accent' };
+  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'accent']; // 13/11: 'paint' entrou no 'accent' (botao Pintura)
+  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', visual: 'slot_visual', canted: 'slot_canted', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_paint' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   let chPickOpen = false;
@@ -574,7 +580,9 @@ export function initMenus(o) {
   let lookTab = 'banner', lookTeam = 'red', lookPeek = null;
   // Ver progresso (05/11, pedido dele): debaixo da barra de nivel, o que esta arma abre e em que nivel. So peca que abre por nivel da
   // arma; o que vem de desafio ou de nivel de jogador fica de fora. Mesmas contas do picker, entao os dois nunca discordam.
-  let ulkOpen = false, visTab = 'charm';
+  let ulkOpen = false, visTab = 'charm', stkSel = -1; // stkSel: adesivo da arma em edicao (arrastar na arma 3D)
+  const kcOwned = (id) => id === 'none' || !!progressInfo().unlockAll || shopOwned('kc:' + id);
+  const stkOwned = (id) => STK_FREE.includes(id) || !!progressInfo().unlockAll || shopOwned('stk:' + id);
   function unlockItems(lo, C) {
     const out = [], add = (slot, id, i, lv, key = id, name = partName(slot, id)) => { if (!id || LOCKED_BY[key] || LOCKED_BY[cat + ':' + key] || BODY_MIN_LVL[id]) return; out.push({ slot, name, lv, open: partUnlocked(cat, i, key) }); };
     C.bodies.forEach((id, i) => { if (i > 0) add('body', id, i, partReq(i, id)); });
@@ -832,7 +840,7 @@ export function initMenus(o) {
       markSeen(pre);
     }
     renderStats(view);
-    o.onSmith(buildGun(cat, view), cat, preview?.k === 'charm' ? preview.v : getLook().charm);
+    o.onSmith(buildGun(cat, view), cat, preview?.k === 'charm' ? preview.v : getLook().charm, cat === 'melee' ? null : { kc: preview?.k === 'kc' ? preview.v : getKc(), kills: wpnTracked(cat, view.body).k || 0, stk: getStickers(view.body) });
   }
 
   // ---------- skills passivas: 2 medalhoes + cartas ----------
@@ -1057,8 +1065,42 @@ export function initMenus(o) {
       if (!lo.canted) retWho = 'main'; else if (!hasMain) retWho = 'canted';
       const kRet = retWho === 'canted' ? 'ret45' : 'ret', kCol = retWho === 'canted' ? 'retColor45' : 'retColor';
       const whoSw = lo.canted && hasMain ? `<div class="ret-who"><small>${t('retWho')}</small><span class="seg" role="group" aria-label="${t('retWho')}"><button data-who="main" aria-pressed="${retWho === 'main'}">${t('retWhoMain')}</button><button data-who="canted" aria-pressed="${retWho === 'canted'}">${t('retWho45')}</button></span></div>` : '';
-      const tabs = `<div class="vis-tabs" role="tablist"><button role="tab" data-v="ret" aria-selected="${visTab === 'ret'}" ${hasRet ? '' : 'disabled'}>${t('slot_ret')}</button><button role="tab" data-v="charm" aria-selected="${visTab === 'charm'}">${t('visCharms')}</button><span class="vis-soon">${t('visStickers')}<small>${t('visSoon')}</small></span><span class="vis-soon">${t('visKills')}<small>${t('visSoon')}</small></span></div>`;
-      const bind = () => p.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { visTab = b.dataset.v; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
+      const tabs = `<div class="vis-tabs" role="tablist"><button role="tab" data-v="ret" aria-selected="${visTab === 'ret'}" ${hasRet ? '' : 'disabled'}>${t('slot_ret')}</button><button role="tab" data-v="charm" aria-selected="${visTab === 'charm'}">${t('visCharms')}</button>${cat === 'melee' ? '' : `<button role="tab" data-v="stk" aria-selected="${visTab === 'stk'}">${t('visStickers')}</button><button role="tab" data-v="kc" aria-selected="${visTab === 'kc'}">${t('visKills')}</button>`}</div>`;
+      const bind = () => p.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { visTab = b.dataset.v; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); stkSel = -1; renderSmith(); });
+      if (cat === 'melee' && (visTab === 'kc' || visTab === 'stk')) visTab = 'charm'; // lamina: sem contador nem adesivo (regra dele 13/11)
+      o.stkEdit?.(null);
+      if (visTab === 'kc') { // contador de abates (13/11): 15 temas da Loja, mostra os abates com ESTE modelo
+        const cur = getKc();
+        p.innerHTML = tabs + `<p class="kc-note">${t('kcNote', { n: wpnTracked(cat, lo.body).k || 0 })}</p>` + ['none', ...KC_IDS].map(id => { const open = kcOwned(id);
+          return `<button class="opt ${cur === id ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === 'kc' && preview.v === id ? 'peek' : ''}" data-kc="${id}" ${open ? '' : 'aria-disabled="true"'}>${id === 'none' ? t('kcNone') : t('lk_kc_' + id)}${open ? '' : `<small class="req-ch">${t('shopOnly')}</small>`}</button>`; }).join('');
+        p.querySelectorAll('[data-kc]').forEach(b => b.onclick = () => { const id = b.dataset.kc; if (b.classList.contains('locked')) { peek('kc', id); return; } preview = null; setKc(id); audio.play('swap', { ui: true, vol: 0.6 }); renderSmith(); });
+        bind(); return;
+      }
+      if (visTab === 'stk') { // adesivos (13/11): escolhe, ARRASTA em cima da arma, muda tamanho e giro; ate 4 por modelo
+        const list = getStickers(lo.body); if (stkSel >= list.length) stkSel = list.length - 1;
+        const sel = list[stkSel];
+        const save = (l) => { setStickers(lo.body, l); o.smithStickers?.(l); };
+        p.innerHTML = tabs + `<div class="stk-on"><small>${t('stkOn', { n: list.length, m: STK_MAX })}</small>${list.map((s, i) => `<button class="stk-chip ${i === stkSel ? 'on' : ''}" data-si="${i}" aria-label="${t('lk_stk_' + s.id)}"><img src="${stickerThumb(s.id)}" alt=""></button>`).join('')}</div>`
+          + (sel ? `<div class="stk-edit"><p class="stk-hint">${t('stkDrag')}</p><label><span>${t('heSize')}</span><input type="range" id="stkSize" min="0.05" max="0.3" step="0.01" value="${sel.s || 0.12}"></label><label><span>${t('stkTurn')}</span><input type="range" id="stkRot" min="-3.14" max="3.14" step="0.05" value="${sel.r || 0}"></label><div class="stk-pad" role="group" aria-label="${t('stkMove')}">${[['up', 0, 1, 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z'], ['left', 1, 0, 'M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6z'], ['right', -1, 0, 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z'], ['down', 0, -1, 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z']].map(([k, z, y, d]) => `<button class="stk-arrow ${k}" data-nz="${z}" data-ny="${y}" aria-label="${t('stk_' + k)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg></button>`).join('')}</div><button class="plain" id="stkDel">${t('stkDel')}</button></div>` : `<p class="stk-hint">${t(list.length >= STK_MAX ? 'stkFull' : 'stkPick')}</p>`)
+          + STK_IDS.map(id => { const open = stkOwned(id); return `<button class="opt stk-opt ${open ? '' : 'locked'} ${STK_ANIM[id] ? 'sa-' + STK_ANIM[id] : ''}" data-stk="${id}" ${open ? '' : 'aria-disabled="true"'}><img src="${stickerThumb(id)}" alt=""><span>${t('lk_stk_' + id)}</span>${STK_ANIM[id] ? `<small class="stk-anim">${t('stkAnim')}</small>` : ''}${open ? '' : `<small class="req-ch">${t('shopOnly')}</small>`}</button>`; }).join('');
+        p.querySelectorAll('[data-si]').forEach(b => b.onclick = () => { stkSel = +b.dataset.si; audio.play('ui_click', { ui: true, vol: 0.5 }); renderSmith(); });
+        p.querySelectorAll('[data-stk]').forEach(b => b.onclick = () => {
+          if (b.classList.contains('locked') || list.length >= STK_MAX) { audio.play('empty', { ui: true, vol: 0.5 }); return; }
+          const at = o.smithCenterPick?.(); if (!at) { audio.play('empty', { ui: true, vol: 0.5 }); return; }
+          list.push({ id: b.dataset.stk, ...at, s: 0.12, r: 0 }); stkSel = list.length - 1; save(list); audio.play('pickup', { ui: true, vol: 0.5 }); renderSmith();
+        });
+        if (sel) {
+          p.querySelector('#stkSize').oninput = (e) => { sel.s = +e.target.value; save(list); };
+          p.querySelector('#stkRot').oninput = (e) => { sel.r = +e.target.value; save(list); };
+          // setinhas: um toque anda um passo; segurando, continua andando
+          p.querySelectorAll('[data-nz]').forEach(b => { let iv = 0; const step = () => { const at = o.smithNudge?.(sel, +b.dataset.nz * 0.012, +b.dataset.ny * 0.012); if (at) { Object.assign(sel, at); save(list); } };
+            b.onpointerdown = (e) => { e.preventDefault(); step(); clearInterval(iv); iv = setInterval(step, 70); audio.play('ui_hover', { ui: true, vol: 0.3 }); };
+            b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearInterval(iv); });
+          p.querySelector('#stkDel').onclick = () => { list.splice(stkSel, 1); stkSel = -1; save(list); audio.play('ui_back', { ui: true, vol: 0.5 }); renderSmith(); };
+          o.stkEdit?.({ move: (at) => { Object.assign(sel, at); save(list); } }); // arrastar na arma 3D move este
+        }
+        bind(); return;
+      }
       if (visTab === 'charm') {
         const cur = getLook().charm || 'none';
         const lockOf = (it) => it.mastery ? t('mstLock') : it.rank != null ? t('rkLock', { t: t('rk_' + TIERS[it.rank].id) }) : it.shop ? t('shopOnly') : it.pass ? t('lookPass') : it.elite ? t('lookElite') : it.acct ? t('lookAcct') : t('lookLvl', { n: it.lvl });
@@ -1086,14 +1128,16 @@ export function initMenus(o) {
     }
     if (slot === 'paint' || slot === 'accent') {
       // 07/11 (pedido dele): cores abrem pelo nivel DA ARMA (a padrao, branca, ja vem); cor livre no fim da progressao
-      const stK = slot === 'paint' ? 'pat' : 'pat2', cur = lo[slot], wl = progressInfo().unlockAll ? 99 : wpnLevel(cat, lo.body), lvOf = (i) => PAINT_LVL0 + i * PAINT_STEP, freeOk = wl >= PAINT_FREE;
-      p.innerHTML = `<button class="swatch none ${!cur ? 'on' : ''}" data-c="">${t('original')}</button>` +
-        PAINTS.map((c, i) => { const ok = wl >= lvOf(i); return `<button class="swatch ${cur === c ? 'on' : ''} ${ok ? '' : 'locked'}" style="background:${c}" data-c="${c}" ${ok ? '' : `aria-disabled="true" data-lv="${lvOf(i)}" title="${t('skLvl', { n: lvOf(i) })}"`} aria-label="Cor ${c}">${ok ? '' : `<small class="sw-lv">${lvOf(i)}</small>`}</button>`; }).join('') +
-        `<label class="swatch none ${freeOk ? '' : 'locked'}" title="${freeOk ? 'Cor livre' : t('skLvl', { n: PAINT_FREE })}" style="display:grid;place-items:center">${freeOk ? t('free') : t('skLvl', { n: PAINT_FREE })}<input type="color" value="${cur || '#5f8f3a'}" ${freeOk ? '' : 'disabled'}></label>` +
-        (slot === 'paint' ? '' : `<div class="ret-cols st-cols"><small>${t('stampTitle')}</small><button class="swatch none st-solid ${!lo[stK] ? 'on' : ''}" data-st="">${t('stampNone')}</button>` + STAMPS.map(s => { const open = stampOpen(s.id), peeked = preview?.k === stK && preview.v === s.id; return `<button class="swatch st ${lo[stK] === s.id ? 'on' : ''} ${open ? '' : 'locked'} ${peeked ? 'peek' : ''}" style="background-image:url(${stampThumb(s.id)})" data-st="${s.id}" ${open ? '' : 'aria-disabled="true"'} title="${t('stamp_' + s.id)}${open ? '' : ' (' + t(s.pass ? 'stampPass' : 'stampShop') + ')'}" aria-label="${t('stamp_' + s.id)}"></button>`; }).join('') + '</div>');
+      // 13/11 (pedido dele): um botao so, "Pintura": cor principal, cor de destaque e estampas no mesmo painel
+      const wl = progressInfo().unlockAll ? 99 : wpnLevel(cat, lo.body), lvOf = (i) => PAINT_LVL0 + i * PAINT_STEP, freeOk = wl >= PAINT_FREE, stK = 'pat2';
+      const row = (sl) => { const cur = lo[sl]; return `<div class="ret-cols pt-row"><small>${t(sl === 'paint' ? 'paintMain' : 'paintAccent')}</small><button class="swatch none ${!cur ? 'on' : ''}" data-ps="${sl}" data-c="">${t('original')}</button>` +
+        PAINTS.map((c, i) => { const ok = wl >= lvOf(i); return `<button class="swatch ${cur === c ? 'on' : ''} ${ok ? '' : 'locked'}" style="background:${c}" data-ps="${sl}" data-c="${c}" ${ok ? '' : `aria-disabled="true" data-lv="${lvOf(i)}" title="${t('skLvl', { n: lvOf(i) })}"`} aria-label="Cor ${c}">${ok ? '' : `<small class="sw-lv">${lvOf(i)}</small>`}</button>`; }).join('') +
+        `<label class="swatch none ${freeOk ? '' : 'locked'}" title="${freeOk ? 'Cor livre' : t('skLvl', { n: PAINT_FREE })}" style="display:grid;place-items:center">${freeOk ? t('free') : t('skLvl', { n: PAINT_FREE })}<input type="color" data-ps="${sl}" value="${cur || '#5f8f3a'}" ${freeOk ? '' : 'disabled'}></label></div>`; };
+      p.innerHTML = (cat === 'melee' && isSaber(lo.body) ? row('accent') : row('paint') + row('accent')) + // sabre: so a cor do brilho
+        `<div class="ret-cols st-cols"><small>${t('stampTitle')}</small><button class="swatch none st-solid ${!lo[stK] ? 'on' : ''}" data-st="">${t('stampNone')}</button>` + STAMPS.map(s => { const open = stampOpen(s.id), peeked = preview?.k === stK && preview.v === s.id; return `<button class="swatch st ${lo[stK] === s.id ? 'on' : ''} ${open ? '' : 'locked'} ${peeked ? 'peek' : ''}" style="background-image:url(${stampThumb(s.id)})" data-st="${s.id}" ${open ? '' : 'aria-disabled="true"'} title="${t('stamp_' + s.id)}${open ? '' : ' (' + t(s.pass ? 'stampPass' : 'stampShop') + ')'}" aria-label="${t('stamp_' + s.id)}"></button>`; }).join('') + '</div>';
       p.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { peek(stK, b.dataset.st); return; } setPart(stK, b.dataset.st || null); });
-      p.querySelectorAll('button.swatch:not([data-st])').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; } setPart(slot, b.dataset.c || null); });
-      p.querySelector('input[type=color]').onchange = (e) => setPart(slot, e.target.value);
+      p.querySelectorAll('button.swatch[data-ps]').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.5 }); return; } setPart(b.dataset.ps, b.dataset.c || null); });
+      p.querySelectorAll('input[type=color][data-ps]').forEach(i => i.onchange = (e) => setPart(i.dataset.ps, e.target.value));
       return;
     }
     let opts;

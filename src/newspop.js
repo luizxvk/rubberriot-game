@@ -3,14 +3,17 @@
 // Abre sozinho uma vez por campanha (rr_news_seen) e de novo pelo cartao "Remasterizado" do carrossel de anuncios.
 // Regra do controle (vault controle-popup.md): role=dialog + hidden, fecha no .lb-x / Esc / B, o foco volta pra quem abriu.
 // Icones: Material Icons (Apache 2.0).
-import { t } from './i18n.js';
+import { t, wName } from './i18n.js';
+import { partName } from './arsenal.js';
 import { audio } from './audio.js';
 import { me, claimGift } from './rovex.js';
 import { sceneReady } from './popgate.js';
 import { eliteBusy } from './elitepop.js';
+import { updateCampaign, UPDATE_ZP } from '../shared/version.js';
 
 // 10/11 (pedido dele): campanha nova = abre de novo pra todo mundo, com as novidades da leva e o Mercado Negro ABERTO
-const CAMPAIGN = 'novidades-2026-11-10', SEEN = 'rr_news_seen';
+// 13/11 (pedido dele): campanha da 0.19: carrossel com as 19 armas novas e o Gancho do Palco no topo
+const CAMPAIGN = updateCampaign(), SEEN = 'rr_news_seen'; // 13/11 (regra dele): popup e presente so em versao nova (0.18 -> 0.19); hotfix nao reabre
 const P = {
   models: 'M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37-1.34-1.34c-.39-.39-1.02-.39-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z', // pincel (NUNCA o icone de brilhinhos: regra dele 07/11)
   parts: 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
@@ -26,34 +29,81 @@ const P = {
   lobby: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
   elite: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
   open: 'M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z',
+  hook: 'M19 9c0-1.3-.84-2.4-2-2.82V2h-2v4.18C13.84 6.6 13 7.7 13 9s.84 2.4 2 2.82V15c0 2.21-1.79 4-4 4s-4-1.79-4-4v-1h3L5 9v6c0 3.31 2.69 6 6 6s6-2.69 6-6v-3.18c1.16-.42 2-1.52 2-2.82zm-3 1c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z', // phishing
+  hud: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+  hit: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
+  mic: 'M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z',
+  run: 'M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z',
+  prev: 'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z',
+  next: 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z',
   close: 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
 };
 const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
-const ITEMS = ['quick', 'melt', 'ghost', 'fx', 'lobby', 'elite'];
+// 0.19 (13/11): o resto da leva em fichas ([chave do texto, icone])
+const ITEMS = [['maps', 'maps'], ['akimbo', 'parts'], ['hud', 'hud'], ['hit', 'hit'], ['vo', 'mic'], ['run', 'run']];
+// carrossel do topo: o gancho abre, depois as 19 armas novas (foto de cada uma inteira, nunca cortada)
+const NEW_GUNS = ['pistol_12', 'pistol_13', 'pistol_14', 'pistol_15', 'subfusil_14', 'subfusil_15', 'subfusil_16', 'fusil_14', 'fusil_15', 'fusil_16',
+  'shotgun_4', 'shotgun_5', 'shotgun_6', 'shotgun_7', 'lmg_3', 'lmg_4', 'lmg_5', 'sniper_5', 'sniper_6'];
+const catOf = (id) => id.startsWith('lmg') ? 'lmg' : id.startsWith('subfusil') ? 'smg' : id.startsWith('fusil') ? 'rifle' : id.startsWith('pistol') ? 'pistol' : id.startsWith('shotgun') ? 'shotgun' : 'sniper';
+const BASE = import.meta.env.BASE_URL;
+// o gancho (13/11, pedido dele): so o icone do gancho, grande, balancando na ponta da corda
+const HOOK_ART = `<svg class="np-hook-art" viewBox="0 0 24 24" aria-hidden="true"><g class="np-hook-ico"><path d="${P.hook}"/></g></svg>`;
+function reelHtml() {
+  const n = NEW_GUNS.length + 1;
+  const hook = `<figure class="np-slide hook on" data-i="0"><span class="np-tag">${t('nq_tagHook')}</span>${HOOK_ART}<figcaption><b>${t('fd_hook')}</b><small>${t('nq_hookD')}</small></figcaption></figure>`;
+  const guns = NEW_GUNS.map((b, i) => { const nm = partName('body', b);
+    return `<figure class="np-slide gun" data-i="${i + 1}" aria-hidden="true"><span class="np-tag">${t('nq_tagGun')} · ${wName(catOf(b))}</span><img src="${BASE}banners/mst/${b}.webp" alt="${nm}" decoding="async" draggable="false"><figcaption><b>${nm}</b></figcaption></figure>`; }).join('');
+  return `<section class="np-reel" aria-roledescription="carousel" aria-label="${t('nq_reel')}">
+    <div class="np-reel-track">${hook}${guns}</div>
+    <button class="np-reel-btn prev" type="button" aria-label="${t('nq_prev')}">${ico('prev')}</button><button class="np-reel-btn next" type="button" aria-label="${t('nq_next')}">${ico('next')}</button>
+    <p class="np-reel-n"><b>1</b> / ${n}</p><i class="np-reel-bar"></i></section>`;
+}
+// passa sozinho (gancho 4 s, cada arma 2,4 s), para com o mouse/foco em cima; setas e arrastar pro lado trocam
+let reelI = 0, reelT = 0, reelHold = false;
+function reelGo(el, i) {
+  const sl = el.querySelectorAll('.np-slide'), N = sl.length; if (!N) return;
+  reelI = (i + N) % N;
+  el.querySelector('.np-reel-track').style.transform = `translateX(${-reelI * 100}%)`;
+  sl.forEach((x, k) => { x.classList.toggle('on', k === reelI); x.toggleAttribute('aria-hidden', k !== reelI); });
+  el.querySelector('.np-reel-n b').textContent = reelI + 1;
+  el.querySelector('.np-reel-bar').style.setProperty('--k', ((reelI + 1) / N).toFixed(3));
+  reelTick(el);
+}
+function reelTick(el) { clearTimeout(reelT); reelT = setTimeout(() => { if (!pop() || pop().hidden) return; if (reelHold || document.hidden) return reelTick(el); reelGo(el, reelI + 1); }, reelI === 0 ? 4000 : 2400); }
+function reelInit(el) {
+  const R = el.querySelector('.np-reel'); if (!R) return;
+  reelHold = false; reelGo(el, 0);
+  R.querySelector('.prev').onclick = () => { audio.play('ui_hover', { ui: true, vol: 0.5 }); reelGo(el, reelI - 1); };
+  R.querySelector('.next').onclick = () => { audio.play('ui_hover', { ui: true, vol: 0.5 }); reelGo(el, reelI + 1); };
+  R.onpointerenter = (e) => { if (e.pointerType === 'mouse') reelHold = true; }; R.onpointerleave = () => { reelHold = false; };
+  let x0 = null;
+  R.onpointerdown = (e) => { if (e.target.closest('.np-reel-btn')) return; x0 = e.clientX; };
+  R.onpointerup = (e) => { if (x0 == null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 36) reelGo(el, reelI + (dx < 0 ? 1 : -1)); };
+}
 
 let opener = null, busy = false;
 const pop = () => document.getElementById('newsPop');
 
+// moeda dos Zions Points (13/11, pedido dele: so ela no presente, nada de icone de caixa)
+const COIN = `<img class="np-coin" src="${import.meta.env.BASE_URL}brand/zion-points.png" alt="" draggable="false">`;
+const zp = () => UPDATE_ZP.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'pt-BR');
 function giftHtml() {
-  if (!me) return `<p class="np-gift-note">${t('np_giftLogin')}</p>`;
-  return `<button class="np-gift" id="npGift">${ico('gift')}<span>${t('np_gift')}</span></button>`;
+  if (!me) return `<p class="np-gift-note">${t('np_giftLogin', { n: zp() })}</p>`;
+  return `<button class="np-gift" id="npGift">${COIN}<span>${t('np_gift', { n: zp() })}</span></button>`;
 }
 function draw(el) {
   el.innerHTML = `<div class="np-card" role="document">
     <button class="lb-x" aria-label="${t('close')}">${ico('close')}</button>
-    <header class="np-head"><h2 id="npTitle">${t('np_title')}</h2><p>${t('np_sub')}</p></header>
-    <ul class="np-list">${ITEMS.map(k => `<li><span class="np-ico">${ico(k)}</span><span><b>${t('np_' + k)}</b><small>${t('np_' + k + 'D')}</small></span></li>`).join('')}</ul>
-    <section class="np-ticket open" aria-labelledby="npBm">
-      <span class="np-ticket-ico">${ico('open')}</span>
-      <div><h3 id="npBm">${t('np_bm')}<span class="np-stamp">${t('np_open')}</span></h3><p>${t('np_bmD')}</p></div>
-      <button class="np-bm-go" id="npBmGo" type="button">${t('np_bmGo')}</button>
-    </section>
+    <header class="np-head"><h2 id="npTitle">${t('np_title')}</h2><p>${t('nq_sub')}</p></header>
+    ${reelHtml()}
+    <ul class="np-list">${ITEMS.map(([k, i]) => `<li><span class="np-ico">${ico(i)}</span><span><b>${t('nq_' + k)}</b><small>${t('nq_' + k + 'D')}</small></span></li>`).join('')}</ul>
     <footer class="np-foot"><div class="np-gift-slot" aria-live="polite">${giftHtml()}</div></footer>
   </div>`;
   el.querySelector('.lb-x').onclick = () => { audio.play('ui_back', { ui: true }); closeNews(); };
+  reelInit(el);
   const g = el.querySelector('#npGift'); if (g) g.onclick = redeem;
-  // Mercado Negro aberto: fecha as novidades e cai direto na aba dele na Loja
-  el.querySelector('#npBmGo').onclick = () => { audio.play('ui_click', { ui: true }); opener = null; closeNews(); document.querySelector('[data-go="shop"]')?.click(); setTimeout(() => document.querySelector('#shopTabs .tab-bm')?.click(), 350); };
+  // 0.19: o ingresso do Mercado Negro (novidade da 10/11) saiu pra caber o carrossel sem rolar
+  if (el.querySelector('#npBmGo')) el.querySelector('#npBmGo').onclick = () => { audio.play('ui_click', { ui: true }); opener = null; closeNews(); document.querySelector('[data-go="shop"]')?.click(); setTimeout(() => document.querySelector('#shopTabs .tab-bm')?.click(), 350); };
 }
 async function redeem() {
   if (busy) return; busy = true;
@@ -63,16 +113,16 @@ async function redeem() {
   if (!slot) return;
   if (r.ok || r.code === 'ja_resgatou') {
     audio.play(r.ok ? 'unlock' : 'ui_click', { ui: true });
-    slot.innerHTML = `<p class="np-got ${r.ok ? 'fresh' : ''}">${ico('gift')}<span>${t(r.ok ? 'np_giftOk' : 'np_giftDone')}</span></p>`;
+    slot.innerHTML = `<p class="np-got ${r.ok ? 'fresh' : ''}">${COIN}<span>${t(r.ok ? 'np_giftOk' : 'np_giftDone', { n: zp() })}</span></p>`;
   } else {
-    slot.innerHTML = `<p class="np-gift-note err">${t(r.code === 'login' ? 'np_giftLogin' : 'np_giftErr')}</p>${me ? giftHtml() : ''}`;
+    slot.innerHTML = `<p class="np-gift-note err">${t(r.code === 'login' ? 'np_giftLogin' : 'np_giftErr', { n: zp() })}</p>${me ? giftHtml() : ''}`;
     const g = slot.querySelector('#npGift'); if (g) g.onclick = redeem;
   }
 }
 function onKey(e) { if (e.key === 'Escape' && !pop()?.hidden) { e.preventDefault(); closeNews(); } }
 export function closeNews() {
   const el = pop(); if (!el || el.hidden) return;
-  el.hidden = true; removeEventListener('keydown', onKey);
+  el.hidden = true; removeEventListener('keydown', onKey); clearTimeout(reelT);
   try { localStorage.setItem(SEEN, CAMPAIGN); } catch { /* sem storage */ }
   opener?.focus?.(); opener = null;
 }

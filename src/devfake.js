@@ -33,7 +33,7 @@ export async function comprar(sku) {
 export async function resgatar(sku) { await wait(); const it = SHOP_ITEMS[sku]; if (!it) return { code: 'erro' }; for (const g of it.give) if (!S.itens.includes(g)) S.itens.push(g); save(); return { ok: true, itens: [...S.itens] }; }
 // presente do Elite (10/11): 4 variantes do Mercado Negro por mes, sem repetir (mesma regra da rota da Rovex)
 export async function elitePresente() { await wait(); const mes = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7); S.eg ||= {}; if (S.eg[mes] || qs.has('semPresente')) return { novos: [], mes }; const tem = new Set(S.itens), livres = Object.keys(BM_VARIANTS).filter(id => !tem.has('bp:' + id)).sort(() => Math.random() - 0.5), novos = livres.slice(0, 4); S.eg[mes] = novos; for (const id of novos) S.itens.push('bp:' + id); save(); return { novos, mes, itens: [...S.itens] }; }
-export async function instagram() { await wait(); if (S.ig) return { code: 'ja_resgatou', ...bal() }; S.ig = true; S.zionsPoints += 1000; save(); return { ok: true, total: 1000, ...bal() }; }
+export async function instagram() { await wait(); if (S.ig) return { code: 'ja_resgatou', ...bal() }; S.ig = true; S.zionsPoints += 500; save(); return { ok: true, total: 500, ...bal() }; } // 13/11: presente de atualizacao = 500
 export async function presente() { await wait(); if (S.gift) return { code: 'ja_resgatou', ...bal() }; S.gift = true; S.zionsPoints += 1000; save(); return { ok: true, total: 1000, ...bal() }; }
 
 // ---------- Mercado Negro (espelho de template-magazine/server/src/routes/rubberRiot.ts) ----------

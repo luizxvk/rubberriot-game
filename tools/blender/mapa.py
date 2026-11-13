@@ -30,6 +30,7 @@ TH = {
   'cortejo': {'walls': ['e9d3a8', 'e3c3a6', 'c9d0bc', 'bfc8cc', 'e8d69a', 'd9b9a0'], 'wood': '9a7a52', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'c2bcb0', 'stoned': '8a847a', 'slate': '4a4540', 'rock': '8a857c', 'sky': 'dcd6c6'},
   'xilindro': {'walls': ['e6dfcc'], 'wood': '8a6a4a', 'woodd': '5d4a3a', 'woodl': 'b89a74', 'stone': 'b9b6ae', 'stoned': '8a877e', 'slate': '3a3836', 'rock': '8a857c', 'sky': 'c4c6c2'},
   'trapiche': {'walls': ['e9c9a4', 'd9a98a', 'e8b98f', 'dcae86'], 'wood': '9d8263', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'b9b2a4', 'stoned': '8b8478', 'slate': '5f4a3e', 'rock': '8a857c', 'sky': 'f0d2b0'},
+  'estande': {'walls': ['d8c8a8'], 'wood': '8a5a3a', 'woodd': '4a2e1e', 'woodl': 'c49a6a', 'stone': 'b9b2a4', 'stoned': '8a847a', 'slate': '3a2a24', 'rock': '8a857c', 'sky': '2a2420'},  # Estande Gargalhada (14/11): barracao de teatro com barraca de tiro
   'fronteira': {'walls': ['e3cfae', 'd9b48f', 'e8dcc0', 'cfa98a', 'ddc59a'], 'wood': '94704a', 'woodd': '5e4128', 'woodl': 'bf9c70', 'stone': 'c2b49a', 'stoned': '948670', 'slate': '7a4a34', 'rock': '9a8b74', 'sky': 'dcd8cc'},
 }[MAP]
 EAVE = 0.35
@@ -1603,6 +1604,80 @@ def clothesline(x0, y, z0, x1, y1, z1, seed):
         else: box(m, [x0 - t, y - hh, u - hw], [x0 + t, y - 0.012, u + hw])
 skipped = {}
 DRAW.update({'pwall': pwall, 'cellbars': cellbars, 'bunk': bunk, 'locker': locker, 'gallery': gallery, 'prail': prail, 'chainfence': chainfence, 'proof': proof})  # Xilindro (13/11)
+
+# ---------- Estande Gargalhada (14/11, pedido dele: campo de tiro proprio no tema do jogo) ----------
+# Barraca de tiro de feira dentro de um barracao de teatro. Detalhe so na face de DENTRO de cada parede (e sempre a alguns cm dela,
+# cada camada num plano proprio); as pontas param 10 cm antes da quina pra nao encostar no detalhe da parede vizinha.
+if MAP == 'estande':
+    GWUP, GWRED, GWCRM = mat('gw_up', 'd8c8a8'), mat('gw_red', 'a8322a'), mat('gw_cream', 'ece4d2')
+    HAY, HAYD = mat('hay', 'd9b45a'), mat('hay_d', '9a7a34')
+    SKYB, HILL1, HILL2, SUN, CLOUD = mat('bd_sky', 'a9c4cf'), mat('bd_hill', '8fa36a'), mat('bd_hill2', '6f8a52'), mat('bd_sun', 'e3b04a'), mat('bd_cloud', 'f4f1e8')
+    def inner(b):
+        "lado de dentro da parede: eixo (0 = x, 2 = z), sinal da normal pra dentro e a coordenada da face"
+        (w, h, d), c = dims(b)
+        if w > d: ax = 2; sg = 1 if c[2] < 0 else -1
+        else: ax = 0; sg = 1 if c[0] < 0 else -1
+        face = b['max'][ax] if sg > 0 else b['min'][ax]
+        return ax, sg, face
+    def slab(m, b, ax, sg, face, a0, a1, y0, y1, out, back=0.01):
+        "placa colada na face de dentro: de a0 a a1 ao longo da parede, de y0 a y1, saindo 'out' m da face"
+        lo, hi = (face - back, face + out) if sg > 0 else (face - out, face + back)
+        if ax == 2: box(m, [a0, y0, lo], [a1, y1, hi])
+        else: box(m, [lo, y0, a0], [hi, y1, a1])
+    def gallwall(b):
+        "parede do barracao: reboco claro, lambri vermelho com ripas creme ate 1,5 m, roda-cadeira e sanca de madeira"
+        mn, mx = b['min'], b['max']; box(GWUP, mn, mx)
+        ax, sg, face = inner(b); along = 0 if ax == 2 else 2
+        a0, a1 = mn[along] + (1.1 if ax == 2 else 0.1), mx[along] - (1.1 if ax == 2 else 0.1)
+        y = mn[1]
+        slab(GWRED, b, ax, sg, face, a0, a1, y, y + 1.5, 0.02)
+        k = a0 + 0.15
+        while k + 0.3 < a1: slab(GWCRM, b, ax, sg, face, k, k + 0.3, y + 0.06, y + 1.42, 0.035); k += 0.6
+        slab(WOODD, b, ax, sg, face, a0, a1, y + 1.5, y + 1.62, 0.05)
+        slab(WOODD, b, ax, sg, face, a0, a1, mx[1] - 0.3, mx[1] + 0.015, 0.06)
+    def shootcounter(b):
+        "balcao de tiro: corpo vermelho, tampo de madeira com beiral, friso dourado e alvos pintados na frente (lado do atirador, +z)"
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        box(PAINTR, mn, [mx[0], mx[1] - 0.08, mx[2]])
+        box(WOODL, [mn[0] - 0.06, mx[1] - 0.08, mn[2] - 0.06], [mx[0] + 0.06, mx[1], mx[2] + 0.06])
+        box(BRASS, [mn[0] + 0.1, mx[1] - 0.3, mn[2] - 0.02], [mx[0] - 0.1, mx[1] - 0.22, mx[2] + 0.02])
+        n = max(1, int(w / 3.2))
+        for k in range(n):
+            x = mn[0] + (k + 0.5) * w / n; yc = mn[1] + 0.48
+            tube(GWCRM, 'z', (yc, x), 0.24, mx[2] - 0.01, mx[2] + 0.015, 20); tube(PAINTR, 'z', (yc, x), 0.15, mx[2] - 0.01, mx[2] + 0.025, 20); tube(GWCRM, 'z', (yc, x), 0.06, mx[2] - 0.01, mx[2] + 0.035, 14)
+    def lanediv(b):
+        "divisoria da baia: painel creme, postes de madeira nas pontas e faixa vermelha em cima"
+        mn, mx = b['min'], b['max']
+        box(GWCRM, [mn[0], mn[1], mn[2] + 0.12], [mx[0], mx[1], mx[2] - 0.12])
+        for z0, z1 in ((mn[2], mn[2] + 0.12), (mx[2] - 0.12, mx[2])): box(WOODD, [mn[0] - 0.04, mn[1], z0], [mx[0] + 0.04, mx[1] + 0.03, z1])
+        box(PAINTR, [mn[0] - 0.02, mx[1] - 0.26, mn[2] + 0.15], [mx[0] + 0.02, mx[1] - 0.1, mx[2] - 0.15])
+    def distpost(b):
+        "placa de distancia: poste de madeira e quadro claro virado pro atirador (+z); o numero vem do jogo (range.js)"
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        box(WOODD, mn, mx)
+        box(WOODD, [c[0] - 0.5, mx[1] - 0.82, mx[2] + 0.002], [c[0] + 0.5, mx[1] + 0.02, mx[2] + 0.05])
+        box(PAPER, [c[0] - 0.44, mx[1] - 0.76, mx[2] + 0.02], [c[0] + 0.44, mx[1] - 0.04, mx[2] + 0.07])
+    def backdrop(b):
+        "cenario pintado de teatro: ceu, morros, sol e nuvens em discos (cada um num plano), moldura de madeira"
+        mn, mx = b['min'], b['max']; zf = mx[2]
+        box(SKYB, mn, mx)
+        for i, (x, r, m) in enumerate(((-9, 3.8, HILL1), (5.5, 4.4, HILL1), (-2, 3.2, HILL2), (11, 3.0, HILL2))): tube(m, 'z', (mn[1] - 0.6, x), r, zf - 0.013 - i * 0.017, zf + 0.03 + i * 0.01, 28)
+        tube(SUN, 'z', (5.6, 7.4), 1.0, zf - 0.09, zf + 0.08, 24)
+        for i, (x, y, r) in enumerate(((-7.6, 6.0, 0.6), (-6.7, 6.25, 0.85), (-5.8, 5.95, 0.55), (2.2, 6.6, 0.5), (3.0, 6.8, 0.7))): tube(CLOUD, 'z', (y, x), r, zf - 0.1 - i * 0.017, zf + 0.085 + i * 0.005, 16)
+        box(WOODD, [mn[0] - 0.03, mx[1] - 0.25, mn[2] + 0.02], [mx[0] + 0.03, mx[1] + 0.03, zf + 0.14])  # moldura: 3 cm pra fora do ceu em toda borda (nada no mesmo plano)
+        for x0, x1 in ((mn[0] - 0.04, mn[0] + 0.25), (mx[0] - 0.25, mx[0] + 0.04)): box(WOODD, [x0, mn[1] + 0.02, mn[2] + 0.03], [x1, mx[1] - 0.2, zf + 0.13])
+    def haybale(b):
+        "espaldao de feno: fardos com fresta de 2 cm entre eles (nada encostado), barbante escuro na frente; fileiras desencontradas"
+        mn, mx = b['min'], b['max']; BW, BD, BH = 1.2, 1.08, 0.78
+        for depth, rows in (((mx[2] - BD, mx[2]), 3), ((mn[2], mn[2] + BD), 2)):
+            for r in range(rows):
+                y0 = mn[1] + r * (BH + 0.02); x = mn[0] + (0.61 if r % 2 else 0)
+                while x + BW <= mx[0] + 1e-6:
+                    box(HAY, [x, y0, depth[0]], [x + BW, y0 + BH, depth[1]])
+                    if depth[1] == mx[2]:
+                        for t in (0.32, 0.88): box(HAYD, [x + t * BW - 0.025, y0 + 0.03, depth[1] - 0.01], [x + t * BW + 0.025, y0 + BH - 0.03, depth[1] + 0.012])
+                    x += BW + 0.02
+    DRAW.update({'gallwall': gallwall, 'shootcounter': shootcounter, 'lanediv': lanediv, 'distpost': distpost, 'backdrop': backdrop, 'haybale': haybale})
 for b in L['boxes']:
     fn = DRAW.get(b['k'])
     if fn: fn(b)
@@ -1708,6 +1783,7 @@ CAMS = {'vila': (('alto', (52, -52, 48), (0, 0, 0)), ('rua', (0, -30, 2.2), (0, 
         'becos': (('alto', (72, -72, 60), (0, 0, 0)), ('beco', (-9, -30, 2.0), (-9, 0, 3))), 'feira': (('alto', (80, -80, 64), (0, 0, 0)), ('mercado', (-20, -14, 2.2), (0, 0, 3))), 'largo': (('alto', (84, -84, 68), (0, 0, 0)), ('largo', (0, -28, 2.2), (0, 0, 3))), 'cortejo': (('alto', (84, -84, 68), (0, 0, 0)), ('avenida', (-12, 8, 2.2), (30, 8, 3))),
         'xilindro': (('alto', (46, -62, 52), (0, 0, 0)), ('galeria', (0, -20, 1.7), (0, 10, 2.5)), ('celas', (-3, -6, 4.3), (-8, 6, 1.5)), ('patio', (10, -38, 2), (-4, -26, 2.5)), ('armarios', (-13.7, -22, 1.7), (-13.7, 4, 1.5))),
         'trapiche': (('alto', (40, -40, 34), (0, 0, 0)), ('rua', (0, -24, 1.7), (0, 10, 2)), ('casarao', (0, 8, 1.7), (0, 24, 3)), ('quintal', (-28, -26, 1.7), (-24, 10, 2))),
+        'estande': (('baia', (0, -29, 1.7), (0, 10, 1.5)), ('fundo', (-9, 18, 2.5), (4, 40, 2.2)), ('lado', (12, -31, 2.6), (-6, -12, 1.4))),
         'fronteira': (('alto', (72, -72, 62), (0, 0, 0)), ('forte', (14, 50, 2.2), (0, 70, 5)), ('meio', (-30, 12, 2.2), (30, -4, 3)), ('casas', (-44, -6, 6), (-58, -22, 3)))}[MAP]
 for nm, loc, tgt in CAMS:
     cam.location = Vector(loc); cam.rotation_euler = (Vector(tgt) - cam.location).to_track_quat('-Z', 'Y').to_euler()

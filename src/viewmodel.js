@@ -5,8 +5,33 @@ import * as THREE from 'three';
 import { umbrellaMesh } from './fieldview.js';
 import { ink, toon, PAL, wordTexture } from './toon.js';
 import { Hose } from './character.js';
-import { buildGun } from './arsenal.js';
+import { buildGun, sightIsBig } from './arsenal.js';
 import { attachCharm, tickCharm } from './charms.js';
+import { attachKc, getKc } from './killcounter.js';
+import { applyStickers, getStickers } from './stickers.js';
+import { wpnTracked } from './progress.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+// telefone-banana (13/11, pedido dele): toda chamada de sequencia e uma banana no ouvido (tools/blender/banana.py), cada
+// sequencia com a cor da casca dela. Carrega uma vez so (malha de 140 faces) e reaproveita.
+export const BANANA_COL = { milk: 0xfff6c8, uav: 0x6fc4ff, talc: 0xd9d4c8, anvil: 0x7a7f86, blimp: 0xff8fb0, anvline: 0x4a5058, sentry: 0x47b04b,
+  rpg: 0xff7a1a, plane: 0xc9a34a, train: 0x8a4b22, bomber: 0x6b3fb3, hand: 0xfaf8f2, nuke: 0xe0301e };
+let BANANA = null;
+new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/banana.glb').then((gl) => {
+  gl.scene.updateMatrixWorld(true); const peel = [], tip = [];
+  gl.scene.traverse((o) => { if (!o.isMesh) return; let g = o.geometry.clone().applyMatrix4(o.matrixWorld); if (g.index) g = g.toNonIndexed(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); (o.material?.name === 'tip' ? tip : peel).push(g); });
+  const P = mergeGeometries(peel), T = tip.length ? mergeGeometries(tip) : null; P.computeBoundingBox(); const c = P.boundingBox.getCenter(new THREE.Vector3());
+  for (const g of [P, T].filter(Boolean)) { g.translate(-c.x, -c.y, -c.z); g.computeVertexNormals(); }
+  BANANA = { peel: P, tip: T };
+}).catch(e => console.warn('banana', e));
+function makeBanana(kind) {
+  const g = new THREE.Group(), hand = new THREE.Object3D();
+  if (BANANA) { g.add(ink(BANANA.peel, BANANA_COL[kind] ?? 0xf2c94c, 0.003)); if (BANANA.tip) g.add(ink(BANANA.tip, 0x2a1a0c, 0.002)); }
+  hand.position.set(0.006, -0.115, 0.03); g.add(hand); // 13/11 (pedido dele): a luva fecha na parte de BAIXO; a banana fica acima da mao
+  g.userData.hand = hand; g.userData.banana = true; g.visible = false;
+  return g;
+}
 import { ovenTex } from './looks3d.js';
 import { measureHands, buildWrap, wristPose } from './handwrap.js';
 
@@ -363,6 +388,9 @@ export class ViewModel {
     this.holder.clear(); this.canted = false;
     this.gun = buildGun(id, loadout);
     if (id !== 'melee' && id !== 'fists') attachCharm(this.gun, this.charm);
+    this.kcBody = loadout?.body; this.kcBigScope = sightIsBig(loadout?.scope); // luneta grande: mirando, o receptor fica colado na camera
+    if (id !== 'melee' && id !== 'fists' && loadout?.handle !== 'akimbo') attachKc(this.gun, getKc(), wpnTracked(id, loadout?.body).k || 0); // contador de abates (13/11): so a SUA arma, nunca lamina nem akimbo
+    if (id !== 'melee' && id !== 'fists' && loadout?.body) applyStickers(this.gun, getStickers(loadout.body)); // adesivos colados no Arsenal (13/11): so a sua arma
     // mao que segura (06/11): mede a arma ainda sem escala e monta os dedos contornando cabo e guarda-mao
     this.wrapR = this.wrapL = this.wrapAK = null;
     // 08/11 (pedido dele, referencia Krunker): sem casca moldada na malha (abria buraco e envolvia a coronha inteira). As duas luvas FECHADAS vao nos pontos de pega da arma
@@ -449,19 +477,20 @@ export class ViewModel {
   pump(t) { this.pumpDur = Math.max(0.32, Math.min(0.55, t * 0.7)); this.pumpT = this.pumpDur + 0.06; }
   bolt(t) { this.boltDur = Math.max(0.45, Math.min(1, t * 0.8)); this.boltT = this.boltDur + 0.12; }
   // escalada (01/11): a arma desce pro lado e a mao esquerda agarra a borda e empurra o corpo pra cima
-  mantle(dur) { this.mantleDur = Math.max(0.3, dur); this.mantleT = this.mantleDur; this.inspectT = 0; }
+  mantle(dur) { this.mantleDur = Math.max(0.2, dur); this.mantleT = this.mantleDur; this.inspectT = 0; }
 
   // chamar sequencia: a mao esquerda entra com um objeto de desenho antigo
   // uav = luneta de pirata, anvil = detonador de TNT, blimp = campainha de balcao
   callStreak(kind) {
     if (this.prop) this.scene.remove(this.prop);
-    kind = kind === 'anvline' || kind === 'train' ? 'anvil' : kind === 'plane' || kind === 'bomber' || kind === 'hand' ? 'blimp' : kind; // detonador ou campainha (as grandes de 03/11 tambem)
-    this.prop = makeProp(kind); this.propKind = kind;
+    this.prop = BANANA ? makeBanana(kind) : makeProp(kind === 'anvline' || kind === 'train' ? 'anvil' : kind === 'plane' || kind === 'bomber' || kind === 'hand' ? 'blimp' : kind); this.propKind = kind; // banana pra todas (13/11); sem a malha ainda, o objeto antigo
     this.scene.add(this.prop);
     this.streakT = STREAK_DUR; this.inspectT = 0;
   }
 
   inspectDef() { const sw = this.gun?.userData.sawed; return this.gun?.userData.sword ? SWORD_INSPECT : this.akimbo ? (sw ? SAWED_AKIMBO_INSPECT : this.wpn === 'pistol' ? AKIMBO_INSPECT : this.wpn === 'sniper' ? AKIMBO_RIFLE_INSPECT : AKIMBO_LONG_INSPECT) : sw ? SAWED_INSPECT : this.gun?.userData.drum ? REV_INSPECT : INSPECTS[this.wpn] || INSPECTS.rifle; }
+  // abate novo com esta arma: a tela do contador atualiza (main.js chama no evento de abate)
+  kcKills(n) { this.gun?.userData.kc?.userData.setKills?.(n); }
   inspect() { if (this.inspectT <= 0 && this.switchT <= 0) this.inspectT = this.inspectDef().dur; }
   landed(v) { this.land = Math.min(0.08, v * 0.006); }
   // luva da primeira pessoa no visual: cor + estilo (mesmos estilos do boneco, medidos pra mao da camera)
@@ -503,6 +532,7 @@ export class ViewModel {
     if (this.gun) tickCharm(this.gun, arguments[0]?.dt ?? 0);
     const dt = st.dt, s = this.s, g = this.gun?.userData || {};
     this.ads = st.ads;
+    { const kc = this.gun?.userData.kc; if (kc) kc.visible = !(this.kcBigScope && this.ads > 0.55); } // 13/11: some so mirando de luneta grande (parecia solto no canto)
     if (this.gun) this.gun.userData.fxHidden = st.ads > 0.3; // efeito da camo lendaria some mirando
     // pose alvo
     let tx = 0.18, ty = -0.15, tz = -0.37, trx = 0.02, tryy = 0.05, trz = 0; // 07/11 (pedido dele): arma mais alta e perto (estava baixa e parecia pequena; era 0,19 / -0,19 / -0,4)
@@ -800,11 +830,27 @@ export class ViewModel {
         this.prop.scale.setScalar(1.05);
         this.prop.position.copy(base);
         const act = Math.max(0, Math.min(1, (skp - 0.25) / 0.45)), beat = Math.sin(act * Math.PI);
-        if (this.propKind === 'uav') { this.prop.position.y += 0.06 * sk; this.prop.rotation.set(0.1 + beat * 0.15, 0.7, 0.2 - beat * 0.2); }
+        if (this.prop.userData.banana) {
+          // telefone-banana: sobe de baixo a esquerda ate o OUVIDO (cabinho la em cima, barriga curvando pra boca), fala com um
+          // balancinho de cabeca e volta. sk: 0 fora de cena, 1 no ouvido (entra e sai em 18% do tempo, com mola)
+          const e = sk * sk * (3 - 2 * sk), talk = Math.sin(skp * Math.PI * 7) * beat;
+          const from = new THREE.Vector3(-0.16, -0.42, -0.34), ear = new THREE.Vector3(-0.14, -0.02, -0.3 + talk * 0.004); // 14/11: mais pra dentro do quadro, banana e luva inteiras // atender telefone (pedido dele): sobe pra lateral da cabeca, perto da camera // mais a frente da camera (pedido dele): inteira no quadro, acima da mao
+          this.prop.position.copy(from).lerp(ear, e);
+          this.prop.rotation.set(-0.1 + (1 - e) * 0.8 + talk * 0.05, -1.25 + (1 - e) * 0.5 + 0.25 * e, 0.62 * e + (1 - e) * -0.5, 'YXZ'); // no ouvido: o topo inclina pra fora/tras, como telefone // curva de lado: barriga virada pra boca (a direita da tela)
+          this.prop.scale.setScalar(0.8);
+        } else if (this.propKind === 'uav') { this.prop.position.y += 0.06 * sk; this.prop.rotation.set(0.1 + beat * 0.15, 0.7, 0.2 - beat * 0.2); }
         else if (this.propKind === 'anvil') { this.prop.rotation.set(0.25, 0.3, 0); const pl = this.prop.userData.plunger; if (pl) pl.position.y = pl.userData.y0 - (act > 0.5 ? 0.05 : act * 0.1); }
         else { this.prop.rotation.set(0.3, 0.2, 0); const bt = this.prop.userData.button; if (bt) bt.position.y = bt.userData.y0 - Math.abs(Math.sin(act * Math.PI * 3)) * 0.012; }
         this.prop.updateMatrixWorld(true);
         this.prop.userData.hand.getWorldPosition(pL);
+        if (this.prop.userData.banana) {
+          // 14/11 (pedido dele): banana NO MEIO da palma, na FRENTE dela (lado da camera). As costas da luva (+Y local) apontam
+          // pra longe da camera, os dedos (-Z local) pra cima ao longo da banana; a palma fica atras do centro da banana
+          const away = this.prop.position.clone().normalize(), up = new THREE.Vector3(0, 1, 0);
+          const fz = up.sub(away.clone().multiplyScalar(up.dot(away))).normalize().negate(), fx = new THREE.Vector3().crossVectors(away, fz);
+          this.banQ = (this.banQ || new THREE.Quaternion()).setFromRotationMatrix(new THREE.Matrix4().makeBasis(fx, away, fz));
+          pL.copy(this.prop.position).addScaledVector(away, 0.045).add(new THREE.Vector3(0, -0.02, 0));
+        }
       }
     }
     // escalada: a esquerda bate na borda la na frente e vai empurrando pra baixo enquanto o corpo sobe
@@ -849,7 +895,9 @@ export class ViewModel {
     const quickSw = !!(this.knife?.visible && this.knife.userData.sword), holdR = two || quickSw, holdL = two && th < 0.3;
     const onGun = !fists && this.wpn !== 'melee' && !(this.knife?.visible ?? false), fistR = (fists || this.wpn === 'melee' || (this.knife?.visible ?? false) || (onGun && bo < 0.02)) && !holdR, fistL = fists || (onGun && pL.distanceTo(pL0) < 0.006 && !holdL); // parada na arma = punho fechado no ponto de pega; soltou (recarga, granada) = aberta
     this.gloveR.userData.fist.visible = fistR; this.gloveR.userData.open.visible = !fistR && !holdR; this.gloveR.userData.grip.visible = holdR;
-    this.gloveL.userData.fist.visible = fistL; this.gloveL.userData.open.visible = !fistL && !holdL; this.gloveL.userData.grip.visible = holdL;
+    const banL = !!(this.prop?.visible && this.prop.userData.banana); // telefone-banana: a esquerda fecha em volta dela
+    this.gloveL.userData.fist.visible = fistL && !banL; this.gloveL.userData.open.visible = (!fistL && !holdL) || banL; this.gloveL.userData.grip.visible = holdL && !banL;
+    if (banL && this.banQ) this.gloveL.quaternion.copy(this.banQ); // palma aberta virada pra tela, segurando a banana (base calculada acima)
     // mao esquerda fechada fica EMBAIXO do guarda-mao (o ponto de pega e dentro do cano: os nos subiam na frente da mira)
     if (fistL && !fists) { pL.add(new THREE.Vector3(g.sideMag ? 0.012 : 0, g.sideMag ? -0.028 : -0.062 - 0.035 * st.ads, 0).applyQuaternion(this.rig.quaternion)); this.gloveL.position.copy(pL); } // pente de lado (13/11): o punho abraca a ponta do pente, nao fica embaixo
     if (fists) { // impacto: luva estica pra frente e gira um pouco (rola no direto)

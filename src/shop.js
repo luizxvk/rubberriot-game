@@ -5,6 +5,8 @@
 // Regra (vault: monetizacao.md): so aparencia. Comprar ainda e "em breve" (falta a compra no servidor da Rovex).
 import { bannerHtml } from './banners.js';
 import { attachCharm } from './charms.js';
+import { kcObject } from './killcounter.js';
+import { stickerMesh } from './stickers.js';
 import { danceLen } from './dances.js';
 import { DanceFx } from './dancefx.js';
 import * as THREE from 'three';
@@ -34,6 +36,8 @@ const ICON = {
   ret: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   camo: 'M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
   hat: 'M7 3h10v10H7zM3 14h18v3.5H3z',
+  kc: 'M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z', // timer
+  stk: 'M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h8l6-6V4c0-1.1-.9-2-2-2zm-4 17.5V15h4.5L14 19.5z', // note (adesivo com a ponta dobrada)
   stamp: 'M18 4V3c0-.55-.45-1-1-1H5c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V6h1v4H9v11c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-9h8V4h-3z',
   banner: 'M3 6h18v12H3zM6 9v6h7V9z', charm: 'M7 11c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5c0-.9-.24-1.75-.66-2.48L18 6.83V9h2V3h-6v2h2.17l-6.65 6.66A4.96 4.96 0 0 0 7 11zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z', face: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM8.5 8a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM12 18c-2.3 0-4.3-1.5-5-3.5h10c-.7 2-2.7 3.5-5 3.5z', death: 'M12 2C7 2 3 5.6 3 10c0 2.8 1.6 5.2 4 6.6V20c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2v-3.4c2.4-1.4 4-3.8 4-6.6 0-4.4-4-8-9-8zM8.5 12a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm7 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4z',
   dance: 'M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7',
@@ -122,6 +126,8 @@ function pieceModel(slot, v) { // uma peca so: camo = a arma; skin/chapeu = o bo
   if (slot === 'banner') return bannerModel(v);
   if (slot === 'charm') { const g = gunModel(null); attachCharm(g.holder.children[0], v, 1); return { obj: g.holder, gun: true, r: g.r }; }
   if (slot === 'ret') return retModel(v);
+  if (slot === 'kc') { const o = kcObject(v, 1930), h = new THREE.Group(); o.rotation.y = Math.PI / 2; o.position.x = -0.15; h.add(o); return { obj: h, gun: true, sway: true, r: 0.95, ready: o.userData.ready }; } // contador sozinho, de frente, no meio e menor; a foto do cartao espera o modelo (13/11)
+  if (slot === 'stk') { const m = stickerMesh(new THREE.PlaneGeometry(1, 1), v, { side: THREE.DoubleSide, depthWrite: true, polygonOffset: false }); m.rotation.y = Math.PI / 2; const h = new THREE.Group(); h.add(m); return { obj: h, gun: true, sway: true, r: 0.5 }; }
   if (slot === 'camo') { const g = gunModel(v); return { obj: g.holder, gun: true, r: g.r }; }
   if (slot === 'stamp') { const g = gunModel(null, null, v); return { obj: g.holder, gun: true, r: g.r }; }
   if (slot === 'bp') { // variante montada (Mercado Negro, 08/11). Foto antes do pacote de armas chegar saia com OUTRO corpo (provisorio): espera e remonta

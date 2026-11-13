@@ -57,13 +57,16 @@ import { propBoxes, getMap, hasLOS, raycast } from '../shared/map.js';
 import { LobbyCam } from './lobbycam.js'; // camera de cinema do lobby (07/11)
 import { modeTipsTick, modeTipsHide } from './modetips.js'; // dicas por modo na partida (07/11)
 const lobbyCam = new LobbyCam();
+if (import.meta.env.DEV) window.__lobbyCam = lobbyCam; // depurar as tomadas do lobby
 import { attachCharm, tickCharm } from './charms.js';
+import { attachKc } from './killcounter.js';
+import { applyStickers, pickOnGun, nudgeOnGun } from './stickers.js';
 import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang, modeName } from './i18n.js';
 import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
-import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack } from './progress.js';
+import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack, wpnTracked } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
 import { unlockDone, LOCKED_BY, track, grantTutorial, missionById, MIS_ZP, misKey } from './challenges.js';
@@ -94,7 +97,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, adsFireBtn: true, fireLBtn: true, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -203,6 +206,7 @@ function dynResTick(now) {
   if (dynK !== was) { renderer.setPixelRatio(basePR() * dynK); resize(); }
 }
 function applySettings() {
+  ARS.RET_GLOW.value = Math.max(0, Math.min(1, settings.retGlow ?? 1)); // brilho da reticula (14/11): vale na hora pra toda lente
   document.body.style.setProperty('--hud-k', settings.hudScale || 1); // escala da HUD (08/11)
   document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
   renderer.setPixelRatio(basePR() * dynK); // tela dividida: 2-4 desenhos por quadro; dynK = resolucao dinamica (10/11)
@@ -231,15 +235,85 @@ function resize() {
   film.uniforms.aspect.value = w / h;
 }
 addEventListener('resize', resize);
+// adesivo (13/11): no Arsenal, com um adesivo escolhido, o dedo/mouse EM CIMA da arma arrasta ele; fora da arma gira como sempre
+let stkEdit = null, stkDrag = false; const stkRay = new THREE.Raycaster();
+// previa do brilho da reticula nos Ajustes (14/11, pedido dele): o MESMO shader da lente, desenhado pelo renderer do jogo num alvo
+// pequeno e copiado pro canvas da tela, em cima de um fundo de rua clara (onde a mira apagava). Reticula/cor = as da arma principal
+let retPv = null;
+function retPreview(cv) {
+  if (!cv) return;
+  const N = 160;
+  if (!retPv) { const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2); cam.position.z = 1; retPv = { sc, cam, rt: new THREE.WebGLRenderTarget(N, N), px: new Uint8Array(N * N * 4), key: '' }; }
+  const lo = G.loadouts?.[settings.primary] || {}, ret = lo.ret && lo.ret !== 'auto' ? lo.ret : 'dot', col = lo.retColor || 'red', key = ret + col;
+  if (retPv.key !== key) { for (const m of retPv.sc.children) m.material.dispose(); retPv.sc.clear(); const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ARS.retLensMaterial(ret, col)); m.material.uniforms.uOn.value = 1; retPv.sc.add(m); retPv.key = key; }
+  const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
+  renderer.setRenderTarget(retPv.rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(retPv.sc, retPv.cam);
+  renderer.readRenderTargetPixels(retPv.rt, 0, 0, N, N, retPv.px); renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, img = new ImageData(N, N);
+  for (let y = 0; y < N; y++) img.data.set(retPv.px.subarray((N - 1 - y) * N * 4, (N - y) * N * 4), y * N * 4); // alvo vem de baixo pra cima
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#e9e4d8'); bg.addColorStop(0.55, '#d8d2c4'); bg.addColorStop(1, '#bdb6a6'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#a9a294'; g.fillRect(W * 0.08, H * 0.22, W * 0.3, H * 0.4); g.fillStyle = '#f4f1e8'; g.fillRect(W * 0.62, H * 0.12, W * 0.3, H * 0.5); // casas de fundo
+  const tmp = document.createElement('canvas'); tmp.width = tmp.height = N; tmp.getContext('2d').putImageData(img, 0, 0);
+  const s = Math.min(W, H) * 0.92; g.drawImage(tmp, (W - s) / 2, (H - s) / 2, s, s);
+  g.strokeStyle = '#141210'; g.lineWidth = 6; g.beginPath(); g.arc(W / 2, H / 2, s / 2 - 3, 0, 7); g.stroke(); // aro da mira
+}
+const smithCenterPick = () => { const g = smithHolder.children[0]; if (!g) return null; g.updateWorldMatrix(true, true); const bx = new THREE.Box3(); g.traverse(o => { if (o.isMesh && !o.userData.noFx && !o.userData.stk && !o.material?.transparent) bx.expandByObject(o); }); if (bx.isEmpty()) return null;
+    const c = bx.getCenter(new THREE.Vector3()).project(smithCam), cx = (c.x + 1) / 2 * innerWidth, cy = (1 - c.y) / 2 * innerHeight;
+    for (let r = 0; r <= 240; r += 12) for (let k = 0, n = r ? Math.ceil(r / 4) : 1; k < n; k++) { const a = k / n * Math.PI * 2, h = smithPick(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6); if (h) return h; }
+    return null; };
+function smithPick(x, y) { const g = smithHolder.children[0]; if (!g) return null; g.updateWorldMatrix(true, true); stkRay.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), smithCam); return pickOnGun(g, stkRay); }
+addEventListener('pointerdown', e => { if (!stkEdit || ui?.screen !== 'arsenal' || !(e.target === canvas || e.target.id === 'menu')) return; const h = smithPick(e.clientX, e.clientY); if (!h) return; stkDrag = true; e.stopImmediatePropagation(); stkEdit.move(h); }, true);
+addEventListener('pointermove', e => { if (!stkDrag) return; const h = smithPick(e.clientX, e.clientY); if (h) stkEdit?.move(h); });
+addEventListener('pointerup', () => { stkDrag = false; });
 { let x0 = null, smith = false; addEventListener('pointerdown', e => { if (ui?.screen === 'look' && e.target === canvas) { x0 = e.clientX; smith = false; } else if (ui?.screen === 'arsenal' && (e.target === canvas || e.target.id === 'menu')) { x0 = e.clientX; smith = true; } }); addEventListener('pointermove', e => { if (x0 !== null) { const d = (e.clientX - x0) * 0.01; if (smith) { smithDrag += d; smithIdle = 0; if (Math.abs(d) > 0.02 && !smithSeen) { smithSeen = true; try { localStorage.setItem('rr_smith_hint', '1'); } catch { /* */ } $('smithHint').hidden = true; } } else lookDrag += d; x0 = e.clientX; } }); addEventListener('pointerup', () => { x0 = null; }); }
 
 // cena do gunsmith: arma girando num fundo de papel, cores de verdade
 const smithScene = new THREE.Scene();
-smithScene.background = new THREE.Color(0xdcd7cb);
+// 14/11 (pedido dele: fundo escuro no Arsenal, tema do Rubber Riot): a vitrine vira o PALCO de um teatro de variedades com a
+// plateia apagada. Coxia tinta-marrom, canhao de luz quente atras da arma, cortina de veludo vinho nos lados com bambinela em
+// cima, beira do palco de tabua embaixo e a granulacao do filme. Desenhado num canvas 2D (fica atras da interface, dentro da cena)
+function smithBackdrop() {
+  const W = Math.max(640, Math.round(innerWidth * 0.7)), H = Math.max(360, Math.round(innerHeight * 0.7)), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), cx = W * 0.5, cy = H * 0.44, fy = H * 0.8;
+  g.fillStyle = '#17130f'; g.fillRect(0, 0, W, H);
+  // canhao de luz: oval quente, mais largo que alto (a arma e comprida)
+  const R = Math.max(W, H) * 0.42, sp = g.createRadialGradient(cx, cy, 0, cx, cy, R);
+  sp.addColorStop(0, 'rgba(246,231,196,0.22)'); sp.addColorStop(0.5, 'rgba(246,231,196,0.08)'); sp.addColorStop(1, 'rgba(246,231,196,0)');
+  g.save(); g.translate(cx, cy); g.scale(1.45, 0.82); g.fillStyle = sp; g.beginPath(); g.arc(0, 0, R, 0, 7); g.fill(); g.restore();
+  // palco: tabuas em perspectiva, beira de madeira e a poca de luz no chao
+  g.fillStyle = '#271c14'; g.fillRect(0, fy, W, H - fy);
+  g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 2;
+  for (let k = -10; k <= 10; k++) { const x0 = cx + k * W * 0.045, x1 = cx + k * W * 0.11; g.beginPath(); g.moveTo(x0, fy); g.lineTo(x1, H); g.stroke(); }
+  const pool = g.createRadialGradient(cx, fy + (H - fy) * 0.35, 0, cx, fy + (H - fy) * 0.35, W * 0.32); pool.addColorStop(0, 'rgba(246,231,196,0.16)'); pool.addColorStop(1, 'rgba(246,231,196,0)');
+  g.save(); g.translate(cx, fy); g.scale(1, 0.28); g.translate(-cx, -fy); g.fillStyle = pool; g.fillRect(0, fy, W, (H - fy) * 4); g.restore();
+  g.fillStyle = '#3a2a1d'; g.fillRect(0, fy - 4, W, 7); g.fillStyle = '#141210'; g.fillRect(0, fy + 3, W, 3);
+  // cortina: dobras verticais nos dois lados (cada dobra escuro-claro-escuro) com o traco de tinta na borda de dentro
+  const cw = Math.min(W * 0.12, 220), folds = 5, fw = cw / folds;
+  for (const side of [0, 1]) for (let k = 0; k < folds; k++) {
+    const x = side ? W - cw + k * fw : k * fw, lg = g.createLinearGradient(x, 0, x + fw, 0);
+    lg.addColorStop(0, '#22090a'); lg.addColorStop(0.45, '#5a1c15'); lg.addColorStop(0.6, '#4a1712'); lg.addColorStop(1, '#1c0808');
+    g.fillStyle = lg; g.fillRect(x, 0, fw + 0.5, fy);
+  }
+  g.fillStyle = '#141210'; g.fillRect(cw - 2, 0, 4, fy); g.fillRect(W - cw - 2, 0, 4, fy);
+  // bambinela em cima: faixa de veludo com festoes e franja de latao
+  const vh = Math.min(H * 0.075, 54), n = Math.max(5, Math.round(W / 160)), sw = W / n;
+  g.fillStyle = '#3d120e'; g.fillRect(0, 0, W, vh * 0.55);
+  for (let k = 0; k < n; k++) { const x = k * sw; g.fillStyle = k % 2 ? '#4a1712' : '#541a14'; g.beginPath(); g.moveTo(x, vh * 0.5); g.quadraticCurveTo(x + sw / 2, vh * 1.25, x + sw, vh * 0.5); g.lineTo(x + sw, 0); g.lineTo(x, 0); g.fill();
+    g.strokeStyle = '#141210'; g.lineWidth = 3; g.beginPath(); g.moveTo(x, vh * 0.5); g.quadraticCurveTo(x + sw / 2, vh * 1.25, x + sw, vh * 0.5); g.stroke();
+    g.strokeStyle = 'rgba(184,144,46,.75)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 4, vh * 0.56); g.quadraticCurveTo(x + sw / 2, vh * 1.16, x + sw - 4, vh * 0.56); g.stroke(); }
+  // granulacao de filme (a mesma textura de papel do jogo, bem leve)
+  const id = g.getImageData(0, 0, W, H), d = id.data;
+  for (let i = 0; i < d.length; i += 4) { const nz = (Math.random() - 0.5) * 14; d[i] += nz; d[i + 1] += nz; d[i + 2] += nz; }
+  g.putImageData(id, 0, 0);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return tx;
+}
+smithScene.background = smithBackdrop();
+{ let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { smithScene.background?.dispose?.(); smithScene.background = smithBackdrop(); }, 250); }); }
 smithScene.add(new THREE.HemisphereLight(0xffffff, 0x8a857c, 1.6));
 const sl = new THREE.DirectionalLight(0xffffff, 2.2); sl.position.set(2, 3, 2); smithScene.add(sl);
 const smithCam = new THREE.PerspectiveCamera(30, 1, 0.3, 30);
 const smithHolder = new THREE.Group(); smithScene.add(smithHolder);
+if (import.meta.env.DEV) window.__smith = { holder: smithHolder, cam: smithCam, pick: (x, y) => smithPick(x, y), center: () => smithCenterPick() }; // depurar adesivo
 // cena do visual: o proprio boneco girando, mesma luz da vitrine
 const lookScene = new THREE.Scene();
 lookScene.background = new THREE.Color(0xdcd7cb);
@@ -426,7 +500,7 @@ function gainXp(kind, wpn = null, mult = 1) {
   const night = G.mode === 'borroes', base = Math.round((XP[kind] || 0) * mult * xpMult());
   if (night && BOR_XP_KINDS.includes(kind)) mult *= BOR_XP;
   const amount = Math.round((XP[kind] || 0) * mult * xpMult());
-  if (!amount && !base) return;
+  if (!amount && !base) return 0;
   if (onlyBots() && !night && !G.botXpWarned) { G.botXpWarned = true; hud.message(t('botsOnlyXp', { n: Math.round(BOTS_ONLY_XP * 100) }), 3); }
   G.matchXp = (G.matchXp || 0) + amount;
   logXp(kind, amount);
@@ -435,8 +509,9 @@ function gainXp(kind, wpn = null, mult = 1) {
   // Armas, pega do chao, do caixote ou do battle royale upava o Trovao equipado e a Garoa ficava parada. Agora vai pro modelo NA MAO
   let inHand = null; try { const b = WEAPONS[wpn] && CATEGORY[wpn] ? G.player?.lo?.(wpn)?.body : null; if (b && CATEGORY[wpn].bodies.includes(b)) inHand = b; } catch { /* sem arma montada */ }
   addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : inHand, night ? base : amount);
-  hud.xpPop(`+${amount} ${t('xp_' + kind)}`);
+  if (kind !== 'kill' && kind !== 'head') hud.xpPop(`+${amount} ${t('xp_' + kind)}`); // abate e cuca vao no cartao do lado da mira (hud.killTag)
   if (boostSync()) hud.message(t('boostGot'), 2.6); // subiu num nivel do Pass que paga ficha
+  return amount;
 }
 // o que abre exatamente neste nivel (pra avisar na hora)
 // o que abriu nesse nivel: [{ slot, id, wpn, name }] (camo de nivel de jogador vale pra arma em uso)
@@ -503,6 +578,8 @@ onProgress((e) => {
   audio.play('levelup', { vol: 0.85, ui: true, jitter: 0 });
   audio.duck(0.3, 1.6);
   if (e.levelUp) hud.stampText(t('levelUp', { n: e.levelUp }));
+  // 14/11 (pedido dele: gancho por nivel): equipamento de campo que o nivel novo libera ganha aviso proprio (o painel de desbloqueio e so de peca de arma)
+  if (e.levelUp) { const nf = Object.entries(FIELD).filter(([, F]) => F.lvl > (e.levelFrom || 0) && F.lvl <= e.levelUp); if (nf.length) setTimeout(() => hud.message(t('fieldUnl', { w: nf.map(([id]) => t('fd_' + id)).join(', ') }), 3.5), 1600); }
   if (e.wpnUp) hud.message(t('wpnUp', { w: e.body && CATEGORY[e.wpn]?.bodies.includes(e.body) ? partName('body', e.body) : wName(e.wpn), n: e.wpnUp }), 2.6);
   // todos os niveis ganhos de uma vez (subir 2 niveis num abate tambem anuncia o do meio)
   const got = [];
@@ -957,7 +1034,7 @@ function onEvent(e) {
       const r = G.remotes.get(e.id);
       if (G.specVm && G.specVm.startsWith(e.id + '|') && !G.player?.alive) vm.fire((WEAPONS[e.wpn]?.kick || 1) * 1.3);
       const rBody = G.remoteBp.get(e.id)?.[e.wpn] ? null : G.remoteLo.get(e.id)?.[e.wpn]?.body, rvBody = e.wpn === 'pistol' && (rBody === 'pistol_10' || rBody === 'pistol_5') /* Bico Longo virou revolver (06/11) */, aaBody = e.wpn === 'shotgun' && rBody === 'shotgun_3', lzBody = e.wpn === 'pistol' && rBody === LASER_BODY;
-      const rTr = lzBody ? 'laser' : tracerOf(G.remoteLo.get(e.id)?.[e.wpn]), rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : aaBody ? 'aa12' : audio.gunSound(rBody, e.wpn); // som proprio do modelo
+      const rTr = lzBody ? 'laser' : tracerOf(G.remoteLo.get(e.id)?.[e.wpn]), rSnd = lzBody ? 'laser' : rvBody ? 'revolver' : rBody === 'pistol_13' && e.wpn === 'pistol' ? 'revolver2' : aaBody ? 'aa12' : audio.gunSound(rBody, e.wpn); // som proprio do modelo
       const rSilOn = isSilenced(G.remoteLo.get(e.id)?.[e.wpn]), rSil = rSilOn && !lzBody ? (INTEGRAL_SIL.includes(rBody) ? audio.gunSound(rBody, null) : null) || audio.silSound(e.wpn) : null; // 13/11: silenciador de fabrica (Psiu, Sussurro) = tiro abafado proprio
       audio.play(rSil || rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2, muffle: rSilOn && !rSil, dry: !!rSil });
       const rg = r?.char.gun?.userData; if (rg?.drum) rg.drum.rotation.z += Math.PI / 3; // tambor do revolver gira no boneco tambem
@@ -1019,6 +1096,7 @@ function onEvent(e) {
       if (inGame && !G.tutorial && !G.range) { if (e.a === G.myId && e.v !== G.myId) wpnTrack(e.wpn, G.player?.lo(e.wpn)?.body, { k: 1, hk: e.head ? 1 : 0 }); if (e.v === G.myId && G.player?.wpn) wpnTrack(G.player.wpn, G.player.lo(G.player.wpn)?.body, { d: 1 }); } // Arsenal: numeros de cada arma
       if (e.a === G.myId && inGame) {
         if (e.v !== G.myId) hud.hitmark(!!e.head, true); // hitmarker de abate (13/11)
+        if (e.v !== G.myId) setTimeout(() => { const w = G.player?.wpn; if (w) vm.kcKills?.(wpnTracked(w, G.player.lo(w)?.body).k || 0); }); // contador de abates na arma (depois do wpnTrack do mesmo evento)
         chEvent({ type: 'kill', wpn: e.wpn, head: !!e.head, streak: e.streak || 0, body: G.player?.lo(e.wpn)?.body }); // body: desafio de um modelo (gadgets)
         G.player?.scavenge?.(); // skill catador
         // multiabate: 3 derrubados em 4 s (desafio de elite)
@@ -1033,8 +1111,8 @@ function onEvent(e) {
           const cm = CAMOS.find(c => c.id === G.loadouts[G.player?.wpn]?.camo);
           if (cm?.react) { hud.message(t('reacted', { n: st }), 1.6); audio.play('unlock', { vol: 0.5, ui: true, rate: 1.2 + st * 0.1 }); }
         }
-        gainXp('kill', e.wpn);
-        if (e.head) gainXp('head', e.wpn);
+        const kxp = (gainXp('kill', e.wpn) || 0) + (e.head ? gainXp('head', e.wpn) || 0 : 0);
+        if (e.v !== G.myId) hud.killTag(nameOf(e.v), kxp, !!e.head); // 13/11 (pedido dele): nome de quem caiu + XP do lado da mira
         const kw = t('killWords');
         hud.stampText(kw[Math.floor(Math.random() * kw.length)], t('streak')[e.streak] || (e.head ? t('headTag') : ''));
         audio.play('killstamp', { vol: 0.6, ui: true });
@@ -1225,7 +1303,7 @@ function onEvent(e) {
     // ---------- equipamento de campo ----------
     case 'field': {
       const pos = e.id === G.myId ? G.player?.pos : posOf(e.id);
-      if (e.kind === 'hook' && e.id !== G.myId && e.at && inGame) G.hookView?.remote(() => { const q = posOf(e.id); return q ? new THREE.Vector3(q[0], q[1] + 1.3, q[2]) : null; }, e.at); // corda de quem lancou
+      if (e.kind === 'hook' && e.id !== G.myId && e.at && inGame) G.hookView?.remote(() => { const h = G.remotes.get(e.id)?.char?.handL; if (h?.parent) return h.getWorldPosition(new THREE.Vector3()); const q = posOf(e.id); return q ? new THREE.Vector3(q[0], q[1] + 1.7, q[2]) : null; }, e.at); // 13/11: a corda sai da mao que segura (pose do gancho) // corda de quem lancou
       if (e.id === G.myId) { if (e.kind === 'hole' && G.player) G.player.holeCd = Math.max(G.player.holeCd || 0, 1.1); /* buraco abre e da 1 s pra ver onde ficou, depois puxa quem ficar em cima (08/11) */ G.fieldK = e.kind === 'hook' && e.left > 0 ? 1 : 0; G.fieldUsedT = G.t; if (e.kind === 'umbrella') { G.shieldT = FIELD.umbrella.dur; vm.umbOn = true; } if (e.kind === 'stim') { vm.stim(); G.stimBoostT = FIELD.stim.boostT; if (G.player) G.player.switchT = Math.max(G.player.switchT, 1.1); } /* arma guardada: nao atira nem recarrega ate a injecao acabar */ if (e.kind === 'vest') hud.message(t('vestOn'), 1.4); }
       // estimulante = chiado da bomba de ar; colete = o som de pegar item (sem som proprio ainda)
       if (inGame && !(e.kind === 'hook' && e.id === G.myId)) audio.play(e.kind === 'anvil' ? 'anvilfall' : e.kind === 'stim' ? 'pump' : e.kind === 'vest' ? 'pickup' : e.kind === 'hook' ? 'whoosh' : e.kind, { pos: e.kind === 'anvil' && e.at ? e.at : pos, vol: 0.75 });
@@ -2425,11 +2503,11 @@ function renderRangePick() {
 }
 function startRange(cat, body) {
   if (!CATEGORY[cat]) return;
-  G.range = new Range(G, cat, body);
+  G.range = new Range(G, cat, body); G.range.scene = scene; // placas de distancia do estande vao na cena
   G.range.primary = settings.primary; // devolve a principal salva na saida
   rangeCat = cat;
   $('menu').hidden = true;
-  const rangeNet = new LocalNet({ mode: 'ffa', map: 'vila', bots: 0, lobby: false, limit: 9999, time: 3600 }); rangeNet.core.noDrops = true; // campo de treino: alvo nao larga arma
+  const rangeNet = new LocalNet({ mode: 'ffa', map: 'estande', bots: 0, lobby: false, limit: 9999, time: 3600 }); // 14/11 (pedido dele): estande proprio, nao mais a Vila rangeNet.core.noDrops = true; // campo de treino: alvo nao larga arma
   startGame(rangeNet, settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.range?.dispose(); G.range = null; });
 }
 $('rangeBack').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
@@ -2457,7 +2535,15 @@ const ui = initMenus({
   previewDeath: (on) => { G.lookDeath = !!on; },
   previewDance: (id) => { if (id === G.lookDance?.id) return; G.lookDance = id ? { id, t: 0 } : null; lookFx?.clear(); if (id) audio.dance(id); else audio.danceStop(); },
   // vitrine: o feixe do laser e' curto (o de 12 m da partida cruzava a tela inteira); so mostra a cor saindo do cano
-  onSmith: (gun, cat, charm) => { const smithId = (G.smithN = (G.smithN || 0) + 1), swap = () => { if (smithId !== G.smithN) { disposeGun(gun); return; } for (const o of smithHolder.children) disposeGun(o); smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') attachCharm(gun, charm ?? wornLook().charm, 1); }; /* 09/11: a arma velha fica na tela ate o shader da nova ficar pronto (sem travada) e so entao e liberada (vazava a cada clique) */ if (!gun) { swap(); return; } compileSafe(gun, smithCam, smithScene, 3000).then(swap, swap); },
+  // adesivos: editar ao vivo na arma da vitrine (ui.js chama)
+  stkEdit: (ed) => { stkEdit = ed; if (!ed) stkDrag = false; },
+  smithStickers: (list) => applyStickers(smithHolder.children[0], list),
+  smithNudge: (st, dz, dy) => smithHolder.children[0] ? nudgeOnGun(smithHolder.children[0], st, dz, dy) : null,
+  // 14/11 (pedido dele: no Trombone clicar no adesivo nao fazia nada): o centro da caixa da arma inteira (com feixe do laser e vaos) caia
+  // fora da malha e o raio errava. Centro so das pecas de verdade e, se errar, procura em espiral em volta ate achar a arma
+  smithCenterPick: () => smithCenterPick(),
+  retPreview: (cv) => retPreview(cv),
+  onSmith: (gun, cat, charm, extra) => { const smithId = (G.smithN = (G.smithN || 0) + 1), swap = () => { if (smithId !== G.smithN) { disposeGun(gun); return; } for (const o of smithHolder.children) disposeGun(o); smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') { attachCharm(gun, charm ?? wornLook().charm, 1); attachKc(gun, extra?.kc, extra?.kills || 0); applyStickers(gun, extra?.stk); } }; /* 09/11: a arma velha fica na tela ate o shader da nova ficar pronto (sem travada) e so entao e liberada (vazava a cada clique) */ if (!gun) { swap(); return; } compileSafe(gun, smithCam, smithScene, 3000).then(swap, swap); },
   onBackFromSettingsInGame: () => { $('menu').hidden = true; $('pause').hidden = false; },
   // arsenal aberto do lobby: aplica a arma montada e volta pra sala (ready = ja marca pronto)
   onBackToLobby: (ready) => closeLobbySmith(ready),
@@ -2586,6 +2672,7 @@ function frameBody(now, realDt) {
   if (ui.screen === 'arsenal' && (G.state === 'menu' || ((G.state === 'lobby' || G.state === 'game') && !$('menu').hidden))) {
     if (G.state !== 'menu') { G.net && G.net.update(realDt); } // a partida segue rodando por tras
     menuT += realDt;
+    if (stkEdit) smithIdle = 0; // editando adesivo: a arma para de balancar sozinha
     smithIdle += realDt; smithSway += ((smithIdle > 5 ? 1 : 0) - smithSway) * Math.min(1, realDt * 3);
     smithHolder.rotation.y = Math.sin(menuT * 0.5) * 0.6 * smithSway - Math.PI / 2 + 0.25 + smithDrag;
     { // o chaveiro fica no lado que esta de frente pra camera: na vitrine ele nunca some atras da arma
@@ -2699,10 +2786,14 @@ function frameBody(now, realDt) {
     let pr = null;
     if (Z && P?.alive) {
       const prims = P.owned.filter(w => ['smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'minigun'].includes(w));
-      if (prims.length >= 2) {
-        const it = (G.brLoot || []).find(l => l[1] === 'wpn' && !P.owned.includes(l[2]) && l[2] !== 'pistol' && (l[3] - P.pos[0]) ** 2 + (l[5] - P.pos[2]) ** 2 < 2.6);
-        if (it) tip('swap');
-        if (it) pr = t(isTouch ? 'br_swapTouch' : G.pad?.active ? 'br_swapPad' : 'br_swap', { a: gunName(G.myId, prims.includes(P.wpn) ? P.wpn : prims[0]), b: it[6] ? t(it[6]) : G.loadouts[it[2]]?.body ? partName('body', G.loadouts[it[2]].body) : wName(it[2]) });
+      // 14/11 (pedido dele): tambem a MESMA classe com outro modelo (o servidor agora troca, shared/br.js); nome = o modelo do CHAO (it[8])
+      const floorName = (l) => l[6] ? t(l[6]) : l[8] ? partName('body', l[8]) : wName(l[2]);
+      const near = (l) => l[1] === 'wpn' && l[2] !== 'pistol' && (l[3] - P.pos[0]) ** 2 + (l[5] - P.pos[2]) ** 2 < 2.6;
+      const it = (G.brLoot || []).find(l => near(l) && (P.owned.includes(l[2]) ? floorName(l) !== gunName(G.myId, l[2]) : prims.length >= 2));
+      if (it) {
+        tip('swap');
+        const mine = P.owned.includes(it[2]) ? it[2] : prims.includes(P.wpn) ? P.wpn : prims[0];
+        pr = t(isTouch ? 'br_swapTouch' : G.pad?.active ? 'br_swapPad' : 'br_swap', { a: gunName(G.myId, mine), b: floorName(it) });
       }
     }
     // dupla: parceiro caido perto = segurar usar enche a bomba de bicicleta
@@ -2854,7 +2945,7 @@ function frameBody(now, realDt) {
     ctxHint(realDt, p);
     modeTipsTick(realDt, G, p, inp, p.alive && !G.paused && !G.intro && !replay.on && !G.tutorial && !G.range && !(G.snap?.freeze > 0) && !G.over); // dicas do modo (07/11)
     nadeArc(p);
-    if (G.range && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) { G.range.begin(); if (!G.range.armed) { G.range.armed = true; rangeEquip(G.range.cat, G.range.body); } } G.range.update(); }
+    if (G.range && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) { G.range.begin(); if (!G.range.armed) { G.range.armed = true; rangeEquip(G.range.cat, G.range.body); } } G.range.update(realDt); }
     if (G.tutorial && !G.paused) { if (p.alive && !(G.snap?.freeze > 0)) G.tutorial.begin(); G.tutorial.update(dt, inp); }
     hud.heat(p.wpn === 'lmg' && p.alive ? p.heat : 0, p.hot);
     if (G.net?.ws && (G.latT = (G.latT || 0) - dt) <= 0) { G.latT = 2; G.net.send({ t: 'lat', c: performance.now(), ms: G.myPing || 0 }); } // ping no Tab: mede a cada 2 s
@@ -2946,7 +3037,8 @@ function frameBody(now, realDt) {
       $('deadGo').hidden = !canGo; $('dead').classList.toggle('can', !!canGo);
       if (canGo && (inp.jumpPressed || inp.firePressed)) G.net?.send({ t: 'respawn' });
     }
-    if (inp.pingPressed && (G.mode === 'br' || G.tutorial?.pingOn) && p.alive && G.state === 'game') makePing(p);
+    // 13/11 (pedido dele): marcar (B) vale em todo modo. Controle: o direcional esquerdo e do gadget quando ele esta na arma
+    if (inp.pingPressed && !(inp.gadgetPressed && G.gadgetShown) && p.alive && G.state === 'game') makePing(p);
     if (inp.quickPressed && G.state === 'game' && !(p.adsK > 0.3 && vm.gun?.userData.canted)) qc.toggle(); // Chat Rapido (mirando com a mira 45 o direcional e dela)
     const SR = !p.alive && G.specR && G.specR.alive && !G.spec?.map ? G.specR : null; G.specR = null;
     const RPV = replay.vmState(); // camera final em primeira pessoa: a arma de quem matou, no tempo da gravacao
@@ -3053,7 +3145,7 @@ function frameBody(now, realDt) {
   } else {
     menuT += realDt;
     modeTipsHide();
-    { const m = G.lobbyCfg?.mode, ln = G.state === 'lobby' && G.lobbyCfg?.tod === 'night' && m !== 'borroes' && m !== 'arte'; // lobby ja mostra o mapa no horario escolhido, em todo modo (08/11); chamado todo quadro: trocar de mapa no lobby monta um cenario novo, ainda de dia
+    { const m = G.lobbyCfg?.mode, hr = new Date().getHours(), ln = (G.state === 'lobby' && G.lobbyCfg?.tod === 'night' && m !== 'borroes' && m !== 'arte') || (G.state === 'menu' && (hr >= 18 || hr < 6)); // 14/11 (pedido dele): SO o menu inicial segue o relogio de quem joga (18h-6h = noite) // lobby ja mostra o mapa no horario escolhido, em todo modo (08/11); chamado todo quadro: trocar de mapa no lobby monta um cenario novo, ainda de dia
       G.nightOn = ln; world?.setNight?.(ln); for (const r of G.remotes.values()) nightChar(r.char, ln); }
     film.uniforms.smoke.value = 0; // veu da fumaca nao fica preso fora da partida
     // lobby (07/11, pedido dele): tomadas de cinema pelo mapa com fade entre elas; menu e mapa sem tomada boa: a orbita de sempre

@@ -33,6 +33,8 @@ const THEME = {
   docas: { sky: 0xf0b48c, ground: ['#b99c78', '#6d5a46'], fog: [50, 160], docks: true, trees: [] },
   // Xilindro (13/11): presidio de concreto, ceu de chumbo; chao de cimento do patio e do pavilhao
   xilindro: { sky: 0xc4c6c2, ground: ['#b8b6ae', '#6c6a64'], fog: [40, 140], trees: [] },
+  // Estande Gargalhada (14/11): campo de tiro fechado, chao de serragem; nevoa longe (o fundo de 64 m tem que aparecer)
+  estande: { sky: 0x2a2420, ground: ['#b89a74', '#6b5236'], fog: [70, 160], trees: [] },
   // Canyon Poeira (04/11): deserto grande, ceu de fim de tarde quente, areia dourada; nevoa longe (mapa aberto)
   deserto: { sky: 0xeed7ae, ground: ['#e3c48f', '#b08a52'], fog: [90, 300], desert: true, trees: [] },
   // refinaria: areia do deserto, ceu quente
@@ -1685,7 +1687,7 @@ function tripoModel(file) {
 // ---------- mapas modelados no Blender (06/11) ----------
 // pecas que o .glb NAO desenha (ficam as do jogo): carro do Tripo (chega depois) e o frontao com a placa pintada em canvas
 const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], trapiche: ['car', 'truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
-const MAP_GLB = { xilindro: 'xilindro.glb', trapiche: 'trapiche.glb', vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
+const MAP_GLB = { estande: 'estande.glb', xilindro: 'xilindro.glb', trapiche: 'trapiche.glb', vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
 const MAP_CELL = 40, MAP_SPLIT_MIN = 12000; // so malha pesada de verdade e dividida (celula de 40 m): dividir as leves gastava mais em chamadas de desenho do que economizava em triangulos (ver mapModel)
 const MAP_THIN_FAR = 42; // celular: contorno de acabamento (moldura e vidro) so ate aqui; numa tela pequena nem da pra ver e sao centenas de milhares de triangulos
 const MAPM = new Map(), MAPG = new Map(); // MAPG: modelo ja pronto (o mapa monta direto com ele, sem as caixas antes)

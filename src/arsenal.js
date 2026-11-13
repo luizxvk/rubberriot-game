@@ -91,11 +91,15 @@ export function infectLoadout(cat, base) {
 // Mira laser (modulo lateral, feito no codigo): melhora o quadril, pesa um pouco na mira
 // lanterna (04/11, pedido dele): mesmo slot do laser. Quem usa ve a luz projetada no mundo; quem recebe so ve um
 // brilho leve vindo da arma (atrapalha a mira de quem esta na frente dela). model = peca do pacote de acessorios
-export const LASERS = ['laser_1', 'laser_2', 'light_1'];
+export const LASERS = ['laser_1', 'laser_2', 'light_1', 'laser_3', 'laser_4']; // 13/11: roxo e amarelo no fim da progressao
 const LASER_DEF = {
   laser_1: { color: 0xff2a2a, size: [0.03, 0.028, 0.085], model: 'laser', traits: { hip: 0.8, adsTime: 1.03 } },              // compacto vermelho
   laser_2: { color: 0x39ff5a, size: [0.04, 0.038, 0.12], model: 'laser', traits: { hip: 0.7, adsTime: 1.07, move: 0.98 } },  // tatico verde
   light_1: { color: 0xfff1d0, size: [0.042, 0.042, 0.15], model: 'light', light: true, traits: { hip: 0.92, adsTime: 1.04 } }, // lanterna tatica
+  // 13/11 (pedido dele, modelos do Blender): atributos que os outros nao tem. Roxo = mira mais rapida (ajuda pouco no quadril);
+  // amarelo = estabiliza o coice (mira um tico mais lenta)
+  laser_3: { color: 0xb04bff, size: [0.036, 0.04, 0.1], model: 'laserP', traits: { hip: 0.9, adsTime: 0.95 } },              // Prisma roxo
+  laser_4: { color: 0xffd23a, size: [0.042, 0.03, 0.09], model: 'laserY', twin: true, traits: { hip: 0.88, kick: 0.9, adsTime: 1.05 } },  // Duplo amarelo
 };
 export const laserColor = (id) => LASER_DEF[id]?.color ?? 0xff2a2a;
 function range(p, a, b) { const r = []; for (let i = a; i <= b; i++) r.push(p + i); return r; }
@@ -124,7 +128,7 @@ export function partName(slot, id) {
   if (slot === 'charger') { const k1 = 'mgi_' + id, s1 = t(k1); if (s1 !== k1) return s1; const k2 = 'mgn_' + n, s2 = t(k2); return s2 !== k2 ? s2 : t('mgn_13'); } // 08/11 (pedido dele): nome proprio, nada de "Pente 2"; 13/11: pente da leva nova com nome dele (mgi_), nunca a chave crua
   if (slot === 'conv') return t('conv_' + id);
   if (slot === 'muzzle') return t('mz_' + id);
-  if (slot === 'laser') return t(id === 'light_1' ? 'lightTac' : id === 'laser_2' ? 'laserTac' : 'laserDot');
+  if (slot === 'laser') return t(id === 'light_1' ? 'lightTac' : id === 'laser_2' ? 'laserTac' : id === 'laser_3' ? 'laserPrisma' : id === 'laser_4' ? 'laserDuplo' : 'laserDot');
   if (id === 'akimbo') return t('akimbo');
   if (GADGETS[id]) return t(id);
   return t('gpn_' + id);
@@ -227,7 +231,7 @@ export function loadArsenal() {
       if (pal) for (const [name, p] of Object.entries(parts)) if (/scope/.test(name)) {
         p.lens = stripLens(p.geo, pal); levelScope(p); stripMount(p);
       }
-    }).then(() => cutForeMounts()).then(() => loadWW2(loader)).then(() => loadRevolver(loader)).then(() => loadPack2(loader)).then(() => buildDrumMag()).then(() => buildExtMags()).then(() => loadComic(loader, import.meta.env.BASE_URL + 'models/src/comic/attach.glb')).then(() => swapSniperScopes()).catch(e => console.warn('low_poly_guns.glb nao carregou', e)),
+    }).then(() => cutForeMounts()).then(() => loadWW2(loader)).then(() => loadRevolver(loader)).then(() => loadPack2(loader)).then(() => buildDrumMag()).then(() => buildExtMags()).then(() => loadComic(loader, import.meta.env.BASE_URL + 'models/src/comic/attach.glb')).then(() => swapSniperScopes()).then(() => loadLasersExtra(loader)).catch(e => console.warn('low_poly_guns.glb nao carregou', e)),
     loader.loadAsync(import.meta.env.BASE_URL + 'models/src/melee.glb').then(g => {
       // cada mesh do arquivo vira melee_i: cabo no -z, ponta/cabeca no +z (sem a rotacao do Sketchfab)
       let i = 0;
@@ -514,6 +518,8 @@ const M107 = [{ node: 'Root', id: 'sniper_2', cat: 'sniper', alongZ: true, k: 1.
 // silenciadores, o laser e a lanterna (as miras do pacote NAO entram). Deitados no Z, centrados, frente no -z (flip
 // = o arquivo vem com a frente no +z). Textura de paleta: claro = destaque, o resto escuro
 const ATT = {};
+// bocas de emissao do modelo do Blender (tools/blender/lasers.py), ja no espaco da malha centrada: o feixe nasce nelas (14/11, pedido dele)
+const ATT_EMIT = {}, EMIT_SRC = { laserY: [[-0.011, 0.065, 0.002], [0.011, 0.065, 0.002]] }; // Blender (x, y = frente, z = cima): lentes lado a lado, na boca do cano
 const ATT_NODES = { supA: ['Muzzle_Pistol_Suppressor_A'], supB: ['Muzzle_Pistol_Suppressor_B'], laser: ['Laser_Pistol_A'], light: ['Light_Pistol_A'] };
 function loadAttach(loader) {
   return loader.loadAsync(import.meta.env.BASE_URL + 'models/src/attach_pistol.glb').then(g => {
@@ -540,6 +546,21 @@ function loadAttach(loader) {
       geo.computeVertexNormals(); geo.computeBoundingBox(); ATT[k] = geo;
     }
   }).catch(e => console.warn('attach_pistol.glb nao carregou', e));
+}
+// lasers do Blender (13/11, pedido dele): roxo Prisma e amarelo Duplo (tools/blender/lasers.py). A cor de cada peca vira a
+// paleta da arma pela luminancia (clara / escura / preta), igual as pecas do pacote de acessorios
+function loadLasersExtra(loader) {
+  const pal = paletteReader(gunTex), uvOf = (L) => pal ? paletteUV(pal, L > 120 ? [178, 128, 84] : L > 45 ? [52, 50, 47] : [30, 30, 30]) : [0.5, 0.5];
+  return Promise.all([['laserP', 'laser_prisma'], ['laserY', 'laser_duplo']].map(([k, f]) => loader.loadAsync(import.meta.env.BASE_URL + `models/src/${f}.glb`).then(g => {
+    g.scene.updateMatrixWorld(true); const list = [];
+    g.scene.traverse(o => { if (!o.isMesh) return; let ge = o.geometry.clone().applyMatrix4(o.matrixWorld); if (ge.index) ge = ge.toNonIndexed();
+      const c = o.material?.color || new THREE.Color(0.3, 0.3, 0.3), L = (0.3 * c.r + 0.59 * c.g + 0.11 * c.b) * 255 * 1.6, uv = uvOf(L), n = ge.attributes.position.count, a = new Float32Array(n * 2);
+      for (let i = 0; i < n; i++) { a[i * 2] = uv[0]; a[i * 2 + 1] = uv[1]; }
+      for (const key of Object.keys(ge.attributes)) if (key !== 'position' && key !== 'normal') ge.deleteAttribute(key);
+      ge.setAttribute('uv', new THREE.BufferAttribute(a, 2)); list.push(ge); });
+    if (!list.length) return; const geo = mergeGeometries(list); geo.computeBoundingBox(); const ce = geo.boundingBox.getCenter(new THREE.Vector3()); geo.translate(-ce.x, -ce.y, -ce.z); geo.computeVertexNormals(); geo.computeBoundingBox(); ATT[k] = geo;
+    if (EMIT_SRC[k]) ATT_EMIT[k] = EMIT_SRC[k].map(([x, y, z]) => new THREE.Vector3(x - ce.x, z - ce.y, -y - ce.z)); // glTF: (x, z, -y) do Blender
+  }).catch(e => console.warn('laser extra', f, e))));
 }
 export const debugAtt = () => ATT;
 export const PACK2_BODIES = [...PACK2, ...AA12, ...PACK3, ...SAWED, ...WPACK, ...M107].map(w => w.id);
@@ -1540,6 +1561,9 @@ export const RET_PATH = {
   spiral: { s: 'M12 12c1-1 2.5 0 2 1.5s-3 2-4.5.5s-1-5 2-6s7 1 7.5 4.5s-2 7.5-6 8' }, crown: { f: 'M4 18L3 7l5 4 4-7 4 7 5-4-1 11z' }, eye: { s: 'M2.5 12q9.5-9 19 0q-9.5 9-19 0z', f: 'M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0' },
   clover: { f: 'M8.5 7.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M8.5 16.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M4 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M13 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0' }, moon: { f: 'M15 3a9 9 0 1 0 6 15a7.5 7.5 0 0 1-6-15z' },
 };
+// brilho da reticula (14/11, pedido dele: opcao em Ajustes pra diminuir, com previa ao vivo): um uniform so pra todas as lentes;
+// 1 = o brilho cheio de sempre (miolo branco + halo), 0 = so a cor, sem halo. main.js applySettings acerta
+export const RET_GLOW = { value: 1 };
 export const RET_COLORS = { red: '#ff3b30', green: '#3cff6b', amber: '#ffb21a', white: '#ffffff', black: '#111111', pink: '#ff5fa2', cyan: '#39d7ff', violet: '#9b6bff', lime: '#b6f23c' }; // as 4 ultimas: Rovex Pass
 export const retColorOwned = (k) => !RET_PASS[k] || !!progressInfo().unlockAll || passLevel() >= RET_PASS[k];
 export const scopeTarget = { texture: null, mask: null };
@@ -1550,6 +1574,7 @@ export const SCOPE_KIND = { sniper_scope_0: 'hunt', sniper_scope_1: 'mil', snipe
 const KIND_ID = { hunt: 0, mil: 1, thermal: 2, vari: 3 };
 const KIND_RET = { hunt: 'duplex', mil: 'milbdc', thermal: 'cross', vari: 'duplex' };
 
+export const retLensMaterial = (ret, color) => lensMaterial(false, ret, color, null, 1); // previa do brilho nos Ajustes (main.js)
 function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
   const ri = RETICLES.indexOf(ret), style = ret === 'milbdc' ? 7 : ri >= 7 ? ri + 1 : Math.max(0, ri); // 7 = milbdc da Militar; as novas vem do 8 em diante
   return lensOwn(new THREE.ShaderMaterial({
@@ -1557,15 +1582,16 @@ function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
     uniforms: {
       tScope: { value: scopeTarget.texture }, uBig: { value: big ? 1 : 0 }, uOn: { value: 0 },
       uStyle: { value: style }, uCol: { value: new THREE.Color(RET_COLORS[color] || RET_COLORS.red) },
-      uKind: { value: kind ? KIND_ID[kind] : -1 }, uStep: { value: 0 }, tMask: { value: scopeTarget.mask }, uRetK: { value: retK },
+      uKind: { value: kind ? KIND_ID[kind] : -1 }, uStep: { value: 0 }, tMask: { value: scopeTarget.mask }, uRetK: { value: retK }, uGlow: RET_GLOW,
     },
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `
-      uniform sampler2D tScope, tMask; uniform float uBig, uOn, uStyle, uKind, uStep, uRetK; uniform vec3 uCol;
+      uniform sampler2D tScope, tMask; uniform float uBig, uOn, uStyle, uKind, uStep, uRetK, uGlow; uniform vec3 uCol;
       varying vec2 vUv;
-      float ln(float d, float w) { return smoothstep(w, w * 0.4, abs(d)); }
-      float ring(vec2 p, float r, float w) { return smoothstep(w, w * 0.4, abs(length(p) - r)); }
-      float dotp(vec2 p, vec2 c, float r) { return smoothstep(r, r * 0.5, length(p - c)); }
+      float WK = 1.0; // 13/11 (pedido dele: fina e apagada nas miras pequenas): engrossa todo traco, anel e ponto
+      float ln(float d, float w) { w *= WK; return smoothstep(w, w * 0.4, abs(d)); }
+      float ring(vec2 p, float r, float w) { w *= WK; return smoothstep(w, w * 0.4, abs(length(p) - r)); }
+      float dotp(vec2 p, vec2 c, float r) { r *= mix(1.0, WK, 0.6); return smoothstep(r, r * 0.5, length(p - c)); }
       float seg(vec2 p, vec2 a, vec2 b) { vec2 pa = p - a, ba = b - a; return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)); }
       float star5(vec2 p, float r, float rf) { const vec2 k1 = vec2(0.809017, -0.587785), k2 = vec2(-0.809017, -0.587785); p.x = abs(p.x); p -= 2.0 * max(dot(k1, p), 0.0) * k1; p -= 2.0 * max(dot(k2, p), 0.0) * k2; p.x = abs(p.x); p.y -= r; vec2 ba = rf * vec2(-k1.y, k1.x) - vec2(0.0, 1.0); float h = clamp(dot(p, ba) / dot(ba, ba), 0.0, r); return length(p - ba * h) * sign(p.y * ba.x - p.x * ba.y); }
       // reticulas de red dot; wk alarga os tracos (wk > 1 = halo do bloom)
@@ -1603,7 +1629,7 @@ function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
           if (s == 29) return max(ln(q.x, 0.03) * step(q.y, -0.02), ln(q.y, 0.022) * step(0.14, a.x));
           if (s == 30) { float t = hair; for (int i = 1; i <= 6; i++) { float m = float(i) * 0.13; t = max(t, max(ln(q.x - m, 0.006) * step(a.y, 0.035), ln(q.y + m, 0.006) * step(a.x, 0.035))); } return t; }
           if (s == 31) { float t = max(hx, ln(q.y - 0.18, 0.005)); for (int i = 1; i <= 5; i++) { float m = float(i) * 0.14; t = max(t, ln(q.y + m - 0.18, 0.006) * step(a.x, 0.42 - float(i) * 0.07)); } return t; }
-          if (s == 32) return max(max(ring(q, 0.55, 0.008 * wk), dotp(q, vec2(0.0), 0.02)), hair * step(0.55, length(q)));
+          if (s == 32) return max(max(ring(q, 0.55, 0.008 * wk), dotp(q, vec2(0.0), 0.02)), hair * step(0.55, length(q)) * step(length(q), 0.76)); // 13/11: tracinhos curtos fora do anel, igual a previa (antes iam ate a borda)
           if (s == 33) { float t = max(ring(q, 0.16, 0.006 * wk), hair * step(0.16, length(q))); for (int i = 2; i <= 6; i++) { float m = float(i) * 0.12; t = max(t, max(dotp(a, vec2(m, 0.0), 0.016), dotp(a, vec2(0.0, m), 0.016))); } return t; }
           if (s == 34) { float t = hair; for (int i = 1; i <= 7; i++) { float m = float(i) * 0.1; t = max(t, max(ln(a.x - m, 0.005) * step(a.y, 0.028), ln(a.y - m, 0.005) * step(a.x, 0.028))); } return t; }
           if (s == 35) return max(max(ln(q.y + a.x * 0.9, 0.012) * step(a.x, 0.14) * step(-0.14, q.y), hx * step(q.y, -0.13)), hy * step(0.2, a.x));
@@ -1630,11 +1656,12 @@ function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
         if (r > 1.0) discard;
         int s = int(uStyle + 0.5);
         float k = uBig > 0.5 ? 1.0 : uRetK; // red dot: reticula pequena no meio do vidro (estilo BO2)
+        WK = uBig > 0.5 ? 1.0 : 1.7;
         vec2 q = p * k;
         float ink = 0.0, glow = 0.0;
         float halo = 0.0;
         float rim = 0.0; // contorno fino de tinta: a reticula salta ate em fundo claro
-        if (s <= 4 || s >= 8) { glow = retGlow(s, q, 1.0); halo = retGlow(s, q, 4.0) * 0.34; rim = clamp(retGlow(s, q, 2.0) - glow, 0.0, 1.0); }
+        if (s <= 4 || s >= 8) { glow = retGlow(s, q, 1.0); halo = retGlow(s, q, uBig > 0.5 ? 4.0 : 5.6) * (uBig > 0.5 ? 0.45 : 0.72) * uGlow; /* 14/11 (pedido dele: "meio apagada"): leve bloom, halo mais largo e mais forte */ rim = clamp(retGlow(s, q, 2.0) - glow, 0.0, 1.0); }
         else if (s == 5) {
           ink = max(ln(p.x, 0.008), ln(p.y, 0.008));
           ink = max(ink, max(ln(p.x, 0.04) * step(0.5, abs(p.y)), ln(p.y, 0.04) * step(0.5, abs(p.x))));
@@ -1657,7 +1684,7 @@ function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
           }
           glow = dotp(p, vec2(0.0), 0.016);
         }
-        vec3 hot = min(uCol * 1.4, vec3(1.0)), c; float a; // 04/11 (pedido dele): cor cheia; misturar com branco virava rosa e o filme desbotava o resto
+        vec3 hot = min(uCol * mix(1.0, 1.4, uGlow), vec3(1.0)) * mix(0.72, 1.0, uGlow), c; float a; // brilho baixo: cor mais funda // 04/11 (pedido dele): cor cheia; misturar com branco virava rosa e o filme desbotava o resto
         if (uBig > 0.5) {
           // luneta: imagem ampliada com vinheta da lente; vidro escuro quando nao esta mirando
           int kd = int(uKind + 0.5);
@@ -1691,11 +1718,11 @@ function lensMaterial(big, ret, color, kind = null, retK = 1.45) {
           c = mix(glass, img, uOn);
           c = mix(c, vec3(0.02), ink * uOn);
           c = mix(c, hot * 0.22, rim * 0.85 * uOn);
-          c = mix(c, mix(hot, vec3(1.0), glow * 0.1), max(glow, halo) * uOn);
+          c = mix(c, mix(hot, vec3(1.0), glow * 0.28 * uGlow), max(glow, halo) * uOn); // miolo puxando pro branco = brilho de luz forte
           a = 1.0;
         } else {
           // laser projetado: miolo quase branco, halo fraquinho da mesma cor em volta
-          c = mix(hot, vec3(1.0), glow * glow * 0.1); a = max(max(glow, ink), max(halo, rim * 0.85));
+          c = mix(hot, vec3(1.0), glow * glow * 0.32 * uGlow); a = max(max(glow, ink), max(halo, rim)); // 14/11: miolo mais quente (bloom) // contorno inteiro (antes 85%): salta mais no fundo claro
           c = mix(c, hot * 0.22, rim);
           c = mix(c, vec3(0.02), ink * (1.0 - glow));
           a = max(a, 0.06); // leve reflexo do vidro
@@ -2668,14 +2695,14 @@ function addLaser(holder, lo, origin, isPistol, magMesh, partMat) {
     : new THREE.Vector3(surf, y, z).sub(origin).multiplyScalar(S).add(new THREE.Vector3(side * (w / 2 + 0.004), 0, 0)); // encosta na lateral DAQUELE trecho
   const g = new THREE.Group(), LA = parts[lo.body].adj?.laser; g.position.copy(at);
   if (LA) g.position.add(new THREE.Vector3(LA.x || 0, LA.y || 0, LA.z || 0).multiplyScalar((parts[lo.body].u || 1) * S)); // ajuste do editor (TT)
-  let box;
+  let box, kAtt = 1;
   // laser comico (07/11, aprovado): pe (presilha) virado pro corpo: de lado no fuzil, pra cima na pistola
   const pal = paletteReader(gunTex), CL = hasComic(lo.laser) ? comicGeo(lo.laser, pal ? paletteUV(pal, [52, 50, 47]) : [0.5, 0.5], pal ? paletteUV(pal, [128, 125, 118]) : [0.5, 0.5]) : null; // destaque cinza (padrao 07/11)
   if (CL) { CL.translate(0, -(CL.boundingBox.min.y + CL.boundingBox.max.y) / 2, 0); CL.rotateZ(isPistol ? Math.PI : side * -Math.PI / 2); }
   const AG = CL || ATT[D.model];
   if (AG) { // peca do pacote de acessorios no tamanho do slot (comprimento manda, proporcao do modelo)
     const ge = AG.clone(); ge.computeBoundingBox(); const sz = ge.boundingBox.getSize(new THREE.Vector3()), k = Math.min(d / sz.z, w * 1.25 / sz.x, h * 1.6 / sz.y);
-    ge.scale(k, k, k); ge.userData.gunOwn = true; box = new THREE.Mesh(ge, CL && partMat ? partMat : (ATT_MAT ||= toon(0xffffff, { map: gunTex }))); // 08/11 (pedido dele): laser pintado na cor de destaque, como as outras pecas
+    ge.scale(k, k, k); kAtt = k; ge.userData.gunOwn = true; box = new THREE.Mesh(ge, CL && partMat ? partMat : (ATT_MAT ||= toon(0xffffff, { map: gunTex }))); // 08/11 (pedido dele): laser pintado na cor de destaque, como as outras pecas
   } else box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(0x2a2724));
   // 08/11: a peca encosta de verdade no corpo, medido pela propria malha (o tamanho do slot deixava um vao e sobrava so a haste)
   if (CL) { box.geometry.computeBoundingBox(); const bb = box.geometry.boundingBox, q = LA?.s || 1;
@@ -2692,6 +2719,14 @@ function addLaser(holder, lo, origin, isPistol, magMesh, partMat) {
   beam.position.set(box.position.x, box.position.y, -d / 2 - 0.004); beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
   beam.userData.noFx = true; // feixe de 18 m nao conta como superficie da arma (efeito da camo lendaria)
   g.add(beam);
+  // Laser Duplo (14/11, pedido dele: saia um feixe so): dois feixes paralelos, um em cima do outro. O 2o e FILHO do 1o: herda o
+  // comprimento (scale.z), o liga/desliga (mesmo material), a mira e o removeFromParent que o resto do codigo ja faz no feixe
+  const EM = !CL && ATT_EMIT[D.model];
+  if (D.twin && EM) { // as duas bocas do modelo, na mesma conta da malha (escala do encaixe e ajuste do editor): cada feixe sai da sua
+    const q = kAtt * (LA?.s || 1), [p1, p2] = EM.map(v => v.clone().multiplyScalar(q).add(box.position));
+    beam.position.set(p1.x, p1.y, p1.z - 0.002); eye.position.set(p1.x, p1.y, p1.z - 0.001);
+    const b2 = new THREE.Mesh(geo, beam.material); b2.position.set(p2.x - p1.x, p2.y - p1.y, 0); b2.renderOrder = 4; b2.frustumCulled = false; b2.userData.noFx = true; beam.add(b2); // filho: herda comprimento, liga/desliga, mira
+    const e2 = eye.clone(); e2.position.set(p2.x, p2.y, p2.z - 0.001); e2.scale.setScalar(EM ? 0.75 : 1); eye.scale.setScalar(0.75); g.add(e2); }
   g.traverse(o => { if (o.geometry) o.geometry.userData.gunOwn = true; }); // 09/11 (bateria: memoria de video subindo a cada renascimento): tudo do laser e so desta montagem
   holder.add(g);
   if (D.light) { beam.visible = false; eye.scale.setScalar(1.5); } // lanterna: sem feixe colorido; a luz e da GunLights

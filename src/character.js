@@ -630,6 +630,10 @@ export class Character {
     // escalada (01/11): corpo pra frente, um joelho sobe na borda, mao esquerda agarrada la em cima, arma abaixada
     this.climbK = ease(this.climbK || 0, anim === 'climb' ? 1 : 0, anim === 'climb' ? 18 : 10);
     const climb = this.climbK;
+    // Gancho do Palco (13/11, pedido dele: o boneco usando o gancho, fluido): entra rapido e sai macio. Corpo esticado pra frente
+    // na puxada, mao esquerda la em cima segurando a corda (com os trancos), pernas dobradas pra tras balancando, arma baixa
+    this.hookK = ease(this.hookK || 0, anim === 'hook' ? 1 : 0, anim === 'hook' ? 14 : 7);
+    const hook = this.hookK, hookSw = Math.sin(t * 9 + this.phase), tug = Math.max(0, Math.sin(t * 13 + this.phase)) ** 2;
 
     if (!alive) {
       this.deadT += dt;
@@ -655,7 +659,8 @@ export class Character {
     this.body.scale.set(1 / Math.sqrt(sq), sq * (1 - crouch * 0.35), 1 / Math.sqrt(sq));
     this.body.position.y = moving && seat < 0.5 ? bounce * 0.12 : 0; this.body.position.x = 0; // x: a danca desloca o corpo pro lado
     if (seat > 0.01) { this.body.position.y -= SEAT_POSE.sink * seat; this.body.scale.set(1, 1, 1); this.body.rotation.x = 0; } // sentado: parado (sem quique nem respiracao)
-    this.body.rotation.x = this.leanK + fl * 0.35 - climb * 0.45;
+    this.body.rotation.x = this.leanK + fl * 0.35 - climb * 0.45 - hook * (0.42 + hookSw * 0.04);
+    if (hook > 0.01) { this.body.scale.y *= 1 + hook * (0.08 + tug * 0.04); this.body.scale.x *= 1 - hook * 0.04; this.body.scale.z *= 1 - hook * 0.04; this.body.position.y += hook * 0.12; } // borracha esticando na puxada
     if (fl) this.body.scale.multiplyScalar(1 - fl * 0.06);
     // dupla: caido de barriga no chao, se arrastando (balanca de leve pra ler de longe)
     if (anim === 'down') { this.body.rotation.x = 1.35 + Math.sin(t * 3 + this.phase) * 0.06; this.body.position.y = 0.32; this.body.rotation.z = Math.sin(t * 2.2) * 0.08; }
@@ -672,6 +677,7 @@ export class Character {
       const footZ = -sw * 0.5 * walk - 0.5 * sk;
       const b = new THREE.Vector3(side * 0.22, 0.1 + lift + this.jumpK * 0.25, footZ);
       if (climb) b.lerp(side > 0 ? new THREE.Vector3(0.2, 0.62, -0.42) : new THREE.Vector3(-0.22, 0.12, 0.28), climb); // direita sobe, esquerda empurra
+      if (hook > 0.01) b.lerp(new THREE.Vector3(side * 0.2, (side > 0 ? 0.38 : 0.24) + hookSw * side * 0.06, (side > 0 ? 0.34 : 0.16) - hookSw * side * 0.08), hook); // pernas pra tras, pedalando no ar
       // joelho de mangueira dobra pra frente
       const c = new THREE.Vector3(side * 0.24, (a.y + b.y) / 2, (a.z + b.z) / 2 - 0.18 - lift * 0.4);
       if (seat > 0.01) { b.lerp(new THREE.Vector3(side * SEAT_POSE.footX, SEAT_POSE.footY, SEAT_POSE.footZ), seat); c.lerp(new THREE.Vector3(side * SEAT_POSE.kneeX, SEAT_POSE.kneeY, SEAT_POSE.kneeZ), seat); }
@@ -694,6 +700,7 @@ export class Character {
       const o = Math.max(-2.2, Math.min(2.2, s.aimOff)), c = Math.cos(o), sn = Math.sin(o), x = gp.position.x, z = gp.position.z;
       gp.position.x = x * c + z * sn; gp.position.z = -x * sn + z * c; gp.rotation.y += o; this.head.rotation.y = o * 0.7;
     } else this.head.rotation.y = 0;
+    if (hook > 0.01) { gp.position.lerp(new THREE.Vector3(0.3, 1.0, -0.22), hook); gp.rotation.x = gp.rotation.x * (1 - hook) - hook * 0.9; gp.rotation.z = hook * 0.35; } // arma baixa, encostada no corpo
     if (climb) { gp.position.lerp(new THREE.Vector3(0.32, 0.98, -0.18), climb); gp.rotation.set(gp.rotation.x * (1 - climb) - climb * 1.0, climb * 0.35, climb * 0.4); }
     const knife = this.wpn === 'melee';
     const sw2h = knife && this.gripOn;
@@ -730,6 +737,7 @@ export class Character {
       }
     }
     if (climb && !this.gun2h) this.handL.position.lerp(new THREE.Vector3(-0.22, 1.72, -0.5), climb);
+    if (hook > 0.01 && !this.gun2h) this.handL.position.lerp(new THREE.Vector3(-0.1, 1.86 - tug * 0.07, -0.6 + tug * 0.1), hook); // segurando a corda: a cada tranco a mao desce e volta
     const shR = new THREE.Vector3(0.26, 1.32, 0), shL = new THREE.Vector3(-0.26, 1.32, 0); // 07/11 (pedido dele: ombro vazado): o braco nasce DENTRO do tronco (borda em x 0,348 nessa altura; em 0,36 a ponta aberta da mangueira aparecia)
     if (anim === 'dance' && applyDance(this, s.dance, s.danceT || 0, dt)) return; // danca de vitoria (05/11): src/dances.js
     if (anim === 'posed') { applyPose(this, s.pose, s.gunPose, dt); return; } // podio: dança, descanso e a volta pra arma

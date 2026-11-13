@@ -11,7 +11,7 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'tick', 'go', 'win', 'lose', 'ding', 'poof', 'bolt', // momentos que eram mudos (contagem, rodada, fim, assist, renascer) e o ferrolho
   'umbrella', 'spring', 'hole', 'anvilfall', 'fieldready', 'comic', 'prestige', // equipamento de campo, kill cam e prestigio
   'ringbell', 'crowd', 'pump', 'balloon', // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
-  'chute', 'wind', 'splat', 'revolver', 'aa12', 'laser',
+  'chute', 'wind', 'splat', 'revolver', 'revolver2', 'aa12', 'laser',
   'nukealarm', 'chargeup', 'megashot',
   'saber_on', 'saber_swing', 'saber_hit', // Sabre de Neon (04/11)
   'rocket', 'flamer']; // 03/11: Bazuca e lanca-chamas // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao

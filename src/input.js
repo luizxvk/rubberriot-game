@@ -247,10 +247,18 @@ export function buildTouch(input, root) {
   // botoes em arco em volta do polegar direito: canto = pular/agachar/botao grande, volta = recarregar/mirar/trocar,
   // aro de fora (menores) = granadas, faca, sequencia, inspecionar. at(direita, baixo, tamanho) em px a partir do canto.
   const at = (r, b, size) => ({ right: 'calc(' + R + ' + ' + r + 'px)', bottom: 'calc(max(0px, env(safe-area-inset-bottom)) + ' + b + 'px)', width: size + 'px', height: size + 'px' });
-  // atirar tambem mira arrastando (olhar enquanto segura)
-  let fireId = null, fx = 0, fy = 0;
-  const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; fx = e.clientX; fy = e.clientY; }, () => { input.touch.fire = false; fireId = null; });
-  fire.addEventListener('pointermove', (e) => { if (e.pointerId !== fireId) return; { const dx = (e.clientX - fx) * 1.4, dy = (e.clientY - fy) * 1.4; input.lookX += dx; input.lookY += dy; input.touchLookX += dx; input.touchLookY += dy; } fx = e.clientX; fy = e.clientY; });
+  // 13/11 (pedido dele): os TRES botoes de tiro (atirar, mirar e atirar, atirar da esquerda) giram a camera arrastando o dedo
+  // enquanto seguram o tiro. Cada botao guarda o proprio dedo; soltou ou perdeu o dedo, para
+  let fireId = null;
+  const dragLook = (b) => {
+    let id = null, x = 0, y = 0;
+    b.addEventListener('pointerdown', (e) => { id = e.pointerId; x = e.clientX; y = e.clientY; });
+    b.addEventListener('pointermove', (e) => { if (e.pointerId !== id) return; const dx = (e.clientX - x) * 1.4, dy = (e.clientY - y) * 1.4; input.lookX += dx; input.lookY += dy; input.touchLookX += dx; input.touchLookY += dy; x = e.clientX; y = e.clientY; });
+    const end = (e) => { if (e.pointerId === id) id = null; };
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, end);
+  };
+  const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; }, () => { input.touch.fire = false; fireId = null; });
+  dragLook(fire);
   input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = input.settings?.adsMode === 'hold' ? true : !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); }, () => { if (input.settings?.adsMode !== 'hold') return; input.touch.ads = false; input.adsBtn?.classList.remove('on'); });
   btn(t('t_jump'), 'jump', at(0, 12, 66), () => input.edges.add('JUMP'));
   btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
@@ -264,10 +272,14 @@ export function buildTouch(input, root) {
   // atirar mirando (02/11, pedido dele): segurou = mira e atira junto; soltou = sai da mira (vaga da estrela antiga)
   let adsWas = false;
   input.adsFireBtn = btn(t('t_adsfire'), 'adsfire fire2', at(156, 176, 56), () => { adsWas = input.touch.ads; input.touch.ads = true; input.touch.fire = true; input.edges.add('FIRE'); }, () => { input.touch.fire = false; input.touch.ads = adsWas; });
+  // icone proprio (13/11, pedido dele): era o mesmo do atirar. Cantos da mira (o botao de mirar) + mira de tiro + ponto vermelho
+  input.adsFireBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z"/><g transform="translate(12 12) scale(.62) translate(-12 -12)"><path d="${ICON.fire}"/></g><circle cx="12" cy="12" r="2" fill="#e0301e"/></svg>`;
+  dragLook(input.adsFireBtn);
   // atirar do lado esquerdo (02/11): ao lado do analogico, pro polegar esquerdo (o direito fica livre pra mirar)
   const L = 'max(24px, env(safe-area-inset-left))';
   input.fireLBtn = btn(t('t_fireL'), 'fire fireL', { left: 'calc(' + L + ' + 170px)', bottom: 'calc(max(0px, env(safe-area-inset-bottom)) + 120px)', width: '66px', height: '66px' }, () => { input.touch.fireL = true; input.edges.add('FIRE'); }, () => { input.touch.fireL = false; });
   input.fireLBtn.dataset.hid = 'fireL'; input.adsFireBtn.dataset.hid = 'adsfire';
+  dragLook(input.fireLBtn);
   btn(t('t_melee'), 'melee', at(162, 84, 50), () => input.edges.add('MELEE'));
   // equipamento de campo: o icone troca pelo equipado e o aro mostra a recarga
   input.cantedBtn = btn(t('t_canted'), 'canted', at(270, 130, 48), () => input.edges.add('CANTED')); // so aparece com a mira de 45 graus (body.has-canted)
@@ -336,9 +348,12 @@ export function buildTouch(input, root) {
 export function setFireButton(input) {
   if (input.fireBtn) input.fireBtn.hidden = !!input.settings?.autoFire;
   for (const b of [input.adsFireBtn, input.fireLBtn]) if (b) b.hidden = !!input.settings?.autoFire; // tiro automatico: os botoes de atirar somem
+  // 13/11 (pedido dele): cada um pode ser desligado nos Ajustes (Toque)
+  if (input.adsFireBtn && input.settings?.adsFireBtn === false) input.adsFireBtn.hidden = true;
+  if (input.fireLBtn && input.settings?.fireLBtn === false) input.fireLBtn.hidden = true;
   if (input.useBtn) {
     input.useBtn.hidden = input.mode !== 'bomb' && input.mode !== 'br' && input.mode !== 'borroes'; // br: trocar arma no chao; borroes: comprar, abrir porta, Caixa, levantar parceiro
-    if (input.pingBtn) input.pingBtn.hidden = input.mode !== 'br';
+    if (input.pingBtn) input.pingBtn.hidden = false; // 13/11: marcar em todo modo
     for (const b of input.leanBtns || []) b.hidden = input.mode !== 'bomb';
     // a mao (plantar/desarmar) vai pro lugar do botao de atirar quando ele some: e onde o polegar ja esta.
     // Com tiro manual, fica acima do recarregar, fora do meio da tela. Posicao salva no editor de HUD manda.
@@ -376,7 +391,7 @@ export const HUD_PIECES = {
   radar: { q: () => document.querySelector('#hud canvas.radar'), hk: 1 },
   stk: { q: () => document.querySelector('#touch .tstk'), hk: 1 },
   chatlog: { q: () => document.getElementById('chat') },
-  fieldhud: { q: () => document.getElementById('fieldHud') },
+  fieldhud: { q: () => document.getElementById('fieldHud'), hk: 1 }, // 13/11: o selo tambem segue a escala da HUD
 };
 export function applyHudPieces(L) {
   if (!isTouch) return;

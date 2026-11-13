@@ -623,7 +623,7 @@ export class Player {
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / 20;
-      const anim = this.g.mySeat ? (this.g.mySeat.seat === 0 ? 'drive' : 'seat') : this.mantle ? 'climb' : this.g.down ? 'down' : this.air && this.g.bounce ? (this.chute ? 'chute' : 'fall') : !this.onGround ? 'jump' : this.slideT > 0 ? 'slide' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
+      const anim = this.g.mySeat ? (this.g.mySeat.seat === 0 ? 'drive' : 'seat') : this.hook ? 'hook' : this.mantle ? 'climb' : this.g.down ? 'down' : this.air && this.g.bounce ? (this.chute ? 'chute' : 'fall') : !this.onGround ? 'jump' : this.slideT > 0 ? 'slide' : this.crouch ? 'crouch' : this.tac ? 'tac' : this.sprint ? 'sprint' : hs > 1 ? 'run' : 'idle';
       this.g.net.send({ t: 'state', pos: [...this.pos], yaw: this.yaw, pitch: this.pitch, anim, wpn: this.wpn, ...(this.lean ? { ln: Math.round(this.lean * 10) / 10 } : {}), ...(this.g.vm?.canted ? { ca: 1 } : {}), ...(this.adsK > 0.6 ? { ad: 1 } : {}), ...(this.g.myCar && this.g.mySeat?.seat === 0 ? { car: { pos: this.g.myCar.pos.map(v => Math.round(v * 100) / 100), yaw: Math.round(this.g.myCar.yaw * 1000) / 1000, spd: Math.round(this.g.myCar.spd * 10) / 10, st: Math.round((this.g.myCar.steer || 0) * 10) / 10 } } : {}) });
     }
   }
@@ -637,7 +637,7 @@ export class Player {
     for (const r of g.remotes.values()) {
       if (!r.alive || !g.isEnemy(r) || !r.pos) continue;
       const dx = r.pos[0] - this.pos[0], dz = r.pos[2] - this.pos[2], d = Math.hypot(dx, dz);
-      if (d > range + 0.4 || Math.abs(r.pos[1] - this.pos[1]) > 1.8 || (dx * fx + dz * fz) / (d || 1) < 0.55) continue;
+      if (d > range + 0.25 || Math.abs(r.pos[1] - this.pos[1]) > 1.8 || (dx * fx + dz * fz) / (d || 1) < 0.7) continue; // 13/11: mais perto e mais de frente (cone ~45 graus)
       if (!hasLOS(g.M, eye, [r.pos[0], r.pos[1] + 1.1, r.pos[2]])) continue;
       if (d < bd) { bd = d; best = r; }
     }
@@ -786,7 +786,7 @@ export class Player {
     for (const r of g.remotes.values()) {
       if (!r.alive || !g.isEnemy(r) || !r.pos || r.pos[1] < -0.5) continue; // abaixo do chao nunca puxa a mira
       const crouch = r.anim === 'crouch' || r.anim === 'slide';
-      const p = [r.pos[0], r.pos[1] + (r.dn > 0 ? 0.35 : crouch ? 0.7 : 1.05), r.pos[2]];
+      const p = [r.pos[0], r.pos[1] + (r.dn > 0 ? 0.3 : crouch ? 0.6 : 0.85), r.pos[2]]; // 13/11 (pedido dele): puxa pro PEITO (meio da caixa do corpo, 0-1,3 m); 1,05 ficava colado na cabeca (1,26 m)
       const d = [p[0] - o[0], p[1] - o[1], p[2] - o[2]], len = Math.hypot(d[0], d[1], d[2]);
       if (len < 0.8 || len > 60) continue;
       const ang = Math.acos(Math.max(-1, Math.min(1, (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len)));
@@ -846,7 +846,7 @@ export class Player {
     const bodyNow = this.lo(this.wpn)?.body; // som proprio de modelo: revolver, AA-12 e o laser do Bico Longo
     const laser = this.wpn === 'pistol' && bodyNow === LASER_BODY;
     const silOn = isSilenced(this.lo(this.wpn)), sil = silOn && !laser ? (INTEGRAL_SIL.includes(bodyNow) ? audio.gunSound(bodyNow, null) : null) || audio.silSound(this.wpn) : null; // 13/11: silenciador de fabrica = tiro abafado proprio // silenciador: som proprio da categoria (sem eco)
-    audio.play(sil || (laser ? 'laser' : (bodyNow === 'pistol_10' || bodyNow === 'pistol_5') ? 'revolver' : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn)), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: silOn && !sil, dry: !!sil });
+    audio.play(sil || (laser ? 'laser' : (bodyNow === 'pistol_10' || bodyNow === 'pistol_5') ? 'revolver' : bodyNow === 'pistol_13' ? 'revolver2' /* Upside Down (14/11, pedido dele: tiro baixissimo): revolver da Bang-Bang um tom abaixo */ : bodyNow === 'shotgun_3' ? 'aa12' : audio.gunSound(bodyNow, this.wpn)), { vol: this.wpn === 'smg' || this.wpn === 'minigun' ? 0.55 : 0.8, key: 'gun', max: this.wpn === 'minigun' ? 3 : 5, jitter: 0.05, muffle: silOn && !sil, dry: !!sil });
     audio.duck(0.6, 0.25);
 
     // boca do cano no mundo (pra o tracer sair da arma)
@@ -962,7 +962,7 @@ export class Player {
     if (this.g.mySeat) return false; // no carro nao escala
     const s = this.mantleSpot(); if (!s) return false;
     const p = this.pos;
-    this.mantle = { a: [...p], b: s.b, t: 0, dur: 0.3 + s.dh * 0.17 };
+    this.mantle = { a: [...p], b: s.b, t: 0, dur: (0.3 + s.dh * 0.17) * this.sk('maos', 'climb') }; // Mao Leve (14/11): escalada 30% mais curta, a animacao da mao acompanha
     this.crouch = false; this.vel = [0, 0, 0];
     this.g.vm?.mantle?.(this.mantle.dur);
     audio.play('land', { vol: 0.4 });

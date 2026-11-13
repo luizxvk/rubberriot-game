@@ -3,6 +3,9 @@
 // devagar (travelling de lado, aproximacao ou grua subindo). Troca de tomada = fade pro preto e volta.
 // REGRA: a camera nunca entra em peca. Toda tomada e conferida contra as caixas do mapa (com folga), as arvores do
 // tema e o chao, e o alvo tem que estar a vista do caminho inteiro. Mapa sem tomada boa (raro) volta pra orbita antiga.
+// 14/11 (pedido dele, print do lobby de zumbi): a maioria das tomadas agora e PASSEIO POR DENTRO do mapa, na altura de quem
+// anda (1,7 a 3 m), andando pelas ruas/galerias e olhando o caminho. O chao e medido de baixo pra cima a partir do ponto (no
+// Xilindro, todo coberto, o raio de 60 m batia no teto: nenhuma tomada passava e o lobby caia na orbita, por fora da muralha).
 import * as THREE from 'three';
 import { raycast } from '../shared/map.js';
 import { mapTrees } from './world.js';
@@ -11,7 +14,8 @@ const SHOT_T = [7, 10]; // duracao de cada tomada (s)
 const FADE = 0.45; // fade de saida e de entrada (s)
 const CLEAR = 1.3; // folga minima da camera pra qualquer caixa (m)
 const TREE_R = 3.4; // raio da copa das arvores (m)
-const N_SHOTS = 7;
+const N_SHOTS = 7, N_WALK = 5; // 5 passeios por dentro + 2 tomadas de cinema, intercalados
+const WALK_CLEAR = 0.8; // folga do passeio (corredor do Xilindro tem 3 a 4 m)
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const ease = (u) => u * u * (3 - 2 * u);
@@ -24,6 +28,7 @@ function inside(M, p, m) {
   return false;
 }
 // altura do chao/superficie embaixo do ponto
+// top: de onde o raio desce (sempre ABAIXO do teto do lugar)
 function floorAt(M, x, z, top = 60) { const h = raycast(M, [x, top, z], [0, -1, 0], top + 1); return Number.isFinite(h.dist) ? top - h.dist : 0; }
 // o alvo aparece daqui? (o raio pode parar ate 1,5 m antes: o alvo as vezes esta em cima de uma peca)
 function sees(M, p, t) {
@@ -51,7 +56,7 @@ function pathOk(M, trees, a, b, tgt) {
   for (let k = 0; k <= 6; k++) {
     const u = k / 6, p = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
     if (Math.abs(p[0]) > lim || Math.abs(p[2]) > lim) return false;
-    if (p[1] - floorAt(M, p[0], p[2]) < 2.2) return false;
+    if (p[1] - floorAt(M, p[0], p[2], p[1]) < 2.2) return false;
     if (inside(M, p, CLEAR)) return false;
     for (const [x, z] of trees) if (Math.hypot(p[0] - x, p[2] - z) < TREE_R && p[1] < 9) return false;
     if (!sees(M, p, tgt)) return false;
@@ -66,7 +71,7 @@ function pathOk(M, trees, a, b, tgt) {
 function makeShot(M, trees, T) {
   for (let tries = 0; tries < 60; tries++) {
     const tgt = T[Math.floor(Math.random() * T.length)];
-    const ang = rnd(0, Math.PI * 2), dist = rnd(11, 24), gy = floorAt(M, tgt[0], tgt[2]);
+    const ang = rnd(0, Math.PI * 2), dist = rnd(11, 24), gy = floorAt(M, tgt[0], tgt[2], tgt[1] + 0.5);
     const a = [tgt[0] + Math.sin(ang) * dist, Math.max(tgt[1], gy) + rnd(2.5, 8), tgt[2] + Math.cos(ang) * dist];
     const f = [tgt[0] - a[0], 0, tgt[2] - a[2]], fl = Math.hypot(f[0], f[2]); f[0] /= fl; f[2] /= fl;
     const side = [f[2], 0, -f[0]], kind = Math.floor(Math.random() * 3), s = Math.random() < 0.5 ? -1 : 1;
@@ -82,12 +87,53 @@ function makeShot(M, trees, T) {
   return null;
 }
 
+// de onde o passeio pode sair: nascimentos, pontos de captura, bandeiras, cofre e os alvos de cima (no chao)
+function starts(M, T) {
+  const S = [];
+  for (const k of Object.keys(M.spawns || {})) for (const sp of M.spawns[k] || []) if (Array.isArray(sp)) S.push(sp.length >= 3 ? [sp[0], sp[1] + 0.5, sp[2]] : [sp[0], 0.5, sp[1]]);
+  for (const t of T) S.push([t[0], t[1] - 1, t[2]]);
+  return S;
+}
+// passeio: anda pra frente na altura de quem anda, olhando o caminho (com um giro leve de um lado pro outro)
+function walkOk(M, trees, a, b) {
+  const lim = M.arena * 0.9;
+  for (let k = 0; k <= 8; k++) {
+    const u = k / 8, p = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
+    if (Math.abs(p[0]) > lim || Math.abs(p[2]) > lim) return false;
+    const fy = p[1] - floorAt(M, p[0], p[2], p[1]);
+    if (fy < 1.4 || fy > 3.8) return false; // chao embaixo (nada de voar por cima de buraco ou de parede baixa)
+    if (inside(M, p, WALK_CLEAR)) return false;
+    if (Number.isFinite(raycast(M, p, [0, 1, 0], 0.7, true).dist)) return false; // teto/viga em cima da cabeca
+    for (const [x, z] of trees) if (Math.hypot(p[0] - x, p[2] - z) < TREE_R && p[1] < 9) return false;
+  }
+  return true;
+}
+function makeWalk(M, trees, S) {
+  for (let tries = 0; tries < 80; tries++) {
+    const s0 = S[Math.floor(Math.random() * S.length)], x = s0[0] + rnd(-3, 3), z = s0[2] + rnd(-3, 3);
+    const gy = floorAt(M, x, z, s0[1] + 2.5), h = rnd(1.7, 3), a = [x, gy + h, z];
+    // anda pro lado de DENTRO do mapa (nascimento fica na ponta: pra fora so tem muralha), ate ~60 graus do rumo do centro
+    const ang = Math.atan2(-x, -z) + rnd(-1.05, 1.05), len = rnd(7, 13), d = [Math.sin(ang), 0, Math.cos(ang)];
+    const b = [a[0] + d[0] * len, a[1] + rnd(-0.3, 0.5), a[2] + d[2] * len];
+    if (!walkOk(M, trees, a, b)) continue;
+    // nao termina encarando parede: o caminho segue aberto 9 m depois do fim (grade e alambrado contam)
+    if (raycast(M, a, d, len + 9, true).dist < len + 9) continue;
+    const pan = rnd(0.18, 0.32) * (Math.random() < 0.5 ? -1 : 1), dir = (t) => [Math.sin(ang + t), 0, Math.cos(ang + t)];
+    const la = dir(pan), lb = dir(-pan * 0.6);
+    return { a, b, lookA: [a[0] + la[0] * 10, a[1] - 0.35, a[2] + la[2] * 10], lookB: [b[0] + lb[0] * 10, b[1] - 0.25, b[2] + lb[2] * 10], T: rnd(SHOT_T[0], SHOT_T[1]), fov: rnd(58, 66), walk: true };
+  }
+  return null;
+}
+
 export class LobbyCam {
   constructor() { this.mapId = null; this.shots = []; this.i = 0; this.t = 0; }
   build(M) {
     this.mapId = M.id; this.shots = []; this.i = 0; this.t = 0;
-    const trees = mapTrees(M), T = targets(M);
-    for (let k = 0; k < N_SHOTS * 3 && this.shots.length < N_SHOTS; k++) { const s = makeShot(M, trees, T); if (s) this.shots.push(s); }
+    const trees = mapTrees(M), T = targets(M), S = starts(M, T), walks = [], cine = [];
+    for (let k = 0; k < N_WALK * 3 && walks.length < N_WALK; k++) { const s = makeWalk(M, trees, S); if (s) walks.push(s); }
+    for (let k = 0; k < N_SHOTS * 3 && walks.length + cine.length < N_SHOTS; k++) { const s = makeShot(M, trees, T); if (s) cine.push(s); }
+    // intercala: passeio, passeio, cinema, passeio...
+    while (walks.length || cine.length) { if (walks.length) this.shots.push(walks.shift()); if (walks.length) this.shots.push(walks.shift()); if (cine.length) this.shots.push(cine.shift()); }
     // nada de duas tomadas seguidas no mesmo alvo
     for (let k = 1; k < this.shots.length; k++) if (this.shots[k].lookA[0] === this.shots[k - 1].lookA[0] && k + 1 < this.shots.length) [this.shots[k], this.shots[k + 1]] = [this.shots[k + 1], this.shots[k]];
   }

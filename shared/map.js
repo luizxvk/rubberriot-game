@@ -1101,6 +1101,44 @@ function xilindro() {
   };
 }
 
+// ---------- Estande Gargalhada (id estande; 14/11, pedido dele: campo de tiro proprio, fechado, no jeito do COD) ----------
+// Barraca de tiro ao alvo de feira montada dentro de um barracao de teatro: o atirador fica atras do balcao vermelho, com 4 baias,
+// e as raias vao ate 60 m (placas de 10/20/30/45/60 m nas paredes; o numero vem do jogo, range.js). No fundo, espaldao de feno e
+// um cenario pintado (ceu, morros e sol). Caixotes e barris no meio da raia pra treinar mira em volta de cobertura. So o
+// Campo de treino usa (MAP_MODES: ffa; fora de toda lista de escolha). Alvos: bonecos parados e dois andando (range.js).
+export const RANGE_MAP = 'estande', RANGE_LINE = 24, RANGE_DIST = [10, 20, 30, 45, 60]; // balcao em z = 24; distancias contadas dele
+function estande() {
+  const A = 42, { boxes, box } = builder(A);
+  const W = 14, ZB = -40, ZF = 36, H = 9, ZC = RANGE_LINE;
+  for (const z of [ZB - 0.5, ZF + 0.5]) box(0, z, W * 2 + 2, 1, H, 0, 'gallwall');
+  for (const s of [-1, 1]) box(s * (W + 0.5), (ZB + ZF) / 2, 1, ZF - ZB, H, 0, 'gallwall');
+  boxes.push({ min: [W + 1, 0, -A - 2], max: [A + 2, 40, A + 2], kind: 'nogo' }, { min: [-A - 2, 0, -A - 2], max: [-W - 1, 40, A + 2], kind: 'nogo' },
+    { min: [-A - 2, 0, -A - 2], max: [A + 2, 40, ZB - 1] }, { min: [-A - 2, 0, ZF + 1], max: [A + 2, 40, A + 2] });
+  boxes[boxes.length - 1].kind = boxes[boxes.length - 2].kind = 'nogo';
+  box(0, (ZB + ZF) / 2, W * 2, ZF - ZB, 0.6, H, 'proof'); // teto (luminarias penduradas vem do mapa.py)
+  // balcao de tiro: vao de 1,6 m nas pontas pra descer pras raias
+  box(0, ZC, W * 2 - 3.2, 0.9, 1.1, 0, 'shootcounter');
+  // baias: divisorias saindo do balcao pro lado do atirador (4 raias de 7 m)
+  for (const x of [-7, 0, 7]) box(x, ZC + 1.95, 0.25, 3, 2.3, 0, 'lanediv');
+  // placas de distancia nas duas paredes
+  for (const d of RANGE_DIST) for (const s of [-1, 1]) box(s * (W - 0.35), ZC - d, 0.3, 0.3, 2.6, 0, 'distpost');
+  // fundo: cenario pintado colado na parede e espaldao de feno na frente dele
+  box(0, ZB + 0.2, W * 2 - 0.6, 0.3, 7.2, 0.4, 'backdrop');
+  box(0, ZB + 1.6, W * 2 - 1, 2.2, 2.4, 0, 'haybale');
+  // cobertura no meio das raias (treino de mira em volta)
+  for (const [x, z] of [[-10.5, 8], [3.5, 2], [10.5, -10], [-3.5, -16]]) box(x, z, 1.2, 1.2, 1.2, 0, 'crate');
+  for (const [x, z] of [[-11.8, -4], [6, -24], [-8, -26]]) box(x, z, 1.3, 1.3, 1.3, 0, 'barrel');
+  // area do atirador: barraquinhas da feira, carrinho de pipoca e coluna de cartazes
+  box(-10.5, ZF - 2.4, 5, 2.2, 3, 0, 'stall'); box(10.5, ZF - 2.4, 5, 2.2, 3, 0, 'stall');
+  box(-12.6, ZC + 6.2, 1.1, 1.8, 2.1, 0, 'cart'); box(12.6, ZC + 6.2, 0.9, 0.9, 2.8, 0, 'poster');
+  return {
+    id: 'estande', arena: A, boxes, theme: 'estande', fixedSpawns: true,
+    spawns: { red: [[-3.5, ZC + 4]], blue: [[3.5, ZC + 4]], ffa: [[-3.5, ZC + 4], [3.5, ZC + 4]] }, // no meio das 2 baias do centro (x = 0 e a divisoria)
+    flagBase: { red: [-3.5, 0, ZC + 6], blue: [3.5, 0, ZC + 6] }, zones: [{ id: 'A', pos: [0, 0, ZC + 6.5], r: 2 }], // so pra regra do servidor (o estande e FFA)
+    pickups: [],
+  };
+}
+
 // ---------- Vila Muamba (id trapiche; 13/11 b, pedido dele: 2o mapa do Contrabando refeito numa VILA) ----------
 // Uma rua so (norte-sul) com casas dos dois lados, becos entre elas e os quintais por tras. No SUL o caminhao de fuga
 // (entrega, onde o ataque nasce); no NORTE o casarao do contrabandista: entra pela frente, pelos lados e pelos fundos, e a
@@ -1507,9 +1545,9 @@ function cortejo() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo, xilindro, trapiche };
+const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo, xilindro, trapiche, estande };
 // 13/11 (pedido dele): mapa que so roda em alguns modos. Fora deles nao aparece na lista nem no sorteio
-export const MAP_MODES = { xilindro: ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect'] };
+export const MAP_MODES = { xilindro: ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect'], estande: ['ffa'] }; // estande: so o Campo de treino (main.js startRange)
 export const mapAllows = (id, mode) => !MAP_MODES[id] || MAP_MODES[id].includes(mode);
 export const SMUGGLE_MAPS = ['docas', 'trapiche']; // Contrabando: Cais do Sol Poente e Trapiche
 export const PVE_ONLY = ['tinteiro']; // Noite dos Borroes: so a noite usa (e a noite so usa ele)

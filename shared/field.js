@@ -165,7 +165,7 @@ export function botHookTick(c, p, dt) {
   const F = FIELD.hook;
   if (!p.alive || p.down > 0 || p.inRing) { p.hookPull = null; return false; }
   H.t += dt;
-  if (H.t < HOOK_OUT) { p.vel[0] = p.vel[2] = 0; p.vel[1] = Math.max(p.vel[1] - 24 * dt, -20); p.onGround = moveBody(c.M, p.pos, p.vel, dt, 0.4, 1.7); return true; } // corda voando
+  if (H.t < HOOK_OUT) { p.anim = 'hook'; p.vel[0] = p.vel[2] = 0; p.vel[1] = Math.max(p.vel[1] - 24 * dt, -20); p.onGround = moveBody(c.M, p.pos, p.vel, dt, 0.4, 1.7); return true; } // corda voando
   const dx = H.to[0] - p.pos[0], dy = H.to[1] - p.pos[1], dz = H.to[2] - p.pos[2], d = Math.hypot(dx, dy, dz) || 1;
   if (d < 1.25 || H.t > F.maxT || H.stuck > 0.25) { // chegou: segue com um pouco do embalo
     p.hookPull = null; p.vel = [dx / d * F.speed * 0.3, Math.max(0, dy / d * F.speed * 0.3), dz / d * F.speed * 0.3]; if (p.ai) { p.ai.path = null; p.ai.think = 0; }
@@ -175,6 +175,6 @@ export function botHookTick(c, p, dt) {
   const k = F.speed / d;
   p.vel = [dx * k, dy * k + 1.2, dz * k]; // um tico pra cima: nao raspa o chao no caminho
   p.onGround = moveBody(c.M, p.pos, p.vel, dt, 0.4, 1.7);
-  p.anim = 'fall';
+  p.anim = 'hook'; // pose do gancho no boneco (character.js)
   return true;
 }

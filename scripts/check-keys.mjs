@@ -8,6 +8,8 @@ const i18n = fs.readFileSync('src/i18n.js', 'utf8'), hud = fs.readFileSync('src/
 // chave presente nos dois idiomas = aparece ao menos 2 vezes como "chave:"
 const both = (k) => (i18n.match(new RegExp(String.raw`[{,\s]"?${k}"?\s*:`, 'g')) || []).length >= 2;
 const falta = [];
+// 13/11: shared/version.js segue o package.json (o servidor paga o presente de atualizacao por ela)
+{ const { GAME_VERSION } = await import('../shared/version.js'), pv = JSON.parse(fs.readFileSync('package.json', 'utf8')).version; if (GAME_VERSION !== pv) falta.push(`shared/version.js ${GAME_VERSION} != package.json ${pv}`); }
 for (const k of Object.keys(STREAKS)) {
   for (const p of ['s_', 'sd_']) if (!both(p + k)) falta.push(p + k);
   if (!new RegExp(String.raw`^\s*${k}:\s*` + '`', 'm').test(hud.slice(hud.indexOf('STREAK_SVG')))) falta.push('icone STREAK_SVG.' + k);
@@ -70,6 +72,7 @@ for (const [k, it] of Object.entries(SHOP_ITEMS)) {
     else if (slot === 'ret') { if (!both('ret_' + id)) falta.push('ret_' + id); } // reticula da Loja (04/11)
     else if (slot === 'wskin') { if (!WSKINS[id]) falta.push(`skin de modelo ${id} nao existe (${k})`); if (!both('ws_' + id)) falta.push('ws_' + id); } // skin de modelo (04/11)
     else if (slot === 'stamp') { if (!both('stamp_' + id)) falta.push('stamp_' + id); } // estampa de pintura (09/11)
+    else if (slot === 'kc' || slot === 'stk') { if (!both('lk_' + slot + '_' + id)) falta.push('lk_' + slot + '_' + id); } // contador e adesivo (13/11)
     else falta.push(`item ${k}: give desconhecido ${g}`);
   }
 }

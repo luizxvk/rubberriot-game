@@ -16,8 +16,10 @@ export const PRICE = {
   dance: { epico: 900, lendario: 1600 }, banner: { lendario: 1000 }, charm: { raro: 500 }, face: { raro: 600, lendario: 900 }, death: { lendario: 1400 }, // dança pro podio (05/11): com efeito e mortal sao as mais caras
   ret: { raro: 300, epico: 500 }, // reticula de mira (04/11): a coisa mais barata da Loja
   stamp: { raro: 400, epico: 700 }, // estampa de pintura (09/11): entre a reticula e a camo
+  kc: { raro: 700, epico: 1000, lendario: 1400 }, // contador de abates na arma (13/11): modelos do Blender, so a sua arma mostra
+  stk: { raro: 400, epico: 700, lendario: 1100 }, // adesivo de arma (13/11); 14/11 (pedido dele): mais caros, os animados sao lendarios
 };
-export const RANGE = { stamp: [300, 900], wpack: [8000, 12000], camo: [600, 1200], skin: [1000, 2000], hat: [1000, 2000], bundle: [1600, 2400], wskin: [1200, 2400], ret: [200, 600], dance: [800, 2000], banner: [800, 1400], charm: [400, 700], face: [500, 900], death: [1000, 1800] };
+export const RANGE = { kc: [600, 1600], stk: [300, 1200], stamp: [300, 900], wpack: [8000, 12000], camo: [600, 1200], skin: [1000, 2000], hat: [1000, 2000], bundle: [1600, 2400], wskin: [1200, 2400], ret: [200, 600], dance: [800, 2000], banner: [800, 1400], charm: [400, 700], face: [500, 900], death: [1000, 1800] };
 export const RARITY = { raro: 1, epico: 1, lendario: 1, pacote: 1 }; // raridades validas (cor do cartao)
 // Itens de verdade (03/11): give = o que libera ('camo:<id>' em src/camos.js com shop: true; 'skin:<id>' em
 // shared/looks.js LOOKS.skin com shop: true). Nome: item de um so usa o nome da camo/skin; pacote usa si_/sid_ no i18n.
@@ -109,6 +111,12 @@ export const SHOP_ITEMS = {
   pFloresta: { kind: 'bundle', r: 'pacote', give: ['hat:cogumelo', 'skin:planta', 'camo:ivy'], price: 2200, feat: 1 },
   pDoceria: { kind: 'bundle', r: 'pacote', give: ['hat:sorvete', 'skin:trico', 'camo:honey'], price: 1800, feat: 1 },
   pGaragem: { kind: 'bundle', r: 'pacote', give: ['skin:papelao', 'camo:vinyl'], price: 1600, feat: 1 },
+  // contadores de abates (13/11, pedido dele): 15 temas, aparecem so na SUA arma (src/killcounter.js)
+  kcDespertador: { kind: 'kc', r: 'raro', give: ['kc:despertador'] }, kcRadio: { kind: 'kc', r: 'raro', give: ['kc:radio'] }, kcLetreiro: { kind: 'kc', r: 'lendario', give: ['kc:letreiro'], feat: 1 }, kcTv: { kind: 'kc', r: 'epico', give: ['kc:tv'] }, kcDinamite: { kind: 'kc', r: 'epico', give: ['kc:dinamite'] }, kcCaveira: { kind: 'kc', r: 'epico', give: ['kc:caveira'] }, kcFerradura: { kind: 'kc', r: 'raro', give: ['kc:ferradura'] }, kcTinta: { kind: 'kc', r: 'raro', give: ['kc:tinta'] }, kcTrofeu: { kind: 'kc', r: 'lendario', give: ['kc:trofeu'], feat: 1 }, kcBigorna: { kind: 'kc', r: 'raro', give: ['kc:bigorna'] }, kcFliperama: { kind: 'kc', r: 'lendario', give: ['kc:fliperama'], feat: 1 }, kcEngrenagem: { kind: 'kc', r: 'epico', give: ['kc:engrenagem'] }, kcXerife: { kind: 'kc', r: 'epico', give: ['kc:xerife'] }, kcTaximetro: { kind: 'kc', r: 'raro', give: ['kc:taximetro'] }, kcCartola: { kind: 'kc', r: 'lendario', give: ['kc:cartola'], feat: 1 },
+  // adesivos (13/11): o jogador arrasta na arma no Arsenal; 4 vem de graca (src/stickers.js STK_FREE)
+  skCaveira: { kind: 'stk', r: 'epico', give: ['stk:caveira'] }, skOlho: { kind: 'stk', r: 'raro', give: ['stk:olho'] }, skTinta: { kind: 'stk', r: 'raro', give: ['stk:tinta'] }, skBigorna: { kind: 'stk', r: 'epico', give: ['stk:bigorna'] }, skSorriso: { kind: 'stk', r: 'raro', give: ['stk:sorriso'] }, skChama: { kind: 'stk', r: 'epico', give: ['stk:chama'] }, skTrevo: { kind: 'stk', r: 'raro', give: ['stk:trevo'] }, skDado: { kind: 'stk', r: 'raro', give: ['stk:dado'] }, skDinamite: { kind: 'stk', r: 'epico', give: ['stk:dinamite'] }, skBanana: { kind: 'stk', r: 'epico', give: ['stk:banana'] }, skCoroa: { kind: 'stk', r: 'epico', give: ['stk:coroa'] }, skAlvo: { kind: 'stk', r: 'raro', give: ['stk:alvo'] },
+  // adesivos animados (14/11)
+  skBonk: { kind: 'stk', r: 'lendario', give: ['stk:bonk'] }, skPlaft: { kind: 'stk', r: 'lendario', give: ['stk:plaft'] }, skBigode: { kind: 'stk', r: 'lendario', give: ['stk:bigode'] }, skJoinha: { kind: 'stk', r: 'lendario', give: ['stk:joinha'] }, skNota: { kind: 'stk', r: 'lendario', give: ['stk:nota'] }, skLua: { kind: 'stk', r: 'lendario', give: ['stk:lua'] }, skSol: { kind: 'stk', r: 'lendario', give: ['stk:sol'] }, skCafe: { kind: 'stk', r: 'lendario', give: ['stk:cafe'] }, skDisco: { kind: 'stk', r: 'lendario', give: ['stk:disco'] }, skClaquete: { kind: 'stk', r: 'lendario', give: ['stk:claquete'] }, skCartola: { kind: 'stk', r: 'lendario', give: ['stk:cartola'] }, skBomba: { kind: 'stk', r: 'lendario', give: ['stk:bomba'] }, skPirulito: { kind: 'stk', r: 'lendario', give: ['stk:pirulito'] }, skFantasma: { kind: 'stk', r: 'lendario', give: ['stk:fantasma'] }, skCogumelo: { kind: 'stk', r: 'lendario', give: ['stk:cogumelo'] }, skPlaneta: { kind: 'stk', r: 'lendario', give: ['stk:planeta'] },
   // Futuristic Weapon Pack (04/11): as duas skins de modelo juntas (so vende o pack); Agulha e Relampago futuristas
   // elite: 1 (05/11, pedido dele): quem assina o Elite resgata de graca (POST /loja/resgatar); e a unica excecao a regra de cima
   pFuturo: { kind: 'bundle', r: 'pacote', give: ['wskin:pulse', 'wskin:fiction'], price: 10000, feat: 1, weapon: 1, elite: 1, until: Date.UTC(2026, 10, 16) }, // lancamento: pacote da semana fixo ate 16/11 (segunda)
@@ -150,7 +158,7 @@ function seeded(list, seed) {
 // Destaque = 1 lendario grande + 1 pacote largo + 2 pequenos; dia = 8 ofertas que nao repetem o destaque.
 // Prateleiras (04/11): o resto do catalogo por tipo, sorteado na semana, sem repetir o que ja esta em cima.
 // O rodizio e so vitrine: a compra confere o catalogo, nao o rodizio.
-export const SHELVES = [['dance', 4], ['banner', 3], ['charm', 2], ['death', 2], ['face', 2], ['bundle', 4], ['react', 4], ['camo', 8], ['skin', 4], ['hat', 4], ['stamp', 6], ['ret', 8]];
+export const SHELVES = [['kc', 3], ['stk', 4], ['dance', 4], ['banner', 3], ['charm', 2], ['death', 2], ['face', 2], ['bundle', 4], ['react', 4], ['camo', 8], ['skin', 4], ['hat', 4], ['stamp', 6], ['ret', 8]];
 // ofertas do dia (09/11, pedido dele): 15% off. O servidor cobra por aqui
 export const DEAL_OFF = 0.15;
 let dealMemo = { end: 0, ids: new Set() };

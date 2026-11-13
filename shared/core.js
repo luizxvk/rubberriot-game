@@ -625,6 +625,7 @@ export class Core {
   // cheia sempre tinha alguem perto). Calcula uma vez por mapa
   openSpots() {
     const M = this.M; if (M.openSpots) return M.openSpots;
+    if (M.fixedSpawns) return (M.openSpots = []); // 14/11: estande (campo de tiro) so nasce nas baias
     const out = [], A = M.arena - 3, step = Math.max(8, A / 4), b = M.spawns.ffa[0], from = [b[0], floorAt(M, b[0], b[1]), b[1]];
     for (let x = -A; x <= A; x += step) for (let z = -A; z <= A; z += step) {
       if (!standable(M, x, z)) continue;
@@ -1017,7 +1018,7 @@ export class Core {
         break;
       }
       case 'ping': {
-        if ((this.mode !== 'br' && !this.pingAny) || !p.alive) break; // pingAny: treino (passo de marcar)
+        if (!p.alive) break; // 13/11 (pedido dele): marcar vale em todo modo (antes so battle royale e treino)
         const now = this.clock || 0;
         if (now - (p.pingAt || -9) < 0.4) break;
         p.pingAt = now;
@@ -1025,7 +1026,7 @@ export class Core {
         if (!off && !(Array.isArray(m.pos) && m.pos.length === 3 && m.pos.every(Number.isFinite))) break;
         const kind = ['spot', 'item', 'enemy'].includes(m.kind) ? m.kind : 'spot';
         const ev = { t: 'ev', k: 'ping', id, off, pos: off ? null : m.pos.map(v => Math.round(v * 10) / 10), kind, label: String(m.label || '').slice(0, 32) };
-        for (const o of this.players.values()) if (!o.bot && (o.id === id || (this.duo && o.team === p.team))) this.send(o.id, ev);
+        for (const o of this.players.values()) if (!o.bot && (o.id === id || (p.team && o.team === p.team))) this.send(o.id, ev); // time ve; mata-mata livre so voce
         break;
       }
       case 'nade':

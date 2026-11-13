@@ -480,6 +480,25 @@ export class Hud {
     if (head || kill) h.firstChild.animate([{ transform: 'scale(.3)', opacity: 0.95 }, { transform: `scale(${kill ? 2.4 : 1.7})`, opacity: 0 }], { duration: kill ? 480 : 340, easing: 'cubic-bezier(.1, .7, .3, 1)' });
   }
 
+  // cartao de abate do lado da mira (13/11, pedido dele, estilo COD/Battlefield com a animacao do hitmarker): entra com mola,
+  // o XP conta subindo, segura e sai pra cima. Varios abates empilham (no maximo 3, o mais velho sai)
+  killTag(name, xp, head) {
+    let box = this.ktBox;
+    if (!box) { box = this.ktBox = document.createElement('div'); box.className = 'kill-tags'; box.setAttribute('aria-live', 'polite'); document.getElementById('hud').appendChild(box); }
+    while (box.children.length >= 3) box.firstChild.remove();
+    const el = document.createElement('div'); el.className = 'kill-tag';
+    el.innerHTML = `<b class="kt-name"></b><span class="kt-xp">+<i>0</i> XP</span>`; // so nome e XP (pedido dele 13/11)
+    el.querySelector('.kt-name').textContent = name || '?';
+    box.appendChild(el);
+    const n = el.querySelector('.kt-xp i'), dur = 2200, rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (rm || !el.animate) { n.textContent = xp; setTimeout(() => el.remove(), dur); return; }
+    el.animate([{ opacity: 0, transform: 'translateX(-26px) scale(.7) rotate(-6deg)', easing: 'cubic-bezier(.25, 1.6, .45, 1)' }, { opacity: 1, transform: 'translateX(0) scale(1) rotate(0)', offset: 0.14 },
+      { opacity: 1, transform: 'translateX(0) scale(1)', offset: 0.8, easing: 'ease-in' }, { opacity: 0, transform: 'translate(10px, -16px) scale(.92)' }], { duration: dur }).onfinish = () => el.remove();
+    const t0 = performance.now(), tick = (now) => { const k = Math.min(1, (now - t0) / 450); n.textContent = Math.round(xp * (1 - (1 - k) ** 3)); if (k < 1 && el.isConnected) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    el.querySelector('.kt-xp').animate([{ transform: 'scale(1)' }, { transform: 'scale(1.25)', offset: 0.6 }, { transform: 'scale(1)' }], { duration: 300, delay: 420, easing: 'ease-out' });
+  }
+
   stampText(text, sub) {
     const s = this.el.stamp;
     s.classList.remove('on'); void s.offsetWidth;
@@ -488,10 +507,17 @@ export class Hud {
   }
 
   // aviso fixo embaixo da mira enquanto vale (trocar arma no chao); null esconde
+  // 13/11 (pedido dele): mesmo lugar e mesmo jeito do aviso de escalar (pilula com a tecla em destaque); com ele na tela o de
+  // escalar some (body.has-prompt) pra nunca empilhar
   prompt(text) {
     let el = this.promptEl;
-    if (!el) { el = this.promptEl = document.createElement('div'); el.className = 'use-prompt'; document.getElementById('hud').appendChild(el); }
-    if (text !== this.promptTxt) { this.promptTxt = text; el.textContent = text || ''; el.hidden = !text; }
+    if (!el) { el = this.promptEl = document.createElement('div'); el.className = 'use-prompt ctx-hint'; el.setAttribute('aria-live', 'polite'); document.getElementById('hud').appendChild(el); }
+    if (text === this.promptTxt) return;
+    this.promptTxt = text; el.hidden = !text; document.body.classList.toggle('has-prompt', !!text);
+    if (!text) { el.textContent = ''; return; }
+    const k = bindLabel(null, 'use', this.g?.pad?.active ? 1 : 0);
+    if (k && text.startsWith(k)) el.innerHTML = `<kbd>${esc(k)}</kbd><span>${esc(text.slice(k.length).replace(/^[:\s]+/, ''))}</span>`;
+    else el.textContent = text;
   }
   // dupla: caido. Caixa embaixo da mira: sangra em N s (barra esvaziando) ou a bomba enchendo; null esconde
   down(s) {
@@ -619,7 +645,11 @@ export class Hud {
     const bl = (id) => bindLabel(null, id, dev === 'pad' ? 1 : 0) + ' '; // tecla remapeada (binds.js)
     const [kf, kl, ks, kz] = dev === 'touch' ? ['', '', '★ ', ''] : [bl('frag'), bl('flash'), bl('streak'), bl('field')];
     const fld = p.g?.field, fpc = Math.floor((p.g?.fieldK ?? 0) * 100), fcd = fpc < 100 ? 1 : 0; // barra por pontos (%)
-    const key = (fld || '') + fpc + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev + '/' + (me?.fz || 0) + '/' + (ready.length && snap.sLock ? snap.sLock.kind + snap.sLock.t : '');
+    // 13/11 (pedido dele): no PC e no controle, dicas das teclas que ficam escondidas (marcar, recarregar, inspecionar e o
+    // gadget so quando esta na arma). Equipamento de campo saiu daqui: o proprio selo dele mostra a tecla
+    const gid = G.gadgetShown || null;
+    const hints = dev === 'touch' ? [] : [...(gid ? [[bl('gadget'), t(gid)]] : []), [bl('ping'), t('kit_ping')], [bl('reload'), t('k_reload')], [bl('inspect'), t('kit_inspect')]].filter(([k]) => k.trim()); // sem tecla nesse aparelho = sem dica
+    const key = hints.map(h => h.join('')).join('|') + '/' + (fld ? 1 : 0) + '/' + (p.g?.mode || '') + '/' + (p.nades.frag || 0) + '/' + (p.nades.flash || 0) + '/' + ready.join(',') + '/' + (me?.streak || 0) + '/' + dev + '/' + (me?.fz || 0) + '/' + (ready.length && snap.sLock ? snap.sLock.kind + snap.sLock.t : '');
     if (key !== this.kitKey) {
       this.kitKey = key;
       let el = document.getElementById('kit');
@@ -627,7 +657,7 @@ export class Hud {
       el.hidden = p.g?.mode === 'br' && !p.nades.frag && !p.nades.flash && !fld; // battle royale: so aparece quando tiver granada ou equipamento
       el.innerHTML = (me?.fz ? `<span class="fuse${me.fz <= 10 ? ' hot' : ''}">${t('ev_fuse', { n: me.fz })}</span>` : '') + // bomba-relogio: pavio no peito
         `<span class="${p.nades.frag ? '' : 'off'}">${kf}${t('n_' + (this.g?.lethal || 'frag'))}</span><span class="${p.nades.flash ? '' : 'off'}">${kl}${t('n_' + (this.g?.tactical || 'flash'))}</span>` +
-        (fld ? `<span class="${fcd > 0 ? 'off' : 'ready-f'}">${kz}${t('fd_' + fld)}${fcd > 0 ? ' ' + fpc + '%' : ''}</span>` : '') +
+        hints.map(([k, n]) => `<span class="kh">${esc(k)}${esc(n)}</span>`).join('') +
         // sequencia pronta mas outra no ar: fica apagada com a contagem ate liberar
         (p.g?.mode !== 'br' && p.g?.mode !== 'gungame' ? '' : callLocked(ready, snap.sLock) ? `<span class="off wait">${ks}${t('s_' + ready[0])} ${snap.sLock.t}s</span>` : ready.length ? `<span class="ready">${ks}${t('s_' + callNext(ready, snap.sLock))}${ready.length > 1 ? ' +' + (ready.length - 1) : ''}</span>` : `<span class="off">${t('streakNext', { n: nextStreak(me?.streak || 0, p.g?.skills?.includes('pavio'), p.g?.streaks) })}</span>`);
     }

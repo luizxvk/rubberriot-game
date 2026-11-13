@@ -316,9 +316,12 @@ function give(c, p, it) {
     if (p.bot) { p.wpn = wpn; c.botReload(p, true); }
   } else {
     if (p.owned.has(it.wpn)) {
-      // ja tem a classe: variante no chao troca pela comum que esta na mao (segurando usar, igual trocar arma)
-      if (!it.bp || p.brBp?.[it.wpn] === it.bp || (!p.bot && !p.using)) return false;
+      // ja tem a classe: troca segurando usar, igual trocar arma. 14/11 (pedido dele: "nao consigo trocar a arma pela do chao"): so a
+      // VARIANTE trocava; modelo diferente da mesma classe (Matraca no chao, Zumbidor na mao) dava "nao pega" pra sempre
+      const same = (it.bp ? p.brBp?.[it.wpn] === it.bp : !p.brBp?.[it.wpn]) && (p.brGun?.[it.wpn] ?? null) === (it.body ?? null);
+      if (same || (p.bot ? !it.bp : (!p.using || (p.swapCd || 0) > 0))) return false; // bot so troca por variante (melhor)
       dropGun(c, p, it.wpn, [p.pos[0], floorAt(c.M, p.pos[0], p.pos[2]), p.pos[2]]);
+      p.swapCd = 0.8; // a que caiu fica no pe: sem isso trocava de volta na hora
       p.owned.add(it.wpn);
     } else {
       if (PRIM.includes(it.wpn) && !makeRoom(c, p, it.wpn, false)) return false;
