@@ -13,7 +13,11 @@ FILTRO = ('[0]silenceremove=start_periods=1:start_threshold=-45dB,areverse,silen
           'vibrato=f=4.5:d=0.02,highpass=f=450,lowpass=f=2800,acompressor=threshold=-20dB:ratio=6:makeup=6,asoftclip=type=tanh,'
           'aecho=0.9:0.85:18:0.2,loudnorm=I=-15:TP=-1.5:LRA=7[v];[1]highpass=f=1500,lowpass=f=5000[n];'
           '[2]highpass=f=3000,agate=threshold=0.45:ratio=20:attack=0.01:release=5,volume=0.08[c];'
-          '[v][n][c]amix=inputs=3:duration=first:normalize=0,alimiter=limit=0.95')
+          # 14/11 (pedido dele: "antes de sair o audio sai um chiado, deixar apenas a voz"): o chiado e os estalos ficam de fora
+          # (peso 0); a voz sai com o vao entre as palavras limpo, sem cauda de ruido no comeco nem no fim
+          '[v][n][c]amix=inputs=3:duration=first:normalize=0:weights=1 0 0,afftdn=nr=20:nf=-40,'
+          'agate=threshold=0.04:ratio=8:attack=2:release=120:range=0.03,silenceremove=start_periods=1:start_threshold=-30dB,'
+          'afade=t=in:d=0.012,alimiter=limit=0.95')
 
 lines = json.load(open(sys.argv[1], encoding='utf-8'))
 tmp = tempfile.mkdtemp()

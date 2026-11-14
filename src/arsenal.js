@@ -2382,7 +2382,9 @@ function buildGunParts(wpn, lo) {
   gripR.position.set(0, -0.03, 0.02);
   const gripL = new THREE.Object3D();
   let hs;
-  if (lo.handle && parts[lo.handle]) {
+  // 14/11 (pedido dele): bipe nao e empunhadura. A mao esquerda segura a sniper (guarda-mao do corpo), nunca as pernas do bipe
+  const bipod = /_bipod/.test(lo.handle || '');
+  if (lo.handle && parts[lo.handle] && !bipod) {
     const hb = parts[lo.handle].box, nat = ownerBody(lo.handle) === lo.body && handleInBody(lo.body, lo.handle);
     const shift = gadgetShift || (nat ? new THREE.Vector3() : bodySlot(lo.body, 'handle').sub(anchor('handle', hb)));
     const ha = anchor('handle', hb); hs = hb.getCenter(new THREE.Vector3()).sub(ha).multiplyScalar(gadgetShift ? 1 : adjS('handle')).add(ha).add(shift); if (!gadgetShift) hs.add(adjV('handle'));

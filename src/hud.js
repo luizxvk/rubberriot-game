@@ -591,6 +591,8 @@ export class Hud {
     }
     const p = G.player, M = this.M, snap = G.snap;
     if (!p || !M || !this.radarBg) return;
+    // 14/11 (medido no app dele: o radar era 4,4% da CPU, redesenhado em todo quadro ate 144x/s): 30x/s ja e liso pro olho
+    { const now = performance.now(); if (now - (this.radarAt || 0) < 33) return; this.radarAt = now; }
     const uav = (snap.uavs || []).some(u => u.owner === G.myId || (u.team && u.team === G.myTeam));
     const spanWant = uav ? Math.min(M.arena * 1.08, 140) : Math.min(M.arena, 64); // 08/11 (pedido dele): mapa enxerga mais e o Radar Espiao abre o mapa inteiro
     this.radarSpan = this.radarSpan ? this.radarSpan + (spanWant - this.radarSpan) * 0.12 : spanWant;

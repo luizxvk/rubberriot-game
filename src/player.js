@@ -579,6 +579,9 @@ export class Player {
         if (this.meleeCd <= 0) this.melee();
       } else {
         this.shoot(W, st);
+        // 14/11 (pedido dele: "a cadencia diminui quando o FPS abaixa"): era 1 tiro por quadro, e a 30 FPS o Moedor (0,028 s)
+        // perdia 1 tiro em 7. Automatica solta no mesmo quadro os tiros que ja venceram (ate 3 a mais; o orcamento do servidor guarda 5)
+        if (mode === 'auto' && !spin) for (let k = 0; k < 3 && this.fireT <= 0 && this.alive && !this.hot && a && a.mag > 0; k++) this.shoot(W, st);
         if (spin) spinShot(this.g.vm.akSide ? 0 : 1); // toque: as duas alternam; a que atirou gira e recarrega
         else if (mode === 'bolt' && mag > 1) { this.g.vm.bolt(W.rate * st.rate); this.boltSfxT = 0.22; } // 1 tiro: sem ferrolho (a recarga ja e o ciclo)
         // escopeta de bomba (nao a automatica AA-12, nem duas na mao): puxa a bomba depois do tiro

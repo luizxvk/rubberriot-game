@@ -398,7 +398,7 @@ export class ViewModel {
     const handKey = id + '|' + [loadout?.body, loadout?.handle, loadout?.charger, loadout?.ws, loadout?.scope, loadout?.muzzle].join('|');
     if (USE_WRAP && id !== 'melee' && id !== 'fists') {
       const ak = loadout?.handle === 'akimbo';
-      const H = measureHands(this.gun, { key: handKey, leftKind: id === 'pistol' || ak ? null : loadout?.handle ? 'grip' : 'fore' });
+      const H = measureHands(this.gun, { key: handKey, leftKind: id === 'pistol' || ak ? null : loadout?.handle && !/_bipod/.test(loadout.handle) ? 'grip' : 'fore' }); // 14/11: bipe = mao no guarda-mao
       this.wrapR = buildWrap(this.gun, H.R); this.wrapL = buildWrap(this.gun, H.L);
     }
     this.gun.scale.setScalar(VM_SCALE);

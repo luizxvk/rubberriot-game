@@ -2155,7 +2155,7 @@ async function beginMatch(join) {
   await preloadMap(G.M.id); LT.mapa = Math.round(performance.now() - lt0); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
   await warmGuns(); LT.armas = Math.round(performance.now() - lt0);
   hideLoading(); LT.total = Math.round(performance.now() - lt0);
-  G.state = 'game';
+  G.state = 'game'; PERF.matches++;
   funil('jogou');
   audio.music(true, matchTrack());
   G.plafts = 0; G.gadgetTold = null; G.gadgetShown = null; G.stimBoostT = 0; G.pings = new Map(); G.brDrops = []; G.matchLog = newMatchLog(); G.matchXp = 0; G.botXpWarned = false; if (weekend() && !G.tutorial) setTimeout(() => hud.message(t('wkndOn'), 3), 2500); setTimeout(() => { if (G.blitz && G.state === 'game') hud.message(t('blitzOn'), 3); }, 5000); G.countEnd = 0; G.spec = { i: 0, map: false };
@@ -2588,23 +2588,65 @@ function nadeArc(p) {
 }
 // erro dentro do quadro nao pode congelar a tela: o clarao (Torta, flash) apaga ANTES de tudo, o erro vai
 // pro servidor com o estado da partida e o proximo quadro roda normal (01/11: tela branca da Torta da Nyx)
+// 14/11 (pedido dele: ver o desempenho de quem joga, ex. a NYX no PC dela): a cada 10 s de partida online manda FPS, quadros
+// lentos, travadas (>100 ms), chamadas de desenho do quadro inteiro, shaders, memoria e a placa. O servidor so anota no log
+// 14/11 b (pedido dele: "bem detalhado, TODAS as metricas"): tempo da logica x do desenho, travadas por faixa, tarefas longas do
+// navegador, chamadas de desenho por quadro (media/pico), bateria (notebook fora da tomada economiza), aparelho, ajustes e estado
+const PERF = { ft: [], cpu: [], rnd: [], dr: [], t0: 0, gpu: null, start: performance.now(), lt: 0, ltMs: 0, matches: 0, prog0: -1, bat: null };
+try { new PerformanceObserver((l) => { for (const e of l.getEntries()) { PERF.lt++; PERF.ltMs += e.duration; } }).observe({ type: 'longtask', buffered: false }); } catch { /* navegador sem longtask */ }
+try { navigator.getBattery?.().then(b => { PERF.bat = b; }).catch(() => {}); } catch { /* */ }
+renderer.info.autoReset = false; // conta o quadro inteiro (o composer desenha em varias passadas); zera no inicio de cada quadro
+const pq = (a, p) => +(a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0).toFixed(1);
+function perfTick(ms, now) {
+  if (G.state !== 'game' || !G.net?.ws || document.hidden) { PERF.ft.length = PERF.cpu.length = PERF.rnd.length = PERF.dr.length = 0; PERF.t0 = now; PERF.lt = PERF.ltMs = 0; return; }
+  if (ms > 0 && ms < 5000) { PERF.ft.push(ms); PERF.dr.push(renderer.info.render.calls); }
+  if (now - PERF.t0 < 10000) return;
+  const a = PERF.ft.sort((x, y) => x - y), n = a.length, cpu = PERF.cpu.sort((x, y) => x - y), rnd = PERF.rnd.sort((x, y) => x - y), dr = PERF.dr.sort((x, y) => x - y);
+  const lt = PERF.lt, ltMs = PERF.ltMs; PERF.t0 = now; PERF.ft = []; PERF.cpu = []; PERF.rnd = []; PERF.dr = []; PERF.lt = PERF.ltMs = 0;
+  if (n < 10) return;
+  const sum = a.reduce((s, x) => s + x, 0), I = renderer.info, P = G.player;
+  if (PERF.gpu == null) { try { const gl = renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); PERF.gpu = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).slice(0, 90); } catch { PERF.gpu = '?'; } }
+  const prog = I.programs?.length || 0, newProg = PERF.prog0 < 0 ? 0 : Math.max(0, prog - PERF.prog0); PERF.prog0 = prog;
+  let near = 0, far = 0; const cp = camera.position; for (const r of G.remotes.values()) { if (!r.char?.root?.visible) continue; const d = Math.hypot(r.pos[0] - cp.x, r.pos[2] - cp.z); if (d < 18) near++; else far++; }
+  const cv = renderer.domElement, B = PERF.bat;
+  G.net.send({ t: 'perf',
+    // quadro
+    fps: Math.round(n * 1000 / sum), p50: pq(a, .5), p95: pq(a, .95), p99: pq(a, .99), max: Math.round(a[n - 1]), f50: a.filter(x => x > 50).length, f100: a.filter(x => x > 100).length, f250: a.filter(x => x > 250).length, frames: n,
+    js50: pq(cpu, .5), js99: pq(cpu, .99), draw50: pq(rnd, .5), draw99: pq(rnd, .99), lt, ltMs: Math.round(ltMs),
+    // desenho e memoria da placa
+    calls: pq(dr, .5), calls95: pq(dr, .95), callsMax: dr[dr.length - 1] || 0, tris: I.render.triangles, prog, newProg, geo: I.memory.geometries, tex: I.memory.textures,
+    heap: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), heapMax: Math.round((performance.memory?.jsHeapSizeLimit || 0) / 1048576),
+    // cena e estado
+    map: G.M?.id, mode: G.mode, night: !!G.nightOn, rem: G.remotes.size, near, far, smoke: G.smokeFx?.length || 0, drops: G.gunDrops?.size || 0, air: G.blimpMeshes?.length || 0,
+    alive: !!P?.alive, ads: (P?.adsK || 0) > 0.6, scope: !!G.scopeDrawn, pod: !!podium.on, rep: !!replay.on, wpn: P?.wpn || '',
+    min: Math.round((now - PERF.start) / 60000), matches: PERF.matches,
+    // ajustes de video
+    res: settings.res, pr: +renderer.getPixelRatio().toFixed(2), dynK: +dynK.toFixed(2), cvW: cv.width, cvH: cv.height, cap: +settings.fpsCap || 0, aa: settings.aa, outl: settings.outl, chars: settings.chars,
+    fxQ: settings.fxQ, drawD: settings.draw, scopeQ: settings.scopeQ, dynRes: !!settings.dynRes, film: settings.film, grain: settings.grain, preset: settings.gfxPreset,
+    // aparelho
+    gpu: PERF.gpu, cores: navigator.hardwareConcurrency || 0, ram: navigator.deviceMemory || 0, scrW: screen.width, scrH: screen.height, dpr: +devicePixelRatio.toFixed(2),
+    bat: B ? Math.round(B.level * 100) : -1, plug: B ? !!B.charging : null, app: /RubberRiotDesktop|Electron/.test(navigator.userAgent) ? 'pc' : isTouch ? 'touch' : 'web' });
+}
 function frame() {
   requestAnimationFrame(frame);
   const now = performance.now();
   const cap = +settings.fpsCap || 0; // limite de FPS (10/11); 0 = sem limite (no app de PC o navegador nao trava em 60)
   if (cap && now - lastDraw < 1000 / cap - 1.5) return;
+  perfTick(now - lastDraw, now); renderer.info.reset();
   lastDraw = now; dynResTick(now); HOSE_FRAME.n++;
   const realDt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (!Number.isFinite(G.flashT)) G.flashT = 0;
   G.flashT = Math.max(0, G.flashT - realDt);
   film.uniforms.flash.value = G.state === 'game' ? Math.min(1, G.flashT) : 0;
+  const jsT0 = performance.now();
   try { frameBody(now, realDt); } catch (e) {
     reportaErro(e, 'frame ' + G.state + '/' + G.mode + '/' + (ui.screen || ''));
     // o quadro quebrou antes de desenhar: desenha assim mesmo (senao a tela congelava no ultimo quadro, branco do
     // clarao da flash/Torta ou da abertura: 02/11, tela branca permanente e tela branca ao comecar)
     try { composer.render(realDt); } catch { /* */ }
   }
+  PERF.cpu.push(performance.now() - jsT0); // tempo de CPU do quadro inteiro (logica + envio do desenho)
 }
 // selo do XP em dobro embaixo do placar (06/11): contando, pausado (com o motivo) ou escondido
 function boostHud(realDt) {
@@ -2745,7 +2787,7 @@ function frameBody(now, realDt) {
     G.hookView.update(dt);
     // 13/11 (pedido dele): nada do gancho dentro da mira da arma (so fora do ADS); depois de uma ganchada, 3 s de espera com contagem
     const cdLeft = Math.max(0, ((G.player?.hookCd || 0) - performance.now()) / 1000);
-    const HA = G.player?.hookAim, show = G.state === 'game' && G.field === 'hook' && (G.fieldK ?? 0) >= 1 && !!HA && !G.player?.hook && G.player?.alive && !G.killcam && (G.player?.adsK ?? 0) < 0.3;
+    const HA = G.player?.hookAim, show = G.state === 'game' && G.field === 'hook' && (G.fieldK ?? 0) >= 1 && !!HA && !G.player?.hook && G.player?.alive && !G.killcam && !podium.on && !replay.on && (G.player?.adsK ?? 0) < 0.3; // 14/11 (pedido dele): no podio/replay do fim nada do gancho
     G.hookView.marker(show && !HA.none && cdLeft <= 0, HA?.p, HA?.ok);
     const hr = $('hookRet');
     if (hr) {
@@ -3132,7 +3174,7 @@ function frameBody(now, realDt) {
     hud.compass(G, camera);
     G.hurtFlash = Math.max(0, (G.hurtFlash || 0) - realDt * 1.2);
     const low = p.alive ? Math.max(0, (40 - p.hp) / 40) * 0.5 : 0.4;
-    film.uniforms.hurt.value = Math.min(1, G.hurtFlash + low);
+    film.uniforms.hurt.value = podium.on || (replay.on && G.endInfo) ? 0 : Math.min(1, G.hurtFlash + low); // 14/11 (pedido dele): morto no fim, o veu da morte ficava por cima do podio
     const rpScope = replay.on && replay.bigScope && replay.fpVm && G.specVm === 'replay'; // tela de morte com luneta (07/11)
     if ((big && p.adsK > 0.3 && p.alive && !replay.on) || rpScope) {
       scopeOn = true;
@@ -3193,7 +3235,7 @@ function frameBody(now, realDt) {
   // com a luneta aberta a cena ja atualizou as matrizes neste quadro: nao percorre tudo de novo
   if (scopeOn && G.scopeDrawn) scene.matrixWorldAutoUpdate = false;
   const farBack = keepStreaksInView(); // sequencias sempre a vista (07/11): o que passou da nevoa e desenhado mais perto, encolhido na mesma proporcao
-  composer.render(realDt);
+  { const rT0 = performance.now(); composer.render(realDt); PERF.rnd.push(performance.now() - rT0); } // so o desenho (relatorio de desempenho)
   for (const [o, p, sc] of farBack) { o.position.copy(p); o.scale.copy(sc); }
   scene.matrixWorldAutoUpdate = true;
   G.clipRec?.draw(); // clipe gravando: copia o quadro na hora (o canvas do jogo nao guarda o desenho)

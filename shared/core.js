@@ -95,7 +95,7 @@ const QC_N = 10; // frases do Chat Rapido (src/quickchat.js)
 // bot provocando (10/11): de vez em quando solta uma do Chat Rapido ao derrubar alguem (seu noob, volta aqui, isso foi sorte...)
 const BOT_TAUNTS = [2, 5, 7, 9];
 export class Core {
-  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false, onFlag = null, onRanked = null }) {
+  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false, onFlag = null, onRanked = null, onPerf = null }) {
     this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
     this.mut = !ranked && EVENTS[mut] ? mut : null; // evento de fim de semana (regra maluca); rankeada nunca
     this.ranked = ranked; // rankeada (31/10): sala publica so com os modos competitivos; vale pontos de rank
@@ -129,7 +129,7 @@ export class Core {
     this.skill = botSkill(difficulty);
     this.send = send;
     // 11/11 (seguranca): so o servidor passa. onFlag(id, tipo, info) = suspeita de trapaca (so anota); onRanked(lista) = rp do fim da rankeada
-    this.onFlag = onFlag; this.onRanked = onRanked;
+    this.onFlag = onFlag; this.onRanked = onRanked; this.onPerf = onPerf; // 14/11: relatorio de desempenho do aparelho (so anota no log)
     this.players = new Map();
     this.snapT = 0;
     this.botSeq = 0;
@@ -757,10 +757,12 @@ export class Core {
     if (this._dyn) this.M.dyn = this._dyn; // 08/11: obstaculos moveis DESTA sala (o mapa e dividido entre salas no servidor)
     const p = this.players.get(id);
     if (!p || !m || typeof m !== 'object') return;
-    if (m.t !== 'state' && m.t !== 'ping' && m.t !== 'lat') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
+    if (m.t !== 'state' && m.t !== 'ping' && m.t !== 'lat' && m.t !== 'perf') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
     switch (m.t) {
       // ping no Tab (04/11, pedido dele): o jogo mede a ida e volta e conta o que deu; o placar mostra de todo mundo
       case 'lat': { p.ping = Math.max(0, Math.min(999, m.ms | 0)); this.send(id, { t: 'latr', c: m.c }); break; }
+      // 14/11 (pedido dele: ver o desempenho de quem joga): o jogo manda a cada 10 s; aqui so repassa pro log (1 a cada 8 s por pessoa)
+      case 'perf': { if (p.bot || !this.onPerf || (this.clock || 0) - (p.perfAt ?? -99) < 8) break; p.perfAt = this.clock || 0; try { this.onPerf(id, p, m); } catch { /* */ } break; }
       // host tira alguem da sala (02/11, pedido dele): sai na hora, mas pode entrar de novo pelo codigo
       case 'kick': {
         const o = this.players.get(m.id);

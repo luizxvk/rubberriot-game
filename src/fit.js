@@ -22,7 +22,11 @@ export function startFit() {
   // 10/11 (desempenho no app de PC): na partida a HUD muda todo quadro (municao, relogio, placar) e cada mudanca refazia a busca
   // e a medida de todo texto da tela. Mudanca dentro da HUD so conta se tiver texto ajustavel nela
   const SEL = Array.isArray(FIT) ? FIT.join(',') : FIT, QUIET = '#hud, #touch, #board, #mapCurtain, #xpChip, .h-arrow, #chat, #qc';
-  const watch = (recs) => { for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!el) continue; if (!el.closest(QUIET) || el.closest(SEL) || el.querySelector?.(SEL)) { later(); return; } } };
+  // 14/11 (medido no app dele: esta checagem era 1,6% da CPU da partida, centenas de buscas por quadro): a resposta de cada
+  // elemento (muda texto ajustavel ou nao) fica guardada 2 s; o mesmo contador da HUD mudando 144x/s nao refaz a busca
+  const seen = new WeakMap();
+  const counts = (el, now) => { const c = seen.get(el); if (c && now - c.t < 2000) return c.v; const v = !el.closest(QUIET) || !!el.closest(SEL) || !!el.querySelector?.(SEL); seen.set(el, { v, t: now }); return v; };
+  const watch = (recs) => { const now = performance.now(); for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!el) continue; if (counts(el, now)) { later(); return; } } };
   new MutationObserver(watch).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
   addEventListener('resize', later); document.fonts?.ready?.then(later);
   later();

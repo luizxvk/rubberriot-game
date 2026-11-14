@@ -489,7 +489,16 @@ export function buildWorld(scene, M) {
   // 10/11 (desempenho, pedido dele: "100% mais leve"): o cenario nao se mexe, mas o three recalculava a posicao de cada peca
   // todo quadro (o maior custo de CPU medido no app de PC). Depois de montado, so o sol e as chamines continuam vivos;
   // estudio e floresta (mapas escuros) tem decoracao animada propria e ficam como estavam
-  function freeze(g) { if (studio || forest) return; const live = new Set([sunSpr, ...chimneys.map(ch => ch.obj)]); g.updateMatrixWorld(true); g.traverse(o => { if (o === g || live.has(o)) return; let p = o.parent, inLive = false; while (p && p !== root) { if (live.has(p)) { inLive = true; break; } p = p.parent; } if (!inLive) o.matrixAutoUpdate = false; }); }
+  // 14/11 (medido no app dele: updateMatrixWorld = 10% da CPU da partida): so parar de recalcular nao bastava, o three ainda
+  // PERCORRIA as milhares de pecas a cada quadro. Peca parada sem nada vivo dentro sai do percurso (matrixWorldAutoUpdate);
+  // quem leva ate o sol/chamine continua no percurso pra eles se mexerem
+  function freeze(g) {
+    if (studio || forest) return;
+    const live = new Set([sunSpr, ...chimneys.map(ch => ch.obj)].filter(Boolean)), path = new Set();
+    for (const l of live) for (let p = l.parent; p; p = p.parent) path.add(p);
+    g.updateMatrixWorld(true);
+    g.traverse(o => { if (o === g || live.has(o)) return; let p = o.parent, inLive = false; while (p && p !== root) { if (live.has(p)) { inLive = true; break; } p = p.parent; } if (inLive) return; o.matrixAutoUpdate = false; if (!path.has(o)) o.matrixWorldAutoUpdate = false; });
+  }
   ready.then(() => freeze(root)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {
     root, ready, setNight,
