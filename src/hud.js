@@ -603,7 +603,12 @@ export class Hud {
     g.clearRect(0, 0, 180, 180);
     g.save();
     g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.clip();
+    // 14/11 (pedido dele): alem da borda do mapa o radar ficava transparente (corte seco). Fundo de chao em todo o circulo,
+    // com o mesmo quadriculado do mapa girando junto, entao a borda do mapa so encosta no chao
+    g.fillStyle = '#cfc7b6'; g.fillRect(0, 0, 180, 180);
     g.translate(R, R); g.rotate(p.yaw);
+    { const step = 12 * k, ox = ((-p.pos[0] * k) % step), oz = ((-p.pos[2] * k) % step); g.strokeStyle = 'rgba(20,18,16,0.08)'; g.lineWidth = 1; g.beginPath();
+      for (let x = -140 + ox; x <= 140; x += step) { g.moveTo(x, -140); g.lineTo(x, 140); } for (let z = -140 + oz; z <= 140; z += step) { g.moveTo(-140, z); g.lineTo(140, z); } g.stroke(); }
     const bs = 256 / wk * k;
     g.drawImage(this.radarBg, -p.pos[0] * k - bs / 2, -p.pos[2] * k - bs / 2, bs, bs);
     const dot = (x, z, col, r = 5) => { g.fillStyle = col; g.beginPath(); g.arc((x - p.pos[0]) * k, (z - p.pos[2]) * k, r, 0, Math.PI * 2); g.fill(); g.lineWidth = 2; g.strokeStyle = '#141210'; g.stroke(); };

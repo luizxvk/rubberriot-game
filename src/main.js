@@ -12,6 +12,7 @@ let flash = null; // lanterna (so no Estudio Tinteiro escuro)
 let gunL = null; // lanterna de arma + reflexo de luneta (04/11)
 import { ViewModel } from './viewmodel.js';
 import { makePipeline, makeMenuPipeline } from './post.js';
+import { makeFsr } from './fsr.js';
 import { Tutorial, keyLabel } from './tutorial.js';
 import { Range } from './range.js';
 import { trainBox } from '../shared/escort.js';
@@ -39,12 +40,12 @@ import { metaGet, metaPost, pushSoon, sessionPing, requestReset, me as rovexMe, 
 import { Hud, STREAK_SVG, DEATH_SVG, BOOM_SVG } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, applyHudPieces, HUD_PIECES, setFireButton, lockPointer, setRawMouse } from './input.js';
 import { Pad } from './gamepad.js';
-import { LocalNet, WsNet, SplitNet } from './net.js';
+import { LocalNet, WsNet, SplitNet, soloNet, WorkerNet } from './net.js';
 import { SS } from './ssboot.js';
 import { Chat } from './chat.js';
 import { QuickChat } from './quickchat.js';
 import { audio } from './audio.js';
-import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS, isSilenced, INTEGRAL_SIL } from '../shared/weapons.js';
+import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS, isSilenced, INTEGRAL_SIL, botBodyPool } from '../shared/weapons.js';
 import { makeHookView } from './hookview.js';
 import { SKILL_ICONS as HOOK_ICONS } from './skillicons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
@@ -64,7 +65,7 @@ import { applyStickers, pickOnGun, nudgeOnGun } from './stickers.js';
 import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang, modeName } from './i18n.js';
-import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG } from './toon.js';
+import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG, cullOutlines } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
 import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack, wpnTracked } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
@@ -97,7 +98,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, adsFireBtn: true, fireLBtn: true, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, adsFireBtn: true, fireLBtn: true, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid', upscale: isTouch ? 'off' : 'fsr', fsrSharp: 0.8, texQ: 'auto', winMode: 'max', winSize: '1600x900' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -190,10 +191,20 @@ const bombMesh = (() => {
 let bombBeep = 0;
 const { composer, film, vmPass, setAA } = makePipeline(renderer, scene, camera, vm);
 const menuPipe = makeMenuPipeline(renderer); // Visual e Arsenal com antisserrilhado (07/11)
+// FSR 1.0 (14/11, pedido dele): Resolucao < 100% = cena menor ampliada pela AMD; a janela fica sempre no tamanho cheio
+const fsr = makeFsr(renderer); fsr.attach(composer); fsr.attach(menuPipe.composer);
 
 // resolucao: a escolhida nos Ajustes x a resolucao dinamica (10/11, pedido dele: graficos mais amplos). A dinamica baixa ate 55%
 // quando o FPS cai abaixo da meta na partida e volta subindo devagar quando sobra folga
-const basePR = () => Math.min(devicePixelRatio, isTouch ? 1.5 : 2) * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1);
+const nativePR = () => Math.min(devicePixelRatio, isTouch ? 1.5 : 2);
+// tela cheia do app de PC (14/11, pedido dele): a resolucao escolhida vale DE VERDADE na tela cheia. O navegador nao troca o modo
+// de video do monitor, entao a cena e desenhada nessa resolucao e ampliada pra tela inteira (FSR), igual jogo nativo em 720p
+const fullResK = () => { if (!window.rrDesktop || settings.winMode !== 'full' || !settings.winSize) return 1; const w = +settings.winSize.split('x')[0]; return w ? Math.min(1, w / (innerWidth * nativePR())) : 1; };
+const basePR = () => nativePR() * fullResK() * settings.res * (SS ? (SS.n > 2 ? 0.8 : 0.9) : 1);
+// FSR so quando ha o que ampliar e fora da tela dividida (la cada tela ja e pequena; o custo do passe nao compensa)
+const sceneScalePR = () => basePR() * dynK;
+const fsrWanted = () => settings.upscale === 'fsr' && !SS && sceneScalePR() < nativePR() * 0.97;
+function setPR() { fsr.on = fsrWanted(); renderer.setPixelRatio(fsr.on ? nativePR() : sceneScalePR()); }
 let dynK = 1, dynN = 0, dynT = 0, lastDraw = 0;
 function dynResTick(now) {
   dynN++;
@@ -203,15 +214,18 @@ function dynResTick(now) {
   const goal = Math.min(+settings.fpsCap || 60, 60), was = dynK;
   if (fps < goal * 0.85) dynK = Math.max(0.55, dynK - 0.08);
   else if (fps > goal * 0.97 && dynK < 1) dynK = Math.min(1, dynK + 0.04);
-  if (dynK !== was) { renderer.setPixelRatio(basePR() * dynK); resize(); }
+  if (dynK !== was) { setPR(); resize(); }
 }
 function applySettings() {
   ARS.RET_GLOW.value = Math.max(0, Math.min(1, settings.retGlow ?? 1)); // brilho da reticula (14/11): vale na hora pra toda lente
   document.body.style.setProperty('--hud-k', settings.hudScale || 1); // escala da HUD (08/11)
   document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
-  renderer.setPixelRatio(basePR() * dynK); // tela dividida: 2-4 desenhos por quadro; dynK = resolucao dinamica (10/11)
+  setPR(); // tela dividida: 2-4 desenhos por quadro; dynK = resolucao dinamica (10/11)
   FX_Q.k = { low: 0.5, mid: 1, high: 1.4 }[settings.fxQ] ?? 1; // particulas (10/11)
-  if (!settings.dynRes && dynK !== 1) { dynK = 1; renderer.setPixelRatio(basePR()); }
+  fsr.setSharp(settings.fsrSharp ?? 0.8);
+  if (!settings.dynRes && dynK !== 1) { dynK = 1; setPR(); }
+  window.rrDesktop?.setAngle?.(settings.angle || 'auto'); // modo grafico do app de PC (14/11): o app usa ao reabrir
+  window.rrDesktop?.setWindow(settings.winMode === 'win' ? settings.winSize : settings.winMode); // app de PC (14/11): janela com tamanho / maximizada / tela cheia
   resize();
   { const n = { off: 0, '2x': 2, '4x': 4, '8x': 8 }[settings.aa] ?? (isTouch ? 0 : 4); setAA(n); menuPipe.setAA(n); } // antisserrilhado (07/11)
   { const O = { eco: [40, 12], near: [90, 45], full: [1e9, 1e9] }[settings.outl] || [90, 45]; OUTLINE_CFG.map = O[0]; OUTLINE_CFG.thin = O[1]; const C = { low: [11, 20], mid: [18, 34], high: [34, 1e9] }[settings.chars] || [18, 34]; CHAR_LOD.far = C[0]; CHAR_LOD.hull = C[1]; } // 09/11
@@ -225,10 +239,11 @@ function applySettings() {
 }
 function resize() {
   const w = innerWidth, h = innerHeight;
+  setPR(); // entrar/sair da tela cheia muda a conta da resolucao
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
-  composer.setPixelRatio(renderer.getPixelRatio());
-  menuPipe.composer.setSize(w, h); menuPipe.composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setPixelRatio(sceneScalePR()); // com FSR a cena fica menor que a janela; sem ele sao iguais
+  menuPipe.composer.setSize(w, h); menuPipe.composer.setPixelRatio(sceneScalePR());
   camera.aspect = w / h; camera.updateProjectionMatrix();
   vm.camera.aspect = w / h; vm.camera.updateProjectionMatrix();
   smithCam.aspect = w / h; smithCam.updateProjectionMatrix();
@@ -338,6 +353,7 @@ const input = new Input(canvas);
 const chat = new Chat({ input, canvas, send: (m) => G.net?.send(m), canPlay: () => (G.state === 'game' && !G.paused && !replay.on) || (G.state === 'lobby' && $('menu').hidden && !$('lobby').hidden) }); // lobby tambem conversa (10/11)
 input.onChat = () => (chat.isOpen ? chat.close() : chat.open());
 chat.onSound = (n) => audio.play(n, { ui: true, vol: 0.8, jitter: 0.03 });
+if (import.meta.env.DEV) window.__rr = { THREE, scene, renderer, get vm() { return vm; }, get G() { return G; } }; // 14/11: diagnostico de memoria de video (so no dev)
 if (import.meta.env.DEV) window.__chat = chat; // teste do balao do lobby sem servidor
 const qc = new QuickChat({ send: (i) => G.net?.send({ t: 'qc', i }), canPlay: () => G.state === 'game' && !G.paused && !replay.on && !chat.isOpen, keyOf: () => keyName(kbBinds(settings).quick?.[0] || 'KeyY') });
 const pad = new Pad(input);
@@ -419,7 +435,7 @@ $('evPlay').onclick = () => {
   audio.play('ui_click', { ui: true }); $('evNote').hidden = true;
   let c = {}; try { c = JSON.parse(localStorage.getItem('rr_lastcfg') || '{}'); } catch { /* */ }
   const mode = ['ffa', 'tdm', 'dom', 'ctf'].includes(c.mode) ? c.mode : 'ffa';
-  startGame(new LocalNet({ mode, map: c.map || 'auto', bots: Number.isFinite(c.bots) && c.bots > 0 ? c.bots : 7, difficulty: c.difficulty || 1, mut: G.evNow() }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap')));
+  startGame(soloNet({ mode, map: c.map || 'auto', bots: Number.isFinite(c.bots) && c.bots > 0 ? c.bots : 7, difficulty: c.difficulty || 1, mut: G.evNow() }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap')));
 };
 evBadge(); setInterval(evBadge, 60000);
 
@@ -632,6 +648,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('pocPodio'))
 window.__smithShow = (cat, lo, charm = 'none') => { smithHolder.clear(); const gun = ARS.buildGun(cat, lo); const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; smithHolder.add(gun); if (charm !== 'none' && cat !== 'melee') attachCharm(gun, charm, 1); };
 if (import.meta.env.DEV) window.__applySet = (c) => { Object.assign(settings, { draw: 'mid', outl: 'near', chars: 'mid' }, c); applySettings(); }; // bateria de desempenho
 if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Teste'); // teste de desempenho (08/11): partida solo por script
+if (import.meta.env.DEV) window.__soloW = (o) => startGame(soloNet({ lobby: false, ...o }), 'Teste'); // 14/11: partida solo no WORKER por script (medir os bots)
 // app de PC (10/11): o Electron marca o navegador (RubberRiotDesktop no user agent); some o banner de baixar
 if (/RubberRiotDesktop/.test(navigator.userAgent)) document.body.classList.add('rr-desktop');
 window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
@@ -919,7 +936,8 @@ function onSnap(s) {
   // dirigivel nasce ja la no alto (antes nascia na origem e subia do chao)
   // casa pelo id: agora tem dirigivel e balao bombardeiro (pela posicao na lista um virava o outro)
   const blIds = new Set(bl.map(b => b.id));
-  G.blimpMeshes = G.blimpMeshes.filter(m => { if (blIds.has(m.userData.id)) return true; scene.remove(m); return false; });
+  // 14/11 (pedido dele): o bombardeiro que acaba o tempo tambem cai murchando (antes sumia de uma vez); o resto sai como sempre
+  G.blimpMeshes = G.blimpMeshes.filter(m => { if (blIds.has(m.userData.id)) return true; if (m.userData.bomber && G.state === 'game') (G.wrecks ||= []).push({ m, t: 0, vy: 0, spin: (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.5), boomT: 0.15, s0: m.scale.clone() }); else scene.remove(m); return false; });
   for (const b of bl) {
     let m = G.blimpMeshes.find(x => x.userData.id === b.id);
     const at = b.k === 'sentry' ? [b.pos[0], b.pos[1] + 1, b.pos[2]] : b.k === 'beacon' ? [b.pos[0], b.pos[1] + 0.4, b.pos[2]] : b.pos; // sentinela: centro do corpo (o tiro mira ali)
@@ -1053,7 +1071,13 @@ function onEvent(e) {
     case 'hurt':
       if (inGame && !G.tutorial && !G.range && e.a === G.myId && e.v !== G.myId && e.wpn) wpnTrack(e.wpn, G.player?.lo(e.wpn)?.body, { dmg: Math.round(e.dmg || 0) });
       if (inGame && G.matchLog) { const L = G.matchLog; if (e.a === G.myId && e.v !== G.myId) { L.dmg = (L.dmg || 0) + (e.dmg || 0); L.hits = (L.hits || 0) + 1; if (e.head) L.heads = (L.heads || 0) + 1; } else if (e.v === G.myId) L.taken = (L.taken || 0) + (e.dmg || 0); } // tela de fim (08/11)
-      if (e.v === G.myId && G.player) {
+      if (e.v === G.myId && G.player && e.burn) {
+        // 14/11 (pedido dele: queimar na termobarica parecia tiroteio): o fogo da dano a cada quadro e cada dano tocava o som de
+        // tiro + tranco de camera. Queimando: so o laco de fogo (some 0,5 s depois do ultimo dano), vermelho na tela e o fogo na lente
+        G.burnT = 0.5; audio.loop('burn', 0.55);
+        G.hurtFlash = Math.min(0.6, (G.hurtFlash || 0) + e.dmg / 90);
+        ammoFx('fire', 2.4);
+      } else if (e.v === G.myId && G.player) {
         audio.play('hit', { vol: 0.7, key: 'hurt', max: 2 });
         G.hurtFlash = Math.min(1, (G.hurtFlash || 0) + e.dmg / 60);
         // tranco de FPS (pedido dele 30/10): a camera pula de leve pra cima e tomba pro lado do tiro, volta com mola
@@ -2059,8 +2083,8 @@ function iris(to, dur = 650) {
 // ---------- sessoes ----------
 let attract = null;
 function startAttract() {
-  attract = new LocalNet({ mode: 'ffa', map: 'vila', bots: 8, difficulty: 0.9, lobby: false });
-  attract.core.endless = true; // 08/11: a partida de fundo nao acaba (antes congelava todo mundo no fim de cada partida)
+  if (G.net instanceof WorkerNet) G.net.close(); // 14/11: partida solo que acabou fecha o worker dela (nada de processo esquecido)
+  attract = soloNet({ mode: 'ffa', map: 'vila', bots: 8, difficulty: 0.9, lobby: false }, { endless: true }); // 08/11: a partida de fundo nao acaba; 14/11: bots do menu no worker
   attract.onmsg = onMsg;
   G.net = attract;
   setMap('vila');
@@ -2070,6 +2094,7 @@ const myBanner = () => (bannerOpen(settings.banner) ? settings.banner : BANNER_D
 const freeChar = (c) => (c.dispose ? c.dispose() : disposeGun(c.gun)); // boneco saiu pra sempre: libera a placa (09/11)
 function clearRemotes() {
   replay.reset(scene); document.body.classList.remove('replay');
+  G.burnT = 0; audio.loop('burn', 0); // saiu queimando: o fogo nao segue tocando no menu
   for (const r of G.remotes.values()) { scene.remove(r.char.root); freeChar(r.char); }
   G.remotes.clear();
   for (const g of G.gunDrops.values()) { scene.remove(g); disposeGun(g); } G.gunDrops.clear();
@@ -2087,8 +2112,10 @@ async function startGame(net, name, mpArgs = null) {
   audio.play('iris', { vol: 0.6, ui: true });
   await iris(0, 600);
   clearRemotes();
+  if (attract && attract !== net) attract.close?.(); // 14/11: o worker da partida de fundo fecha
   attract = null;
   G.loadouts = matchLoadouts();
+  if (G.net && G.net !== net && G.net instanceof WorkerNet) G.net.close(); // partida solo anterior (jogar de novo): fecha o worker dela
   G.net = net;
   G.player = new Player(G);
   G.snap = null; G.me = null; G.matchXp = 0; G.myName = name; G.lobbyCfg = null; G.lobbyHost = null; matchVote.reset();
@@ -2125,6 +2152,7 @@ async function warmGunsNow() {
     await compileSafe(vm.scene, vm.camera);
     vm.scene.remove(grp);
     await breathe();
+    const cast = await warmCast(); // 14/11: bonecos e armas dos bots/jogadores prontos antes de abrir (eram montados no meio da partida: 100-700 ms parado)
     // 03/11 (bateria de desempenho): a cena da partida tambem (mapa, bonecos e armas de quem ja esta na sala) + as
     // 8 skins animadas. Sem isso a 1a imagem compilava tudo junto: 0,5 s (contra todos) a 1 s (noite) de tela parada.
     // compileAsync usa a compilacao paralela do navegador (KHR_parallel_shader_compile): o carregamento nao trava
@@ -2134,12 +2162,63 @@ async function warmGunsNow() {
     skins.position.copy(camera.position); scene.add(skins);
     const airs = [fx.blimpMesh('red'), bomberMesh('red')]; for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular
     await breathe();
-    uploadWorld(); // 09/11: mapa inteiro sobe pra placa aqui, nao na primeira vez que entra na tela
-    await compileSafe(scene, camera);
-    scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
+    // elenco na frente da camera: sobe pra placa e compila junto com o mapa (14/11: a 1a aparicao subia as malhas no meio da partida)
+    if (cast) { cast.position.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(4)); scene.add(cast); }
+    try {
+      uploadWorld(); // 09/11: mapa inteiro sobe pra placa aqui, nao na primeira vez que entra na tela
+      await compileSafe(scene, camera);
+    } finally {
+      scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
+      // o elenco SEMPRE sai da cena (mesmo com erro): fica so o compartilhado, ja na placa
+      if (cast) { scene.remove(cast); for (const o of cast.userData.chars) freeChar(o); for (const g of cast.userData.guns) disposeGun(g); cast.clear(); }
+    }
     await breathe();
     warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11): nada de travar na 1a morte
   } catch (e) { console.warn('aquecimento das armas falhou', e); }
+}
+
+// 14/11 (desempenho medido no app real: travada de 705 ms quando bot nascia): o carregamento monta UMA VEZ cada boneco e cada
+// modelo de arma que a partida vai usar e joga fora. O que fica e so o contorno de cada forma (cache do smoothGeo, compartilhado):
+// quando o bot nasce de verdade, a montagem acha tudo pronto. So o que precisa: os bots desta partida (id fixo = visual fixo),
+// os jogadores da sala e os modelos que bot pode sortear nas armas do modo. Fatias de ~12 ms com respiro (a tela continua animando)
+async function warmCast() {
+  try {
+    let t0 = performance.now(); const tIni = t0, CAP = 2500; // teto: o que nao deu tempo monta na hora (como antes), o resto do carregamento nao atrasa
+    const slice = async () => { if (performance.now() - t0 > 12) { await breathe(); t0 = performance.now(); } return performance.now() - tIni > CAP; };
+    // visuais: os bots que podem entrar (bot1..bot18 cobre a sala cheia e as reposicoes) + quem ja esta na sala
+    const looks = new Map();
+    for (let i = 1; i <= 18; i++) { const L = botLook('bot' + i); looks.set(JSON.stringify(L), L); }
+    for (const L of G.remoteLook.values()) if (L) looks.set(JSON.stringify(L), L);
+    const cast = new THREE.Group(); cast.userData.chars = []; cast.userData.guns = [];
+    let i = 0; const spot = (o) => { o.position.set((i % 6) * 0.9 - 2.5, 0, -Math.floor(i / 6) * 0.9); i++; cast.add(o); };
+    for (const L of looks.values()) { const c = new Character('red', '', L); cast.userData.chars.push(c); spot(c.root); if (await slice()) break; }
+    // armas: modelos que bot sorteia (so das armas do modo) + as montagens dos jogadores da sala
+    const pool = botBodyPool(), cats = G.mode === 'gungame' ? [] : Object.keys(pool); // gun game: a escada ja foi montada acima
+    const builds = [];
+    for (const los of G.remoteLo.values()) for (const [w, lo] of Object.entries(los || {})) if (lo) builds.push([w, lo]); // jogadores da sala primeiro (certeza de uso)
+    for (const w of cats) for (const body of pool[w]) builds.push([w, { body }]);
+    const seen = new Set();
+    for (const [w, lo] of builds) { const k = w + JSON.stringify(lo); if (seen.has(k)) continue; seen.add(k); try { const g = buildGun(w, lo); if (g) { cast.userData.guns.push(g); spot(g); } } catch { /* */ } if (await slice()) break; }
+    if (G.loadTimes) G.loadTimes.elenco = Math.round(performance.now() - tIni);
+    return cast;
+  } catch (e) { console.warn('aquecimento do elenco falhou', e); return null; }
+}
+
+// 14/11 (medido no app: 802 ms de travada montando arma de outro jogador; o corte do pente e o contorno da 1a vez sao caros):
+// no MENU, so nas sobras de tempo de cada quadro (requestIdleCallback), monta uma vez cada modelo que bot sorteia e a montagem de
+// quem ja esteve na sala. Fica so o cache (contorno, corte do pente); o carregamento da partida acha pronto e nao bate no teto
+let idleWarmDone = false;
+function idleWarmGuns() {
+  if (idleWarmDone) return; idleWarmDone = true;
+  const pool = botBodyPool(), list = [];
+  for (const w of Object.keys(pool)) for (const body of pool[w]) list.push([w, { body }]);
+  const ric = window.requestIdleCallback || ((f) => setTimeout(() => f({ timeRemaining: () => 8 }), 50));
+  const step = (dl) => {
+    if (G.state === 'loading') { ric(step, { timeout: 2000 }); return; } // carregando: deixa o carregamento trabalhar
+    while (list.length && dl.timeRemaining() > 6) { const [w, lo] = list.shift(); try { disposeGun(buildGun(w, lo)); } catch { /* */ } }
+    if (list.length) ric(step, { timeout: 4000 });
+  };
+  ric(step, { timeout: 4000 });
 }
 
 // todo mundo pronto: intertitulo de carregamento e entra na partida
@@ -2529,7 +2608,7 @@ const ui = initMenus({
   },
   onRange: (cat, body) => startRange(cat, body),
   bindsChanged: () => { input.kbMap = null; input.padMap = null; },
-  onSolo: ({ mode, map, bots, difficulty, limit, time }) => startGame(new LocalNet({ mode, map, bots, difficulty, limit, time }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))),
+  onSolo: ({ mode, map, bots, difficulty, limit, time }) => startGame(soloNet({ mode, map, bots, difficulty, limit, time }), settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))),
   onMp: (args) => startGame(new WsNet(args), args.name, args),
   onLook: (look, team) => setLookPreview(look, team),
   previewDeath: (on) => { G.lookDeath = !!on; },
@@ -2871,7 +2950,9 @@ function frameBody(now, realDt) {
   for (const m of G.nadeMeshes.values()) { const to = m.userData.to, moving = to && m.position.distanceToSquared(tmpV.fromArray(to)) > 0.0004; if (moving) { if (m.userData.spin) m.rotation.x -= dt * 16; else m.rotation.z -= dt * 6; } else if (m.userData.spin) m.rotation.x = -Math.PI / 2; } // gira so no ar; no chao fica deitada
   tickNadeFx(dt);
   // noite no banco (07/11): o servidor sorteia (snap.nt); o cenario troca a luz e os bonecos ganham brilho proprio
-  { const night = G.state === 'game' && (!!G.snap?.nt || !!G.forceNight); /* forceNight: so teste */ world?.setNight?.(night); if (night !== G.nightOn) G.nightOn = night; for (const r of G.remotes.values()) nightChar(r.char, night); }
+  // 14/11 (medido no app: menu a 34 FPS depois das 18h): isto rodava em todo quadro e dizia 'dia' fora da partida, o menu dizia
+  // 'noite' (relogio) e os bonecos trocavam de material a cada quadro, recompilando shader sem parar. Agora so na partida
+  if (G.state === 'game') { const night = !!G.snap?.nt || !!G.forceNight; /* forceNight: so teste */ world?.setNight?.(night); if (night !== G.nightOn) G.nightOn = night; for (const r of G.remotes.values()) nightChar(r.char, night); }
   for (const m of G.nadeMeshes.values()) if (m.userData.to) { m.position.lerp(tmpV.fromArray(m.userData.to), Math.min(1, dt * 18)); if (m.userData.rocket) { if (Math.random() < dt * 30) fx.puff(m.position.toArray(), 1, 0.35, 0x8a8478, 0.5); } else m.rotation.x += dt * 8; } // foguete nao gira: solta fumaca
   for (const m of G.blimpMeshes) if (m.userData.to) {
     if (m.userData.bomber) { // dirigivel bombardeiro (04/11): aparece e vai embora esmaecendo perto da borda do mapa
@@ -3013,6 +3094,7 @@ function frameBody(now, realDt) {
     // nevoa: comeca na metade da distancia e fecha antes do corte (nada some de repente). rrBase: a nevoa do proprio mapa (Tinteiro e Docas tem a deles, mais fechada)
     if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = longEye ? Math.min(b[1], dd * 0.96) : Math.min(b[1], dd * 0.94); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.45); }
     OUTLINE_FAR.value = scene.fog && !longEye ? Math.min(OUTLINE_CFG.map, scene.fog.near + (scene.fog.far - scene.fog.near) * 0.8) : 1e9; // contorno so de perto (07/11): a 80% da nevoa ele ja quase nao aparece
+    if ((++G.outlTick || (G.outlTick = 1)) % 4 === 0) cullOutlines(scene, camera.position, OUTLINE_FAR.value < 1e8 ? OUTLINE_FAR.value : 1e9); // 14/11: contorno longe nem vai pra placa
     camera.fov += (fovT - camera.fov) * (1 - Math.exp(-14 * realDt));
     camera.updateProjectionMatrix();
     // escala de FOV (04/11, pedido dele): 1x = como sempre; acima disso a arma fica mais longe do olho, parada e mirando (o mundo nao muda)
@@ -3422,6 +3504,7 @@ const BOOT_T = performance.now();
   B?.set(0.6);
   await Promise.race([loadArsenal(), new Promise(r => setTimeout(r, 6000))]);
   // 08/11: rede lenta passou dos 6 s: a sua arma pode ter saido provisoria; quando tudo chegar ela e remontada
+  loadArsenal().then(() => idleWarmGuns()).catch(() => {});
   loadArsenal().then(() => { const p = G.player; if (p?.alive && vm.gun?.userData.provisional && !G.specVm) vm.setWeapon(p.wpn, p.lo(p.wpn), true); }).catch(() => {});
   await document.fonts.ready.catch(() => {});
   // celular: o pavio chega na bomba e a tela de entrada espera o toque em Jogar (o toque ja pediu tela cheia
@@ -3533,7 +3616,11 @@ function tickWrecks(dt) {
     const m = w.m; w.t += dt; w.vy -= 9 * dt;
     m.position.y += w.vy * dt;
     m.rotation.x += dt * 0.55 * Math.min(1, w.t); m.rotation.y += w.spin * dt; m.rotation.z += w.spin * 0.4 * dt;
-    const k = Math.min(1, w.t / 1.6); m.scale.set(w.s0.x * (1 - 0.25 * k), w.s0.y * (1 - 0.55 * k), w.s0.z * (1 - 0.15 * k)); // desinflando
+    const k = Math.min(1, w.t / 1.6);
+    if (m.userData.morphs?.length) { // 14/11: bombardeiro do Blender murcha DE VERDADE (forma 'murcho'); o contorno nao tem a forma e some
+      const km = k * k * (3 - 2 * k); for (const b of m.userData.morphs) b.morphTargetInfluences[0] = km;
+      if (!w.noLines) { w.noLines = true; for (const l of m.userData.lines || []) l.visible = false; }
+    } else m.scale.set(w.s0.x * (1 - 0.25 * k), w.s0.y * (1 - 0.55 * k), w.s0.z * (1 - 0.15 * k)); // desinflando
     if ((w.boomT -= dt) <= 0) { w.boomT = 0.22 + Math.random() * 0.12; const p = m.position, r = 3 * m.scale.x; fx.explosion([p.x + (Math.random() - 0.5) * r, p.y + (Math.random() - 0.5) * 1.5, p.z + (Math.random() - 0.5) * r]); fx.puff([p.x, p.y, p.z], 3, 1.4, PAL.dark, 0.9); }
     const down = raycast(G.M, [m.position.x, m.position.y, m.position.z], [0, -1, 0], 300).dist, floor = Number.isFinite(down) ? m.position.y - down : 0;
     if (m.position.y <= floor + 0.8 || w.t > 6) {
@@ -3548,6 +3635,7 @@ function tickWrecks(dt) {
 }
 function tickNadeFx(dt) {
   tickWrecks(dt);
+  if (G.burnT > 0 && (G.burnT -= dt) <= 0) audio.loop('burn', 0); // parou de queimar: o fogo some suave
   for (const s of G.smokeFx || []) { s.t += dt; s.mat.uniforms.uOp.value = Math.min(0.95, s.t * 1.5) * Math.min(1, (s.dur - s.t) / 2); s.grp.rotation.y += dt * 0.05; if (s.t >= s.dur) { scene.remove(s.grp); s.mat.dispose(); } }
   if (G.smokeFx) G.smokeFx = G.smokeFx.filter(s => s.t < s.dur);
   // dentro da nuvem: veu cinza no filtro de filme (1 passada que ja roda) em vez de dezenas de camadas transparentes na tela toda

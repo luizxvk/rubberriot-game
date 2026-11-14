@@ -61,19 +61,107 @@ function getOutlineMat(th) {
   return outlineMats.get(th);
 }
 
-const geoCache = new WeakMap();
+// contorno (14/11, desempenho medido no app: travadas de 100-700 ms quando bot nascia). O cache era POR OBJETO: cada arvore,
+// chapeu, luva e peca de arma montada de novo criava geometria nova e refazia o mergeVertices (o mais caro do quadro), alem de
+// guardar uma copia da malha de contorno por boneco. Agora a chave e a FORMA (tipo + parametros, ou a impressao dos vertices):
+// mesma forma = mesma malha de contorno, calculada uma vez so e marcada como compartilhada (ninguem libera ela sozinho).
+const sharedSet = new WeakSet(); // geometria compartilhada: quem limpa a cena nao libera
+const geoCache = new WeakMap(), shapeCache = new Map(), SHAPE_MAX = 1500;
+function shapeKey(g) {
+  const P = g.attributes.position; if (!P) return null;
+  if (g.parameters && g.type !== 'BufferGeometry') return g.type + JSON.stringify(g.parameters);
+  const a = P.array, n = a.length, I = g.index?.array; let h1 = 0, h2 = 0, h3 = 0;
+  for (let i = 0; i < n; i++) { const v = a[i]; h1 += v; h2 += v * ((i % 97) + 1); h3 = (h3 + Math.round(v * 4096) * (i + 7)) | 0; }
+  let hi = 0; if (I) for (let i = 0; i < I.length; i += 3) hi = (hi * 31 + I[i]) | 0;
+  return n + '|' + (I ? I.length : 0) + '|' + h1.toFixed(4) + '|' + h2.toFixed(3) + '|' + h3 + '|' + hi;
+}
 export function smoothGeo(g) {
-  if (geoCache.has(g)) return geoCache.get(g);
-  const c = g.clone();
-  for (const k of Object.keys(c.attributes)) if (k !== 'position') c.deleteAttribute(k);
-  const m = mergeVertices(c, 1e-3);
-  m.computeVertexNormals();
+  const hit = geoCache.get(g); if (hit) return hit;
+  const k = shapeKey(g); let m = k && shapeCache.get(k);
+  if (m) { shapeCache.delete(k); shapeCache.set(k, m); } // usado agora: vai pro fim da fila
+  else {
+    const c = g.clone();
+    for (const a of Object.keys(c.attributes)) if (a !== 'position') c.deleteAttribute(a);
+    m = mergeVertices(c, 1e-3); c.dispose();
+    m.computeVertexNormals();
+    sharedSet.add(m);
+    if (k) { shapeCache.set(k, m); if (shapeCache.size > SHAPE_MAX) shapeCache.delete(shapeCache.keys().next().value); }
+  }
   geoCache.set(g, m);
   return m;
+}
+export const smoothCacheSize = () => shapeCache.size;
+
+// junta pecinhas paradas (14/11, desempenho: boneco longe ainda desenhava 39 malhas; a luva de espinho sozinha eram 12 cones).
+// Dentro de um acessorio (chapeu, oculos, mascara, enfeite da luva): pecas com o MESMO material, sem filho de verdade e que
+// ninguem referencia (helice, bolinha, tela...: tudo que esta no userData fica solto e animando) viram UMA malha + um contorno.
+// key: a mesma forma pronta fica compartilhada entre os bonecos com o mesmo visual (memoria). Chamar ANTES do antiFlicker.
+const rigidCache = new Map(), RIGID_MAX = 400;
+const rigidFlags = (ud) => { for (const k in ud) if (k !== 'detail' && k !== 'gloveExtra') return false; return true; };
+export function mergeRigid(root, key) {
+  if (!root) return root;
+  const refs = new Set();
+  root.traverse(o => { for (const v of Object.values(o.userData || {})) { if (v?.isObject3D) refs.add(v); else if (Array.isArray(v)) for (const x of v) if (x?.isObject3D) refs.add(x); } });
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), groups = new Map();
+  root.traverse(o => {
+    if (!o.isMesh || o === root || o.isInstancedMesh || o.isSkinnedMesh || refs.has(o) || !o.material || Array.isArray(o.material) || o.material.isShaderMaterial || o.material.transparent || o.material.map || o.material.polygonOffset || !rigidFlags(o.userData)) return;
+    for (let q = o.parent; q && q !== root; q = q.parent) if (refs.has(q) || !rigidFlags(q.userData)) return;
+    if (o.children.some(c => !(c.isMesh && c.material?.uniforms?.th))) return; // tem filho de verdade: fica
+    const ol = o.children.find(c => c.material?.uniforms?.th), th = ol ? ol.material.uniforms.th.value : 0;
+    const k = o.material.uuid + '|' + th + '|' + (o.userData.detail ? 'd' : '') + (o.userData.gloveExtra ? 'g' : '') + '|' + o.renderOrder + '|' + o.visible;
+    let gr = groups.get(k); if (!gr) groups.set(k, gr = { list: [], th, o });
+    gr.list.push(o);
+  });
+  let gi = 0;
+  for (const [k, gr] of groups) {
+    gi++;
+    if (gr.list.length < 2) continue;
+    const ck = key ? key + '#' + gi + '#' + gr.list.length + '#' + gr.th : null;
+    let g = ck && rigidCache.get(ck);
+    if (!g) {
+      const parts = gr.list.map(o => { const c = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const a of Object.keys(c.attributes)) if (a !== 'position' && a !== 'normal') c.deleteAttribute(a); if (!c.attributes.normal) c.computeVertexNormals(); c.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); return c; });
+      g = mergeGeometries(parts); for (const c of parts) c.dispose();
+      if (!g) continue;
+      if (ck) { sharedSet.add(g); rigidCache.set(ck, g); if (rigidCache.size > RIGID_MAX) rigidCache.delete(rigidCache.keys().next().value); }
+    }
+    const m = new THREE.Mesh(g, gr.o.material); m.renderOrder = gr.o.renderOrder; m.visible = gr.o.visible;
+    if (gr.o.userData.detail) m.userData.detail = true; if (gr.o.userData.gloveExtra) m.userData.gloveExtra = true;
+    if (gr.th) outline(m, gr.th);
+    for (const o of gr.list) { o.parent.remove(o); if (!sharedSet.has(o.geometry)) o.geometry.dispose(); }
+    root.add(m);
+  }
+  return root;
+}
+
+// contorno longe sai da LISTA de desenho (14/11, desempenho medido: 365 de ~900 desenhos por quadro eram contornos).
+// Antes, alem de OUTLINE_FAR o shader so jogava o triangulo pra fora: a chamada de desenho ia inteira pra placa. Agora a
+// cada poucos quadros o contorno longe troca de camada (layers 1: nenhuma camera desenha). Camada e nao "visible": o LOD do
+// boneco ja usa o visible e os dois nao brigam. So o que esta na cena da partida (arma na mao e telas de menu ficam de fora).
+const OUTLS = [];
+let outlI = 0;
+export function cullOutlines(scene, cam, far, budget = 600) {
+  const n = OUTLS.length; if (!n) return;
+  const cx = cam.x, cy = cam.y, cz = cam.z;
+  for (let k = 0; k < Math.min(budget, n); k++) {
+    if (outlI >= OUTLS.length) outlI = 0;
+    const o = OUTLS[outlI];
+    let r = o; while (r.parent) r = r.parent;
+    // fora da cena da partida (boneco que saiu, arma da mao, menu): volta pra camada normal e sai da lista (nada de vazar memoria)
+    if (r !== scene) { if (o.layers.mask !== 1) o.layers.set(0); OUTLS[outlI] = OUTLS[OUTLS.length - 1]; OUTLS.pop(); continue; }
+    outlI++;
+    const e = o.matrixWorld.elements, g = o.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const rad = (g.boundingSphere?.radius || 0) * Math.hypot(e[0], e[1], e[2]);
+    const d = Math.hypot(e[12] - cx, e[13] - cy, e[14] - cz) - rad;
+    const on = d < far;
+    if (on !== (o.layers.mask === 1)) o.layers.set(on ? 0 : 1);
+  }
 }
 
 export function outline(mesh, th = 0.04) {
   const o = new THREE.Mesh(smoothGeo(mesh.geometry), getOutlineMat(th));
+  OUTLS.push(o);
   o.raycast = () => {};
   o.renderOrder = mesh.renderOrder;
   mesh.add(o);
@@ -254,7 +342,6 @@ export function geo(Ctor, ...args) {
 
 // tirou um pedaco grande da cena pra sempre (mapa da partida que acabou, arma largada): libera a geometria na placa.
 // Antes o mapa velho ficava inteiro na memoria de video a cada partida nova (02/11). As compartilhadas (geo()) ficam.
-const sharedSet = new WeakSet();
 export const isSharedGeo = (g) => sharedSet.has(g);
 // 09/11 (mapas novos pesados): separa uma malha por celula do chao (pelo centro de cada triangulo), pra o que esta fora da tela nao ser desenhado
 export function splitByCell(g, cell) {

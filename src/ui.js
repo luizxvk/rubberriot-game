@@ -243,6 +243,10 @@ export function initMenus(o) {
     ['toggle', 'voSubs', 's_voSubs'], // legenda do narrador (06/11): ligada por padrao
     ['range', 'grain', 's_grain', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
     ['range', 'res', 's_res', 0.4, 1, 0.05, v => Math.round(v * 100) + '%'],
+    // FSR 1.0 (14/11, pedido dele): como ampliar a cena quando a Resolucao fica abaixo de 100%
+    ['seg', 'upscale', 's_upscale', [['off', 'up_off'], ['fsr', 'up_fsr']]],
+    ['range', 'fsrSharp', 's_fsrSharp', 0, 1, 0.05, v => Math.round(v * 100) + '%'],
+    ['seg', 'texQ', 's_texQ', [['auto', 'tq_auto'], ['low', 'q_low'], ['mid', 'q_mid'], ['high', 'q_high']]], // texturas (14/11): vale ao reabrir
     ['seg', 'lang', 's_lang', [['en', 'English'], ['pt', 'Portugues']]],
     ['seg', 'film', 's_film', [['full', 'film_full'], ['color', 'film_color'], ['bw', 'film_bw']]],
     ['seg', 'scopeQ', 's_scopeQ', [['fast', 'sq_fast'], ['full', 'sq_full']]], // luneta (05/11, pedido dele): otimizada ou qualidade cheia
@@ -267,6 +271,15 @@ export function initMenus(o) {
     ['retglow'], // brilho da reticula (14/11, pedido dele): com previa ao vivo do shader de verdade
   ];
   if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
+  // app de PC (14/11, pedido dele): tamanho da janela. So os tamanhos que cabem no monitor
+  if (window.rrDesktop) {
+    const fit = [[1280, 720], [1600, 900], [1920, 1080], [2560, 1440], [3840, 2160]].filter(([w, h]) => w <= screen.width && h <= screen.height);
+    // 14/11 (pedido dele): modo numa fileira (Janela / Maximizada / Tela cheia em janela) e os tamanhos separados embaixo;
+    // escolher um tamanho ja passa pro modo Janela
+    defs.splice(defs.findIndex(d => d[1] === 'res'), 0, ['seg', 'winMode', 's_winMode', [['win', 'wm_win'], ['max', 'wm_max'], ['full', 'wm_full']]],
+      ['seg', 'winSize', 's_winSize', fit.map(([w, h]) => [w + 'x' + h, '=' + w + ' × ' + h])],
+      ['seg', 'angle', 's_angle', [['auto', 'ag_auto'], ['d3d11', 'ag_d3d'], ['gl', 'ag_gl']]]); // modo grafico do app (14/11): vale ao reabrir
+  }
   // mouse (so no PC, igual as opcoes do COD): suavizacao, aceleracao, entrada crua e a arma acompanhando o giro
   // sensibilidade por aparelho (05/11, pedido dele): no celular so a do toque; no PC so a do mouse. A do controle fica na aba dele
   if (isTouch) defs.unshift(['range', 'touchSens', 's_touchSens', 0.1, 4, 0.05, v => v.toFixed(2)], ['range', 'touchAdsSens', 's_touchAds', 0.3, 1.5, 0.05, v => v.toFixed(2)]);
@@ -285,7 +298,7 @@ export function initMenus(o) {
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
     autoFire: 'play', adsFireBtn: 'touch', fireLBtn: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
-    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
+    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', upscale: 'video', fsrSharp: 'video', texQ: 'video', winMode: 'video', winSize: 'video', angle: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[0] === 'retglow' ? 'retglow' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
@@ -300,7 +313,7 @@ export function initMenus(o) {
     if (d[0] === 'retglow') return `<div class="field rg-field"><span>${t('s_retGlow')} <b id="rgOut">${Math.round((S.retGlow ?? 1) * 100)}%</b></span><div class="rg-row"><canvas id="rgPrev" width="240" height="160" aria-label="${t('s_retGlowPrev')}"></canvas><input type="range" id="rgIn" min="0" max="1" step="0.05" value="${S.retGlow ?? 1}" aria-label="${t('s_retGlow')}"></div></div>`;
     if (d[0] === 'hudscale') return `<div class="field"><span>${t('s_hudScale')} <b id="hsOut">${Math.round((S.hudScale || 1) * 100)}%</b></span><button type="button" class="hs-open" id="hsOpen">${t('hsPreview')}</button></div>`;
     if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
-    if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : t(l)}</button>`).join('')}</div></div>`;
+    if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : l[0] === '=' ? l.slice(1) : t(l)}</button>`).join('')}</div></div>`;
     return `<div class="toggle"><span id="lbl-${d[1]}">${t(d[2])}</span><button class="switch" role="switch" aria-labelledby="lbl-${d[1]}" data-t="${d[1]}"></button></div>`;
   }).join('') + nextSec() + '</div>'; };
   // 07/11 (pedido dele): botao no pe de cada aba que avanca pra proxima secao (na ultima, volta pra primeira)
@@ -338,6 +351,7 @@ export function initMenus(o) {
     if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); const tb = sl.querySelector(`.set-tabs [data-sg="${setTab}"]`); tb?.focus({ preventScroll: true }); tb?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } return; }
     const seg = b.parentElement.dataset.seg;
     if (seg) S[seg] = b.dataset.v;
+    if (seg === 'winSize' && S.winMode !== 'full') S.winMode = 'win'; // tamanho na janela/maximizada = janela com esse tamanho; na tela cheia = resolucao dela
     if (seg === 'gfxPreset' && GFX_PRESETS[S.gfxPreset]) Object.assign(S, GFX_PRESETS[S.gfxPreset]);
     else if ((seg && GFX_KEYS.has(seg)) || (b.dataset.t && GFX_KEYS.has(b.dataset.t))) S.gfxPreset = 'custom';
     if (seg === 'lang') { setLang(S.lang); buildSettings(); ui.relang(); }
@@ -664,7 +678,7 @@ export function initMenus(o) {
   function renderBanners() {
     const lv = progressInfo().unlockLevel, cur = S.banner, who = rovex.me?.name || S.name || t('youCap');
     const g = $('lookGrid'); g.classList.remove('swatches'); g.classList.add('banners');
-    g.innerHTML = BANNERS.filter(b => !b.mastery || bannerOpen(b.id)).map(b => { const open = bannerOpen(b.id); /* poster de mestre so aparece liberado */ return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.elite ? t('eliteOnly') : b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
+    g.innerHTML = BANNERS.filter(b => bannerOpen(b.id)).map(b => { const open = true; /* 14/11 (pedido dele): so aparece o banner que a pessoa ja liberou */ return `<button class="bn-it ${b.id === cur ? 'on' : ''} ${open ? '' : 'locked'}" data-b="${b.id}" ${open ? '' : 'aria-disabled="true"'} aria-label="${t('bn_' + b.id)}">${bannerHtml(b.id, { name: who, lvl: progressInfo().level })}<span class="bn-cap"><b>${t('bn_' + b.id)}</b>${b.anim ? `<i>${t('bnAnim')}</i>` : ''}${open ? '' : `<small class="lk-lock">${b.elite ? t('eliteOnly') : b.shop ? t('shopOnly') : b.pass ? t('lookPass') : t('lookLvl', { n: b.lvl })}</small>`}</span></button>`; }).join('');
     $('lookNote').textContent = t('bnNote');
     $('lookTabs').querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true, vol: 0.6 }); lookTab = b.dataset.lt; lookPeek = null; g.classList.remove('banners'); renderLook(); });
     g.querySelectorAll('.bn-it').forEach(b => b.onclick = () => { if (b.classList.contains('locked')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } S.banner = b.dataset.b; o.saveSettings(); o.bannerChanged?.(); audio.play('swap', { ui: true, vol: 0.6 }); renderBanners(); });

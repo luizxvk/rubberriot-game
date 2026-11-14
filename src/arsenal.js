@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { pushSoon } from './rovex.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { toon, outline, geo } from './toon.js';
+import { toon, outline, geo, isSharedGeo } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeGun } from './guns.js';
 import { SIGHT_KIND, sightGeoFor, loadComic, comicGeo, hasComic } from './sights.js';
@@ -2116,7 +2116,7 @@ function releaseGunMat(m) {
 export function disposeGun(g) {
   const done = new Set();
   g?.traverse(o => {
-    if (o.geometry?.userData.gunOwn) { o.geometry.dispose(); for (const c of o.children) if (c.geometry && c.material?.isShaderMaterial) c.geometry.dispose(); } // bocal e laser sao malha propria de cada montagem
+    if (o.geometry?.userData.gunOwn) { o.geometry.dispose(); for (const c of o.children) if (c.geometry && c.material?.isShaderMaterial && !isSharedGeo(c.geometry)) c.geometry.dispose(); } // contorno compartilhado (14/11) fica // bocal e laser sao malha propria de cada montagem
     const ms = Array.isArray(o.material) ? o.material : [o.material];
     for (const m of ms) if (m?.userData?.gunOwn && !done.has(m)) { done.add(m); releaseGunMat(m); }
   });
@@ -2711,12 +2711,12 @@ function addLaser(holder, lo, origin, isPistol, magMesh, partMat) {
     if (isPistol) box.position.y = h / 2 + 0.004 - bb.max.y * q + 0.002;
     else box.position.x = side < 0 ? w / 2 + 0.004 - bb.max.x * q + 0.002 : -w / 2 - 0.004 - bb.min.x * q - 0.002; }
   outline(box, 0.004); g.add(box); if (LA?.s) box.scale.setScalar(LA.s);
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(isPistol ? w * 0.7 : 0.008, isPistol ? 0.008 : h * 0.7, d * 0.7), toon(0x1c1a18));
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(isPistol ? w * 0.7 : 0.008, isPistol ? 0.008 : h * 0.7, d * 0.7), toon(0x1c1a18)); rail.geometry.userData.gunOwn = true; // 14/11: trilho, olho e feixe vazavam na placa a cada arma montada (o descarte so liberava o marcado)
   rail.position.set(isPistol ? 0 : -side * (w / 2 + 0.004), isPistol ? h / 2 + 0.004 : 0, 0); if (!CL) g.add(rail); // o laser comico ja tem o pe dele
-  const eye = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.3, h * 0.3, 0.006, 12), new THREE.MeshBasicMaterial({ color: D.color }));
+  const eye = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.3, h * 0.3, 0.006, 12), new THREE.MeshBasicMaterial({ color: D.color })); eye.geometry.userData.gunOwn = true; eye.material.userData.gunOwn = true;
   eye.rotation.x = Math.PI / 2; eye.position.set(box.position.x, box.position.y, -d / 2 - 0.002); g.add(eye);
   // feixe: vT = 1 na boca do laser e 0 na ponta (some ao longe)
-  const geo = new THREE.CylinderGeometry(0.003, 0.005, 1, 8, 1, true); geo.rotateX(-Math.PI / 2); geo.translate(0, 0, -0.5);
+  const geo = new THREE.CylinderGeometry(0.003, 0.005, 1, 8, 1, true); geo.rotateX(-Math.PI / 2); geo.translate(0, 0, -0.5); geo.userData.gunOwn = true;
   const beam = new THREE.Mesh(geo, beamMaterial(D.color));
   beam.position.set(box.position.x, box.position.y, -d / 2 - 0.004); beam.scale.z = BEAM_LEN; beam.renderOrder = 4; beam.frustumCulled = false;
   beam.userData.noFx = true; // feixe de 18 m nao conta como superficie da arma (efeito da camo lendaria)

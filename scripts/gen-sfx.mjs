@@ -149,6 +149,8 @@ const SFX = {
   trainwhistle: ['loud cartoon steam train whistle toot toot followed by fast chugging locomotive charging closer, comedic 1930s rubber hose cartoon, no music, no voice', 3.5],
   bomberdrone: ['enormous slow airship passing overhead, deep heavy rumbling engine drone that shakes the ground, ominous low frequency, huge and menacing with a faint comedic creak, no music, no voice', 8.0],
   eraser: ['cartoon pencil eraser rubbing fast on paper, squeaky scribble rub then a soft comedic pop, close, dry, no music, no voice', 1.2],
+  // 14/11 (pedido dele: levar dano da termobarica parecia tiroteio): fogo LINEAR, continuo, toca em laco enquanto queima
+  burn: ['steady continuous fire burning close around you, even roaring flames with soft constant crackle, linear and seamless, same intensity the whole time, no explosions, no impacts, no gunshots, no whoosh, no music, no voice', 4.0],
   firedrop: ['cartoon fireball falling with a whistle and landing in a soft fiery FWOOMP burst with crackle, comedic, no music, no voice', 1.0],
 };
 for (const [name, [text, dur]] of Object.entries(SFX)) {

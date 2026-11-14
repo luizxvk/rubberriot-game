@@ -2,6 +2,8 @@
 // mais as pocas de fogo do balao e a sombra dele no chao. O nucleo esta em shared/strikes.js.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+let DRACO = null; const dracoFor = () => (DRACO ||= new DRACOLoader().setDecoderPath(import.meta.env.BASE_URL + 'draco/')); // bombardeiro em Draco (14/11)
 import { ink, geo, toon, PAL, outline } from './toon.js';
 
 // Biplano do Tripo (04/11, pedido dele: o feito de caixas estava feio). Veio SEM helice de proposito: a helice e nossa
@@ -162,42 +164,29 @@ function finGeo() {
 // nossas, dos lados da gondola). Mesmo tamanho do antigo (13,8 de comprimento antes do x6 = ~83 m no ceu), nariz no -Z.
 // Time azul: o vermelho do envelope vira azul no shader
 let BAL = null;
-const TEAM_BAL = new Map();
-function balMat(team) {
-  if (TEAM_BAL.has(team)) return TEAM_BAL.get(team);
-  const m = toon(0xffffff, { map: BAL.map, unique: true }), c = new THREE.Color(TEAMC(team));
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTeam = { value: c };
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTeam;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
-        { vec3 k = diffuseColor.rgb; float red = smoothstep(0.12, 0.3, k.r - max(k.g, k.b)); /* envelope vermelho (gondola e bombas ficam) */
-          diffuseColor.rgb = mix(k, uTeam * (0.55 + dot(k, vec3(0.3, 0.59, 0.11)) * 1.3), red); }`);
-  };
-  m.customProgramCacheKey = () => 'balTeam';
-  TEAM_BAL.set(team, m);
+// 14/11 (pedido dele): bombardeiro refeito no Blender (tools/blender/bombardeiro.py, Draco). Ja vem na medida e na direcao do
+// jogo (13,8 de ponta a ponta antes do x6, nariz no -Z, centro do envelope na origem): nada de girar/escalar aqui, senao a
+// forma 'murcho' (morph target da queda) nao acompanharia. Uma parte por cor; bb_team/bb_team2 = gomos claro/escuro do time.
+// Sem nevoa em nenhuma cor: o balao nasce longe e a nevoa pintava ele de cinza ate chegar perto ("aparece cinza e depois a cor")
+const BAL_MATS = new Map();
+function balMat(team, name, base) {
+  const k = team + '|' + name;
+  if (BAL_MATS.has(k)) return BAL_MATS.get(k);
+  const tc = new THREE.Color(TEAMC(team));
+  const col = name === 'bb_team' ? tc : name === 'bb_team2' ? tc.clone().multiplyScalar(0.74) : base;
+  const m = toon(col.getHex(), { unique: true, fog: false });
+  BAL_MATS.set(k, m);
   return m;
 }
-new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/src/dirigivel.glb').then((gl) => {
-  let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
-  if (!mesh) return;
+new GLTFLoader().setDRACOLoader(dracoFor()).loadAsync(import.meta.env.BASE_URL + 'models/src/bombardeiro.glb').then((gl) => {
+  const parts = [];
   gl.scene.updateMatrixWorld(true);
-  const g0 = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); g0.computeBoundingBox();
-  let b = g0.boundingBox; if (b.max.x - b.min.x > b.max.z - b.min.z) g0.rotateY(Math.PI / 2);
-  g0.computeBoundingBox(); b = g0.boundingBox;
-  const k = 13.8 / (b.max.z - b.min.z); g0.scale(k, k, k); g0.computeBoundingBox(); b = g0.boundingBox;
-  // centro do ENVELOPE na origem (o tiro usa o elipsoide dele): altura sem a gondola = parte de cima (75%)
-  const H = b.max.y - b.min.y, P = g0.attributes.position, yEnv = b.max.y - H * 0.75;
-  g0.translate(-(b.min.x + b.max.x) / 2, -(b.max.y + yEnv) / 2, -(b.min.z + b.max.z) / 2); g0.computeBoundingBox(); b = g0.boundingBox;
-  // rabo = ponta com as aletas (mais altas): vai pro +Z
-  const L = b.max.z - b.min.z; let hiA = -Infinity, hiB = -Infinity;
-  for (let i = 0; i < P.count; i++) { const z = P.getZ(i), y = P.getY(i); if (z < b.min.z + L * 0.12) hiA = Math.max(hiA, y); if (z > b.max.z - L * 0.12) hiB = Math.max(hiB, y); }
-  if (hiA > hiB) g0.rotateY(Math.PI);
-  g0.computeVertexNormals(); g0.computeBoundingBox(); b = g0.boundingBox;
-  const cb = new THREE.Box3(); // gondola: a fatia de baixo (as helices vao dos lados dela)
-  for (let i = 0; i < P.count; i++) if (P.getY(i) < b.min.y + (b.max.y - b.min.y) * 0.16) cb.expandByPoint(new THREE.Vector3(P.getX(i), P.getY(i), P.getZ(i)));
-  BAL = { geo: g0, map: mesh.material?.map || null, basket: cb, envR: [(b.max.x - b.min.x) / 2 * 0.9, (b.max.y - b.min.y) * 0.75 / 2, L / 2 * 0.95] };
-  if (BAL.map) BAL.map.colorSpace = THREE.SRGBColorSpace;
-}).catch(e => console.warn('dirigivel.glb nao carregou (fica o de caixas)', e));
+  gl.scene.traverse(o => { if (o.isMesh) parts.push({ geo: o.geometry, name: o.material?.name || '', base: o.material?.color?.clone() || new THREE.Color(0xffffff) }); });
+  if (!parts.length) return;
+  const env = new THREE.Box3(), cb = new THREE.Box3();
+  for (const p of parts) { p.geo.computeBoundingBox(); if (p.name === 'bb_team' || p.name === 'bb_team2') env.union(p.geo.boundingBox); if (p.name === 'bb_wood') cb.union(p.geo.boundingBox); }
+  BAL = { parts, basket: cb, envR: [(env.max.x - env.min.x) / 2 * 0.9, (env.max.y - env.min.y) / 2 * 0.9, (env.max.z - env.min.z) / 2 * 0.95] };
+}).catch(e => console.warn('bombardeiro.glb nao carregou (fica o de caixas)', e));
 // Sentinela (04/11, pedido dele): torreta do Tripo (tripe + cabeca verde com cano). O verde vira a cor do time.
 // Origem do grupo = centro do corpo (1 m acima do chao): o tiro usa uma esfera ali (hitR). userData.head gira pra mira
 let SENT = null;
@@ -271,7 +260,9 @@ export function beaconMesh(team) {
 
 export function bomberMesh(team) {
   if (BAL) {
-    const g = new THREE.Group(), body = new THREE.Mesh(BAL.geo, balMat(team)); outline(body, 0.03); g.add(body);
+    const g = new THREE.Group(), morphs = [], lines = [];
+    for (const p of BAL.parts) { const m = new THREE.Mesh(p.geo, balMat(team, p.name, p.base)); outline(m, 0.03); g.add(m); if (m.morphTargetInfluences) morphs.push(m); lines.push(...m.children); }
+    g.userData.morphs = morphs; g.userData.lines = lines; // queda: o casco murcha pelo morph; o contorno (sem morph) some
     const cb = BAL.basket, cy = (cb.min.y + cb.max.y) / 2, hw = (cb.max.x - cb.min.x) / 2, props = [];
     for (const sx of [-1, 1]) { // braco + motorzinho + helice de cada lado do cesto, empurrando pra frente (-Z)
       const x = sx * (hw + 0.95);

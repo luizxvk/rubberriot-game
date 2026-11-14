@@ -20,6 +20,34 @@ export class LocalNet {
   close() {}
 }
 
+// solo com bots num WORKER (14/11, pedido dele): mesma interface do LocalNet, a Core roda em outro nucleo (src/coreworker.js).
+// Sem acesso direto a .core (Campo de tiro e Tutorial mexem nela na hora: esses continuam no LocalNet). flags: endless, noDrops.
+// Nao deu pra criar o worker (navegador antigo, erro): devolve um LocalNet, igual a antes
+export function soloNet(opts, flags = null) {
+  try { return new WorkerNet(opts, flags); } catch (e) { console.warn('worker da partida falhou, segue no LocalNet', e); const n = new LocalNet(opts); Object.assign(n.core, flags || {}); return n; }
+}
+export class WorkerNet {
+  constructor(opts, flags) {
+    this.onmsg = () => {}; this.onclose = () => {}; this.inbox = []; this.core = null; this.ping = 0;
+    this.w = new Worker(new URL('./coreworker.js', import.meta.url), { type: 'module' });
+    this.w.onmessage = (ev) => { const m = ev.data; if (m.k === 'out') for (const x of m.batch) this.inbox.push(x); else if (m.k === 'err') console.warn('[partida no worker]', m.e); };
+    this.w.onerror = (e) => console.warn('[partida no worker] erro', e.message);
+    this.w.postMessage({ k: 'init', opts, flags });
+  }
+  connect(name) { this.w.postMessage({ k: 'join', name }); return Promise.resolve(); }
+  send(m) { this.w.postMessage({ k: 'msg', m }); }
+  set(key, v) { this.w.postMessage({ k: 'flag', key, v }); }
+  update() {
+    // 14/11: o worker roda no relogio proprio (60x/s); aqui so avisa que o jogo segue rodando (no maximo 30x/s) e le o que chegou.
+    // Quadro lento da tela nao segura mais os bots (antes: paravam e depois pulavam, como ping alto)
+    const now = performance.now();
+    if (now - this.ping > 33) { this.ping = now; this.w.postMessage({ k: 'run' }); }
+    const q = this.inbox; this.inbox = [];
+    for (const m of q) this.onmsg(m);
+  }
+  close() { this.w.terminate(); }
+}
+
 // tela dividida: a Core roda na pagina que hospeda as telas (splithost.js); cada tela fala com ela como se
 // fosse o servidor (mensagem vai e volta em JSON, igual ao multiplayer: nada de objeto de outra janela)
 export class SplitNet {

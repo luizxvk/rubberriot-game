@@ -1,3 +1,4 @@
+import { GAME_VERSION } from '../shared/version.js';
 import { SS } from './ssboot.js';
 // Audio fluido: todo sample e' aparado (silencio da ponta), normalizado e ganha
 // micro-fade nas pontas; vozes da mesma chave saem com fade em vez de corte seco.
@@ -14,7 +15,7 @@ const NAMES = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'minigun', 'reload
   'chute', 'wind', 'splat', 'revolver', 'revolver2', 'aa12', 'laser',
   'nukealarm', 'chargeup', 'megashot',
   'saber_on', 'saber_swing', 'saber_hit', // Sabre de Neon (04/11)
-  'rocket', 'flamer']; // 03/11: Bazuca e lanca-chamas // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
+  'rocket', 'flamer', 'burn']; // 14/11: burn = fogo continuo de quem esta queimando (laco) // 03/11: Bazuca e lanca-chamas // 01/11: alarme da Torta Atomica, carga e tiro do kit da Luneta // ringue de boxe, dupla (bomba de bicicleta) e volta de balao
 
 const STEREO_SFX = new Set(['win', 'lose', 'levelup', 'prestige', 'crowd', 'comic']); // vinhetas de tela, sem posicao: seguem em estereo
 // primeiro e ultimo instante com som (limiar baixo: nao corta cauda de nota)
@@ -97,7 +98,7 @@ class Audio {
   }
   async fetchSound(name) {
     try {
-      const r = await fetch(`./sfx/${name}.mp3`);
+      const r = await fetch(`./sfx/${name}.mp3?v=${GAME_VERSION}`); // 14/11: versao no endereco = cache de 1 ano (_headers)
       if (!r.ok) { (this.failed ||= new Set()).add(name); this.loading.delete(name); return; }
       const raw = await this.ctx.decodeAudioData(await r.arrayBuffer());
       const pol = name.startsWith('music') || name.startsWith('dn_') || name.startsWith('vo_') ? raw : this.polish(raw, name); // trilha nao passa pelo tratamento de efeito curto

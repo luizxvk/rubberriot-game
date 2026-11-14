@@ -2,7 +2,7 @@
 // recalculado por frame), luvas brancas, olhos de fatia de torta.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { ink, toon, PAL, wordTexture, smoothGeo, isSharedGeo } from './toon.js';
+import { ink, toon, PAL, wordTexture, smoothGeo, isSharedGeo, mergeRigid } from './toon.js';
 import { buildGun, disposeGun } from './arsenal.js';
 import { cleanLook } from '../shared/looks.js';
 import { eyeTex, buildEyewear, buildHat, buildFace, styleGlove, patternTex, buildFx, buildSkinFx, skinMat, antiFlicker } from './looks3d.js';
@@ -319,13 +319,14 @@ export class Character {
     this.shorts.material = pt ? toon(tc, { map: pt }) : toon(tc); antiFlicker(this.shorts, 1);
     this.eyes.material = eyeMat(L.eyes); this.eyes.material.polygonOffset || antiFlicker(this.eyes, 2);
     if (this.eyewear) this.head.remove(this.eyewear);
-    this.eyewear = buildEyewear(L.eyes); if (this.eyewear) { antiFlicker(this.eyewear); this.head.add(this.eyewear); }
+    this.eyewear = mergeRigid(buildEyewear(L.eyes), 'eye:' + L.eyes); if (this.eyewear) { antiFlicker(this.eyewear); this.head.add(this.eyewear); }
     if (this.faceP) this.head.remove(this.faceP);
-    this.faceP = buildFace(L.face); if (this.faceP) { antiFlicker(this.faceP); this.head.add(this.faceP); } if (this.nose) this.nose.visible = !this.faceP?.userData.noNose; // mascara de casca (08/11)
+    this.faceP = mergeRigid(buildFace(L.face), 'face:' + L.face); if (this.faceP) { antiFlicker(this.faceP); this.head.add(this.faceP); } if (this.nose) this.nose.visible = !this.faceP?.userData.noNose; // mascara de casca (08/11)
     if (this.hat) this.head.remove(this.hat);
-    this.hat = buildHat(L.hat, tc); if (this.hat) { antiFlicker(this.hat); this.head.add(this.hat); }
+    this.hat = mergeRigid(buildHat(L.hat, tc), 'hat:' + L.hat + ':' + tc); if (this.hat) { antiFlicker(this.hat); this.head.add(this.hat); }
     if (this.curl) this.curl.visible = !['bolo', 'tubarao', 'sorvete', 'cogumelo', 'alavanca'].includes(L.hat); // chapeu que cobre o topo: o topete atravessava
     styleGlove(this.handR, L.glove, L.gloveCol); styleGlove(this.handL, L.glove, L.gloveCol);
+    for (const h of [this.handR, this.handL]) mergeRigid(h, 'glove:' + L.glove + ':' + L.gloveCol + ':' + (h === this.handR ? 'r' : 'l')); // 14/11: espinhos/anel/polegar = 1 malha
     for (const h of [this.handR, this.handL]) for (const c of h.children) if (c.userData.gloveExtra) antiFlicker(c, 2); // peca extra da luva (polegar, anel...) por cima da luva
     if (this.gun && this.gun.userData.charm?.id !== L.charm && L.charm !== 'none') attachCharm(this.gun, L.charm); else if (this.gun && L.charm === 'none') attachCharm(this.gun, null);
     if (this.fx) this.root.remove(this.fx.group);

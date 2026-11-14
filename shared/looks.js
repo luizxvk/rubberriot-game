@@ -179,9 +179,9 @@ export function botLook(id) {
   const pick = (k) => { const l = LOOKS[k].filter(i => !i.elite && !i.ch && !i.shop && !i.pass && i.rank == null && !i.mastery && !i.meta && !i.acct); next(); return l[h % l.length].id; };
   const out = {};
   for (const k of LOOK_SLOTS) out[k] = pick(k);
-  if (h % 3) out.fx = 'none'; // efeito so em 1 de cada 3 bots
-  // skin do boneco com chance media (10/11, pedido dele): 2 em cada 5 bots, sorteada entre as da Loja
-  const skins = LOOKS.skin.filter(i => i.shop);
-  out.skin = next() % 5 < 2 ? skins[next() % skins.length].id : 'none';
+  out.fx = 'none'; // 14/11 (pedido dele: skin/efeito pesa pros bots e pra quem joga): bot sem efeito (era 1 em cada 3)
+  // 14/11 (pedido dele): bot NUNCA tem skin. A skin animada e um shader proprio por boneco (compila, pesa na placa e no
+  // celular de todo mundo na sala). Antes 2 em cada 5 bots saiam com uma da Loja
+  out.skin = 'none';
   return out;
 }

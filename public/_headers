@@ -7,3 +7,14 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), payment=(), usb=()
+
+# 14/11 (pedido dele: rodar como local): modelos e sons vem com ?v=<versao do jogo> no endereco: guarda 1 ano sem perguntar.
+# Mudou um .glb ou .mp3? SOBE A VERSAO (shared/version.js), senao quem ja abriu o jogo fica com o arquivo velho.
+/models/*
+  Cache-Control: public, max-age=31536000, immutable
+/sfx/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/draco/*
+  Cache-Control: public, max-age=604800

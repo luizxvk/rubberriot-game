@@ -1064,10 +1064,12 @@ export class FX {
   // sem fumacinha (03/11, pedido dele): a bolinha branca nascia na hora no alvo e parecia uma segunda bala
   impact(pos, normal) {
     if (normal) {
-      const m = new THREE.Mesh(new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: PAL.ink, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }));
+      // 14/11 (medido no app: vazamento na placa, ~1 geometria nova por tiro que acertava e nunca era liberada): o furo usa UMA
+      // geometria compartilhada e o material de cada furo e liberado quando ele some
+      const m = new THREE.Mesh(this.holeGeo ||= new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: PAL.ink, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }));
       m.position.fromArray(pos).addScaledVector(new THREE.Vector3().fromArray(normal), 0.02);
       m.lookAt(m.position.clone().add(new THREE.Vector3().fromArray(normal)));
-      this.add(m, 6, (f, k) => { f.obj.material.opacity = k > 0.8 ? (1 - k) * 5 : 1; });
+      this.add(m, 6, (f, k) => { f.obj.material.opacity = k > 0.8 ? (1 - k) * 5 : 1; }, (o) => o.material.dispose());
     }
   }
 
@@ -1709,6 +1711,18 @@ function mapLoader() {
 }
 // baixa o modelo do mapa antes da partida (tela de carregamento): quando o mundo monta, ja entra o do Blender direto
 export function preloadMap(id) { return MAP_GLB[id] ? mapModel(MAP_GLB[id]) : Promise.resolve(null); }
+// 14/11 (pedido dele: limpar entre partidas): todo mapa jogado ficava na memoria ate fechar o jogo. Agora ficam no maximo 3:
+// a Vila (fundo do menu), o que esta carregando e o anterior. O que sai deixa de ser guardado
+function trimMapCache(keep) {
+  const vila = MAP_GLB.vila;
+  for (const f of [...MAPG.keys()]) {
+    if (MAPG.size <= 3) break;
+    if (f === keep || f === vila) continue;
+    // so solta a referencia: o mundo usa uma COPIA que divide as malhas (liberar aqui apagaria o que ainda esta em cena). A placa ja
+    // e liberada quando o mundo da partida desmonta (world.dispose); a memoria do JS o coletor recupera quando ninguem mais usa
+    MAPG.delete(f); MAPM.delete(f);
+  }
+}
 function mapModel(file) {
   if (MAPM.has(file)) return MAPM.get(file);
   const p = mapLoader().loadAsync(import.meta.env.BASE_URL + 'models/maps/' + file).then(gl => {
@@ -1730,7 +1744,7 @@ function mapModel(file) {
       outline(m, th);
       g.add(m);
     });
-    if (g.children.length) MAPG.set(file, g);
+    if (g.children.length) { MAPG.set(file, g); trimMapCache(file); }
     return g.children.length ? g : null;
   }).catch(e => { console.warn(file + ' nao carregou', e); return null; });
   MAPM.set(file, p);

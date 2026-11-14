@@ -55,6 +55,7 @@ const GG_POOL = {
 };
 const GG_SHAPE = ['pistol', 'pistol', 'smg', 'smg', 'smg', 'rifle', 'rifle', 'rifle', 'shotgun', 'smg', 'rifle', 'shotgun', 'sniper', 'sniper', 'pistol', 'pistol', 'melee', 'melee'];
 // modelo sorteado pra arma do bot (03/11: variedade de verdade, nao so a categoria)
+export const botBodyPool = () => GG_POOL; // 14/11: o carregamento deixa pronto o contorno de cada modelo que bot pode sortear
 export function botBody(wpn) { const L = GG_POOL[wpn]; return L ? L[Math.floor(Math.random() * L.length)] : null; }
 export function ggPickLadder() {
   const ids = [...Object.keys(GG_LADDERS), 'sorteio'], id = ids[Math.floor(Math.random() * ids.length)];
@@ -86,7 +87,7 @@ export const NADES = {
   // some no chao) e termobarica (explosao menor e fogo no chao por burn s). Tatica (F): flash, fumaca (nuvem que tapa a
   // visao por time s) e sinalizador (cai no chao e voce renasce ali; o inimigo destroi a tiro, hp)
   tomahawk: { speed: 44, lift: 6.5, fuse: 30, hitR: 0.9 }, // 04/11: mais longe, em parabola; no chao fica ate 30 s e o dono pega de volta passando em cima
-  thermo: { speed: 27, fuse: 1.8, radius: 5.5, dmg: 95, burn: 5, burnR: 4, burnDps: 18 },
+  thermo: { speed: 27, fuse: 1.8, radius: 5.5, dmg: 71, burn: 3.8, burnR: 4, burnDps: 13.5 }, // 14/11 (pedido dele): dano -25% (95 -> 71, fogo 18 -> 13,5/s) e fogo so 3,8 s (era 5)
   smoke: { speed: 28, fuse: 1.4, radius: 6.5, time: 12 },
   beacon: { speed: 16, fuse: 0.7, hp: 120 },
   // 05/11 (pedido dele): cai no chao e reabastece quem passa por cima (dono e aliados). lvl = nivel da conta; cd = espera por jogador.
@@ -198,7 +199,7 @@ export const STREAKS = {
   // 03/11 (pedido dele): as grandes
   plane: { kills: 11, speed: 30, h: 11, lead: 9, rate: 0.08, dmg: 30, hitR: 1.9, lane: 8, passes: 2, hp: 600 }, // hp (07/11, pedido dele): derrubado a tiro explode e o ataque acaba // Biplano: ida e volta metralhando a reta dos inimigos (mira em quem esta no corredor)
   train: { kills: 14, warn: 2.4, speed: 34, cars: 3, car: 6, halfW: 1.9 }, // Trem Desgovernado: sai de um buraco e entra noutro
-  bomber: { kills: 18, time: 38, h: 36, hp: 1200, /* 07/11: 4200 nao caia nunca */ drop: 0.45, spread: 7, fire: 7, burn: 12, burnR: 2.4 }, // Balao Bombardeiro: enorme e devagar
+  bomber: { kills: 18, time: 38, h: 52 /* 14/11 (pedido dele: mais alto): era 36; a gondola do modelo novo pendura ~28 m abaixo do centro */, hp: 1200, /* 07/11: 4200 nao caia nunca */ drop: 0.45, spread: 7, fire: 7, burn: 12, burnR: 2.4 }, // Balao Bombardeiro: enorme e devagar
   hand: { kills: 20, n: 4, speed: 11, erase: 0.9, wait: 3, life: 24 }, // Mao do Animador: apaga ate 4, um por vez; telhado protege
   nuke: { kills: 25, delay: 6 }, // 25 abates sem morrer (02/11, pedido dele)
 };

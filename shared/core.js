@@ -2009,7 +2009,7 @@ export class Core {
         if (!ai.duck) p.vel[1] = 7.2;
         ai.strafe *= -1; ai.t = 1; ai.path = null;
         const q = ai.stuckN >= 3 ? freeNear(M, p.pos) : null;
-        if (q && ai.stuckN >= 6) { p.pos[0] = q[0]; p.pos[2] = q[1]; p.pos[1] = floorAt(M, q[0], q[1]); p.vel = [0, 0, 0]; ai.stuckN = 0; }
+        if (q && ai.stuckN >= 6) { if (this.local) this.event({ k: 'dbgUnstuck', id: p.id, from: [...p.pos], to: [q[0], q[1]] }); p.pos[0] = q[0]; p.pos[2] = q[1]; p.pos[1] = floorAt(M, q[0], q[1]); p.vel = [0, 0, 0]; ai.stuckN = 0; } // dbgUnstuck: so no solo, pra medir (14/11)
         else if (q) { const dx = q[0] - p.pos[0], dz = q[1] - p.pos[2], L = Math.hypot(dx, dz) || 1; ai.unstick = [dx / L, dz / L]; ai.unstickT = 0.7; }
       } else if (moved >= 1.2) ai.stuckN = 0;
       ai.last = [...p.pos]; ai.stuckT = 0;
@@ -2036,8 +2036,15 @@ export class Core {
     ai.pathT = (ai.pathT || 0) - dt;
     const moved = ai.pathGoal ? Math.hypot(goal[0] - ai.pathGoal[0], goal[2] - ai.pathGoal[2]) : Infinity;
     // sem rota = calcula ja; rota velha so e refeita se ainda tem orcamento neste tick (senao segue a velha)
-    if (!ai.path || ((moved > 3 || ai.pathT <= 0) && this.pathBudget > 0)) {
-      this.pathBudget--;
+    // 14/11 (medido no app: travada de 638 ms com bots nascendo juntos): o bot SEM rota furava o limite por tick e todos calculavam
+    // no mesmo quadro. Agora todo mundo respeita o limite + um teto de tempo por tick; quem fica sem vez anda reto ate o objetivo
+    // e tenta de novo no proximo tick (ninguem para no lugar)
+    // 14/11 b (pedido dele: 'bots travando e teleportando'): o bot sem vez andava RETO ate o objetivo, atolava na parede e o
+    // destravador (stuckN >= 6) teletransportava. Agora: SEM rota = calcula ja (teto de 8 ms por tick pra varios nascendo juntos);
+    // estourou o teto = fica parado no lugar 1 tick (16 ms, invisivel). O limite por segundo vale so pra quem ja tem rota
+    if (!ai.path && (this.pathMsTick || 0) >= 8) { ai.path = [[p.pos[0], p.pos[2]]]; ai.pathT = 0; ai.pathGoal = null; }
+    else if (!ai.path || ((moved > 3 || ai.pathT <= 0) && this.pathBudget > 0 && (this.pathMs || 0) < 4)) {
+      this.pathBudget--; this.pathTok--; const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
       // destino longe (atravessar a ilha): rota so ate um ponto andavel ~35 m na direcao dele; a rota e
       // refeita no caminho. A* de 200 m numa grade de 0,5 m custava 10-40 ms por bot.
       let to = goal;
@@ -2054,6 +2061,7 @@ export class Core {
       ai.path = navPath(this.M, p.pos, to, 8000, !ai.duct); // busca curta: rota que nao fecha em 8 mil celulas vira linha reta ate a proxima
       if (!ai.path && !ai.duct) ai.path = navPath(this.M, p.pos, to, 8000);
       if (!ai.path || !ai.path.length) ai.path = [[goal[0], goal[2]]];
+      { const used = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0; this.pathMs = (this.pathMs || 0) + used; this.pathMsTok -= used; this.pathMsTick = (this.pathMsTick || 0) + used; }
       // cada bot desvia um pouco de cada curva (o caminho mais curto e igual pra todo mundo)
       const sway = ai.sway ??= rnd(-0.9, 0.9);
       for (let i = 0; i < ai.path.length - 1; i++) {
@@ -2384,7 +2392,11 @@ export class Core {
     // 08/11 (producao: "buga com 3-5 jogadores"): salas no MESMO mapa dividem o objeto do mapa no servidor, e o M.dyn (bonde,
     // van, sentinela, carro) gravado por uma sala valia na outra: parede invisivel, bala barrada no nada. Cada sala recoloca o seu
     if (this._dyn) this.M.dyn = this._dyn;
-    this.pathBudget = PATHS_PER_TICK; // rotas novas por tick (espalha o custo: 15 bots refazendo juntos travava a sala)
+    // 14/11 (medido no app: FPS oscilando 150 -> 60): no solo a Core roda a CADA QUADRO, entao "3 rotas por tick" virava 450 rotas
+    // por segundo a 150 FPS (quanto melhor rodava, mais os bots calculavam). Agora e por TEMPO: ~30 rotas e ~40 ms de busca por
+    // segundo, igual em qualquer FPS (servidor e solo). Guarda no maximo o de 1 tick cheio (nada acumula pra estourar depois)
+    this.pathTok = Math.min(PATHS_PER_TICK, (this.pathTok ?? PATHS_PER_TICK) + dt * 30); this.pathBudget = Math.floor(this.pathTok);
+    this.pathMsTok = Math.min(6, (this.pathMsTok ?? 6) + dt * 40); this.pathMs = 6 - this.pathMsTok; this.pathMsTick = 0; // pathMs < 4 = ainda tem tempo; pathMsTick: gasto neste tick (espalha o custo: 15 bots refazendo juntos travava a sala)
     if (this.noises) for (const [id, n] of this.noises) if ((n.t -= dt) <= 0) this.noises.delete(id);
     this.clock = (this.clock || 0) + dt;
     this.mvTick(dt);
@@ -2537,7 +2549,8 @@ export class Core {
   snapshot(dt) {
     this.snapT -= dt;
     if (this.snapT > 0) return;
-    this.snapT = 1 / 20;
+    this.snapT += this.local ? 1 / 60 - 0.003 : 1 / 20; // 14/11: solo (worker, sem rede) manda estado a CADA tick (folga de 3 ms: com 1/60 exato pulava um tick sim, outro nao e caia pra 30/s); online segue 20/s
+    if (this.snapT < -0.05) this.snapT = 0; // tick muito longo nao acumula envio atrasado
     // infectado: o placar e' a contagem de cada lado (vale desde a contagem de inicio)
     if (this.mode === 'infect') { let r = 0, b = 0; for (const p of this.players.values()) { if (p.team === 'red') r++; else b++; } this.teamScore.red = r; this.teamScore.blue = b; }
     // numeros arredondados (cm na posicao, milesimo de radiano na mira): o snapshot vai 15x/s pra cada
