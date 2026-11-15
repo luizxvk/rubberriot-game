@@ -2567,7 +2567,7 @@ export class Core {
               });
     }
     this.send(null, {
-      t: 'snap', lob: this.useLobby, host: this.over ? this.hostId() : undefined, mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
+      t: 'snap', sc: r2(this.clock || 0) /* 15/11: relogio do servidor (o cliente desenha os outros 100 ms atras, pelo tempo daqui) */, lob: this.useLobby, host: this.over ? this.hostId() : undefined, mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,

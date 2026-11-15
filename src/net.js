@@ -80,8 +80,11 @@ export class WsNet {
       ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, quick: this.quick, ranked: this.ranked, token: token(), sid: sessionId() })); };
       ws.onerror = () => { if (!opened) fail('down', 'Não deu pra conectar em ' + this.url); };
       ws.onmessage = (e) => {
-        this.lastMsg = performance.now();
+        const now = performance.now();
+        this.lastMsg = now;
         let m; try { m = JSON.parse(e.data); } catch { return; }
+        // 15/11 (relatorio): maior buraco entre estados do servidor (20/s = 50 ms); o relatorio de desempenho le e zera a cada 10 s
+        if (m.t === 'snap') { if (this.snapAt) this.gapMax = Math.max(this.gapMax || 0, now - this.snapAt); this.snapAt = now; }
         if (!inRoom) {
           if (m.t === 'err') { fail(m.code, m.code); ws.close(); return; }
           // jogo rapido: daqui pra frente e' uma sala comum (reconectar volta pra ela pelo codigo)

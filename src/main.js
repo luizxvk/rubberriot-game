@@ -882,11 +882,26 @@ function voSnap(s) {
   if (s.bomb?.state === 'planted' && o.bomb?.t > 10 && s.bomb.t <= 10 && s.bomb.t > 8) audio.voice('bomb10');
   if (s.esc && o.esc && s.esc.round === o.esc.round && o.esc.d / o.esc.len < 0.85 && s.esc.d / s.esc.len >= 0.85) audio.voice('tramlast');
 }
+// 15/11: posicao do boneco no instante t (relogio do servidor, ms) pela fila de estados. Passou do ultimo estado: segue na mesma
+// velocidade por ate 150 ms e depois espera parado (conexao caiu de verdade)
+const INTERP_MS = 100;
+function bufPos(b, t) {
+  if (b.length === 1 || t <= b[0].t) return b[0].p;
+  for (let i = b.length - 1; i > 0; i--) {
+    const a = b[i - 1], c = b[i];
+    if (t >= a.t && t <= c.t) { const f = (t - a.t) / Math.max(1, c.t - a.t); return [a.p[0] + (c.p[0] - a.p[0]) * f, a.p[1] + (c.p[1] - a.p[1]) * f, a.p[2] + (c.p[2] - a.p[2]) * f]; }
+  }
+  const a = b[b.length - 2], c = b[b.length - 1], ex = Math.min(t - c.t, 150) / Math.max(1, c.t - a.t);
+  return [c.p[0] + (c.p[0] - a.p[0]) * ex, c.p[1] + (c.p[1] - a.p[1]) * ex, c.p[2] + (c.p[2] - a.p[2]) * ex];
+}
 function onSnap(s) {
   voSnap(s);
   // narrador: ultimo minuto (so em partida corrida; modo de rounds zera o relogio a cada round)
   if (G.state === 'game' && !s.round && !G.range && !G.tutorial && G.snap?.time > 60 && s.time <= 60 && s.time > 50) audio.voice('lastmin');
   G.snap = s;
+  // 15/11 (pedido dele: bonecos paravam e pulavam): relogio do servidor -> relogio daqui. Guarda o pacote que chegou mais rapido
+  // (menor atraso) e sobe devagar (relogios andam um pouco diferente). Sem 'sc' (servidor velho) fica como antes
+  if (G.net?.ws && Number.isFinite(s.sc)) { const o = performance.now() - s.sc * 1000; G.svOff = G.svOff == null || o < G.svOff || o - G.svOff > 1000 ? o : G.svOff + (o - G.svOff) * 0.002; } // relogio do servidor recomecou (sala nova): pega o novo na hora
   if (s.mut !== G.mutSeen) { G.mutSeen = s.mut; if (s.mut && G.state === 'game') { hud.message(t('evOn', { e: t('ev_' + s.mut) }), 3.5); audio.play('ringbell', { vol: 0.6, ui: true }); } } // evento de fim de semana: anuncia na entrada
   { const wasBz = G.blitz; G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen; G.blitz = s.blitz || false; if (!wasBz && G.blitz && G.state === 'game') audio.music(true, matchTrack()); } // blitz chegou depois do inicio: troca pra trilha dele
   if (s.map && s.map !== G.M.id) setMap(s.map);
@@ -927,6 +942,13 @@ function onSnap(s) {
       r.sv = o && dts > 0.004 && dts < 0.2 && Math.hypot(p.pos[0] - o[0], p.pos[2] - o[2]) < 3 ? [(p.pos[0] - o[0]) / dts, (p.pos[1] - o[1]) / dts, (p.pos[2] - o[2]) / dts] : null;
       r.snapT = now;
     }
+    // 15/11: online, cada estado entra numa fila com o horario do servidor; o quadro desenha 100 ms atras, andando liso entre dois
+    // estados. Atraso de ate ~100 ms na conexao (ou no PC) nao aparece mais como boneco parado e depois pulando
+    if (G.net?.ws && Number.isFinite(s.sc)) {
+      const b = r.buf ||= [], l = b[b.length - 1], t = s.sc * 1000;
+      if (!p.alive || (l && (t <= l.t || Math.hypot(p.pos[0] - l.p[0], p.pos[1] - l.p[1], p.pos[2] - l.p[2]) > 6))) b.length = 0; // morreu, renasceu ou teletransportou: sem deslizar
+      b.push({ t, p: [...p.pos] }); if (b.length > 12) b.shift();
+    } else r.buf = null;
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team; r.gh = !!p.gh;
     r.kills = p.kills; r.hp = p.hp; r.dn = p.dn || 0; r.rv = p.rv || 0;
     if (r.mob) { r.mh = p.mh; r.hk = p.hk; r.char.setHp(p.hp / (p.mh || 1)); if (p.mob === 'reiTinteiro') r.char.boss({ lid: p.hk ? 1 : 0 }); }
@@ -1934,7 +1956,7 @@ function animateEndXp(from, to, gained) {
 
 function onMsg(m) {
   if (m.t === 'snap') onSnap(m);
-  else if (m.t === 'latr') G.myPing = Math.round(performance.now() - m.c); // ping do Tab
+  else if (m.t === 'latr') { G.myPing = Math.round(performance.now() - m.c); PERF.pmax = Math.max(PERF.pmax || 0, G.myPing); } // ping do Tab (15/11: e o pior dos 10 s pro relatorio)
   else if (m.t === 'ev') onEvent(m);
   else if (m.t === 'kicked') { // host tirou da sala ou ficou parado demais: volta pro menu com o aviso (sem reconectar)
     G.kickedWhy = m.why === 'afk' ? 'kickedAfk' : 'kickedHost';
@@ -2695,6 +2717,9 @@ function nadeArc(p) {
 const PERF = { ft: [], cpu: [], rnd: [], dr: [], t0: 0, gpu: null, start: performance.now(), lt: 0, ltMs: 0, matches: 0, prog0: -1, bat: null };
 try { new PerformanceObserver((l) => { for (const e of l.getEntries()) { PERF.lt++; PERF.ltMs += e.duration; } }).observe({ type: 'longtask', buffered: false }); } catch { /* navegador sem longtask */ }
 try { navigator.getBattery?.().then(b => { PERF.bat = b; }).catch(() => {}); } catch { /* */ }
+// 15/11: a cada 100 ms agenda uma tarefa e mede quanto ela atrasou. Atraso alto = o app (quadro atras de quadro) segurou a fila,
+// e a mensagem da rede espera na mesma fila. Atraso baixo com 'gap' alto = foi a conexao
+{ let due = performance.now() + 100; setInterval(() => { const n = performance.now(); PERF.tq = Math.max(PERF.tq || 0, n - due); due = n + 100; }, 100); }
 renderer.info.autoReset = false; // conta o quadro inteiro (o composer desenha em varias passadas); zera no inicio de cada quadro
 const pq = (a, p) => +(a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0).toFixed(1);
 function perfTick(ms, now) {
@@ -2709,7 +2734,10 @@ function perfTick(ms, now) {
   const prog = I.programs?.length || 0, newProg = PERF.prog0 < 0 ? 0 : Math.max(0, prog - PERF.prog0); PERF.prog0 = prog;
   let near = 0, far = 0; const cp = camera.position; for (const r of G.remotes.values()) { if (!r.char?.root?.visible) continue; const d = Math.hypot(r.pos[0] - cp.x, r.pos[2] - cp.z); if (d < 18) near++; else far++; }
   const cv = renderer.domElement, B = PERF.bat;
+  const gap = Math.round(G.net.gapMax || 0), pmax = PERF.pmax || 0, tq = Math.round(PERF.tq || 0); G.net.gapMax = 0; PERF.pmax = 0; PERF.tq = 0;
   G.net.send({ t: 'perf',
+    // 15/11: rede x PC. gap = maior buraco entre estados (normal ~50-70), pmax = pior ping, tq = maior atraso do app pra rodar uma tarefa da fila
+    gap, pmax, tq,
     // quadro
     fps: Math.round(n * 1000 / sum), p50: pq(a, .5), p95: pq(a, .95), p99: pq(a, .99), max: Math.round(a[n - 1]), f50: a.filter(x => x > 50).length, f100: a.filter(x => x > 100).length, f250: a.filter(x => x > 250).length, frames: n,
     js50: pq(cpu, .5), js99: pq(cpu, .99), draw50: pq(rnd, .5), draw99: pq(rnd, .99), lt, ltMs: Math.round(ltMs),
@@ -3014,7 +3042,9 @@ function frameBody(now, realDt) {
     const k = 1 - Math.exp(-14 * dt);
     const ox = r.pos[0], oz = r.pos[2];
     const ex = r.sv && G.net?.w ? Math.min(0.05, (performance.now() - r.snapT) / 1000) : 0; // solo no worker: segue a velocidade ate 50 ms entre um estado e outro
-    r.pos[0] += (r.target[0] + (ex && r.sv[0] * ex) - r.pos[0]) * k; r.pos[1] += (r.target[1] + (ex && r.sv[1] * ex) - r.pos[1]) * k; r.pos[2] += (r.target[2] + (ex && r.sv[2] * ex) - r.pos[2]) * k;
+    const ip = r.buf?.length && G.svOff != null && r.alive ? bufPos(r.buf, performance.now() - G.svOff - INTERP_MS) : null;
+    if (ip) { const k2 = 1 - Math.exp(-40 * dt); r.pos[0] += (ip[0] - r.pos[0]) * k2; r.pos[1] += (ip[1] - r.pos[1]) * k2; r.pos[2] += (ip[2] - r.pos[2]) * k2; } // so apara a correcao
+    else { r.pos[0] += (r.target[0] + (ex && r.sv[0] * ex) - r.pos[0]) * k; r.pos[1] += (r.target[1] + (ex && r.sv[1] * ex) - r.pos[1]) * k; r.pos[2] += (r.target[2] + (ex && r.sv[2] * ex) - r.pos[2]) * k; }
     r.speed = r.speed * 0.8 + (Math.hypot(r.pos[0] - ox, r.pos[2] - oz) / Math.max(dt, 1e-3)) * 0.2;
     r.char.root.position.fromArray(r.pos);
     let dy = r.yaw - r.char.root.rotation.y;
