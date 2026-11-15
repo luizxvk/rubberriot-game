@@ -2755,8 +2755,13 @@ function perfTick(ms, now) {
     gpu: PERF.gpu, cores: navigator.hardwareConcurrency || 0, ram: navigator.deviceMemory || 0, scrW: screen.width, scrH: screen.height, dpr: +devicePixelRatio.toFixed(2),
     bat: B ? Math.round(B.level * 100) : -1, plug: B ? !!B.charging : null, app: /RubberRiotDesktop|Electron/.test(navigator.userAgent) ? 'pc' : isTouch ? 'touch' : 'web' });
 }
+// 15/11 (bug dele: bonecos param e pulam so no app de PC): o app roda sem limite de FPS (sem vsync) e o Chromium emendava quadro
+// atras de quadro; as mensagens do servidor ficavam ate 2,5 s presas na fila (relatorio: tq/gap). No app, o proximo quadro passa
+// pela fila de tarefas antes: o que chegou da rede roda primeiro. rr_noyield=1 no localStorage desliga (pra comparar)
+const YIELD = /RubberRiotDesktop|Electron/.test(navigator.userAgent) && (() => { try { return localStorage.getItem('rr_noyield') !== '1'; } catch { return true; } })();
+const nextFrame = () => requestAnimationFrame(frame);
 function frame() {
-  requestAnimationFrame(frame);
+  if (YIELD) setTimeout(nextFrame, 0); else requestAnimationFrame(frame);
   const now = performance.now();
   const cap = +settings.fpsCap || 0; // limite de FPS (10/11); 0 = sem limite (no app de PC o navegador nao trava em 60)
   if (cap && now - lastDraw < 1000 / cap - 1.5) return;
