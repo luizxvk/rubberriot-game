@@ -93,9 +93,9 @@ export function infectLoadout(cat, base) {
 // brilho leve vindo da arma (atrapalha a mira de quem esta na frente dela). model = peca do pacote de acessorios
 export const LASERS = ['laser_1', 'laser_2', 'light_1', 'laser_3', 'laser_4']; // 13/11: roxo e amarelo no fim da progressao
 const LASER_DEF = {
-  laser_1: { color: 0xff2a2a, size: [0.03, 0.028, 0.085], model: 'laser', traits: { hip: 0.8, adsTime: 1.03 } },              // compacto vermelho
-  laser_2: { color: 0x39ff5a, size: [0.04, 0.038, 0.12], model: 'laser', traits: { hip: 0.7, adsTime: 1.07, move: 0.98 } },  // tatico verde
-  light_1: { color: 0xfff1d0, size: [0.042, 0.042, 0.15], model: 'light', light: true, traits: { hip: 0.92, adsTime: 1.04 } }, // lanterna tatica
+  laser_1: { color: 0xff2a2a, size: [0.03, 0.028, 0.085], model: 'laser', traits: { hip: 0.85, move: 1.02 } },                 // compacto vermelho: leve (15/11, pedido dele: os 3 tinham o mesmo pro/contra)
+  laser_2: { color: 0x39ff5a, size: [0.04, 0.038, 0.12], model: 'laser', traits: { hip: 0.7, spread: 0.96, adsTime: 1.07, move: 0.98 } },  // tatico verde: o maior no quadril + precisao, pesado
+  light_1: { color: 0xfff1d0, size: [0.042, 0.042, 0.15], model: 'light', light: true, traits: { kick: 0.92, move: 0.98 } }, // lanterna tatica: peso na frente segura o coice (e ofusca quem esta na frente)
   // 13/11 (pedido dele, modelos do Blender): atributos que os outros nao tem. Roxo = mira mais rapida (ajuda pouco no quadril);
   // amarelo = estabiliza o coice (mira um tico mais lenta)
   laser_3: { color: 0xb04bff, size: [0.036, 0.04, 0.1], model: 'laserP', traits: { hip: 0.9, adsTime: 0.95 } },              // Prisma roxo
@@ -596,6 +596,9 @@ export const DEFAULT_IRON = 'iron_own'; // 05/11 (pedido dele): Mira de Trilho e
 export const ironOptions = (cat) => (cat === 'sniper' || cat === 'melee' ? [] : Object.keys(IRONS)); // alca propria: pistola, fuzil, submetralhadora e escopeta (04/11)
 // alca do proprio modelo (04/11): a linha de mira passa na ponta da massa (o ponto mais alto da frente do corpo, perto do
 // eixo); o ADS poe esse ponto no centro da tela, entao a massa fica rente ao crosshair
+// 15/11 (pedido dele: Pesadao, Trovoada, Zumbidor, Matraca): o ponto automatico caia no topo do capuz/alca de transporte, nao na
+// ponta do pino da massa. Ajuste da altura da linha de mira (unidade do viewmodel; + sobe o olho = a massa desce na tela)
+const IRON_DY = { fusil_4: 0.0065, fusil_2: -0.007, subfusil_2: -0.002, subfusil_1: -0.0025 }; // Pesadao com sy 0,9 (achatada, tt_guns.json)
 function ownIronPoint(body, cx) {
   const pr = profile(body), b = parts[body].box, N = pr.hi.length; let y = -Infinity, k = 0;
   for (let i = 0; i < Math.ceil(N * 0.8); i++) if (pr.hi[i] > y) { y = pr.hi[i]; k = i; } /* ate 80%: a parte mais alta antes da coronha (alca/ferrolho) nao pode tapar a linha */
@@ -2428,6 +2431,7 @@ function buildGunParts(wpn, lo) {
     if (mainCant) { scopeInfo = { ...cantedInfo, zoom: Math.min(SCOPE_ZOOM[mainCant] || 1.4, 1.8) }; cantedInfo = null; } // a 45 graus e a mira principal (ADS ja deita a arma)
   }
   const iron = (lo.scope === IRON_OWN ? (ironUp && parts[lo.body].ironPt ? parts[lo.body].ironPt.clone() : ownIronPoint(lo.body, cx)) : new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6)).sub(origin).multiplyScalar(S);
+  { const dy = (typeof window !== 'undefined' && window.__ironDy?.[lo.body]) ?? IRON_DY[lo.body]; if (lo.scope === IRON_OWN && dy) iron.y += dy; } // 15/11: ponta da massa no centro da tela (medido no jogo)
   // skin de modelo: o neon e uma malha a parte que nunca pega camo nem pintura (04/11)
   if (parts[lo.body].neon) { const nm = new THREE.Mesh(parts[lo.body].neon, NEON_MAT); nm.position.copy(origin).multiplyScalar(-1); inner.add(nm); }
   holder.add(muzzle, gripR, gripL);

@@ -482,16 +482,15 @@ function chEvent(e) {
     const r = c.reward;
     if (c.kind === 'elite') hud.eliteTrack(t('el_' + c.id, { n: c.n }), 1, 1, true);
     const name = r ? (r.slot === 'look' ? t('look') + ': ' + t('lk_' + r.id.replace(':', '_')) : r.slot === 'bp' ? t(r.id) : r.slot === 'tracer' ? t('s_tracer') + ': ' + t('tr_' + r.id.slice(3)) : r.slot === 'ammo' ? t('slot_ammo') + ': ' + t('am_' + r.id.slice(3)) : r.slot === 'camo' ? t('camo_' + r.id) : partName(r.slot, r.id)) : c.kind === 'mission' ? t(misKey(missionById(c.id)), { n: missionById(c.id).n, w: c.wpn ? wName(c.wpn) : '' }) : t('ch_' + c.id, { n: '', w: c.wpn ? wName(c.wpn) : '' }).replace(/\s+/g, ' ');
-    const img = r && r.slot !== 'tracer' && r.slot !== 'look' ? unlockShot({ slot: r.slot, id: r.id, wpn: r.wpn || G.player?.wpn || 'smg' }) : null;
-    if (r) logUnlock(t('chUnlocked'), name, img);
+    const shotU = r && r.slot !== 'tracer' && r.slot !== 'look' ? { slot: r.slot, id: r.id, wpn: r.wpn || G.player?.wpn || 'smg' } : null; // 15/11: foto pela fila (fora do quadro)
     if (c.kind === 'elite') {
       // elite: cartaz lendario com a arma ganha + fanfarra comica
       const bp = r && BLUEPRINTS[r.id];
-      setTimeout(() => { hud.eliteBanner({ title: t('elDone'), name: bp ? name : t('el_' + c.id, { n: '' }), sub: bp ? `${wName(bp.wpn)} · ${t('camo_' + bp.lo.camo)}` : '', xp: c.xp, img }); audio.fanfare(0.85); }, 400);
+      laterShot(shotU, (img) => { if (r) logUnlock(t('chUnlocked'), name, img); hud.eliteBanner({ title: t('elDone'), name: bp ? name : t('el_' + c.id, { n: '' }), sub: bp ? `${wName(bp.wpn)} · ${t('camo_' + bp.lo.camo)}` : '', xp: c.xp, img }); audio.fanfare(0.85); });
       if (r) { G.loadouts = matchLoadouts(); sendLoadout(); }
       continue;
     }
-    setTimeout(() => { hud.unlockBanner({ kind: t(c.kind === 'elite' ? 'elDone' : c.kind === 'mission' ? 'misDone' : r ? 'chUnlocked' : 'chDoneDaily'), name: name + ' +' + c.xp + ' XP' + (c.kind === 'mission' ? ' · +' + MIS_ZP + ' ZP' : ''), img }); audio.play(r ? 'unlock' : 'levelup', { vol: 0.7, ui: true, jitter: 0 }); }, 400);
+    laterShot(shotU, (img) => { if (r) logUnlock(t('chUnlocked'), name, img); hud.unlockBanner({ kind: t(c.kind === 'elite' ? 'elDone' : c.kind === 'mission' ? 'misDone' : r ? 'chUnlocked' : 'chDoneDaily'), name: name + ' +' + c.xp + ' XP' + (c.kind === 'mission' ? ' · +' + MIS_ZP + ' ZP' : ''), img }); audio.play(r ? 'unlock' : 'levelup', { vol: 0.7, ui: true, jitter: 0 }); });
     if (r) { G.loadouts = matchLoadouts(); sendLoadout(); }
   }
 }
@@ -550,6 +549,17 @@ function unlocksAt(wpn, wLevel, pLevel, only = null) {
   return out;
 }
 
+// 15/11 (pedido dele: 'quando mato um bot da uma travada'): a foto do desbloqueio (arma montada + render no 2o contexto + leitura
+// da placa) custava 50-175 ms DENTRO do quadro do abate. Agora entra numa fila: 1 foto a cada 350 ms, comecando depois do abate.
+// cb recebe a imagem (ou null) na ordem em que entrou
+const shotQ = []; let shotBusy = false;
+function laterShot(u, cb) { shotQ.push([u, cb]); if (!shotBusy) { shotBusy = true; setTimeout(shotStep, 300); } }
+function shotStep() {
+  const it = shotQ.shift(); if (!it) { shotBusy = false; return; }
+  let img = null; try { img = it[0] ? unlockShot(it[0]) : null; } catch (e) { console.warn('foto do desbloqueio', e); }
+  try { it[1](img); } catch (e) { console.warn('aviso do desbloqueio', e); }
+  setTimeout(shotStep, 350);
+}
 // foto da arma com a peca nova (banner de desbloqueio)
 let shotR = null, shotScene = null, shotCam = null;
 function unlockShot(u) {
@@ -613,9 +623,11 @@ onProgress((e) => {
   }
   if (e.wpnUp) for (let n = (e.wpnFrom || 0) + 1; n <= e.wpnUp; n++) chEvent({ type: 'wpnUp', wpn: e.wpn }); // missoes diarias (08/11)
   for (const u of got) chEvent({ type: 'unlock', slot: u.slot, wpn: u.wpn });
-  const shots = got.map(u => unlockShot(u));
-  got.forEach((u, i) => logUnlock(t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), u.name, shots[i]));
-  got.slice(0, 3).forEach((u, i) => hud.unlockBanner({ kind: t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) }), name: u.name, img: shots[i], more: i === 2 && got.length > 3 ? got.length - 3 : 0 })); // entram em fila no hud
+  got.forEach((u, i) => laterShot(u, (img) => { // 15/11: foto fora do quadro do abate (fila)
+    const kind = t(u.slot === 'camo' ? 'unlCamo' : 'unlPart', { w: wName(u.wpn) });
+    logUnlock(kind, u.name, img);
+    if (i < 3) hud.unlockBanner({ kind, name: u.name, img, more: i === 2 && got.length > 3 ? got.length - 3 : 0 }); // entram em fila no hud
+  }));
   if (got.length) audio.play('unlock', { vol: 0.8, ui: true, jitter: 0 });
 });
 // nome da arma de alguem (01/11, pedido dele): o do MODELO montado (o mesmo do HUD), nunca o da categoria antiga.
@@ -2276,6 +2288,8 @@ async function beginMatch(join) {
   if (G.state !== 'loading') return;
   await preloadMap(G.M.id); LT.mapa = Math.round(performance.now() - lt0); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
   await warmGuns(); LT.armas = Math.round(performance.now() - lt0);
+  // 15/11: 1a foto de desbloqueio ainda no carregamento (cria o 2o contexto e compila os shaders dele); a do meio da partida sai leve
+  try { unlockShot({ wpn: CATEGORY[settings.primary] ? settings.primary : 'smg' }); } catch { /* */ }
   hideLoading(); LT.total = Math.round(performance.now() - lt0);
   G.state = 'game'; PERF.matches++;
   funil('jogou');
