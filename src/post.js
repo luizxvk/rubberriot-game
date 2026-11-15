@@ -90,7 +90,10 @@ export function makePipeline(renderer, scene, camera, vm) {
   composer.addPass(film);
   composer.addPass(new OutputPass());
   // troca as amostras sem refazer o composer (o alvo e recriado no proximo desenho)
-  const setAA = (n) => { for (const rt of [composer.renderTarget1, composer.renderTarget2]) if (rt.samples !== n) { rt.samples = n; rt.dispose(); } };
+  // 15/11 (relatorio THILASCO: RX 6700 XT, 2560x1080, 37 FPS com JS 4 ms = placa no limite): as amostras iam nos DOIS alvos e o
+  // filme (tela cheia) tambem pagava 8x. A cena (RenderPass + arma) sempre cai no renderTarget2: filme e saida trocam 2x por quadro.
+  // So ele leva amostras; o renderTarget1 (saida do filme) fica sem. Mesma imagem, metade da memoria/banda de MSAA
+  const setAA = (n) => { for (const [rt, s] of [[composer.renderTarget1, 0], [composer.renderTarget2, n]]) if (rt.samples !== s) { rt.samples = s; rt.dispose(); } };
   return { composer, film, vmPass, setAA };
 }
 
