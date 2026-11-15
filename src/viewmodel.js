@@ -971,7 +971,7 @@ export class ViewModel {
     } else if (this.chargeFx) this.chargeFx.visible = false;
     const hideHands = false;
     if (g.scope?.lens) {
-      g.scope.lens.material.uniforms.uOn.value = g.scope.big ? (this.canted ? 0 : THREE.MathUtils.smoothstep(st.ads, 0.55, 0.9)) : 1;
+      { const uo = g.scope.lens.material?.uniforms?.uOn; if (uo) uo.value = g.scope.big ? (this.canted ? 0 : THREE.MathUtils.smoothstep(st.ads, 0.55, 0.9)) : 1; }
       // luneta na mira cheia: o vidro e' desenhado por cima da carcaca (sem o tunel da caixa por dentro)
       const over = g.scope.big && st.ads > 0.8 && !this.canted;
       if (g.scope.lens.material.depthTest === over) { g.scope.lens.material.depthTest = !over; g.scope.lens.renderOrder = over ? 9 : 3; }

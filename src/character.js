@@ -460,7 +460,7 @@ export class Character {
   blotDeath(T, B, sm) {
     const a = sm(T / 0.16), b = sm((T - 0.16) / 0.7), c = sm((T - 1.7) / 0.5), sy = (1 + 0.12 * a * (1 - b)) * (1 - 0.94 * b), sx = 1 + 0.5 * b;
     B.scale.set(sx, Math.max(0.04, sy), sx); B.rotation.set(0, 0, 0); B.position.y = -0.03 * b;
-    if (b > 0.3 && !this.blotMats) { this.blotMats = new Map(); B.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) { this.blotMats.set(o, o.material); o.material = BLOT.ink; } }); }
+    if (b > 0.3 && !this.blotMats) { this.blotMats = new Map(); B.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide && !o.material.uniforms?.uOn && !o.userData.noFx) { this.blotMats.set(o, o.material); o.material = BLOT.ink; } }); }
     B.visible = b < 0.97;
     if (!this.blot) { const g = this.blot = new THREE.Group(), d = new THREE.Mesh(blotDisc(), BLOT.pool); d.rotation.x = -Math.PI / 2; d.position.y = 0.02; g.add(d); g.userData.disc = d; g.userData.drops = [0, 1, 2, 3].map(i => { const m = new THREE.Mesh(BLOT.drop, BLOT.ink), an = i * 1.7 + 0.4; m.userData = { an, h: 0.7 + i * 0.28 }; g.add(m); return m; }); this.root.add(g); }
     const f = this.blot.userData; f.disc.scale.setScalar(0.001 + 0.85 * sm((T - 0.45) / 0.8) * (1 - c));
@@ -472,7 +472,7 @@ export class Character {
     const a = sm(T / 0.14), b = sm((T - 0.14) / 0.95), c = sm((T - 1.8) / 0.55), wob = Math.sin(T * 15) * 0.07 * (1 - b) * a;
     const sy = (1 + 0.1 * a * (1 - b)) * (1 - 0.95 * b), sx = 1 + 0.75 * b;
     B.scale.set(sx + wob, Math.max(0.035, sy), sx - wob); B.rotation.set(Math.sin(T * 9) * 0.08 * (1 - b), 0, Math.sin(T * 7) * 0.1 * (1 - b)); B.position.y = -0.04 * b;
-    if (b > 0.42 && !this.blotMats) { this.blotMats = new Map(); B.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) { this.blotMats.set(o, o.material); o.material = BLOT.ink; } }); }
+    if (b > 0.42 && !this.blotMats) { this.blotMats = new Map(); B.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide && !o.material.uniforms?.uOn && !o.userData.noFx) { this.blotMats.set(o, o.material); o.material = BLOT.ink; } }); }
     B.visible = b < 0.985;
     if (!this.blot) {
       const g = this.blot = new THREE.Group(), d = new THREE.Mesh(blotDisc(), BLOT.pool); d.rotation.x = -Math.PI / 2; d.position.y = 0.02; g.add(d); g.userData.disc = d;
@@ -492,7 +492,7 @@ export class Character {
   startDraw() {
     const B = this.body; B.scale.set(1, 1, 1); B.position.y = 0; B.rotation.set(0, 0, 0); this.root.updateMatrixWorld(true);
     const v = new THREE.Vector3(), y0 = this.root.getWorldPosition(new THREE.Vector3()).y, list = [];
-    B.traverse(o => { if (!o.isMesh || !o.visible || !o.material) return; o.getWorldPosition(v); list.push({ o, y: v.y - y0, m: o.material, line: o.material.side === THREE.BackSide }); });
+    B.traverse(o => { if (!o.isMesh || !o.visible || !o.material || o.material.uniforms?.uOn || o.userData.noFx) return; o.getWorldPosition(v); list.push({ o, y: v.y - y0, m: o.material, line: o.material.side === THREE.BackSide }); });
     if (!list.length) return;
     this.pencil ||= pencilMesh(); this.root.add(this.pencil);
     this.draw = { t: 0, list, top: Math.max(...list.map(p => p.y)) + 0.2 };
@@ -620,7 +620,9 @@ export class Character {
     // laser dos outros: desligado sempre (03/11, pedido dele: os feixes dos bots/jogadores cruzando a tela
     // atrapalhavam). So o seu aparece (viewmodel + ponto no mundo, igual no multiplayer)
     const lz = this.gun?.userData.laser;
-    if (lz) lz.beam.material.uniforms.uOn.value = 0;
+    // 15/11 (bug em producao: todo mundo travado): a morte derretida trocava o material do FEIXE por tinta, esta linha estourava
+    // todo quadro (antes do contador da morte) e o quadro inteiro parava: jogadores e o proprio controle congelados
+    { const u = lz?.beam?.material?.uniforms?.uOn; if (u) u.value = 0; }
     this.phase += dt * (anim === 'tac' ? 15 : anim === 'sprint' ? 12.5 : 10) * Math.min(1, speed / 6 + 0.15);
     const ph = this.phase;
     // deslize e agachar entram e saem amaciados (01/11: o boneco pulava de pe pro deslize num quadro so)

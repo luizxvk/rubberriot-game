@@ -3037,7 +3037,7 @@ function frameBody(now, realDt) {
     const behind = camD > 9 && G.state === 'game' && !replay.on && frLim < Math.PI && (r.pos[0] - camera.position.x) * camF.x + (r.pos[1] + 1 - camera.position.y) * camF.y + (r.pos[2] - camera.position.z) * camF.z < camD * Math.cos(Math.min(Math.PI, frLim + Math.asin(Math.min(1, 3 / camD))));
     const hideB = !!(r.occl || behind || r.warming); if (r.char.body.visible === hideB) r.char.body.visible = !hideB;
     const chStep = !r.occl && ((camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on); // fora da tela: a vez dele vem 10x por segundo
-    if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); r.animAcc = 0; }
+    if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); try { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); } catch (e) { reportaErro(e, 'boneco ' + G.mode + '/' + (r.wpn || '')); } r.animAcc = 0; } // 15/11: erro num boneco nao para o quadro (travava todo mundo)
     if (chStep === !!r.frozen) { r.frozen = !chStep; if (r.frozen) r.char.root.updateMatrixWorld = NO_MATRIX; else delete r.char.root.updateMatrixWorld; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
