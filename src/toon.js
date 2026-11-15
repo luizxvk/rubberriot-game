@@ -85,12 +85,15 @@ export function smoothGeo(g) {
     m = mergeVertices(c, 1e-3); c.dispose();
     m.computeVertexNormals();
     sharedSet.add(m);
-    if (k) { shapeCache.set(k, m); if (shapeCache.size > SHAPE_MAX) shapeCache.delete(shapeCache.keys().next().value); }
+    // 15/11: o que sai do cache cheio tambem sai da placa (antes so saia da lista: 1 malha a mais na memoria de video pra sempre).
+    // Se alguem ainda usar, o three sobe de novo no proximo desenho
+    if (k) { shapeCache.set(k, m); if (shapeCache.size > SHAPE_MAX) { const k0 = shapeCache.keys().next().value; const old = shapeCache.get(k0); shapeCache.delete(k0); old?.dispose(); } }
   }
   geoCache.set(g, m);
   return m;
 }
 export const smoothCacheSize = () => shapeCache.size;
+export const rigidCacheSize = () => rigidCache.size; // 15/11: medir o cache (teste de vazamento)
 
 // junta pecinhas paradas (14/11, desempenho: boneco longe ainda desenhava 39 malhas; a luva de espinho sozinha eram 12 cones).
 // Dentro de um acessorio (chapeu, oculos, mascara, enfeite da luva): pecas com o MESMO material, sem filho de verdade e que
@@ -123,7 +126,7 @@ export function mergeRigid(root, key) {
       const parts = gr.list.map(o => { const c = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const a of Object.keys(c.attributes)) if (a !== 'position' && a !== 'normal') c.deleteAttribute(a); if (!c.attributes.normal) c.computeVertexNormals(); c.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); return c; });
       g = mergeGeometries(parts); for (const c of parts) c.dispose();
       if (!g) continue;
-      if (ck) { sharedSet.add(g); rigidCache.set(ck, g); if (rigidCache.size > RIGID_MAX) rigidCache.delete(rigidCache.keys().next().value); }
+      if (ck) { sharedSet.add(g); rigidCache.set(ck, g); if (rigidCache.size > RIGID_MAX) { const k0 = rigidCache.keys().next().value; const old = rigidCache.get(k0); rigidCache.delete(k0); old?.dispose(); } } // 15/11: libera o que sai
     }
     const m = new THREE.Mesh(g, gr.o.material); m.renderOrder = gr.o.renderOrder; m.visible = gr.o.visible;
     if (gr.o.userData.detail) m.userData.detail = true; if (gr.o.userData.gloveExtra) m.userData.gloveExtra = true;
@@ -362,8 +365,10 @@ export function outlineCells(meshes, whole, th, cell) {
 }
 
 export function freeGeos(root) {
-  root?.traverse(o => { if (o.geometry && !sharedSet.has(o.geometry)) o.geometry.dispose(); });
+  root?.traverse(o => { if (o.geometry && !sharedSet.has(o.geometry) && !o.geometry.userData?.charShared) o.geometry.dispose(); });
 }
+// 15/11 (FPS caindo partida apos partida: geometria acumulando na placa): tira a peca do pai E libera o que e so dela
+export function dropObj(o) { if (!o) return; o.parent?.remove(o); freeGeos(o); }
 
 export function ink(geo, color, th = 0.04, opts) {
   const m = new THREE.Mesh(geo, toon(color, opts));

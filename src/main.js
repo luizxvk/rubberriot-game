@@ -65,7 +65,7 @@ import { applyStickers, pickOnGun, nudgeOnGun } from './stickers.js';
 import { loadArsenal, getLoadouts, scopeTarget, freeScope, nativePart, handleFits, convOptions, muzzleOptions } from './arsenal.js';
 import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang, modeName } from './i18n.js';
-import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG, cullOutlines } from './toon.js';
+import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG, cullOutlines, isSharedGeo, smoothCacheSize, rigidCacheSize, dropObj } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
 import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack, wpnTracked } from './progress.js';
 import { Lobby, runLoading, hideLoading } from './lobby.js';
@@ -651,7 +651,7 @@ if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Test
 if (import.meta.env.DEV) window.__soloW = (o) => startGame(soloNet({ lobby: false, ...o }), 'Teste'); // 14/11: partida solo no WORKER por script (medir os bots)
 // app de PC (10/11): o Electron marca o navegador (RubberRiotDesktop no user agent); some o banner de baixar
 if (/RubberRiotDesktop/.test(navigator.userAgent)) document.body.classList.add('rr-desktop');
-window.__A = ARS; window.__G = G; window.__AU = audio; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
+window.__A = ARS; window.__G = G; window.__AU = audio; window.__T = { isSharedGeo, smoothCacheSize, rigidCacheSize }; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
 

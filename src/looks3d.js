@@ -1,7 +1,7 @@
 // Monta o visual do boneco (chapeu, olhos, oculos, luvas, camisa, estampa do short, efeito).
 // Tudo procedural, no mesmo traco de tinta do resto (ink + toon). A cor do time fica no short e na fita.
 import * as THREE from 'three';
-import { ink, toon, PAL, smoothGeo } from './toon.js';
+import { ink, toon, PAL, smoothGeo, dropObj } from './toon.js';
 import { camoGlsl, camoTime } from './camos.js';
 import { SKIN_CODE2, SKIN_GLSL2, SKIN_GLSL_HELP } from './skins3d.js';
 export { buildSkinFx } from './skins3d.js';
@@ -579,7 +579,7 @@ export function ovenTex() {
 export function styleGlove(glove, style, color) {
   const col = style === 'golden' ? 0xd4a017 : style === 'oven' ? 0xffffff : hex(color);
   const mat = style === 'oven' ? toon(0xffffff, { map: ovenTex() }) : toon(col);
-  for (const c of [...glove.children]) if (c.userData.gloveExtra) glove.remove(c);
+  for (const c of [...glove.children]) if (c.userData.gloveExtra) dropObj(c); // 15/11: peca velha da luva saia sem liberar
   glove.material = mat;
   for (const c of glove.children) if (c.isMesh && !c.userData.outline && c.material?.isMeshToonMaterial) c.material = mat;
   const base = glove.userData.baseScale ||= glove.scale.clone(); // luva Mickey ja vem achatada: o estilo multiplica por cima
