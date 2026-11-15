@@ -6,7 +6,7 @@
 import { Core } from '../shared/core.js';
 
 let core = null, out = [], timer = null, last = 0, alive = 0;
-const flush = () => { if (out.length) { const batch = out; out = []; self.postMessage({ k: 'out', batch }); } };
+const flush = () => { if (out.length) { const batch = out; out = []; self.postMessage({ k: 'out', batch, at: performance.timeOrigin + performance.now() }); } }; // at: relogio absoluto (o jogo entrega no ritmo em que foi produzido)
 function step() {
   const now = performance.now();
   if (now - alive > 300) { clearInterval(timer); timer = null; return; } // o jogo parou de pedir ha 0,3 s: pausa (quadro travado nao conta)

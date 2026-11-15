@@ -6,6 +6,30 @@ import { buildGun, bpLoadout } from './arsenal.js';
 import { milkBottle } from './world.js';
 
 const LOOT_FAR = 90; // m: alem disso o item nao e desenhado
+const LOOT_SPIN = 45; // m: alem disso o item para de girar e sai do percurso de matrizes do three
+// 14/11 (BR com 49 bots): item parado (caixote, longe) sai do percurso do three: eram ~1.800 pecas recalculadas todo quadro.
+// No three r169 matrixWorldAutoUpdate = false ainda percorre os filhos; so trocar o updateMatrixWorld tira de verdade
+const NO_MATRIX = () => {}, MW = THREE.Object3D.prototype.updateMatrixWorld;
+function hold(it, on) {
+  if (on === !!it.held) return;
+  it.held = on;
+  if (on) { delete it.g.updateMatrixWorld; MW.call(it.g, true); it.g.updateMatrixWorld = NO_MATRIX; } else delete it.g.updateMatrixWorld;
+}
+// 14/11 (BR com 49 bots): arma no chao tinha ~32 mil vertices e 7 malhas (corpo, pecas, contornos); 52 delas a vista = 450 malhas.
+// Alem de LOOT_LOD fica so a maior peca (corpo) e o disco colorido, sem contorno: de longe a leitura e a mesma
+const LOOT_LOD = 20;
+function lootLod(it, lo) {
+  if (it.lodM === it.model && it.lodLo === lo) return;
+  if (it.lodM !== it.model) it.lodKeep = null; // modelo refeito (saiu e voltou pra perto)
+  it.lodM = it.model; it.lodLo = lo;
+  if (!it.lodKeep) {
+    let body = null, big = 0;
+    it.model.traverse(o => { if (o.isMesh && !o.material?.isShaderMaterial && o !== it.model.userData.pad) { o.geometry.computeBoundingSphere?.(); const r = o.geometry.boundingSphere?.radius || 0; if (r > big) { big = r; body = o; } } });
+    const keep = new Set(); for (const k of [body, it.model.userData.pad]) for (let q = k; q && q !== it.model; q = q.parent) keep.add(q);
+    it.lodKeep = keep;
+  }
+  it.model.traverse(o => { if ((o.isMesh || o.isSprite) && !it.lodKeep.has(o)) o.visible = !lo; });
+}
 const LOOT_DROP = 115; // m: alem disso o modelo sai da memoria
 // material de pintura de arma e unico por modelo (paintMaterial): libera quando o item sai do mapa.
 // Geometria e contorno sao compartilhados, nao mexe.
@@ -157,12 +181,14 @@ export class BrView {
     for (const it of this.items.values()) {
       // longe da camera nao desenha nem gira (a ilha tem centenas de itens)
       const d2 = cam ? (it.g.position.x - cx) ** 2 + (it.g.position.z - cz) ** 2 : 0, far = d2 > LOOT_FAR * LOOT_FAR;
-      if (!far && !it.model && built < 3) { it.model = it.make(); it.g.add(it.model); built++; }
-      else if (it.model && d2 > LOOT_DROP * LOOT_DROP) dropModel(it); // folga maior que a de desenhar: andar na beirada nao fica criando e apagando
+      if (!far && !it.model && built < 3) { hold(it, false); it.model = it.make(); it.g.add(it.model); built++; }
+      else if (it.model && d2 > LOOT_DROP * LOOT_DROP) { hold(it, false); dropModel(it); } // folga maior que a de desenhar: andar na beirada nao fica criando e apagando
       // ultimos 5 s: pisca avisando que vai sumir
       const left = it.die ? it.die - now : 99;
       it.g.visible = !far && (left > 5 || Math.sin(t * (left > 2 ? 10 : 22)) > -0.2);
-      if (far || it.kind === 'crate') { i++; continue; }
+      if (it.model && it.kind !== 'crate') lootLod(it, d2 > LOOT_LOD * LOOT_LOD);
+      if (far || it.kind === 'crate' || d2 > LOOT_SPIN * LOOT_SPIN) { hold(it, true); i++; continue; }
+      hold(it, false);
       it.g.rotation.y = t * 1.4 + i; it.g.position.y = it.y + Math.sin(t * 3 + i) * 0.12; i++;
     }
     for (let k = this.falling.length - 1; k >= 0; k--) {

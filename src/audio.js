@@ -104,6 +104,7 @@ class Audio {
       const pol = name.startsWith('music') || name.startsWith('dn_') || name.startsWith('vo_') ? raw : this.polish(raw, name); // trilha nao passa pelo tratamento de efeito curto
       // arquivo mudo (veio vazio do gerador) = usa o sintetizado
       if (pol) this.buf[name] = pol;
+      else (this.failed ||= new Set()).add(name); // 14/11: arquivo mudo virava download + decodificacao A CADA TIRO (gunSound pedia de novo); agora fica no som da categoria
       if (name === (this.track || 'music') && this.wantMusic) this.music(true);
     } catch { /* sem o arquivo, cai no sintetizador */ }
     this.loading.delete(name);

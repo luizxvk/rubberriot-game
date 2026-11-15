@@ -11,6 +11,7 @@ import { buildGun, rocketMesh } from './arsenal.js';
 
 export const BEAT = 2.2; // batidas por segundo da danca da cidade
 
+const FROZEN_MW = () => {}; // 14/11: galho parado do cenario fora do percurso de matrizes (ver freeze)
 const THEME = {
   bonde: { sky: 0xd6d2c6, ground: ['#cdc6b6', '#7a7366'], trees: [] }, // Ladeira do Bonde: a rua vem do trilho (escortview)
   // bairros grandes e avenida (08/11): as ruas vem do proprio mapa (M.roads)
@@ -497,7 +498,9 @@ export function buildWorld(scene, M) {
     const live = new Set([sunSpr, ...chimneys.map(ch => ch.obj)].filter(Boolean)), path = new Set();
     for (const l of live) for (let p = l.parent; p; p = p.parent) path.add(p);
     g.updateMatrixWorld(true);
-    g.traverse(o => { if (o === g || live.has(o)) return; let p = o.parent, inLive = false; while (p && p !== root) { if (live.has(p)) { inLive = true; break; } p = p.parent; } if (inLive) return; o.matrixAutoUpdate = false; if (!path.has(o)) o.matrixWorldAutoUpdate = false; });
+    g.traverse(o => { if (o === g || live.has(o)) return; let p = o.parent, inLive = false; while (p && p !== root) { if (live.has(p)) { inLive = true; break; } p = p.parent; } if (inLive) return; o.matrixAutoUpdate = false; if (!path.has(o)) { o.matrixWorldAutoUpdate = false; if (o.parent === g || path.has(o.parent)) o.updateMatrixWorld = FROZEN_MW; } });
+    // 14/11: no three r169 o matrixWorldAutoUpdate = false NAO tira os filhos do percurso (o laco chama todos mesmo assim).
+    // O topo de cada galho parado troca o updateMatrixWorld por um vazio: o galho inteiro sai do percurso de verdade
   }
   ready.then(() => freeze(root)); // materiais do modelo em cache sao compartilhados: cada montagem acerta o estado (nada de janela acesa de dia)
   return {

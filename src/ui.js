@@ -230,6 +230,7 @@ export function initMenus(o) {
   const defs = [
     // 10/11 (pedido dele: graficos mais amplos): predefinicao que acerta tudo de uma vez; mexer numa opcao vira "Personalizado"
     ['seg', 'gfxPreset', 's_gfxPreset', [['perf', 'gp_perf'], ['bal', 'gp_bal'], ['qual', 'gp_qual'], ['ultra', 'gp_ultra'], ['custom', 'gp_custom']]],
+    ['autogfx'], // 14/11 (pedido dele): botao que mede o PC e escolhe a predefinicao sozinho
     ['seg', 'fpsCap', 's_fpsCap', [['30', 'fps_30'], ['60', 'fps_60'], ['120', 'fps_120'], ['144', 'fps_144'], ['0', 'fps_max']]],
     ['toggle', 'dynRes', 's_dynRes'],
     ['seg', 'fxQ', 's_fxQ', [['low', 'q_low'], ['mid', 'q_mid'], ['high', 'q_high']]],
@@ -300,7 +301,7 @@ export function initMenus(o) {
     autoFire: 'play', adsFireBtn: 'touch', fireLBtn: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
     gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', upscale: 'video', fsrSharp: 'video', texQ: 'video', winMode: 'video', winSize: 'video', angle: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
-  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[0] === 'retglow' ? 'retglow' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
+  const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[0] === 'autogfx' ? 'gfxPreset' : d[0] === 'retglow' ? 'retglow' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
   const padOn = () => [...(navigator.getGamepads?.() || [])].some(Boolean);
   const TABS = isTouch ? ['touch', ...(padOn() ? ['pad'] : []), 'play', 'video', 'audio', 'game'] : ['ctrl', 'pad', 'play', 'video', 'audio', 'game']; // play: Jogabilidade (09/11, pedido dele)
@@ -311,6 +312,7 @@ export function initMenus(o) {
   const buildSettings = () => { sl.innerHTML = `<nav class="set-tabs" role="tablist">${TABS.map(g => `<button role="tab" data-sg="${g}" aria-selected="${g === setTab}">${t('sg_' + g)}</button>`).join('')}</nav><div class="set-body">` + defs.filter(d => grp(d) === setTab).map(d => {
     if (d[0] === 'range') return `<label class="field"><span>${t(d[2])} <b data-out="${d[1]}"></b></span><input type="range" data-k="${d[1]}" min="${d[3]}" max="${d[4]}" step="${d[5]}"></label>`;
     if (d[0] === 'retglow') return `<div class="field rg-field"><span>${t('s_retGlow')} <b id="rgOut">${Math.round((S.retGlow ?? 1) * 100)}%</b></span><div class="rg-row"><canvas id="rgPrev" width="240" height="160" aria-label="${t('s_retGlowPrev')}"></canvas><input type="range" id="rgIn" min="0" max="1" step="0.05" value="${S.retGlow ?? 1}" aria-label="${t('s_retGlow')}"></div></div>`;
+    if (d[0] === 'autogfx') return `<div class="field"><span>${t('s_autoGfx')} <b id="agOut"></b></span><button type="button" class="hs-open" id="agRun">${t('autoGfxBtn')}</button></div>`;
     if (d[0] === 'hudscale') return `<div class="field"><span>${t('s_hudScale')} <b id="hsOut">${Math.round((S.hudScale || 1) * 100)}%</b></span><button type="button" class="hs-open" id="hsOpen">${t('hsPreview')}</button></div>`;
     if (d[0] === 'xhair') return `<div class="field xh-field"><span>${t('s_xhair')}</span><div class="xh-row"><div class="xh-prev" aria-hidden="true"><div class="cross" id="xhPrev">${XH_CROSS}</div></div><div class="xh-opts"><div class="seg" data-seg="xhair">${XHAIRS.map(x => `<button data-v="${x}">${t('xh_' + x)}</button>`).join('')}</div><div class="xh-cols" role="group" aria-label="${t('s_xhairColor')}">${XH_COLORS.map(c => `<button data-xc="${c}" style="background:${c}" aria-label="${t('s_xhairColor')} ${c}"></button>`).join('')}</div></div></div></div>`;
     if (d[0] === 'seg') return `<div class="field"><span>${t(d[2])}</span><div class="seg" data-seg="${d[1]}">${d[3].map(([v, l]) => `<button data-v="${v}">${d[1] === 'lang' ? l : l[0] === '=' ? l.slice(1) : t(l)}</button>`).join('')}</div></div>`;
@@ -344,8 +346,40 @@ export function initMenus(o) {
     ultra: { res: 1, aa: '8x', draw: 'far', outl: 'full', chars: 'high', grain: 0.6, fxQ: 'high', dynRes: false, scopeQ: 'full' },
   };
   const GFX_KEYS = new Set(Object.keys(GFX_PRESETS.perf));
+  // ajuste automatico (14/11, pedido dele: "definir sozinho, mais pro minimo ou pro maximo"): nota da placa (integrada / dedicada
+  // antiga / dedicada forte), menos se a tela e grande ou o PC tem pouco nucleo/memoria, e o FPS medido por 2,5 s na tela de agora
+  const PRESET_ORDER = ['perf', 'bal', 'qual', 'ultra'];
+  const autoGfx = () => new Promise((res) => {
+    let gpu = '';
+    try { const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl'), e = gl?.getExtension('WEBGL_debug_renderer_info'); gpu = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER) || ''); gl?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* */ }
+    const g = gpu.toLowerCase();
+    let score = /swiftshader|llvmpipe|basic render|software/.test(g) ? 0
+      : /rtx|rx ?[67]\d{3}|rx ?5[67]00|arc a\d|gtx ?16\d\d|gtx ?10[78]0|radeon pro w|apple m\d (pro|max|ultra)/.test(g) ? 2.6
+      : /gtx|rx ?[45]\d0|rx ?5[45]00|r9 |vega|radeon(?!.*graphics)|quadro|apple m\d/.test(g) ? 1.6
+      : /intel|uhd|iris|hd graphics|mali|adreno|powervr|radeon.*graphics|vega \d+ graphics/.test(g) ? 0.6 : 1.2;
+    const px = screen.width * screen.height * Math.min(2, devicePixelRatio || 1);
+    if (px > 3.6e6) score -= 0.5; // 1440p cheio, 4K, ultrawide grande
+    if ((navigator.hardwareConcurrency || 4) < 4 || (navigator.deviceMemory || 8) <= 4) score -= 0.8;
+    if (isTouch) score = Math.min(score, 0.6);
+    const ts = []; let last = performance.now(); const t0 = last;
+    const f = () => { const now = performance.now(); ts.push(now - last); last = now; if (now - t0 < 2500) requestAnimationFrame(f); else done(); };
+    const done = () => {
+      const s = ts.slice(5).sort((a, b) => a - b), p90 = s[Math.floor(s.length * 0.9)] || 16, fps = 1000 / (s.reduce((a, b) => a + b, 0) / Math.max(1, s.length));
+      // o menu pesa menos que a partida: pede folga (menu a 90 = partida perto de 50)
+      if (p90 > 28 || fps < 50) score -= 1; else if (p90 > 16 || fps < 90) score -= 0.5; else if (fps > 140 && p90 < 9) score += 0.4;
+      res(PRESET_ORDER[Math.max(0, Math.min(3, Math.round(score)))]);
+    };
+    requestAnimationFrame(f);
+  });
   sl.addEventListener('input', (e) => { if (e.target.id === 'rgIn') { S.retGlow = Number(e.target.value); o.saveSettings(); refresh(); return; } const k = e.target.dataset.k; if (!k) return; S[k] = Number(e.target.value); if (GFX_KEYS.has(k)) S.gfxPreset = 'custom'; refresh(); o.saveSettings(); });
   sl.addEventListener('click', (e) => {
+    if (e.target.closest('#agRun')) { // ajuste automatico (14/11): mede e aplica a predefinicao que cabe no PC
+      const bt = e.target.closest('#agRun'); if (bt.disabled) return; bt.disabled = true; audio.play('ui_click', { ui: true });
+      const out = sl.querySelector('#agOut'); if (out) out.textContent = t('autoGfxRun');
+      autoGfx().then(p => { Object.assign(S, GFX_PRESETS[p]); S.gfxPreset = p; o.saveSettings(); buildSettings(); refresh(); const o2 = sl.querySelector('#agOut'); if (o2) o2.textContent = t('autoGfxDone', { p: t('gp_' + p) }); })
+        .catch(() => { bt.disabled = false; if (out) out.textContent = ''; });
+      return;
+    }
     if (e.target.closest('#hsOpen')) { audio.play('ui_click', { ui: true }); openHudScale({ value: S.hudScale || 1, onDone: (k, save) => { if (save) { S.hudScale = k; o.saveSettings(); } const out = sl.querySelector('#hsOut'); if (out) out.textContent = Math.round((S.hudScale || 1) * 100) + '%'; } }); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); const tb = sl.querySelector(`.set-tabs [data-sg="${setTab}"]`); tb?.focus({ preventScroll: true }); tb?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } return; }

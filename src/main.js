@@ -228,7 +228,7 @@ function applySettings() {
   window.rrDesktop?.setWindow(settings.winMode === 'win' ? settings.winSize : settings.winMode); // app de PC (14/11): janela com tamanho / maximizada / tela cheia
   resize();
   { const n = { off: 0, '2x': 2, '4x': 4, '8x': 8 }[settings.aa] ?? (isTouch ? 0 : 4); setAA(n); menuPipe.setAA(n); } // antisserrilhado (07/11)
-  { const O = { eco: [40, 12], near: [90, 45], full: [1e9, 1e9] }[settings.outl] || [90, 45]; OUTLINE_CFG.map = O[0]; OUTLINE_CFG.thin = O[1]; const C = { low: [11, 20], mid: [18, 34], high: [34, 1e9] }[settings.chars] || [18, 34]; CHAR_LOD.far = C[0]; CHAR_LOD.hull = C[1]; } // 09/11
+  { const O = { eco: [40, 12], near: [90, 45], full: [1e9, 1e9] }[settings.outl] || [90, 45]; OUTLINE_CFG.map = O[0]; OUTLINE_CFG.thin = O[1]; CHAR_LOD.vfar = O[0]; const C = { low: [11, 20], mid: [18, 34], high: [34, 1e9] }[settings.chars] || [18, 34]; CHAR_LOD.far = C[0]; CHAR_LOD.hull = C[1]; } // 09/11
   film.uniforms.grain.value = settings.grain;
   film.uniforms.mode.value = settings.film === 'bw' ? 0 : settings.film === 'full' ? 2 : 1;
   audio.setVolumes(SS?.vol || { master: settings.master, music: settings.music, sfx: settings.sfx, vo: settings.vo ?? 0.7 }); // tela dividida: volume do PC, igual nas telas
@@ -651,7 +651,7 @@ if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Test
 if (import.meta.env.DEV) window.__soloW = (o) => startGame(soloNet({ lobby: false, ...o }), 'Teste'); // 14/11: partida solo no WORKER por script (medir os bots)
 // app de PC (10/11): o Electron marca o navegador (RubberRiotDesktop no user agent); some o banner de baixar
 if (/RubberRiotDesktop/.test(navigator.userAgent)) document.body.classList.add('rr-desktop');
-window.__A = ARS; window.__G = G; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
+window.__A = ARS; window.__G = G; window.__AU = audio; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
 
@@ -794,12 +794,27 @@ function warmLater(obj) {
   p.then(show, show);
 }
 
+// 14/11 (pedido dele: FPS caindo de 75 pra 40 online): jogador entrando ou trocando de visual (skin animada, efeito) compilava o
+// shader NA HORA da 1a aparicao: quadro de 150-370 ms. Mesmo esquema da arma: compila em segundo plano e o corpo so aparece
+// pronto (no maximo 1,5 s escondido; o frameBody le r.warming)
+function warmChar(r) {
+  if (!r?.char || !renderer.compileAsync || G.state !== 'game') return;
+  const n = (r.warmN = (r.warmN || 0) + 1);
+  r.warming = true;
+  const done = () => { if (r.warmN === n) r.warming = false; };
+  const c = r.char, rv = c.root.visible, bv = c.body.visible; c.root.visible = c.body.visible = true; // o compile so pega o que esta visivel (atras da parede tambem conta)
+  const pr = compileSafe(c.root, camera, scene, 1500);
+  c.root.visible = rv; c.body.visible = bv;
+  pr.then(done, done);
+}
+
 function remoteFor(p) {
   let r = G.remotes.get(p.id);
   if (!r) {
     r = { id: p.id, mob: p.mob || null, char: p.mob ? new MobChar(p.mob) : new Character(p.team, p.name, lookOf(p)), pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
     scene.add(r.char.root);
     G.remotes.set(p.id, r);
+    warmChar(r);
   }
   return r;
 }
@@ -903,9 +918,15 @@ function onSnap(s) {
     seen.add(p.id);
     const r = remoteFor(p);
     // trocou de time (infectado): o boneco e' refeito na cor nova
-    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; }
+    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; warmChar(r); }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
+    { // 14/11 (pedido dele: 'bots lagando no offline'): o worker manda 60 estados/s e a tela roda a 75+; quadro sem estado novo = bot
+      // parado 1 quadro e depois pulando. Guarda a velocidade entre estados pra o quadro do meio seguir andando (frameBody)
+      const now = performance.now(), dts = (now - (r.snapT || 0)) / 1000, o = r.target;
+      r.sv = o && dts > 0.004 && dts < 0.2 && Math.hypot(p.pos[0] - o[0], p.pos[2] - o[2]) < 3 ? [(p.pos[0] - o[0]) / dts, (p.pos[1] - o[1]) / dts, (p.pos[2] - o[2]) / dts] : null;
+      r.snapT = now;
+    }
     r.target = [...p.pos]; r.yaw = p.yaw; r.pitch = p.pitch; r.anim = p.anim; r.alive = p.alive; r.team = p.team; r.gh = !!p.gh;
     r.kills = p.kills; r.hp = p.hp; r.dn = p.dn || 0; r.rv = p.rv || 0;
     if (r.mob) { r.mh = p.mh; r.hk = p.hk; r.char.setHp(p.hp / (p.mh || 1)); if (p.mob === 'reiTinteiro') r.char.boss({ lid: p.hk ? 1 : 0 }); }
@@ -1312,7 +1333,7 @@ function onEvent(e) {
       }
       break;
     case 'look':
-      if (e.id !== G.myId) { G.remoteLook.set(e.id, e.look); G.remotes.get(e.id)?.char.setLook(e.look); }
+      if (e.id !== G.myId) { G.remoteLook.set(e.id, e.look); { const rl = G.remotes.get(e.id); if (rl) { rl.char.setLook(e.look); warmChar(rl); } } }
       break;
     case 'ladder': // escada de armas sorteada pra partida
       G.ladder = e.list.map(b => ({ wpn: wpnOfBody(b), body: b })); G.ladderId = e.id;
@@ -2639,7 +2660,7 @@ let last = performance.now();
 let menuT = 0;
 const tmpV = new THREE.Vector3();
 // 08/11 (desempenho): boneco fora da tela ou muito longe nao recalcula as ~100 pecas todo quadro (trocar updateMatrixWorld corta a descida na arvore)
-const NO_MATRIX = () => {}, camFr = new THREE.Frustum(), camPV = new THREE.Matrix4(), chSph = new THREE.Sphere();
+const NO_MATRIX = () => {}, tmpF = new THREE.Vector3(), camFr = new THREE.Frustum(), camPV = new THREE.Matrix4(), chSph = new THREE.Sphere();
 
 // granada cozinhando: tracejado (bolinhas) com a mesma fisica do servidor ate o pavio que sobra, e um anel
 // onde ela estoura. Tinta preta (o filtro do jogo tira a cor, branco sumia no chao); pisca no fim do pavio.
@@ -2983,12 +3004,17 @@ function frameBody(now, realDt) {
   else if (G.carView) { G.carView.dispose(); G.carView = null; }
   camFr.setFromProjectionMatrix(camPV.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   const aimedFoe = aimedEnemy();
+  // 14/11 (BR com 49 bots): boneco bem atras da camera nao desenha o corpo (cone da tela + 35 graus de folga, pra virada rapida nao
+  // mostrar ninguem faltando na borda). O three percorria e testava cada pecinha de 49 bonecos todo quadro
+  const camF = camera.getWorldDirection(tmpF), tvF = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), frLim = Math.atan(Math.hypot(tvF, tvF * camera.aspect)) + 0.61;
+  const lodK = Math.min(1, (G.scopeDrawn ? Math.tan(THREE.MathUtils.degToRad(scopeCam.fov) / 2) : tvF) / Math.tan(THREE.MathUtils.degToRad(settings.fov || 90) / 2)); // luneta: o detalhe vale pela distancia que APARECE (4x = 4x mais perto)
   for (const r of G.remotes.values()) {
     if (replay.on && r.frozen) { r.frozen = false; delete r.char.root.updateMatrixWorld; }
     if (replay.on && replay.pose(r, r.id)) continue;
     const k = 1 - Math.exp(-14 * dt);
     const ox = r.pos[0], oz = r.pos[2];
-    r.pos[0] += (r.target[0] - r.pos[0]) * k; r.pos[1] += (r.target[1] - r.pos[1]) * k; r.pos[2] += (r.target[2] - r.pos[2]) * k;
+    const ex = r.sv && G.net?.w ? Math.min(0.05, (performance.now() - r.snapT) / 1000) : 0; // solo no worker: segue a velocidade ate 50 ms entre um estado e outro
+    r.pos[0] += (r.target[0] + (ex && r.sv[0] * ex) - r.pos[0]) * k; r.pos[1] += (r.target[1] + (ex && r.sv[1] * ex) - r.pos[1]) * k; r.pos[2] += (r.target[2] + (ex && r.sv[2] * ex) - r.pos[2]) * k;
     r.speed = r.speed * 0.8 + (Math.hypot(r.pos[0] - ox, r.pos[2] - oz) / Math.max(dt, 1e-3)) * 0.2;
     r.char.root.position.fromArray(r.pos);
     let dy = r.yaw - r.char.root.rotation.y;
@@ -2999,7 +3025,7 @@ function frameBody(now, realDt) {
     if (rs) { r.pos = [...rs.pos]; r.char.root.position.fromArray(r.pos); r.char.root.rotation.y = rs.yaw; r.speed = 0; r.steer = rs.steer; let o = r.yaw - rs.yaw; r.aimOff = Math.atan2(Math.sin(o), Math.cos(o)); } else { r.steer = 0; r.aimOff = 0; } // sentado: corpo preso no banco
     const camD = camera.position.distanceTo(tmpV.fromArray(r.pos));
     // longe (battle royale com 50): o esqueleto anima 10x por segundo em vez de todo quadro; de perto nada muda
-    r.animAcc = (r.animAcc || 0) + dt;
+    r.animAcc = (r.animAcc ?? Math.random() * 0.1) + dt; // 14/11: cada um comeca numa fase (antes os 40 de longe animavam todos no MESMO quadro, a cada 6: travada)
     // 09/11 (mapas de cidade): boneco atras de predio nao desenha. 4 raios (cabeca, peito, ombros), confere a cada 5 quadros; depois de visto fica 0,4 s garantido (nada de piscar na quina)
     if (G.state === 'game' && G.M && r.alive && camD > 9 && !replay.on && !r.char.seated) {
       if (((r.occN = (r.occN || 0) + 1) + (r.occOff ??= Math.floor(Math.random() * 5))) % 5 === 0) {
@@ -3008,13 +3034,14 @@ function frameBody(now, realDt) {
         r.occl = G.t - (r.seenT ?? -9) > 0.4;
       }
     } else { r.occl = false; r.seenT = G.t; }
-    if (r.char.body.visible === !!r.occl) r.char.body.visible = !r.occl;
+    const behind = camD > 9 && G.state === 'game' && !replay.on && frLim < Math.PI && (r.pos[0] - camera.position.x) * camF.x + (r.pos[1] + 1 - camera.position.y) * camF.y + (r.pos[2] - camera.position.z) * camF.z < camD * Math.cos(Math.min(Math.PI, frLim + Math.asin(Math.min(1, 3 / camD))));
+    const hideB = !!(r.occl || behind || r.warming); if (r.char.body.visible === hideB) r.char.body.visible = !hideB;
     const chStep = !r.occl && ((camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on); // fora da tela: a vez dele vem 10x por segundo
     if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); r.animAcc = 0; }
     if (chStep === !!r.frozen) { r.frozen = !chStep; if (r.frozen) r.char.root.updateMatrixWorld = NO_MATRIX; else delete r.char.root.updateMatrixWorld; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
-    r.char.lod(camD);
+    r.char.lod(camD * lodK);
     r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || r === aimedFoe); // 09/11 (pedido dele): nome do inimigo so com ele na mira
     if (r.team && r.team === G.myTeam) r.char.sharpTag(renderer);
   }
@@ -3204,7 +3231,7 @@ function frameBody(now, realDt) {
       introMeSync(realDt, p, true, { anim: seatV.i === 0 ? 'drive' : 'seat', yaw: seatV.yaw, steer: seatV.steer, aimOff: off });
     } else if (!G.intro && introMe?.root.visible) introMeSync(0, p, false);
     if (replay.on) { replay.camera(camera, realDt, G, vm); vmPass.enabled = replay.fpVm; }
-    const ru = vm.gun?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0;
+    for (const gg of [vm.gun, vm.gun2]) { const ru = gg?.userData.mat?.userData?.u?.uReact; if (ru) ru.value = G.reactStage || 0; } // 14/11 (pedido dele): akimbo reagia so na direita; a esquerda (gun2) tem pintura propria
     // ponto do laser no mundo: onde o centro da mira bate
     if (g?.laser && !g.laser.light && p.alive && !p.sprint && !p.tac && !replay.on) { // lanterna nao faz ponto
       const d = camera.getWorldDirection(tmpV2), o = p.eyePos();

@@ -190,7 +190,7 @@ function stripeTex() {
 
 // a partir daqui (m) o boneco perde os detalhes pequenos
 // 09/11: Ajustes > Detalhe dos bonecos. far = some o detalhe pequeno; hull = some o contorno (a essa distancia ele tem menos de 1 pixel e dobra as chamadas de desenho)
-export const CHAR_LOD = { far: 18, hull: 34 };
+export const CHAR_LOD = { far: 18, hull: 34, vfar: 90 }; // vfar: segue o ajuste Contornos (main.js)
 
 // pose de sentado no carro (04/11): coordenadas do corpo do boneco (quadril em y 0.72, frente = -z).
 // sink = quanto o corpo desce (o quadril encosta no banco); pe e joelho vao pra frente; wheel = centro do volante
@@ -420,6 +420,15 @@ export class Character {
     }
     const far = dist > CHAR_LOD.far;
     const th = hf ? 3 : far ? 2 : 0; for (const h of [this.armR, this.armL, this.legR, this.legL]) if (h) h.throttle = th;
+    // 14/11 (BR com 49 bots): MUITO longe (a mesma distancia em que o cenario perde o contorno, ajuste Contornos) some o
+    // contorno de braco/perna e a arma (uns 4 pixels; a mais pesada tinha 11 mil vertices). Boneco a 150 m custava 30 chamadas
+    const vf = dist > CHAR_LOD.vfar;
+    if (vf !== this.vfar || this.vfarGun !== this.gun || this.vfarGun2 !== this.gun2h) {
+      this.vfar = vf; this.vfarGun = this.gun; this.vfarGun2 = this.gun2h;
+      for (const h of [this.armR, this.armL, this.legR, this.legL]) if (h) h.line.visible = !vf;
+      if (this.gun) this.gun.visible = !vf;
+      for (const g of this.gun2h?.children || []) g.visible = !vf;
+    }
     if (far === this.far) return;
     this.far = far;
     for (const o of this.details) o.visible = !far && !(o === this.nose && this.faceP?.userData.noNose); // nariz debaixo da mascara de casca fica escondido (08/11)

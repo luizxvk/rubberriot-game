@@ -1079,10 +1079,10 @@ Object.assign(D.en, { elw_skip: 'Show all', elw_done: '{n} rewards unlocked!',
 Object.assign(D.pt, { elw_hero: 'Sua assinatura está ativa. Veja tudo o que você ganhou.', elw_on: 'Ativo', elw_prev: 'Voltar', elw_next: 'Avançar' });
 Object.assign(D.en, { elw_hero: 'Your subscription is active. See everything you got.', elw_on: 'Active', elw_prev: 'Back', elw_next: 'Next' });
 // graficos ampliados (10/11)
-Object.assign(D.pt, { s_gfxPreset: 'Predefinição gráfica', gp_perf: 'Desempenho', gp_bal: 'Equilibrado', gp_qual: 'Qualidade', gp_ultra: 'Ultra', gp_custom: 'Personalizado',
+Object.assign(D.pt, { s_autoGfx: 'Ajuste automático', autoGfxBtn: 'Detectar', autoGfxRun: 'medindo…', autoGfxDone: 'aplicado: {p}', s_gfxPreset: 'Predefinição gráfica', gp_perf: 'Desempenho', gp_bal: 'Equilibrado', gp_qual: 'Qualidade', gp_ultra: 'Ultra', gp_custom: 'Personalizado',
   s_fpsCap: 'Limite de FPS', fps_30: '30', fps_60: '60', fps_120: '120', fps_144: '144', fps_max: 'Sem limite',
   s_dynRes: 'Resolução dinâmica (baixa a nitidez sozinha quando o FPS cai)', s_fxQ: 'Efeitos e partículas' });
-Object.assign(D.en, { s_gfxPreset: 'Graphics preset', gp_perf: 'Performance', gp_bal: 'Balanced', gp_qual: 'Quality', gp_ultra: 'Ultra', gp_custom: 'Custom',
+Object.assign(D.en, { s_autoGfx: 'Auto detect', autoGfxBtn: 'Detect', autoGfxRun: 'measuring…', autoGfxDone: 'applied: {p}', s_gfxPreset: 'Graphics preset', gp_perf: 'Performance', gp_bal: 'Balanced', gp_qual: 'Quality', gp_ultra: 'Ultra', gp_custom: 'Custom',
   s_fpsCap: 'FPS limit', fps_30: '30', fps_60: '60', fps_120: '120', fps_144: '144', fps_max: 'Unlimited',
   s_dynRes: 'Dynamic resolution (lowers sharpness by itself when FPS drops)', s_fxQ: 'Effects and particles' });
 // FSR 1.0 e tamanho da janela do app de PC (14/11)
