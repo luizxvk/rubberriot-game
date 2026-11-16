@@ -205,8 +205,13 @@ export function initMenus(o) {
   // ---------- amigos na pausa (16/11, pedido dele): entrar no lobby do amigo (sai desta partida) ou convidar pra ESTA partida ----------
   ui.openPauseFriends = async ({ room, leave }) => {
     const pop = $('pauseFr'), ul = $('pfList'); $('pfErr').textContent = '';
-    pop.hidden = false; $('pfClose').onclick = () => { audio.play('ui_back', { ui: true }); pop.hidden = true; };
-    pop.onclick = (e) => { if (e.target === pop) pop.hidden = true; };
+    // 16/11 hotfix: o popup fica NA FRENTE do Intervalo (que some enquanto ele esta aberto) e fecha por Voltar, Esc ou clique fora
+    const close = (snd = true) => { if (pop.hidden) return; if (snd) audio.play('ui_back', { ui: true }); pop.hidden = true; document.body.classList.remove('pf-open'); removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => { if (e.code === 'Escape' && !pop.hidden) { e.preventDefault(); e.stopImmediatePropagation(); close(); } };
+    pop.hidden = false; document.body.classList.add('pf-open'); addEventListener('keydown', onKey, true);
+    $('pfClose').onclick = (e) => { e.stopPropagation(); close(); };
+    pop.onclick = (e) => { if (e.target === pop) close(); };
+    ui.closePauseFriends = () => close(false);
     $('pfSub').textContent = room ? t('pfSubOn') : t('pfSubOff');
     if (!rovex.me) { ul.innerHTML = `<li class="lf-msg">${t('frGuest')}</li>`; return; }
     ul.innerHTML = `<li class="lf-msg">${t('inviteLoading')}</li>`;
@@ -218,7 +223,7 @@ export function initMenus(o) {
     ul.innerHTML = list.map(f => { const r = roomOf.get(f.id), same = r && room && r.code === room;
       return `<li class="${f.online ? 'on' : ''}"><span class="lf-av">${f.avatar ? `<img alt="" src="${esc(f.avatar)}">` : esc(f.name.slice(0, 1))}</span><span class="lf-nm">${esc(f.name)}<small>${same ? t('pfHere') : r ? t('frInRoom') : f.online ? t('online') : t('offline')}</small></span>`
         + `<span class="pf-acts">${r && !same ? `<button data-join="${esc(r.code)}">${t('pfJoin')}</button>` : ''}${room && !same ? `<button data-inv="${esc(f.id)}">${t('pfInvite')}</button>` : ''}</span></li>`; }).join('');
-    ul.querySelectorAll('[data-join]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true }); pop.hidden = true; leave(); setTimeout(() => goMp({ room: b.dataset.join, join: true }), 300); });
+    ul.querySelectorAll('[data-join]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true }); close(false); leave(); setTimeout(() => goMp({ room: b.dataset.join, join: true }), 300); });
     ul.querySelectorAll('[data-inv]').forEach(b => b.onclick = async () => {
       b.disabled = true;
       try { await rovex.invite(b.dataset.inv, room); b.textContent = t('inviteSent'); b.classList.add('sent'); audio.play('ui_click', { ui: true }); }

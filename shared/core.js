@@ -2468,7 +2468,7 @@ export class Core {
     for (const p of this.players.values()) {
       // orcamento de dano: enche no ritmo da arma (barra trapaca de cliente)
       const w = WEAPONS[p.wpn];
-      if (w) { const tr = bodyTrait(this.bodyOf(p, p.wpn)), bm = this.bpOf(p, p.wpn), dmg = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (bm.dmg || 1); const cv = p.los?.[p.wpn]?.conv === 'auto' ? 1.9 : 1; p.budget = Math.min(dmg * 5, p.budget + (dmg / (w.rate * (tr.rate || 1) * (bm.rate || 1))) * 1.6 * cv * dt); } // kit automatico: cadencia maior
+      if (w) { const tr = bodyTrait(this.bodyOf(p, p.wpn)), bm = this.bpOf(p, p.wpn), dmg = w.dmg * (w.pellets || 1) * (tr.dmg || 1) * (bm.dmg || 1); const cv = (p.los?.[p.wpn]?.conv === 'auto' ? 1.9 : 1) * (p.wpn === 'pistol' && p.los?.pistol?.trigger ? 1.4 : 1); /* hotfix 16/11: gatilho da pistola atira ate 39% mais rapido */ p.budget = Math.min(dmg * 5, p.budget + (dmg / (w.rate * (tr.rate || 1) * (bm.rate || 1))) * 1.6 * cv * dt); } // kit automatico: cadencia maior
       if (!p.alive) {
         if (p.mob || (this.bor && borHoldSpawn(this, p))) continue; // vilao nao renasce; gente da noite volta na onda seguinte
         p.respawnT -= dt;

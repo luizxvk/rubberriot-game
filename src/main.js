@@ -2327,7 +2327,7 @@ function backToLobby() {
   G.paused = false;
   input.enabled = false;
   document.body.classList.remove('ingame', 'mode-br', 'is-dead', 'stim-rush'); if (!isTouch) document.body.classList.remove('touchmode'); /* 08/11: no celular o visual de toque fica (antes voltava pro layout de PC: cartaz espremido, banners cortados) */ G.stimFx = false; chat.enable(G.net instanceof WsNet, false); /* 10/11: o chat da sala continua no lobby */
-  $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
+  ui.closePauseFriends?.(); $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   if (document.pointerLockElement) document.exitPointerLock();
   clearRemotes();
   lobby.show();
@@ -2451,7 +2451,7 @@ async function quitGame() {
   G.player = null; G.myId = null; G.me = null;
   clearRemotes();
   document.body.classList.remove('ingame', 'mode-br', 'is-dead', 'stim-rush'); if (!isTouch) document.body.classList.remove('touchmode'); /* 08/11: no celular o visual de toque fica (antes voltava pro layout de PC: cartaz espremido, banners cortados) */ G.stimFx = false; chat.enable(false);
-  $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
+  ui.closePauseFriends?.(); $('hud').hidden = true; $('pause').hidden = true; $('dead').hidden = true; $('theend').hidden = true; $('touch').hidden = true; document.body.classList.remove('game-smith'); setTouchBoard(false);
   lobby.hide(); hideLoading();
   $('menu').hidden = false;
   input.enabled = false;

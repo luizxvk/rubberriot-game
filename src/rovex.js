@@ -357,7 +357,8 @@ export async function divLoad() {
       melhores: Object.fromEntries(D.DIVISIONS.map(d => [d.id, ['luizxvk', 'THILASCO', 'Tangerino', 'NYX Maria Garcia', 'Visitante3679'].map((n, i) => ({ nome: n, pts: 900 - i * 140, eu: i === 0 }))])) };
   }
   if (!token() || !me) return { code: 'login' };
-  try { return await call('/games/rubber-riot/divisoes', { timeout: 7000 }); } catch { return { code: 'erro' }; }
+  // hotfix 16/11: uma falha (rede piscando, servidor trocando de maquina no deploy) tenta de novo antes de mostrar o erro
+  for (let i = 0; i < 2; i++) { try { return await call('/games/rubber-riot/divisoes', { timeout: i ? 10000 : 7000 }); } catch { if (i) return { code: 'erro' }; await new Promise(r => setTimeout(r, 1200)); } }
 }
 export async function divJoin(respostas) {
   if (import.meta.env.DEV && FAKE) { const D = await import('../shared/divisions.js'), id = D.assignDivision(respostas, 'dev'); let was = null; try { was = JSON.parse(localStorage.getItem('rr_div') || 'null')?.id; } catch { /* */ } if (was && was !== id) { if ((me?.zionsPoints ?? 0) < D.DIV_DESERT_ZP) return { code: 'sem_saldo', preco: D.DIV_DESERT_ZP }; me.zionsPoints -= D.DIV_DESERT_ZP; dispatchEvent(new Event('rovex-me')); } return { ok: true, id, same: was === id }; } // local: desertor cobra do saldo falso

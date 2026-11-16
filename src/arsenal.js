@@ -101,15 +101,16 @@ const LASER_DEF = {
   laser_3: { color: 0xb04bff, size: [0.036, 0.04, 0.1], model: 'laserP', traits: { hip: 0.9, adsTime: 0.95 } },              // Prisma roxo
   laser_4: { color: 0xffd23a, size: [0.042, 0.03, 0.09], model: 'laserY', twin: true, traits: { hip: 0.88, kick: 0.9, adsTime: 1.05 } },  // Duplo amarelo
 };
-// Gatilho das pistolas (16/11, pedido dele, igual aos gatilhos do MW3): mexe em cadencia, controle (coice) e mobilidade.
-// rate > 1 = atira mais rapido; kick < 1 = menos coice (mais controle); move > 1 = anda mais rapido
+// Gatilho das pistolas (16/11, pedido dele, igual aos gatilhos do MW3). Hotfix 16/11 (pedido dele): TODO gatilho so melhora,
+// e bem: mais cadencia, mais controle e mais precisao; cada um puxa mais pra um lado. Nada de contra.
+// ⚠ rate = SEGUNDOS ENTRE TIROS (menor = atira mais rapido); kick < 1 = menos coice; spread < 1 = mais preciso; move > 1 = anda mais rapido
 export const TRIGGERS = ['tg_pena', 'tg_cabelo', 'tg_trava', 'tg_martelo', 'tg_turbo'];
 export const TRIGGER_DEF = {
-  tg_pena: { rate: 1.12, kick: 1.1 },               // Pena: leve, dispara mais rapido e o coice sobe
-  tg_cabelo: { rate: 1.06, move: 1.05, kick: 1.05 }, // Fio de Cabelo: competicao, um pouco de tudo pra frente
-  tg_trava: { kick: 0.9, move: 1.06, rate: 0.95 },   // Trava Dupla: tatico, controle e passo leve, cadencia menor
-  tg_martelo: { kick: 0.84, rate: 0.9, move: 0.97 }, // Martelo: pesado, segura o coice e atira mais devagar
-  tg_turbo: { rate: 1.3, kick: 1.18, spread: 1.06 },  // Turbo (16/11, pedido dele): cadencia bem maior; paga em coice e precisao
+  tg_pena: { rate: 0.88, kick: 0.92, spread: 0.92 },               // Pena: leve, ja dispara bem mais rapido
+  tg_cabelo: { rate: 0.85, kick: 0.9, spread: 0.88, move: 1.04 },  // Fio de Cabelo: competicao, um pouco de tudo pra frente
+  tg_trava: { rate: 0.88, kick: 0.8, spread: 0.86, move: 1.06 },   // Trava Dupla: tatico, controle e passo leve
+  tg_martelo: { rate: 0.85, kick: 0.74, spread: 0.82 },            // Martelo: segura o coice como nenhum outro
+  tg_turbo: { rate: 0.72, kick: 0.82, spread: 0.84 },              // Turbo: cadencia +39%, e ainda mais controle e precisao
 };
 export const laserColor = (id) => LASER_DEF[id]?.color ?? 0xff2a2a;
 function range(p, a, b) { const r = []; for (let i = a; i <= b; i++) r.push(p + i); return r; }
