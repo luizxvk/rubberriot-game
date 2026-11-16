@@ -1492,16 +1492,22 @@ function onEvent(e) {
     case 'take': if (e.id === G.myId && G.player) { const was = G.player.wpn, back = G.player.lastWpn; G.player.take(e.wpn); if (e.wpn === 'rpg' && was === 'rpg') { G.player.equip(G.player.owned.includes(back) ? back : G.player.owned[0]); hud.weapon(G.player); } } break; // Bazuca acabou: volta pra arma de antes
     case 'gunDrop': { // arma largada de quem morreu (some em 10 s)
       if (!inGame) break;
-      const lo = e.lo ? { ...e.lo, laser: null } : null, gun = buildGun(e.wpn, lo);
-      if (!gun) break;
+      // hotfix 0.20.2 (travada ao matar): montar a arma do zero custava ~14 ms NO QUADRO do abate. Agora: molde por arma+pecas,
+      // montado uma vez (no tempo ocioso se ainda nao existe) e clonado (clone divide malha e material com o molde)
+      const lo = e.lo ? { ...e.lo, laser: null } : null, k = dropKey(e.wpn, e.lo), id = e.id;
+      const place = (tpl) => { if (!tpl || G.state !== 'game' || G.gunDrops.has(id) || G.gunGoneEarly?.delete(id)) return; const gun = cloneBare(tpl); gun.position.set(0, 0, 0);
       const g = new THREE.Group(); gun.scale.setScalar(1.5); gun.rotation.set(0, Math.random() * 6.28, Math.PI / 2); g.add(gun);
       g.position.set(e.pos[0], e.pos[1] + 0.18, e.pos[2]); g.userData = { born: G.t, y: e.pos[1] + 0.18, wpn: e.wpn, name: e.lo?.cvName || (e.lo?.body ? partName('body', e.lo.body) : wName(e.wpn)), pos: e.pos };
-      scene.add(g); G.gunDrops.set(e.id, g);
+      g.userData.shared = true; scene.add(g); G.gunDrops.set(id, g); };
+      const tpl = DROP_TPL.get(k);
+      if (tpl) place(tpl);
+      else (window.requestIdleCallback || ((f) => setTimeout(f, 30)))(() => { let t = DROP_TPL.get(k); if (!t) { t = buildGun(e.wpn, lo); if (!t) return; DROP_TPL.set(k, t); } place(t); }, { timeout: 400 });
       break;
     }
     case 'gunGone': {
       const g = G.gunDrops.get(e.id);
-      if (g) { scene.remove(g); disposeGun(g); G.gunDrops.delete(e.id); }
+      if (g) { scene.remove(g); if (!g.userData.shared) disposeGun(g); G.gunDrops.delete(e.id); } // clone do molde: malha e material ficam com o molde
+      else (G.gunGoneEarly ||= new Set()).add(e.id); // pegaram antes do molde ficar pronto: nao coloca depois
       if (e.by === G.myId) audio.play('pickup', { vol: 0.7, ui: true });
       break;
     }
@@ -1827,6 +1833,11 @@ async function makeClip() {
 $('endClip').onclick = () => { audio.play('ui_click', { ui: true }); makeClip(); };
 
 // podio (05/11, pedido dele): os 3 melhores depois da camera final; quem esta nele aperta pra dançar
+const DROP_TPL = new Map(); // moldes das armas largadas (hotfix 0.20.2)
+// clone do three copia o userData com JSON.parse(JSON.stringify): o da arma guarda texturas e virava imagem base64 a cada abate
+// (medido 0.20.2: 13-52 ms no quadro do abate). A arma no chao nao precisa dele: tira, clona, devolve
+const cloneBare = (src) => { const keep = []; src.traverse(o => { keep.push([o, o.userData]); o.userData = {}; }); try { return src.clone(true); } finally { for (const [o, u] of keep) o.userData = u; } };
+const dropKey = (w, lo) => w + '|' + JSON.stringify(lo ? { ...lo, laser: null } : null);
 const podium = G.podium = new Podium();
 let podEquip = [], podPrev = [];
 const PAD_HINT = { LEFT: '←', UP: '↑', RIGHT: '→', DOWN: '↓' };
@@ -2157,7 +2168,7 @@ function clearRemotes() {
   G.burnT = 0; audio.loop('burn', 0); // saiu queimando: o fogo nao segue tocando no menu
   for (const r of G.remotes.values()) { scene.remove(r.char.root); freeChar(r.char); }
   G.remotes.clear();
-  for (const g of G.gunDrops.values()) { scene.remove(g); disposeGun(g); } G.gunDrops.clear();
+  for (const g of G.gunDrops.values()) { scene.remove(g); if (!g.userData.shared) disposeGun(g); } G.gunDrops.clear(); G.gunGoneEarly?.clear(); for (const t of DROP_TPL.values()) disposeGun(t); DROP_TPL.clear(); // moldes das armas largadas morrem com a partida
   for (const m of G.nadeMeshes.values()) scene.remove(m);
   G.nadeMeshes.clear();
   while (G.blimpMeshes.length) scene.remove(G.blimpMeshes.pop()); for (const w of G.wrecks || []) scene.remove(w.m); G.wrecks = [];
@@ -2230,7 +2241,7 @@ async function warmGunsNow() {
     } finally {
       scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
       // o elenco SEMPRE sai da cena (mesmo com erro): fica so o compartilhado, ja na placa
-      if (cast) { scene.remove(cast); for (const o of cast.userData.chars) freeChar(o); for (const g of cast.userData.guns) disposeGun(g); cast.clear(); }
+      if (cast) { scene.remove(cast); for (const o of cast.userData.chars) freeChar(o); for (const g of cast.userData.guns) { const k = g.userData.dropKey; if (k && !DROP_TPL.has(k)) { cast.remove(g); DROP_TPL.set(k, g); } else disposeGun(g); } cast.clear(); } // 0.20.2: arma ja montada vira molde da arma largada
     }
     await breathe();
     warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11): nada de travar na 1a morte
@@ -2256,9 +2267,9 @@ async function warmCast() {
     const pool = botBodyPool(), cats = G.mode === 'gungame' ? [] : Object.keys(pool); // gun game: a escada ja foi montada acima
     const builds = [];
     for (const los of G.remoteLo.values()) for (const [w, lo] of Object.entries(los || {})) if (lo) builds.push([w, lo]); // jogadores da sala primeiro (certeza de uso)
-    for (const w of cats) for (const body of pool[w]) builds.push([w, { body }]);
+    for (const w of cats) { builds.push([w, null]); for (const body of pool[w]) builds.push([w, { body }]); }
     const seen = new Set();
-    for (const [w, lo] of builds) { const k = w + JSON.stringify(lo); if (seen.has(k)) continue; seen.add(k); try { const g = buildGun(w, lo); if (g) { cast.userData.guns.push(g); spot(g); } } catch { /* */ } if (await slice()) break; }
+    for (const [w, lo] of builds) { const k = w + JSON.stringify(lo); if (seen.has(k)) continue; seen.add(k); try { const g = buildGun(w, lo); if (g) { if (!lo?.laser) g.userData.dropKey = dropKey(w, lo); cast.userData.guns.push(g); spot(g); } } catch { /* */ } if (await slice()) break; }
     if (G.loadTimes) G.loadTimes.elenco = Math.round(performance.now() - tIni);
     return cast;
   } catch (e) { console.warn('aquecimento do elenco falhou', e); return null; }
