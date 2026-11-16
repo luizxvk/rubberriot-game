@@ -1127,6 +1127,8 @@ Object.assign(D.en, { rec_title: 'Recommended for your PC', rec_fps: 'Your last 
 // banner do app de PC (10/11)
 Object.assign(D.pt, { dlTitle: 'Rubber Riot pra PC', dlSub: 'App leve, mais FPS e sem limite de quadros', dlChip: 'Baixar' });
 Object.assign(D.en, { dlTitle: 'Rubber Riot for PC', dlSub: 'Lightweight app, more FPS and no frame cap', dlChip: 'Download' });
+Object.assign(D.pt, { dlUpTitle: 'Atualização do app', dlUpSub: 'Fecha, baixa e abre sozinho', dlUpChip: 'Atualizar', dlUpOld: 'Baixando no navegador: feche o jogo e abra o instalador' });
+Object.assign(D.en, { dlUpTitle: 'App update', dlUpSub: 'Closes, downloads and reopens', dlUpChip: 'Update', dlUpOld: 'Downloading in your browser: close the game and run the installer' });
 // leva de armas 13/11 (TastyTony): nomes próprios no clima do jogo
 Object.assign(D.pt, { bn_lmg_3: 'Debulhadora', bn_lmg_4: 'Gramofone', bn_lmg_5: 'Lua Minguante', bn_fusil_14: 'Fraque', bn_fusil_15: 'Trombone', bn_fusil_16: 'Sussurro', bn_sniper_5: 'Sentença', bn_sniper_6: 'Lupa', bn_subfusil_14: 'Caracol', bn_subfusil_15: 'Foxtrote', bn_subfusil_16: 'Pernilongo', bn_shotgun_4: 'Dupla Caipira', bn_shotgun_5: 'Atchim', bn_shotgun_6: 'Bate-Bife', bn_shotgun_7: 'Canhão de Feira', bn_pistol_12: 'Psiu', bn_pistol_13: 'Ponta-Cabeça', bn_pistol_14: 'Matraquinha', bn_pistol_15: 'Pederneira', integralSil: 'Silenciador de fábrica (não troca bocal)' });
 Object.assign(D.en, { bn_lmg_3: 'Thresher', bn_lmg_4: 'Gramophone', bn_lmg_5: 'Waning Moon', bn_fusil_14: 'Tailcoat', bn_fusil_15: 'Trombone', bn_fusil_16: 'Whisper', bn_sniper_5: 'Verdict', bn_sniper_6: 'Loupe', bn_subfusil_14: 'Snail', bn_subfusil_15: 'Foxtrot', bn_subfusil_16: 'Mosquito', bn_shotgun_4: 'Hillbilly Pair', bn_shotgun_5: 'Achoo', bn_shotgun_6: 'Meat Tenderizer', bn_shotgun_7: 'Fairground Cannon', bn_pistol_12: 'Hush', bn_pistol_13: 'Upside Down', bn_pistol_14: 'Little Rattler', bn_pistol_15: 'Flintlock', integralSil: 'Built-in suppressor (no muzzle swap)' });
@@ -1235,3 +1237,7 @@ Object.assign(D.en, {"np_giftHint": "Go through the carousel to the end to unloc
 // telemetria (16/11)
 Object.assign(D.pt, {"s_telemetry": "Telemetria (FPS, ping, perda de pacotes e horário)", "telPing": "Ping", "telLoss": "Perda", "telLocal": "local"});
 Object.assign(D.en, {"s_telemetry": "Telemetry (FPS, ping, packet loss and time)", "telPing": "Ping", "telLoss": "Loss", "telLocal": "local"});
+
+// 16/11 (pedido dele): secao Exclusivos Elite+ da Loja
+Object.assign(D.pt, { shopEliteH: 'Exclusivos Elite+', shopEliteSubOn: 'Resgate de graça enquanto o Elite+ estiver ativo', shopEliteSubOff: 'Só quem tem Elite+ resgata', shopGetElite: 'Adquirir Elite+', shopGetEliteSub: 'Assine na Rovex e resgate tudo daqui de graça', shopEliteOnly: 'Exclusivo Elite+' });
+Object.assign(D.en, { shopEliteH: 'Elite+ Exclusives', shopEliteSubOn: 'Redeem for free while your Elite+ is active', shopEliteSubOff: 'Only Elite+ members can redeem', shopGetElite: 'Get Elite+', shopGetEliteSub: 'Subscribe on Rovex and redeem everything here for free', shopEliteOnly: 'Elite+ exclusive' });

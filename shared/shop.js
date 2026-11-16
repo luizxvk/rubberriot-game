@@ -180,10 +180,14 @@ export function isDeal(id, now = Date.now()) { if (now >= dealMemo.end) { const 
 export const ELITE_OFF = { shop: 0.15, bm: 0.20, chest: 0.10 };
 export const elitePrice = (p, k) => p == null || !Number.isFinite(p) ? p : Math.max(5, Math.round(p * (1 - (ELITE_OFF[k] || 0)) / 5) * 5);
 export const dealPrice = (id, now = Date.now()) => { const p = shopPrice(id); return p != null && isDeal(id, now) ? Math.round(p * (1 - DEAL_OFF) / 5) * 5 : p; };
+// 16/11 (pedido dele): exclusivos do Elite+ (contadores e adesivos Elite) moram numa secao propria da Loja: so quem tem Elite resgata,
+// ninguem compra com ZP. Pacote em destaque com elite (pFuturo) segue a regra de 05/11: vende pra todos e o Elite resgata de graca
+export const eliteOnly = (id) => !!SHOP_ITEMS[id]?.elite && !SHOP_ITEMS[id]?.feat;
+export const eliteShelf = () => Object.keys(SHOP_ITEMS).filter(eliteOnly);
 export const shelfOf = (id) => (SHOP_ITEMS[id].react ? 'react' : SHOP_ITEMS[id].kind);
 export function shopRotation(now = Date.now()) {
   const day = Math.floor(now / DAY), week = Math.floor((day + 3) / 7);
-  const ids = Object.keys(SHOP_ITEMS), feat = ids.filter(id => SHOP_ITEMS[id].feat);
+  const ids = Object.keys(SHOP_ITEMS).filter(id => !eliteOnly(id)), feat = ids.filter(id => SHOP_ITEMS[id].feat); // exclusivos Elite+ ficam na secao deles
   const hero = rotate(feat.filter(id => SHOP_ITEMS[id].r !== 'pacote'), week, 1);
   const pack = feat.find(id => SHOP_ITEMS[id].r === 'pacote' && SHOP_ITEMS[id].until > now) || seeded(feat.filter(id => SHOP_ITEMS[id].r === 'pacote'), week)[0];
   const rest = rotate(ids.filter(id => !SHOP_ITEMS[id].feat), week, 2);

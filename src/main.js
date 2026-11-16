@@ -37,6 +37,7 @@ import { DanceFx } from './dancefx.js';
 import { OVER_STATS } from '../shared/core.js';
 import { podiumSpot } from '../shared/podiumspot.js';
 import { startPresence } from './presence.js';
+import { DESKTOP_APP } from '../shared/version.js';
 import { metaGet, metaPost, pushSoon, sessionPing, requestReset, me as rovexMe, inRovex, inviteRoom, isGuest as rovexGuest, guestName as rovexGuestName, AUTH_URL } from './rovex.js';
 import { Hud, STREAK_SVG, DEATH_SVG, BOOM_SVG } from './hud.js';
 import { Input, isTouch, buildTouch, applyHudLayout, applyHudPieces, HUD_PIECES, setFireButton, lockPointer, setRawMouse } from './input.js';
@@ -667,6 +668,22 @@ if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Test
 if (import.meta.env.DEV) window.__soloW = (o) => startGame(soloNet({ lobby: false, ...o }), 'Teste'); // 14/11: partida solo no WORKER por script (medir os bots)
 // app de PC (10/11): o Electron marca o navegador (RubberRiotDesktop no user agent); some o banner de baixar
 if (/RubberRiotDesktop/.test(navigator.userAgent)) document.body.classList.add('rr-desktop');
+// 16/11 (pedido dele): app de PC desatualizado -> o mesmo banner vira "Atualizar o app". App 1.0.7+ baixa, confere e
+// instala sozinho (rrDesktop.update fecha o jogo e reabre na versao nova); o 1.0.6 nao sabe: baixa pelo navegador.
+{
+  const m = /RubberRiotDesktop\/(\d+)\.(\d+)\.(\d+)/.exec(navigator.userAgent), want = DESKTOP_APP.split('.').map(Number);
+  const old = m && (() => { for (let i = 0; i < 3; i++) { const a = +m[i + 1], b = want[i] || 0; if (a !== b) return a < b; } return false; })();
+  const a = old && document.getElementById('dlPromo');
+  if (a) {
+    a.classList.add('dl-update');
+    for (const [sel, k] of [['b', 'dlUpTitle'], ['small', 'dlUpSub'], ['.ep-chip', 'dlUpChip']]) { const el = a.querySelector(sel); if (el) { el.dataset.i18n = k; el.textContent = t(k); } }
+    a.onclick = (e) => {
+      audio.play('ui_click', { ui: true });
+      if (window.rrDesktop?.update) { e.preventDefault(); window.rrDesktop.update(); return; }
+      const s = a.querySelector('small'); if (s) { s.dataset.i18n = 'dlUpOld'; s.textContent = t('dlUpOld'); } // app velho: o link abre no navegador
+    };
+  }
+}
 window.__A = ARS; window.__G = G; window.__AU = audio; window.__T = { isSharedGeo, smoothCacheSize, rigidCacheSize }; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
 G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
@@ -1065,7 +1082,6 @@ function nameOf(id) {
   const p = G.snap?.players.find(x => x.id === id);
   return p ? (p.mob ? t('mob_' + p.mob) : p.name) : '?';
 }
-const divChipOf = (id) => { const p = G.snap?.players.find(x => x.id === id); return p?.dt ? divChip(p.dt) : ''; }; // tag da divisao no killfeed (16/11)
 function teamCls(id) {
   const p = G.snap?.players.find(x => x.id === id);
   return p?.team === 'red' ? 'r' : p?.team === 'blue' ? 'b' : '';
@@ -1175,7 +1191,8 @@ function onEvent(e) {
         audio.play('death', { pos: [vPos[0], vPos[1] + 1, vPos[2]], vol: 0.8, key: 'death', max: 3 });
       }
       const wn = gunName(e.a, e.wpn);
-      const html = e.a ? `<span class="${teamCls(e.a)}">${divChipOf(e.a)}${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${divChipOf(e.v)}${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>${FEED_ICO[e.wpn] ? `<i class="kf-ico">${FEED_ICO[e.wpn]}</i>` : ''}${e.head ? HS_ICON : ''}` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
+      // 16/11 (pedido dele): killfeed SEM tag de divisao (fica no placar, lobby e etiqueta)
+      const html = e.a ? `<span class="${teamCls(e.a)}">${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>${FEED_ICO[e.wpn] ? `<i class="kf-ico">${FEED_ICO[e.wpn]}</i>` : ''}${e.head ? HS_ICON : ''}` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
       if (inGame && G.mode !== 'borroes') hud.feed(html, e.a === G.myId || e.v === G.myId); // noite dos borroes: sem killfeed (pedido dele)
       if (inGame && !G.tutorial && !G.range) { if (e.a === G.myId && e.v !== G.myId) wpnTrack(e.wpn, G.player?.lo(e.wpn)?.body, { k: 1, hk: e.head ? 1 : 0 }); if (e.v === G.myId && G.player?.wpn) wpnTrack(G.player.wpn, G.player.lo(G.player.wpn)?.body, { d: 1 }); } // Arsenal: numeros de cada arma
       if (e.a === G.myId && inGame) {

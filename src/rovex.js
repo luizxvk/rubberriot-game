@@ -237,6 +237,7 @@ export async function vaultCheckout(tierId) {
 // progresso local, a nao ser que ele seja de OUTRA conta deste navegador.
 const KEYS = ['rr_progress_v1', 'rr_loadouts_v1', 'rr_variants_v1', 'rr_challenges_v1', 'rr_settings', 'rr_lang', 'rr_look_v1'];
 const OWNER = 'rr_owner';
+const GUEST_MIG = 'rr_guest_mig'; // 16/11: save do guest esperando o servidor aceitar a migracao
 const ls = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } },
@@ -268,8 +269,15 @@ export async function pullSave() {
     const xpOf = (raw) => { try { return JSON.parse(raw)?.xp || 0; } catch { return 0; } };
     if (r && r.data) {
       // guest que acabou de entrar: se jogou mais como guest do que a conta tem, o dele vale e sobe
-      if (wasGuest && xpOf(ls.get('rr_progress_v1')) > xpOf(r.data.rr_progress_v1)) pushSave();
-      else {
+      // 16/11 (pedido dele): a subida do guest vai marcada (rr_guest_mig) ate o servidor aceitar; ele da folga pelas
+      // partidas jogadas como guest (uma vez por conta), senao o teto anti-trapaca cortava o XP de conta nova
+      if (wasGuest && xpOf(ls.get('rr_progress_v1')) > xpOf(r.data.rr_progress_v1)) { ls.set(GUEST_MIG, '1'); pushSave(); }
+      else if (wasGuest) {
+        // conta ja tem mais que o guest: fica a da conta, mas os desafios ganhos como guest entram junto
+        const earned = typeof r.data.rr_challenges_v1 === 'string' ? keepEarned(ls.get('rr_challenges_v1'), r.data.rr_challenges_v1) : null;
+        for (const k of KEYS) if (typeof r.data[k] === 'string') ls.set(k, r.data[k]); else if (k !== 'rr_challenges_v1') ls.del(k);
+        if (earned) { ls.set('rr_challenges_v1', earned); pushSoon(); }
+      } else {
         // variantes (02/11): conta que ainda nao tem as variantes na nuvem (gravadas antes da chave existir) nao apaga as
         // deste aparelho; elas sobem na proxima gravacao
         const keepVar = typeof r.data.rr_variants_v1 !== 'string' && owner === me.id && ls.get('rr_variants_v1');
@@ -281,6 +289,7 @@ export async function pullSave() {
     } else {
       if (owner && owner !== me.id && !wasGuest) for (const k of KEYS) ls.del(k);
       ls.set(OWNER, me.id);
+      if (wasGuest) ls.set(GUEST_MIG, '1'); // conta nova herdando o guest (ver acima)
       pushSave();
     }
     ls.set(OWNER, me.id);
@@ -303,7 +312,8 @@ export function pushSave(keepalive = false) {
   const body = JSON.stringify(data);
   if (body === lastBody) return; // nada mudou desde a ultima gravacao
   lastPush = Date.now();
-  call('/games/rubber-riot/save', { method: 'PUT', body: { data }, keepalive }).then(() => { lastBody = body; }).catch(() => {});
+  const guest = ls.get(GUEST_MIG) === '1';
+  call('/games/rubber-riot/save', { method: 'PUT', body: guest ? { data, guest: true } : { data }, keepalive }).then(() => { lastBody = body; if (guest) ls.del(GUEST_MIG); }).catch(() => {});
 }
 addEventListener('pagehide', () => { if (timer) pushSave(true); });
 

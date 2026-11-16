@@ -14,7 +14,7 @@ import { offscreen } from './offscreen.js';
 import { t } from './i18n.js';
 import { me, buyItem, redeemItem } from './rovex.js';
 import { audio } from './audio.js';
-import { SHOP_ITEMS, shopPrice as basePrice, dealPrice, elitePrice, isDeal, shopRotation as rotation } from '../shared/shop.js';
+import { SHOP_ITEMS, shopPrice as basePrice, dealPrice, elitePrice, isDeal, shopRotation as rotation, eliteOnly, eliteShelf } from '../shared/shop.js';
 // Elite (16/11, pedido dele): 15% em todo item da Loja, em cima da oferta do dia. O servidor confere o Elite na hora de cobrar
 const price = (id) => me?.elite ? elitePrice(dealPrice(id), 'shop') : dealPrice(id);
 const cut = (id) => isDeal(id) || !!me?.elite; // mostra o preco cheio riscado
@@ -334,12 +334,26 @@ function stopLive() {
 }
 // ---------- vitrine ----------
 const canRedeem = (id) => !!SHOP_ITEMS[id]?.elite && !!me?.elite && !owned(id); // Elite resgata de graca (05/11)
+// 16/11 (pedido dele): secao Exclusivos Elite+. Selo = EliteHexIcon da Rovex (hexagono + estrela, o mesmo do banner do menu)
+const ELITE_URL = 'https://tryrovex.com/elite';
+const HEX = '<svg class="el-hex" viewBox="0 0 64 64" aria-hidden="true"><path class="el-hex-in" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path class="el-hex-out" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path d="M32 18L35.5 26L44 27L38 33L39 42L32 38L25 42L26 33L20 27L28.5 26L32 18Z"/></svg>';
+const lockedElite = (id) => eliteOnly(id) && !me?.elite && !owned(id); // sem Elite: nao compra, so assina
+function goElite() { const a = document.createElement('a'); a.href = ELITE_URL; a.target = '_top'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+function eliteSection() {
+  const ids = eliteShelf(); if (!ids.length) return '';
+  const on = !!me?.elite;
+  return `<section class="shop-sec elite-sec" aria-labelledby="shopEliteH">
+      <header><h3 id="shopEliteH">${HEX}${t('shopEliteH')}</h3><span class="shop-left">${t(on ? 'shopEliteSubOn' : 'shopEliteSubOff')}</span></header>
+      ${on ? '' : `<a class="el-get" href="${ELITE_URL}" target="_top" rel="noopener">${HEX}<span><b>${t('shopGetElite')}</b><small>${t('shopGetEliteSub')}</small></span></a>`}
+      <div class="shop-grid">${ids.map(id => tile(id, '', false)).join('')}</div>
+    </section>`;
+}
 function tile(id, size, newTag) {
   const it = SHOP_ITEMS[id], mine = owned(id), name = itemName(id);
   return `<button class="shop-tile r-${it.r} ${size} ${mine ? 'owned' : ''}" data-item="${id}" aria-label="${name}, ${t('rar_' + it.r)}, ${mine ? t('shopOwned') : fmt(price(id)) + ' Zions Points'}">
     <span class="st-bg"></span><span class="st-art">${svg(it.kind)}</span>
     ${mine ? `<span class="st-tag own">${t('shopOwned')}</span>` : newTag ? `<span class="st-tag">${t('shopNew')}</span>` : ''}
-    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && cut(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : (cut(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>` + (me?.elite ? `<i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '')}</em></span>
+    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && !eliteOnly(id) && cut(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : lockedElite(id) ? `<span class="st-elonly">${HEX}Elite+</span>` : (cut(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>` + (me?.elite ? `<i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '')}</em></span>
   </button>`;
 }
 
@@ -360,6 +374,7 @@ export function renderShop(boot) { // boot = chegou agora na tela: mostra o load
   renderBal($('shopBal')); // Zions Points e Zions Cash no canto (zbal.js)
   { const zb = $('shopBuyZ'); zb.setAttribute('aria-label', t('zbAdd')); zb.title = t('zbAdd'); zb.onclick = () => openZionBuy(zb); }
   pane.innerHTML = `
+    ${eliteSection()}
     <section class="shop-sec" aria-labelledby="shopFeatH">
       <header><h3 id="shopFeatH">${t('shopFeat')}</h3><span class="shop-left">${t('shopChanges')} <b id="shopWeekLeft"></b></span></header>
       <div class="shop-grid feat">${tile(RT.featured[0], 'hero', true)}${tile(RT.featured[1], 'wide', true)}${tile(RT.featured[2], '', false)}${tile(RT.featured[3], '', false)}</div>
@@ -403,8 +418,9 @@ function openItem(id, from) {
   // pills do que vem na compra (item unico = 1; pacote = cada peca), cada uma com o tipo
   $('shopPopGives').setAttribute('aria-label', t('shopIncl'));
   $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill k-${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'stamp' ? t('stamp_' + v) : s === 'banner' ? t('bn_' + v) : s === 'dance' ? t('dn_' + v) : s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
-  $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : (cut(id) ? `<s class="sp-was">${fmt(basePrice(id))}</s> ` : '') + coin + fmt(price(id)) + (me?.elite ? ` <i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '');
-  $('shopBuy').textContent = t(mine ? 'shopOwned' : canRedeem(id) ? 'shopRedeem' : 'shopBuy');
+  $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : lockedElite(id) ? `<span class="st-elonly">${HEX}${t('shopEliteOnly')}</span>` : (cut(id) ? `<s class="sp-was">${fmt(basePrice(id))}</s> ` : '') + coin + fmt(price(id)) + (me?.elite ? ` <i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '');
+  $('shopBuy').textContent = t(mine ? 'shopOwned' : canRedeem(id) ? 'shopRedeem' : lockedElite(id) ? 'shopGetElite' : 'shopBuy');
+  $('shopBuy').classList.toggle('el-buy', lockedElite(id));
   $('shopBuy').disabled = mine;
   pop.hidden = false;
   try { startLive(id, art); } catch (e) { console.warn('previa da loja', e); }
@@ -459,6 +475,7 @@ export function initShop() {
   $('shopBuy').onclick = async () => {
     const id = curItem, b = $('shopBuy'), msg = $('shopPopSoon');
     if (!id || owned(id) || buying) return;
+    if (lockedElite(id)) { audio.play('ui_click', { ui: true }); goElite(); return; } // 16/11: exclusivo Elite+ sem Elite = vai assinar na Rovex
     const redeem = canRedeem(id);
     if (!confirming && !redeem) { confirming = true; b.textContent = t('shopConfirm', { n: fmt(price(id)) }); b.classList.add('confirm'); audio.play('ui_click', { ui: true }); return; }
     buying = true; b.disabled = true; b.textContent = t('shopBuying');

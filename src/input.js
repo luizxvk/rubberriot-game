@@ -142,7 +142,7 @@ export class Input {
       lookX: this.lookX + smx, lookY: this.lookY + smy, padLookX: this.padLookX, padLookY: this.padLookY, touchLookX: this.touchLookX, touchLookY: this.touchLookY,
       fire: A('fire') || t.fire || t.fireL || !!pd.fire, firePressed: E('fire') || edge('FIRE'),
       ads: ads, adsPressed: E('ads') || edge('ADS'),
-      adsHeld: A('ads') || !!pd.ads || (this.settings?.adsMode !== 'toggle' && !!t.ads), // botao de mirar FISICAMENTE segurado (akimbo: gatilho da direita; nunca o alternar)
+      adsHeld: A('ads') || !!pd.ads, // 16/11: o botao de toque e sempre alternar, nunca conta como segurado // botao de mirar FISICAMENTE segurado (akimbo: gatilho da direita; nunca o alternar)
       sprint: A('sprint') || t.sprint || !!pd.sprint || this.settings?.autoSprint,
       tacPressed: edge('TAC'),
       jumpPressed: E('jump') || edge('JUMP'),
@@ -259,7 +259,9 @@ export function buildTouch(input, root) {
   };
   const fire = input.fireBtn = btn(t('t_fire'), 'fire', at(0, 90, 84), (e) => { input.touch.fire = true; input.edges.add('FIRE'); fireId = e.pointerId; }, () => { input.touch.fire = false; fireId = null; });
   dragLook(fire);
-  input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = input.settings?.adsMode === 'hold' ? true : !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); }, () => { if (input.settings?.adsMode !== 'hold') return; input.touch.ads = false; input.adsBtn?.classList.remove('on'); });
+  // 16/11 (pedido dele): no celular o botao de mirar e SEMPRE alternar (toque liga, toque desliga), independente do
+  // "segurar ou alternar" dos Ajustes, que vale so pro mouse/teclado e controle
+  input.adsBtn = btn(t('t_ads'), 'ads', at(88, 168, 58), (e, b) => { input.touch.ads = !input.touch.ads; input.edges.add('ADS'); b.classList.toggle('on', input.touch.ads); setTimeout(() => b.classList.toggle('on', input.touch.ads)); }, (e, b) => b.classList.toggle('on', !!input.touch.ads)); // soltar o dedo nao apaga o aceso
   btn(t('t_jump'), 'jump', at(0, 12, 66), () => input.edges.add('JUMP'));
   btn(t('t_crouch'), 'crouch', at(76, 12, 62), () => { input.edges.add('CROUCH'); });
   btn(t('t_reload'), 'reload', at(94, 96, 58), () => input.edges.add('RELOAD'));
