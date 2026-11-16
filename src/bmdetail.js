@@ -5,7 +5,9 @@ import { audio } from './audio.js';
 import { me } from './rovex.js';
 import { bpLoadout, loadoutStats, partEffects, partName, arsenalLoaded } from './arsenal.js';
 import { WEAPONS } from '../shared/weapons.js';
-import { BM_VARIANTS, BM_CAMOS, BM_PIECES, bmPrice, bmRefund } from '../shared/blackmarket.js';
+import { BM_VARIANTS, BM_CAMOS, BM_PIECES, bmPrice as bmBase, bmRefund } from '../shared/blackmarket.js';
+import { elitePrice } from '../shared/shop.js';
+const bmPrice = (id) => me?.elite ? elitePrice(bmBase(id), 'bm') : bmBase(id); // Elite: 20% (16/11)
 import { bmLive } from './shop.js';
 import { openZionBuy } from './zionbuy.js';
 

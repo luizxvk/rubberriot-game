@@ -14,7 +14,10 @@ import { offscreen } from './offscreen.js';
 import { t } from './i18n.js';
 import { me, buyItem, redeemItem } from './rovex.js';
 import { audio } from './audio.js';
-import { SHOP_ITEMS, shopPrice as basePrice, dealPrice as price, isDeal, shopRotation as rotation } from '../shared/shop.js';
+import { SHOP_ITEMS, shopPrice as basePrice, dealPrice, elitePrice, isDeal, shopRotation as rotation } from '../shared/shop.js';
+// Elite (16/11, pedido dele): 15% em todo item da Loja, em cima da oferta do dia. O servidor confere o Elite na hora de cobrar
+const price = (id) => me?.elite ? elitePrice(dealPrice(id), 'shop') : dealPrice(id);
+const cut = (id) => isDeal(id) || !!me?.elite; // mostra o preco cheio riscado
 import { openZionBuy } from './zionbuy.js';
 import { RET_ROW_LONG, buildGun, buildSight, getLoadouts, RET_PATH, bpLoadout, arsenalLoaded } from './arsenal.js';
 import { BLUEPRINTS } from '../shared/weapons.js';
@@ -33,6 +36,7 @@ const COIN_SRC = import.meta.env.BASE_URL + 'brand/zion-points.png';
 const coin = `<img class="zc" src="${COIN_SRC}" alt="" aria-hidden="true">`;
 // icone enquanto a previa 3D nao fica pronta (Material Icons, Apache 2.0)
 const ICON = {
+  stk: 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10l6-6V5c0-1.1-.9-2-2-2zM7 8h10v2H7V8zm5 6H7v-2h5v2zm2 5.5V14h5.5L14 19.5z', // adesivo (Material 'sticky_note_2', Apache 2.0)
   ret: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   camo: 'M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
   hat: 'M7 3h10v10H7zM3 14h18v3.5H3z',
@@ -335,7 +339,7 @@ function tile(id, size, newTag) {
   return `<button class="shop-tile r-${it.r} ${size} ${mine ? 'owned' : ''}" data-item="${id}" aria-label="${name}, ${t('rar_' + it.r)}, ${mine ? t('shopOwned') : fmt(price(id)) + ' Zions Points'}">
     <span class="st-bg"></span><span class="st-art">${svg(it.kind)}</span>
     ${mine ? `<span class="st-tag own">${t('shopOwned')}</span>` : newTag ? `<span class="st-tag">${t('shopNew')}</span>` : ''}
-    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && isDeal(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : (isDeal(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>`}</em></span>
+    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && cut(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : (cut(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>` + (me?.elite ? `<i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '')}</em></span>
   </button>`;
 }
 
@@ -398,8 +402,8 @@ function openItem(id, from) {
   $('shopPopDesc').textContent = itemDesc(id);
   // pills do que vem na compra (item unico = 1; pacote = cada peca), cada uma com o tipo
   $('shopPopGives').setAttribute('aria-label', t('shopIncl'));
-  $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill ${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'stamp' ? t('stamp_' + v) : s === 'banner' ? t('bn_' + v) : s === 'dance' ? t('dn_' + v) : s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
-  $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : (isDeal(id) ? `<s class="sp-was">${fmt(basePrice(id))}</s> ` : '') + coin + fmt(price(id));
+  $('shopPopGives').innerHTML = gives(id).map(([s, v]) => `<li class="sp-pill k-${s}">${svg(s === 'wskin' ? 'camo' : s)}<b>${s === 'stamp' ? t('stamp_' + v) : s === 'banner' ? t('bn_' + v) : s === 'dance' ? t('dn_' + v) : s === 'camo' ? t('camo_' + v) : s === 'wskin' ? t('ws_' + v) : s === 'ret' ? t('ret_' + v) : t('lk_' + s + '_' + v)}</b><small>${t(s === 'camo' && camoById(v).react ? 'shk_react' : 'shk_' + s)}</small></li>`).join('');
+  $('shopPopPrice').innerHTML = mine ? t('shopOwned') : canRedeem(id) ? t('shopEliteFree') : (cut(id) ? `<s class="sp-was">${fmt(basePrice(id))}</s> ` : '') + coin + fmt(price(id)) + (me?.elite ? ` <i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '');
   $('shopBuy').textContent = t(mine ? 'shopOwned' : canRedeem(id) ? 'shopRedeem' : 'shopBuy');
   $('shopBuy').disabled = mine;
   pop.hidden = false;

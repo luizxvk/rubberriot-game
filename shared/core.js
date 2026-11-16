@@ -1,5 +1,6 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
+import { isDivTag, botDivTag } from './divisions.js'; // divisoes (16/11)
 import { CONV_RANGE, BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS, isSilenced , SOON_MODES } from './weapons.js';
 import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, SMUGGLE_MAPS, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallSpan, matchRules, clampArena, headroom } from './map.js';
 import { navPath, floorAt, standable, roomy, hop, lowAt, freeNear, warmNav } from './nav.js';
@@ -95,7 +96,7 @@ const QC_N = 10; // frases do Chat Rapido (src/quickchat.js)
 // bot provocando (10/11): de vez em quando solta uma do Chat Rapido ao derrubar alguem (seu noob, volta aqui, isso foi sorte...)
 const BOT_TAUNTS = [2, 5, 7, 9];
 export class Core {
-  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false, onFlag = null, onRanked = null, onPerf = null }) {
+  constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false, onFlag = null, onRanked = null, onPerf = null, onMatch = null }) {
     this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
     this.mut = !ranked && EVENTS[mut] ? mut : null; // evento de fim de semana (regra maluca); rankeada nunca
     this.ranked = ranked; // rankeada (31/10): sala publica so com os modos competitivos; vale pontos de rank
@@ -129,7 +130,7 @@ export class Core {
     this.skill = botSkill(difficulty);
     this.send = send;
     // 11/11 (seguranca): so o servidor passa. onFlag(id, tipo, info) = suspeita de trapaca (so anota); onRanked(lista) = rp do fim da rankeada
-    this.onFlag = onFlag; this.onRanked = onRanked; this.onPerf = onPerf; // 14/11: relatorio de desempenho do aparelho (so anota no log)
+    this.onFlag = onFlag; this.onRanked = onRanked; this.onPerf = onPerf; this.onMatch = onMatch; // 16/11: onMatch(lista) = pontos das divisoes (toda partida) // 14/11: relatorio de desempenho do aparelho (so anota no log)
     this.players = new Map();
     this.snapT = 0;
     this.botSeq = 0;
@@ -854,6 +855,7 @@ export class Core {
         if (Number.isFinite(m.lvl)) p.lvl = Math.max(1, Math.min(250, Math.round(m.lvl))); // nivel de verdade (o que aparece)
         p.ulvl = Number.isFinite(m.ul) ? Math.max(1, Math.min(250, Math.round(m.ul))) : p.lvl; // nivel de desbloqueio (prestigiado = maximo): so valida skill/equipamento
         if (typeof m.elite === 'boolean') p.elite = m.elite; // selo Elite da Rovex (so visual)
+        if (m.dt === null || isDivTag(m.dt)) p.dt = m.dt || undefined; // tag da divisao (16/11): so as 10 fixas
         p.rk = Number.isInteger(m.rk) && m.rk >= 0 && m.rk <= 4 ? m.rk : -1; // badge da rankeada (so visual)
         p.prest = Math.max(0, Math.min(10, m.prest | 0)); // estrelas de prestigio (so visual)
         if (PRIMARIES.includes(m.primary)) p.primary = m.primary;
@@ -1820,6 +1822,10 @@ export class Core {
     this.over = true; this.overT = this.useLobby ? OVER_LOBBY : OVER_NEXT;
     this.top3 = [...this.players.values()].filter(p => !p.mob).sort((a, b) => b.score - a.score || b.kills - a.kills).slice(0, 3).map(p => p.id);
     this.event({ k: 'end', winner, top: this.top3 });
+    if (this.onMatch && !this.tutorial) { // divisoes (16/11): toda partida com gente conta pontos pra divisao de cada um
+      const hs = [...this.players.values()].filter(o => !o.mob && !o.bot), top = this.top3[0];
+      try { this.onMatch(hs.map(o => ({ id: o.id, kills: o.kills | 0, won: winner === o.team || winner === o.name || (!o.team && top === o.id) }))); } catch { /* */ }
+    }
     if (this.ranked && this.mode !== 'br' && this.onRanked) { // mesma conta do jogo (src/main.js rankEnd), feita aqui
       const ps = [...this.players.values()].filter(o => !o.mob), humans = ps.filter(o => !o.bot);
       const share = ps.length ? humans.length / ps.length : 0;
@@ -2542,7 +2548,7 @@ export class Core {
     this.send(null, {
       t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, map: this.M.id, host: this.hostId(),
       cfg: { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, tod: this.tod || 'day', mode: this.modeId(), map: (this.mode === 'escort' || this.blitz ? this.mapRaw : this.mapPick) || 'auto', /* blitz: o lobby ve a ESCOLHA (auto mostrava o sorteado e a seta pulava) */ bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
-      players: [...this.players.values()].filter(p => !p.mob).map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), pr: p.prest || 0, elite: !!p.elite, rk: p.rk ?? -1 })), // vilao da noite nao e do elenco (03/11)
+      players: [...this.players.values()].filter(p => !p.mob).map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), pr: p.prest || 0, elite: !!p.elite, rk: p.rk ?? -1, dt: p.bot ? botDivTag(p.id) : p.dt })), // vilao da noite nao e do elenco (03/11)
     });
   }
 
@@ -2562,7 +2568,7 @@ export class Core {
         id: p.id, name: p.name, bot: p.bot, team: p.team, lvl: p.lvl || botLevel(p.id) /* 07/11: banner e tela de morte com o nivel de verdade */, hp: Math.max(0, Math.round(p.hp)), alive: p.alive, pg: p.ping || undefined,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
-        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, gh: hasSkill(p, 'fantasma') ? 1 : undefined, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
+        nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, dt: p.mob ? undefined : p.bot ? botDivTag(p.id) : p.dt, gh: hasSkill(p, 'fantasma') ? 1 : undefined, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
                 ...(this.bor ? { mob: p.mob || undefined, mh: p.mob ? p.maxHp : undefined, cs: p.mob ? undefined : Math.round(p.cash || 0), fr: p.frozenT > 0 ? 1 : 0, hk: p.headK > 1.6 ? 1 : undefined } : null), // noite: tipo do vilao, vida cheia (barra do chefao), pontos, congelado, lente/olho exposto
               });
     }

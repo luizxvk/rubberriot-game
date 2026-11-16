@@ -84,7 +84,10 @@ export class WsNet {
         this.lastMsg = now;
         let m; try { m = JSON.parse(e.data); } catch { return; }
         // 15/11 (relatorio): maior buraco entre estados do servidor (20/s = 50 ms); o relatorio de desempenho le e zera a cada 10 s
-        if (m.t === 'snap') { if (this.snapAt) this.gapMax = Math.max(this.gapMax || 0, now - this.snapAt); this.snapAt = now; }
+        if (m.t === 'snap') { if (this.snapAt) this.gapMax = Math.max(this.gapMax || 0, now - this.snapAt); this.snapAt = now;
+          // telemetria (16/11): perda de pacotes pelo relogio do servidor (20 estados/s = 0,05 s). So conta quando pula um envio de verdade
+          this.snapN = (this.snapN || 0) + 1;
+          if (typeof m.sc === 'number') { if (this.scLast != null && m.sc > this.scLast) { const miss = Math.round((m.sc - this.scLast) / 0.05) - 1; if (miss > 0 && miss < 200) this.snapLost = (this.snapLost || 0) + miss; } this.scLast = m.sc; } }
         if (!inRoom) {
           if (m.t === 'err') { fail(m.code, m.code); ws.close(); return; }
           // jogo rapido: daqui pra frente e' uma sala comum (reconectar volta pra ela pelo codigo)

@@ -73,8 +73,12 @@ async function call(path, opt = {}) {
 export let me = null;
 // so no localhost (10/11, pedido dele): ?semElite mostra o jogo como conta SEM Elite (banner de assinar, itens travados)
 const NO_ELITE = import.meta.env.DEV && new URLSearchParams(location.search).has('semElite');
+// Elite de teste (16/11, pedido dele): Ajustes > Jogo > 'Elite (teste)', igual ao 'desbloquear tudo'. So no localhost
+const eliteTest = () => { if (!import.meta.env.DEV) return null; try { const v = localStorage.getItem('rr_elite_test'); return v === 'on' ? true : v === 'off' ? false : null; } catch { return null; } };
+const applyEliteTest = () => { const v = eliteTest(); if (me && v !== null) me.elite = v; };
+export function setEliteTest(on) { if (!import.meta.env.DEV) return; try { localStorage.setItem('rr_elite_test', on ? 'on' : 'off'); } catch { /* */ } applyEliteTest(); try { dispatchEvent(new Event('rovex-me')); } catch { /* */ } }
 export async function loadMe() {
-  if (import.meta.env.DEV && FAKE) { me = (await fk()).fakeMe(); if (NO_ELITE) me.elite = false; try { dispatchEvent(new Event('rovex-me')); } catch { /* */ } loadShop(); return me; }
+  if (import.meta.env.DEV && FAKE) { me = (await fk()).fakeMe(); if (NO_ELITE) me.elite = false; applyEliteTest(); try { dispatchEvent(new Event('rovex-me')); } catch { /* */ } loadShop(); return me; }
   if (!token()) return null;
   try {
     const u = await call('/users/me', { timeout: 5000 });
@@ -82,6 +86,7 @@ export async function loadMe() {
     me = u && u.id ? { id: String(u.id), name: ((u.displayName || '').trim() || u.name || 'Player').slice(0, 24), elite: !!u.isElite, email: typeof u.email === 'string' ? u.email : '', zions: Number.isFinite(u.zions) ? u.zions : null, zionsPoints: Number.isFinite(u.zionsPoints) ? u.zionsPoints : null, vaultPoints: Number.isFinite(u.vaultPoints) ? u.vaultPoints : 0 } : null; // saldo de Zions Points mostrado na loja
   } catch { me = null; }
   if (me && NO_ELITE) me.elite = false;
+  applyEliteTest();
   try { dispatchEvent(new Event('rovex-me')); } catch { /* fora do navegador */ } // saldos de Zions na tela atualizam (zbal.js)
   if (me) loadShop(); // o que comprou na Loja + saldos (sem esperar: nao atrasa a entrada)
   return me;
@@ -341,3 +346,25 @@ export async function bmLoad() {
 }
 export const bmBuy = (id) => bmPost('/comprar', { id });
 export const bmChest = () => bmPost('/bau');
+
+// ---------- Divisoes (16/11, pedido dele) ----------
+// painel: ranking mensal, rankeada de divisoes, duelo da semana e os melhores. Entrar: manda as 6 respostas, o servidor enquadra
+export async function divLoad() {
+  if (import.meta.env.DEV && FAKE) { // so no localhost: placar de exemplo pra ver a tela
+    const D = await import('../shared/divisions.js'), r = (k) => Object.fromEntries(D.DIVISIONS.map((d, i) => [d.id, Math.round(((i * 37 + k * 11) % 97) * 41 + 120)]));
+    let mine = null; try { mine = JSON.parse(localStorage.getItem('rr_div') || 'null'); } catch { /* */ }
+    return { mes: D.divMonth(), semana: D.divWeek(), minha: mine, trocaEm: mine ? mine.at + 30 * 864e5 : 0, mensal: r(1), rankeada: r(2), duelo: { pares: D.divDuels(), pts: r(3) }, dueloAnt: { pares: D.divDuels(D.divWeek(Date.now() - 7 * 864e5)), pts: r(4) },
+      melhores: Object.fromEntries(D.DIVISIONS.map(d => [d.id, ['luizxvk', 'THILASCO', 'Tangerino', 'NYX Maria Garcia', 'Visitante3679'].map((n, i) => ({ nome: n, pts: 900 - i * 140, eu: i === 0 }))])) };
+  }
+  if (!token() || !me) return { code: 'login' };
+  try { return await call('/games/rubber-riot/divisoes', { timeout: 7000 }); } catch { return { code: 'erro' }; }
+}
+export async function divJoin(respostas) {
+  if (import.meta.env.DEV && FAKE) { const D = await import('../shared/divisions.js'), id = D.assignDivision(respostas, 'dev'); let was = null; try { was = JSON.parse(localStorage.getItem('rr_div') || 'null')?.id; } catch { /* */ } if (was && was !== id) { if ((me?.zionsPoints ?? 0) < D.DIV_DESERT_ZP) return { code: 'sem_saldo', preco: D.DIV_DESERT_ZP }; me.zionsPoints -= D.DIV_DESERT_ZP; dispatchEvent(new Event('rovex-me')); } return { ok: true, id, same: was === id }; } // local: desertor cobra do saldo falso
+  if (!token() || !me) return { code: 'login' };
+  try {
+    const r = await fetch(API + '/games/rubber-riot/divisao', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ respostas }) });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? j : { code: j.code || 'erro', ate: j.ate };
+  } catch { return { code: 'erro' }; }
+}

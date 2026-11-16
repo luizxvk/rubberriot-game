@@ -207,9 +207,49 @@ def m_cartola():
     box(0.18, 0.24, 0.02, (0.28, 0.3, 0.26), 'ece9e1', 0.005, rot=(0, 0, -0.4))     # carta de baralho
     screen(0.46, 0.15, (0, -0.1, 0.25))
 
+
+# ---------- ELITE (16/11, pedido dele): violeta da Rovex Elite + dourado, mesmo padrao (tela 'screen' pra +Z, altura ~1) ----------
+EV, EG, ED = '8b5cf6', 'e0b13a', '4f46e5'
+def hexa_prism(R, depth, loc, hexc, rot=0.0):
+    bm = bmesh.new(); vs = [bm.verts.new((math.cos(math.pi / 2 + rot + i * math.pi / 3) * R, math.sin(math.pi / 2 + rot + i * math.pi / 3) * R, 0)) for i in range(6)]
+    f = bm.faces.new(vs); ext = bmesh.ops.extrude_face_region(bm, geom=[f])
+    for v in [e for e in ext['geom'] if isinstance(e, bmesh.types.BMVert)]: v.co.z += depth
+    bmesh.ops.translate(bm, verts=bm.verts, vec=(0, 0, -depth / 2)); bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new('hexa'); bm.to_mesh(me); bm.free(); o = bpy.data.objects.new('hexa', me); bpy.context.collection.objects.link(o)
+    o.location = loc; bpy.context.view_layer.objects.active = o; return put(o, hexc, 0.015)
+
+def m_el_cofre():  # Cofre Elite: cofre violeta, disco dourado com a contagem, alavanca e dobradicas
+    box(0.9, 0.82, 0.42, (0, 0, -0.06), EV, 0.05)
+    box(0.78, 0.7, 0.04, (0, 0, 0.16), ED, 0.02)                                      # porta
+    for y in (0.24, -0.24): cyl(0.05, 0.12, (-0.45, y, 0.1), EG, rot=(math.pi / 2, 0, 0), v=12)   # dobradicas
+    tor(0.24, 0.035, (0.08, 0, 0.19), EG, maj=32, mino=8)                              # aro do disco
+    box(0.06, 0.26, 0.05, (0.36, 0, 0.2), EG, 0.015)                                   # alavanca
+    sph(0.05, (0.36, 0.14, 0.22), EG, seg=10)
+    for x in (-0.36, 0.36):
+        for y in (-0.36, 0.36): sph(0.035, (x, y, 0.18), EG, seg=8)                    # rebites
+    screen(0.36, 0.36, (0.08, 0, 0.192), round_=True)
+
+def m_el_brasao():  # Brasao Elite: hexagono violeta com moldura dourada, estrela no topo e fita embaixo
+    hexa_prism(0.52, 0.1, (0, 0, 0), EV)
+    hexa_prism(0.42, 0.04, (0, 0, 0.06), ED)
+    star_prism(5, 0.16, 0.07, 0.06, (0, 0.5, 0.05), EG)
+    box(0.7, 0.14, 0.05, (0, -0.5, 0.04), EG, 0.02)                                    # fita
+    for x in (-0.38, 0.38): box(0.12, 0.14, 0.04, (x, -0.55, 0.02), EG, 0.015, rot=(0, 0, 0.5 if x > 0 else -0.5))
+    screen(0.5, 0.36, (0, -0.02, 0.083))
+
+def m_el_coroa():  # Coroa Elite: placa violeta com uma coroa dourada em cima e joias
+    box(0.88, 0.5, 0.14, (0, -0.12, 0), EV, 0.04)
+    box(0.8, 0.42, 0.02, (0, -0.12, 0.07), ED, 0.01)
+    box(0.7, 0.12, 0.1, (0, 0.2, 0), EG, 0.02)                                         # aro da coroa
+    for i, x in enumerate((-0.3, 0, 0.3)):
+        cone(0.1, 0.0, 0.26 if i == 1 else 0.2, (x, 0.38 if i == 1 else 0.35, 0), EG, rot=(-math.pi / 2, 0, 0), v=4)  # pontas
+        sph(0.04, (x, 0.52 if i == 1 else 0.47, 0), 'e0301e' if i == 1 else 'f4ecd6', seg=8)
+    screen(0.72, 0.34, (0, -0.12, 0.082))
+
 MODELS = {'despertador': m_despertador, 'radio': m_radio, 'letreiro': m_letreiro, 'tv': m_tv, 'dinamite': m_dinamite, 'caveira': m_caveira,
           'ferradura': m_ferradura, 'tinta': m_tinta, 'trofeu': m_trofeu, 'bigorna': m_bigorna, 'fliperama': m_fliperama, 'engrenagem': m_engrenagem,
-          'xerife': m_xerife, 'taximetro': m_taximetro, 'cartola': m_cartola}
+          'xerife': m_xerife, 'taximetro': m_taximetro, 'cartola': m_cartola,
+          'el_cofre': m_el_cofre, 'el_brasao': m_el_brasao, 'el_coroa': m_el_coroa}
 
 for mid, fn in MODELS.items():
     if ONLY and mid not in ONLY: continue

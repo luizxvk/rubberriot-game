@@ -101,6 +101,16 @@ const LASER_DEF = {
   laser_3: { color: 0xb04bff, size: [0.036, 0.04, 0.1], model: 'laserP', traits: { hip: 0.9, adsTime: 0.95 } },              // Prisma roxo
   laser_4: { color: 0xffd23a, size: [0.042, 0.03, 0.09], model: 'laserY', twin: true, traits: { hip: 0.88, kick: 0.9, adsTime: 1.05 } },  // Duplo amarelo
 };
+// Gatilho das pistolas (16/11, pedido dele, igual aos gatilhos do MW3): mexe em cadencia, controle (coice) e mobilidade.
+// rate > 1 = atira mais rapido; kick < 1 = menos coice (mais controle); move > 1 = anda mais rapido
+export const TRIGGERS = ['tg_pena', 'tg_cabelo', 'tg_trava', 'tg_martelo', 'tg_turbo'];
+export const TRIGGER_DEF = {
+  tg_pena: { rate: 1.12, kick: 1.1 },               // Pena: leve, dispara mais rapido e o coice sobe
+  tg_cabelo: { rate: 1.06, move: 1.05, kick: 1.05 }, // Fio de Cabelo: competicao, um pouco de tudo pra frente
+  tg_trava: { kick: 0.9, move: 1.06, rate: 0.95 },   // Trava Dupla: tatico, controle e passo leve, cadencia menor
+  tg_martelo: { kick: 0.84, rate: 0.9, move: 0.97 }, // Martelo: pesado, segura o coice e atira mais devagar
+  tg_turbo: { rate: 1.3, kick: 1.18, spread: 1.06 },  // Turbo (16/11, pedido dele): cadencia bem maior; paga em coice e precisao
+};
 export const laserColor = (id) => LASER_DEF[id]?.color ?? 0xff2a2a;
 function range(p, a, b) { const r = []; for (let i = a; i <= b; i++) r.push(p + i); return r; }
 
@@ -110,6 +120,7 @@ export const PART_LABEL = {
 
 // nome de exibicao das pecas (cartoon, nada de marca)
 export function partName(slot, id) {
+  if (slot === 'trigger') return t(id ? id : 'tgStd'); // gatilho das pistolas (16/11)
   if (!id) return slot === 'muzzle' ? t('muzzleNone') : slot === 'conv' ? t('convNone') : slot === 'scope' ? t('ir_iron_own') : slot === 'handle' ? t('noGrip') : slot === 'laser' ? t('noLaser') : t('stdPart');
   const n = id.match(/(\d+)$/)?.[1] ?? '0';
   if (slot === 'body' && id.startsWith('melee_')) return t('ml_' + n);
@@ -2764,6 +2775,7 @@ export function loadoutStats(wpn, lo, noStyle = false) {
     }
   }
   if (lo.laser && LASER_DEF[lo.laser]) for (const [k, v] of Object.entries(LASER_DEF[lo.laser].traits)) st[k] *= v;
+  if (wpn === 'pistol' && lo.trigger && TRIGGER_DEF[lo.trigger]) for (const [k, v] of Object.entries(TRIGGER_DEF[lo.trigger])) st[k] *= v; // gatilho (16/11)
   // tipo de bala: so os status que ela mexe (fogo, marca, respingo e parede ficam nas regras do jogo)
   if (lo.ammo && AMMO[lo.ammo] && wpn !== 'melee') for (const k of ['dmg', 'mag', 'kick', 'rate']) if (AMMO[lo.ammo][k]) st[k] *= AMMO[lo.ammo][k];
   if (lo.handle) {

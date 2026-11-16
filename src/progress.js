@@ -38,7 +38,13 @@ function load() {
 // fichas de XP em dobro (06/11, pedido dele): n = fichas no Bolso, ms = tempo que falta da ficha ativa (so anda em partida),
 // mo = meses em que o Elite ja recebeu as 6 do mes, pg = niveis do Pass que ja pagaram a ficha extra
 function boostLoad(b) { b = b && typeof b === 'object' ? b : {}; return { n: Math.max(0, b.n | 0), ms: Math.max(0, +b.ms || 0), mo: Array.isArray(b.mo) ? b.mo.slice(-24) : [], pg: Array.isArray(b.pg) ? b.pg : [] }; }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } pushSoon(); }
+// 16/11 (travada no abate): cada XP (abate, cuca, assistencia) regravava o progresso inteiro no localStorage DENTRO do quadro.
+// Agora junta as gravacoes (1 a cada 400 ms) e grava na hora ao fechar/esconder (captura: antes do pushSave da Rovex)
+let saveT = 0;
+function saveNow() { clearTimeout(saveT); saveT = 0; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* */ } }
+function save() { if (!saveT) saveT = setTimeout(saveNow, 400); pushSoon(); }
+addEventListener('pagehide', () => { if (saveT) saveNow(); }, true);
+document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) saveNow(); }, true);
 
 export function level(xp = data.xp) { let n = 1; while (n < MAX_LEVEL && xp >= levelXp(n + 1)) n++; return n; }
 // Nivel por corpo: o XP vai pro modelo equipado da categoria (data.wpn[idDoCorpo]). Pecas e camos abrem pelo
@@ -137,6 +143,7 @@ export function addXp(kind, amount = XP[kind] || 0, wpn = null, body = null, wpn
 // bocal (02/11, pedido dele): entra no nivel da arma como as outras pecas (antes vinha tudo aberto)
 // 04/11 (hotfix, pedido dele): "no inicio to desbloqueando tudo". Cada tipo de peca tem o seu passo e comeca num nivel
 // diferente, entao quase todo nivel abre UMA coisa nova e o fim fica la no 30. [primeira, passo]
+export const TRIGGER_LVL = { tg_pena: 4, tg_cabelo: 9, tg_trava: 14, tg_martelo: 20, tg_turbo: 25 }; // gatilho das pistolas (16/11)
 export const MUZZLE_LVL = { comp: 5, flash: 10, brake: 15, silencer: 21, silencer2: 27 };
 // municao (05/11, pedido dele): sai do progresso da arma, nao mais de desafio
 export const AMMO_LVL = { fire: 7, slug: 9, trace: 12, boom: 17, ap: 23 };
@@ -148,6 +155,7 @@ const OLD_MZ = { comp: 3, flash: 6, brake: 9, silencer: 13, silencer2: 16 };
 const oldLv = (xp) => { let n = 1; while (n < 20 && xp >= Math.round(350 * n + 40 * n ** 2)) n++; return n; };
 function hadOld(wpn, i, id) {
   const L = data.lg || {}, w = oldLv(L[keyOf(wpn)] || 0);
+  if (id && id.startsWith('tg:')) return wpnLevel(wpn) >= (TRIGGER_LVL[id.slice(3)] || 1);
   if (id && id.startsWith('mz:')) return w >= (OLD_MZ[id.slice(3)] || 1);
   const need = i <= 0 ? 1 : Math.min(20, 1 + Math.ceil(i * 1.5));
   if (id && bodiesOf(wpn).includes(id)) return Math.max(w, ...bodiesOf(wpn).map(b => oldLv(L[b] || 0))) >= need;

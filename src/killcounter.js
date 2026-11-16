@@ -13,6 +13,7 @@ export const KC = {
   despertador: { r: 'raro' }, radio: { r: 'raro' }, letreiro: { r: 'lendario' }, tv: { r: 'epico' }, dinamite: { r: 'epico' },
   caveira: { r: 'epico' }, ferradura: { r: 'raro' }, tinta: { r: 'raro' }, trofeu: { r: 'lendario' }, bigorna: { r: 'raro' },
   fliperama: { r: 'lendario' }, engrenagem: { r: 'epico' }, xerife: { r: 'epico' }, taximetro: { r: 'raro' }, cartola: { r: 'lendario' },
+  el_cofre: { r: 'lendario' }, el_brasao: { r: 'lendario' }, el_coroa: { r: 'lendario' }, // ELITE (16/11): modelos do Blender, de graca pra quem assina
 };
 export const KC_IDS = Object.keys(KC);
 const KEY = 'rr_kc';
@@ -94,6 +95,24 @@ const DRAW = {
     g.fillStyle = '#3a1e0e'; g.fillRect(0, 0, W, H); const s = pad(n, 4), cw = W * 0.17;
     for (let i = 0; i < 4; i++) { const x = W * 0.16 + i * cw * 1.04, gr = g.createLinearGradient(0, H * 0.32, 0, H * 0.68); gr.addColorStop(0, '#6b3a1a'); gr.addColorStop(0.5, '#f2d6a2'); gr.addColorStop(1, '#6b3a1a');
       g.fillStyle = gr; g.fillRect(x, H * 0.32, cw, H * 0.36); g.fillStyle = '#2a1206'; g.font = `800 ${Math.round(H * 0.28)}px Grandstander, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s[i], x + cw / 2, H * 0.51); }
+  },
+  // ---- ELITE (16/11): violeta da Rovex Elite + dourado ----
+  el_cofre(g, W, H, n) { // disco de cofre: marcas douradas em volta, numero no meio
+    const gr = g.createRadialGradient(W / 2, H / 2, 4, W / 2, H / 2, W / 2); gr.addColorStop(0, '#3b2a7a'); gr.addColorStop(1, '#1b1240'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#e0b13a'; g.lineCap = 'round'; for (let i = 0; i < 40; i++) { const a = i * Math.PI / 20, r1 = W * 0.47, r2 = W * (i % 5 ? 0.43 : 0.39); g.lineWidth = i % 5 ? 3 : 6; g.beginPath(); g.moveTo(W / 2 + Math.cos(a) * r1, H / 2 + Math.sin(a) * r1); g.lineTo(W / 2 + Math.cos(a) * r2, H / 2 + Math.sin(a) * r2); g.stroke(); }
+    g.fillStyle = '#f2c94c'; g.textAlign = 'center'; g.textBaseline = 'middle'; fit(g, String(n), '400 {s}px Bowlby One, sans-serif', W * 0.6, 96); g.fillText(String(n), W / 2, H * 0.54);
+    g.fillStyle = '#c4b5fd'; g.font = '800 18px Grandstander, sans-serif'; g.fillText('ELITE', W / 2, H * 0.25);
+  },
+  el_brasao(g, W, H, n) { // placa violeta com estrela e contagem dourada
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#8b5cf6'); gr.addColorStop(1, '#4f46e5'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#f2c94c'; g.lineWidth = 8; g.strokeRect(6, 6, W - 12, H - 12);
+    g.fillStyle = '#f2c94c'; g.textAlign = 'center'; g.textBaseline = 'middle'; fit(g, String(n), '400 {s}px Bowlby One, sans-serif', W * 0.7, 100); g.fillText(String(n), W / 2, H * 0.58);
+    g.save(); g.translate(W / 2 - 14, H * 0.12); g.scale(1.2, 1.2); g.fill(new Path2D('M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z')); g.restore();
+  },
+  el_coroa(g, W, H, n) { // faixa de veludo violeta com a contagem em letras douradas
+    g.fillStyle = '#2a1b5c'; g.fillRect(0, 0, W, H); g.fillStyle = '#8b5cf6'; for (let x = 0; x < W; x += 24) g.fillRect(x, 0, 10, H);
+    g.fillStyle = 'rgba(20,10,40,.55)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#f2c94c'; g.textAlign = 'center'; g.textBaseline = 'middle'; fit(g, pad(n, 4), '400 {s}px Bowlby One, sans-serif', W * 0.86, 96); g.fillText(pad(n, 4), W / 2, H * 0.55);
   },
   xerife(g, W, H, n) { // cartaz de PROCURADO
     g.fillStyle = '#e9d9b0'; g.fillRect(0, 0, W, H); g.fillStyle = '#5a3a1a'; g.textAlign = 'center'; g.textBaseline = 'middle';

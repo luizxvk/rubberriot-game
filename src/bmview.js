@@ -6,7 +6,12 @@ import { audio } from './audio.js';
 import { me, bmLoad, bmBuy, bmChest } from './rovex.js';
 import { pieceShot } from './shop.js';
 import { renderBal } from './zbal.js';
-import { BM_VARIANTS, BM_IDS, BM_RARITY, BM_CHEST, BM_PIECES, bmShowcase, bmPrice, bmRefund } from '../shared/blackmarket.js';
+import { BM_VARIANTS, BM_IDS, BM_RARITY, BM_CHEST, BM_PIECES, bmShowcase, bmPrice as bmBase, bmRefund } from '../shared/blackmarket.js';
+import { elitePrice } from '../shared/shop.js';
+// Elite (16/11, pedido dele): 20% nas armas do Mercado Negro e 10% no bau. O servidor confere o Elite na hora de cobrar
+const bmPrice = (id) => me?.elite ? elitePrice(bmBase(id), 'bm') : bmBase(id);
+const chestZp = () => me?.elite ? elitePrice(BM_CHEST.zp, 'chest') : BM_CHEST.zp;
+const eliteTag = (n) => me?.elite ? `<i class="el-off">${t('eliteOff', { n })}</i>` : '';
 import { CAMO_SWATCH } from './camos.js';
 import { shopOwned } from './shopstore.js';
 import { openBmDetail } from './bmdetail.js';
@@ -75,7 +80,7 @@ function vCard(id) {
     <span class="bm-rib">${t('rar_' + V.rar)}</span>
     <button class="bm-art" type="button" data-shot="${id}" aria-label="${t('bmdZoom', { n: esc(vName(id)) })}"><i class="cswatch" style="background:${CAMO_SWATCH[V.lo.camo]}"></i></button><span class="bm-zoom" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg></span>
     <div class="bm-info"><h4>${esc(vName(id))}</h4><small>${esc(baseName(id))}</small><p class="bm-mods">${modsHtml(id)}</p></div>
-    <button class="bm-buy ${own ? 'owned' : ''}" data-buy="${id}" ${own ? 'disabled' : ''}>${own ? t('bmOwned') : `<img src="${COIN}" alt=""><span>${fmt(pr)}</span>`}</button>
+    <button class="bm-buy ${own ? 'owned' : ''}" data-buy="${id}" ${own ? 'disabled' : ''}>${own ? t('bmOwned') : `<img src="${COIN}" alt="">${me?.elite ? `<s>${fmt(bmBase(id))}</s>` : ''}<span>${fmt(pr)}</span>${eliteTag(20)}`}</button>
   </article>`;
 }
 function piecesHtml(id) { // ilustracao da arma em 5 fatias: a fatia aparece quando a peca e sua, senao silhueta
@@ -114,7 +119,7 @@ export function renderBM() {
         <div class="bm-chest-txt">
           <h3 id="bmChestH">${t('bmChestName')}</h3><p>${t('bmChestSub', { n: BM_PIECES, a: fmt(BM_CHEST.loot[0]), b: fmt(BM_CHEST.loot[1]) })}</p>
           <ul class="bm-odds">${Object.entries(BM_RARITY).map(([k, r]) => `<li style="--rc:${RAR_COL[k]}"><i></i>${t('rar_' + k)} <b>${Math.round(r.w / Object.values(BM_RARITY).reduce((s, x) => s + x.w, 0) * 100)}%</b></li>`).join('')}</ul>
-          <button class="bm-buy big" id="bmChestBuy"><img src="${COIN}" alt=""><span>${t('bmChestOpen')}</span><em>${fmt(BM_CHEST.zp)}</em></button>
+          <button class="bm-buy big" id="bmChestBuy"><img src="${COIN}" alt=""><span>${t('bmChestOpen')}</span>${me?.elite ? `<s>${fmt(BM_CHEST.zp)}</s>` : ''}<em>${fmt(chestZp())}</em>${eliteTag(10)}</button>
           <p class="bm-msg" id="bmMsg" role="status"></p>
         </div>
       </div>
@@ -184,11 +189,11 @@ let opening = false;
 async function openChest() {
   if (opening) return;
   const msg = $('bmMsg');
-  if ((me?.zionsPoints ?? 0) < BM_CHEST.zp) { audio.play('empty', { ui: true, vol: 0.5 }); if (msg) msg.textContent = t('shopNoFunds', { n: fmt(BM_CHEST.zp), s: fmt(me?.zionsPoints ?? 0) }); return; }
+  if ((me?.zionsPoints ?? 0) < chestZp()) { audio.play('empty', { ui: true, vol: 0.5 }); if (msg) msg.textContent = t('shopNoFunds', { n: fmt(chestZp()), s: fmt(me?.zionsPoints ?? 0) }); return; }
   opening = true;
   const ov = chestOverlay(); ov.classList.add('shake'); audio.play('ui_click', { ui: true });
   const [r] = await Promise.all([bmChest(), new Promise(res => setTimeout(res, 1700))]); // o bau treme enquanto o servidor sorteia
-  if (!r.ok) { opening = false; ov.remove(); audio.play('empty', { ui: true, vol: 0.5 }); if (msg) msg.textContent = r.code === 'sem_saldo' ? t('shopNoFunds', { n: fmt(BM_CHEST.zp), s: fmt(r.saldo ?? 0) }) : t('bmErr'); return; }
+  if (!r.ok) { opening = false; ov.remove(); audio.play('empty', { ui: true, vol: 0.5 }); if (msg) msg.textContent = r.code === 'sem_saldo' ? t('shopNoFunds', { n: fmt(chestZp()), s: fmt(r.saldo ?? 0) }) : t('bmErr'); return; }
   state.pecas = r.pecas || state.pecas;
   ov.style.setProperty('--rc', RAR_COL[BM_VARIANTS[r.id]?.rar] || '#f2b544'); // a coluna de luz ja sai na cor da raridade
   ov.classList.remove('shake'); ov.classList.add('open'); audio.play(r.completa ? 'fanfare' : 'unlock', { ui: true, vol: 0.9, jitter: 0 }); audio.fanfare?.(r.completa ? 0.9 : 0.5);

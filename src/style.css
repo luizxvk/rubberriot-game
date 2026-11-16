@@ -2571,7 +2571,7 @@ body.touchmode #menu.home .news, body.touchmode #menu.home .rovex-strip, body.to
 .sp-gives { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
 .sp-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper-2); box-shadow: 2px 2px 0 var(--ink); }
 .sp-pill svg { width: 20px; height: 20px; padding: 3px; border-radius: 50%; background: var(--ink); fill: var(--paper); flex: none; }
-.sp-pill.skin svg { background: #7b33cc; } .sp-pill.camo svg { background: #e2731f; }
+.sp-pill.k-skin svg { background: #7b33cc; } .sp-pill.k-camo svg { background: #e2731f; } .sp-pill.k-stk svg { background: #c8342a; }
 .sp-pill b { font-family: var(--display); font-weight: 400; font-size: 13px; line-height: 1; }
 .sp-pill small { font-family: var(--body); font-weight: 800; font-size: 10px; color: var(--graphite); }
 @media (max-height: 520px) { .sp-pill b { font-size: 11px; } .sp-pill small { display: none; } .sp-gives { margin-top: 6px; } }
@@ -4826,3 +4826,250 @@ body.range #scorePlaque, body.range #streaks, body.range #touch .tstk { display:
   #scr-arsenal .smith { grid-template-rows: minmax(0, 1fr); align-content: stretch; }
   #scr-arsenal .slots, #scr-arsenal .stats { min-height: 0; }
 }
+/* recomendacao grafica (16/11, pedido dele): banner no topo da aba Video. Colunas fixas = tudo alinhado */
+.rec-card { margin: 0 0 14px; padding: 12px 14px 14px; border: 3px solid var(--ink); border-radius: 16px; background: var(--ink); color: var(--paper); box-shadow: 4px 4px 0 var(--red, #c8342a); }
+.rec-head { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
+.rec-head svg { width: 34px; height: 34px; fill: var(--paper); }
+.rec-head b { display: block; font-family: var(--display); font-weight: 400; font-size: 18px; line-height: 1.1; }
+.rec-head small { display: block; font-size: 12.5px; font-weight: 700; opacity: .8; line-height: 1.3; margin-top: 2px; }
+.rec-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.rec-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr); align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.08); font-size: 13px; font-weight: 700; }
+.rec-k { overflow-wrap: anywhere; line-height: 1.2; }
+.rec-v { overflow-wrap: anywhere; line-height: 1.25; }
+.rec-v i { font-style: normal; opacity: .6; margin: 0 2px; }
+.rec-v b { font-family: var(--display); font-weight: 400; }
+.rec-g { justify-self: end; text-align: right; color: #ffd166; font-weight: 800; line-height: 1.2; }
+.rec-go { width: 100%; padding: 10px 14px; border: 3px solid var(--paper); border-radius: 999px; background: var(--paper); color: var(--ink); font-family: var(--display); font-size: 16px; cursor: var(--cur-click); transition: transform .1s; }
+.rec-go:hover, .rec-go:focus-visible { transform: translate(-1px, -1px); outline: none; }
+@media (max-width: 520px) { .rec-list li { grid-template-columns: 1fr auto; } .rec-g { grid-column: 1 / -1; justify-self: start; text-align: left; } }
+.rs-card .rs-body { margin: 10px 0 16px; font-weight: 700; line-height: 1.4; }
+.rs-acts { display: grid; gap: 8px; justify-items: center; }
+.rs-acts .big { width: 100%; }
+/* 16/11 (pedido dele): Skills e Equipamento de campo com todas as cartas da MESMA altura (a da carta mais alta) */
+.sk-grid { grid-auto-rows: 1fr; }
+.sk-card { height: 100%; }
+/* 16/11 (pedido dele): carimbo "feito" visivel. Era absoluto em cima do numero e com multiply (sumia no fundo escuro do Elite).
+   Agora entra na fileira, antes do numero, com fundo de papel */
+.ch-list li .ch-stamp, #chElite .ch-stamp { position: static; flex: none; order: 2; transform: rotate(-8deg); align-self: center; opacity: 1; mix-blend-mode: normal; background: var(--paper); color: var(--red); box-shadow: 2px 2px 0 var(--ink); font-size: 16px; padding: 1px 9px; }
+.ch-list li .ch-side, #chElite .el-side { order: 3; }
+.ch-list li.ch-tut .ch-stamp { right: auto; }
+/* selo do desconto Elite (16/11) */
+.el-off { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--elite, #8b5cf6); color: #fff; font-style: normal; font-family: var(--display); font-size: 11px; line-height: 1.5; white-space: nowrap; vertical-align: middle; box-shadow: 1px 1px 0 var(--ink); }
+.bm-buy s, .st-price s { opacity: .6; margin-right: 4px; font-weight: 600; }
+/* ---------- Divisoes (16/11, pedido dele) ----------
+   O destaque e o BRASAO: a tag de 4 letras carimbada na cor da divisao (emblema de sindicato dos anos 30). O resto fica quieto */
+#scr-divisions { width: min(860px, 100%); }
+.dv-pane { display: grid; gap: 12px; max-height: calc(100dvh - 150px); overflow-y: auto; padding: 2px 4px 6px 2px; }
+.dv-chip { display: inline-grid; place-items: center; min-width: 40px; height: 18px; padding: 0 5px; margin-right: 5px; border: 2px solid var(--ink); border-radius: 5px; background: var(--dc); color: var(--di); font-family: var(--display); font-size: 11px; line-height: 1; letter-spacing: .04em; vertical-align: middle; transform: rotate(-3deg); box-shadow: 1px 1px 0 var(--ink); }
+.dv-chip.big { min-width: 52px; height: 24px; font-size: 14px; }
+.dv-crest { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 72px; background: var(--dc); color: var(--di); border: 3px solid var(--ink); border-radius: 10px 10px 50% 50% / 10px 10px 34% 34%; box-shadow: 3px 3px 0 var(--ink); }
+.dv-crest svg { width: 26px; height: 26px; fill: currentColor; margin-top: 4px; }
+.dv-crest b { font-family: var(--display); font-weight: 400; font-size: 15px; line-height: 1; margin-bottom: 12px; letter-spacing: .05em; }
+.dv-crest.xl { width: 104px; height: 118px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); }
+.dv-crest.xl svg { width: 42px; height: 42px; margin-top: 8px; }
+.dv-crest.xl b { font-size: 25px; margin-bottom: 20px; }
+.dv-intro { display: grid; gap: 12px; justify-items: start; padding: 14px 16px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper-2); }
+.dv-intro p { margin: 0; font-weight: 700; line-height: 1.45; max-width: 62ch; }
+.dv-h { margin: 4px 0 0; font-family: var(--display); font-weight: 400; font-size: 19px; }
+.dv-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
+.dv-card { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); }
+.dv-card div { display: grid; gap: 2px; min-width: 0; }
+.dv-card b { font-family: var(--display); font-weight: 400; font-size: 16px; line-height: 1.1; }
+.dv-card i { font-weight: 700; font-size: 12.5px; }
+.dv-card small { font-size: 12px; font-weight: 600; color: var(--graphite); line-height: 1.3; }
+.dv-mine { display: flex; gap: 18px; align-items: center; padding: 16px 18px; border: 4px solid var(--ink); border-radius: 18px; background: var(--paper); box-shadow: 6px 6px 0 var(--dc); }
+.dv-mine-txt { display: grid; gap: 3px; min-width: 0; }
+.dv-mine-txt small { font-weight: 800; color: var(--graphite); }
+.dv-mine-txt h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 28px; line-height: 1.05; }
+.dv-mine-txt i { font-weight: 700; }
+.dv-mine-txt p { margin: 0; font-weight: 600; font-size: 13.5px; color: var(--graphite); }
+.dv-wait { font-style: normal; font-weight: 800; font-size: 12.5px; }
+.dv-redo { justify-self: start; margin-top: 4px; }
+.dv-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.dv-tabs button { padding: 6px 12px; border: 3px solid var(--ink); border-radius: 999px; background: var(--paper); font-weight: 800; font-size: 13px; }
+.dv-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.dv-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dv-board li { display: grid; grid-template-columns: 26px 52px minmax(0, 1fr) minmax(60px, 1.2fr) 96px; align-items: center; gap: 8px; padding: 7px 10px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); font-weight: 700; }
+.dv-board.members li { grid-template-columns: 26px 52px minmax(0, 1fr) 96px; }
+.dv-board strong { justify-self: end; }
+.dv-board .dv-chip { justify-self: start; }
+.dv-board li.me { background: var(--paper-2); box-shadow: 3px 3px 0 var(--ink); }
+.dv-board em { font-style: normal; font-family: var(--display); font-size: 16px; text-align: center; }
+.dv-board b { font-family: var(--display); font-weight: 400; font-size: 15px; overflow-wrap: anywhere; line-height: 1.15; }
+.dv-board b small { font-family: inherit; font-size: 11px; opacity: .7; }
+.dv-board strong { font-family: var(--display); font-weight: 400; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dv-bar { height: 12px; border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; background: var(--paper); }
+.dv-bar i { display: block; height: 100%; }
+.dv-sub { margin: 4px 0 6px; font-family: var(--display); font-weight: 400; font-size: 17px; }
+.dv-duels { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 8px; }
+.dv-duels li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.dv-side { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); }
+.dv-side b { font-family: var(--display); font-weight: 400; font-size: 14px; line-height: 1.1; overflow-wrap: anywhere; }
+.dv-side strong { font-family: var(--display); font-weight: 400; font-size: 17px; font-variant-numeric: tabular-nums; }
+.dv-side.win { box-shadow: 3px 3px 0 var(--red, #c8342a); }
+.dv-side.me { background: var(--paper-2); }
+.dv-vs { font-family: var(--display); font-size: 15px; }
+.dv-note { margin: 0; padding: 10px 12px; border: 3px dashed var(--ink); border-radius: 12px; font-weight: 700; line-height: 1.4; }
+.dv-note.warn { border-style: solid; color: var(--red, #c8342a); }
+.dv-how { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: var(--graphite); line-height: 1.4; }
+.dv-quiz { display: grid; gap: 12px; padding: 4px 2px; }
+.dv-step { margin: 0; font-weight: 800; color: var(--graphite); }
+.dv-prog { display: block; height: 10px; border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; }
+.dv-prog i { display: block; height: 100%; background: var(--ink); transition: width .25s; }
+.dv-quiz h3 { margin: 4px 0 2px; font-family: var(--display); font-weight: 400; font-size: clamp(22px, 3.4vw, 30px); line-height: 1.1; max-width: 26ch; }
+.dv-ans { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
+.dv-ans button { text-align: left; padding: 14px 16px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); font-weight: 800; font-size: 15px; line-height: 1.3; box-shadow: 3px 3px 0 var(--ink); transition: transform .08s, box-shadow .08s; }
+.dv-ans button:hover, .dv-ans button:focus-visible { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); outline: none; background: var(--paper-2); }
+.dv-ans button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.dv-back { justify-self: start; }
+.dv-reveal { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 22px 16px 18px; border: 4px solid var(--ink); border-radius: 18px; background: var(--ink); color: var(--paper); }
+.dv-reveal p { margin: 0; font-family: var(--display); font-size: 18px; opacity: .85; }
+.dv-reveal h3 { margin: 6px 0 0; font-family: var(--display); font-weight: 400; font-size: 34px; line-height: 1; }
+.dv-reveal i { font-weight: 700; }
+.dv-reveal small { font-weight: 600; opacity: .8; }
+.dv-reveal .dv-crest { box-shadow: 5px 5px 0 var(--paper); border-color: var(--paper); }
+.dv-reveal .dv-go { margin-top: 10px; background: var(--paper); color: var(--ink); }
+/* o unico momento animado: o brasao cai carimbado */
+.dv-crest.drop { animation: dv-drop .55s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes dv-drop { 0% { transform: translateY(-40px) rotate(-14deg) scale(1.4); opacity: 0; } 70% { transform: translateY(0) rotate(4deg) scale(.95); opacity: 1; } 100% { transform: rotate(-3deg) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .dv-crest.drop { animation: none; transform: rotate(-3deg); } }
+@media (max-width: 560px) {
+  .dv-mine { flex-direction: column; align-items: flex-start; }
+  .dv-board li { grid-template-columns: 22px 52px minmax(0, 1fr) 84px; } .dv-board li .dv-bar { grid-column: 2 / -1; grid-row: 2; }
+  .dv-duels li { grid-template-columns: 1fr; } .dv-vs { justify-self: center; }
+}
+
+/* Amigos na pausa (16/11) */
+.pf-card { text-align: left; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.pf-card h2 { text-align: center; }
+.pf-sub { margin: 6px 0 10px; font-weight: 700; line-height: 1.4; }
+.pf-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.pf-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.pf-acts:empty { display: none; }
+.pf-err { min-height: 1em; margin: 6px 0; color: var(--red, #c8342a); font-weight: 700; }
+.pf-card .plain { display: block; margin: 4px auto 0; }
+/* 16/11 (bug dele: vitrine do Mercado Negro estourando): o selo Elite e o preco riscado alargavam o botao e o card vazava.
+   Card preso na coluna (min-width 0), botao quebra linha se precisar e o selo vira etiqueta em cima do botao */
+.bm-card { min-width: 0; overflow: visible; }
+.bm-card .bm-art, .bm-card .bm-art img { max-width: 100%; }
+.bm-card .bm-art { overflow: hidden; }
+.bm-buy { position: relative; flex-wrap: wrap; row-gap: 0; max-width: 100%; min-width: 0; }
+.bm-buy s { font-size: .78em; opacity: .65; }
+.bm-buy .el-off { position: absolute; top: -11px; right: 6px; margin: 0; font-size: 10px; }
+.bm-mods { min-width: 0; }
+/* botao Divisoes (16/11, pedido dele): tracejado vermelho correndo em volta (formigas marchando de cartaz) enquanto nao tem divisao */
+.bill-item.div-go { position: relative; }
+.bill-item.div-go.call::after { content: ''; position: absolute; inset: -3px; border-radius: inherit; pointer-events: none; /* 16/11: em cima da borda do botao (fora dela a grade do menu cortava) */
+  background: linear-gradient(90deg, var(--red, #c8342a) 55%, transparent 0) repeat-x 0 0 / 14px 4px, linear-gradient(90deg, var(--red, #c8342a) 55%, transparent 0) repeat-x 0 100% / 14px 4px,
+    linear-gradient(0deg, var(--red, #c8342a) 55%, transparent 0) repeat-y 0 0 / 4px 14px, linear-gradient(0deg, var(--red, #c8342a) 55%, transparent 0) repeat-y 100% 0 / 4px 14px;
+  animation: dv-ants .7s linear infinite; }
+@keyframes dv-ants { to { background-position: 14px 0, -14px 100%, 0 -14px, 100% 14px; } }
+@media (prefers-reduced-motion: reduce) { .bill-item.div-go.call::after { animation: none; } }
+
+/* itens Elite novos no banner do presente (16/11) */
+.elg-h { margin: 10px 0 6px; font-family: var(--display); font-weight: 400; font-size: 17px; }
+.elg-extras { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); grid-auto-rows: 1fr; gap: 8px; }
+.elg-ex { display: grid; grid-template-rows: 64px auto auto; justify-items: center; align-content: start; gap: 3px; padding: 8px 6px; min-width: 0; border: 3px solid var(--ink); border-radius: 12px; background: linear-gradient(180deg, #ede9fe, #ddd6fe); text-align: center; }
+.elg-ex img, .elg-ex .elp-shot { width: 64px; height: 64px; object-fit: contain; }
+.elg-ex .elp-shot img { width: 100%; height: 100%; object-fit: contain; }
+.elg-ex b { font-family: var(--display); font-weight: 400; font-size: 13px; line-height: 1.1; color: var(--ink); overflow-wrap: anywhere; }
+.elg-ex small { font-size: 11px; font-weight: 700; color: var(--graphite); }
+.elg-perks { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.elg-perks li { display: grid; justify-items: center; gap: 2px; padding: 8px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); text-align: center; }
+.elg-perks b { font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--elite, #8b5cf6); }
+.elg-perks span { font-size: 12px; font-weight: 700; line-height: 1.25; }
+@media (max-width: 520px) { .elg-perks { grid-template-columns: 1fr; } }
+
+/* suspense da divisao (16/11): roleta de brasoes freando ate o resultado */
+.dv-sus { display: grid; justify-items: center; gap: 10px; padding: 26px 16px 22px; border: 4px solid var(--ink); border-radius: 18px; background: var(--ink); color: var(--paper); text-align: center; min-height: 300px; align-content: center; }
+.dv-sus p { margin: 0; font-family: var(--display); font-size: 22px; }
+.dv-sus-slot { display: grid; place-items: center; width: 140px; height: 150px; }
+.dv-sus .dv-crest { box-shadow: 5px 5px 0 var(--paper); border-color: var(--paper); }
+.dv-crest.spin { animation: dv-flick .12s ease-out; }
+@keyframes dv-flick { from { transform: translateY(-14px) scale(.92); opacity: .4; } to { transform: none; opacity: 1; } }
+.dv-sus-name { min-height: 1.2em; font-family: var(--display); font-size: 15px; opacity: .75; }
+.dv-sus-dots { display: flex; gap: 6px; }
+.dv-sus-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--paper); animation: dv-dot 1s infinite; }
+.dv-sus-dots i:nth-child(2) { animation-delay: .15s; } .dv-sus-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dv-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+/* 16/11 (pedido dele): tag cabendo no brasao (MOMA vazava) e cartas das divisoes com altura igual sem estourar o texto */
+.dv-crest b { font-size: 13px; letter-spacing: 0; max-width: 90%; text-align: center; }
+.dv-crest.xl b { font-size: 21px; }
+.dv-grid { grid-auto-rows: 1fr; align-items: stretch; }
+.dv-card { height: 100%; min-width: 0; align-items: center; }
+.dv-card div { min-width: 0; }
+.dv-card b, .dv-card i, .dv-card small { overflow-wrap: anywhere; }
+
+/* desertor e pill do botao Divisoes (16/11) */
+.dv-desert { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 20px 16px; border: 4px solid var(--ink); border-radius: 18px; background: var(--paper); box-shadow: 6px 6px 0 var(--red, #c8342a); }
+.dv-desert h3 { margin: 4px 0 0; font-family: var(--display); font-weight: 400; font-size: 28px; }
+.dv-desert p { margin: 0; max-width: 52ch; font-weight: 700; line-height: 1.45; }
+.dv-desert-acts { display: grid; gap: 8px; justify-items: center; width: min(360px, 100%); }
+.dv-desert-acts .big { width: 100%; }
+.bill-item .dv-pill { position: absolute; top: -9px; right: -6px; padding: 1px 8px; border: 2px solid var(--ink); border-radius: 6px; background: var(--dc); color: var(--di); font-family: var(--display); font-size: 11px; line-height: 1.4; transform: rotate(4deg); box-shadow: 1px 1px 0 var(--ink); }
+/* 16/11 (pedido dele): pill do botao Divisoes ACIMA do tracejado (ele riscava o texto) */
+.bill-item.div-go.call::after { z-index: 1; }
+.bill-item.div-go .ch-new, .bill-item.div-go .dv-pill { z-index: 3; white-space: nowrap; }
+
+/* novidades 0.20 (16/11): carrossel das Divisoes */
+.np-slide.dvh, .np-slide.dvs { display: grid; place-items: center; align-content: center; gap: 10px; padding: 34px 16px 14px; }
+.np-dv-wall { display: grid; grid-template-columns: repeat(6, auto); gap: 8px 10px; justify-content: center; }
+.np-dv-wall .dv-crest { width: 48px; height: 54px; border-width: 2px; box-shadow: 2px 2px 0 #0a0908; }
+.np-dv-wall .dv-crest svg { width: 18px; height: 18px; margin-top: 2px; }
+.np-dv-wall .dv-crest b { font-size: 10px; margin-bottom: 8px; }
+.np-slide.dvh figcaption, .np-slide.dvs figcaption { display: grid; justify-items: center; gap: 2px; text-align: center; max-width: 60ch; }
+.np-slide.dvs { background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--dc) 45%, transparent), transparent 70%); }
+@media (max-width: 560px) { .np-dv-wall { grid-template-columns: repeat(4, auto); } }
+
+/* Novidades como capa de jornal (16/11, pedido dele). Unico destaque: o cabecalho do jornal + a manchete; o resto quieto,
+   colunas separadas por fio, o resgate vira cupom recortavel */
+.news-pop .np-card { background: #f3ecd8; background-image: radial-gradient(rgba(60,40,10,.06) 1px, transparent 1px); background-size: 4px 4px; }
+.np-mast { text-align: center; margin: 0 0 6px; }
+.np-mast-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 0 0 5px; border-bottom: 2px solid var(--ink); font-weight: 800; font-size: 12px; color: #3a3226; }
+.np-mast-top time { flex: 1; text-align: center; text-transform: capitalize; }
+.np-mast-name { margin: 6px 0 2px; font-family: var(--display); font-weight: 400; font-size: clamp(28px, 4.6vw, 46px); line-height: 1; letter-spacing: .01em; }
+.np-mast-rule { height: 7px; border-top: 4px solid var(--ink); border-bottom: 1.5px solid var(--ink); }
+.np-headline { margin: 10px 0 2px; font-family: var(--display); font-weight: 400; font-size: clamp(30px, 5.4vw, 54px); line-height: .95; text-align: center; }
+.np-deck { margin: 4px auto 10px; max-width: 64ch; text-align: center; font-weight: 700; font-style: italic; line-height: 1.4; color: #3a3226; }
+.np-list.np-cols { gap: 0; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); padding: 8px 0; }
+.np-list.np-cols li { background: transparent; border: 0; box-shadow: none; border-radius: 0; padding: 6px 12px; border-left: 1.5px solid rgba(20,18,16,.5); }
+.np-list.np-cols li:nth-child(3n + 1) { border-left: 0; }
+.np-list.np-cols li b { font-family: var(--display); font-weight: 400; }
+.news-pop .np-gift { border: 3px dashed var(--ink); border-radius: 6px; background: #fff7d6; box-shadow: none; }
+@media (max-width: 720px) { .np-list.np-cols li { border-left: 0; border-top: 1.5px solid rgba(20,18,16,.35); } .np-list.np-cols li:first-child { border-top: 0; } }
+.news-pop .np-card { grid-template-rows: none; grid-auto-rows: auto; overflow-y: auto; width: min(820px, 100%); }
+.np-list.np-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { .np-list.np-cols { grid-template-columns: 1fr; } }
+/* 16/11 (bug dele: conteudo do carrossel cortado): as Divisoes sao mais altas que as fotos de arma. Altura propria, etiqueta dentro
+   da moldura e texto fora das setas */
+.news-pop .np-reel { height: clamp(290px, 40vh, 350px); }
+.np-slide.dvh, .np-slide.dvs { grid-template-rows: none; align-content: center; gap: 10px; padding: 46px 62px 26px; }
+.np-slide.dvh .np-tag, .np-slide.dvs .np-tag { position: absolute; top: 16px; left: 18px; }
+.np-slide.dvh figcaption small, .np-slide.dvs figcaption small { max-width: 52ch; }
+@media (max-width: 560px) { .news-pop .np-reel { height: clamp(330px, 52vh, 400px); } .np-slide.dvh, .np-slide.dvs { padding: 44px 48px 24px; } }
+
+/* resgate das Novidades so no fim do carrossel (16/11) + cabecalho do jornal livre do botao de fechar */
+.news-pop .np-gift:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.6); }
+.news-pop .np-gift.ready { animation: npGiftReady .6s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes npGiftReady { 0% { transform: scale(.9); } 60% { transform: scale(1.06); } 100% { transform: none; } }
+.np-gift-hint { margin: 6px 0 0; text-align: center; font-weight: 800; font-size: 12.5px; color: #3a3226; }
+.np-mast-top { padding-right: 52px; }
+@media (prefers-reduced-motion: reduce) { .news-pop .np-gift.ready { animation: none; } }
+/* 16/11 (pedido dele): X fora do texto do cabecalho e resgate sem encostar nos fios do jornal */
+.news-pop .np-card .lb-x { top: 10px; right: 10px; width: 36px; height: 36px; }
+.news-pop .np-mast { margin-top: 34px; }
+.news-pop .np-mast-top { padding-right: 0; }
+.news-pop .np-foot { padding: 14px 0 16px; min-height: 0; }
+.news-pop .np-gift-slot { display: grid; justify-items: center; gap: 4px; }
+.news-pop .np-gift { box-shadow: 3px 3px 0 var(--ink); }
+
+.np-mast-top time { text-transform: none; } /* so a primeira letra maiuscula (vem do JS) */
+
+/* telemetria (16/11): canto superior esquerdo, uma linha, numeros com largura fixa (nao tremem) */
+.telem { position: fixed; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); z-index: 30; display: flex; gap: 10px; padding: 4px 10px; border-radius: 8px; background: rgba(20,18,16,.72); color: #ece9e1; font-weight: 700; font-size: 12px; line-height: 1.3; pointer-events: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.telem b { font-family: var(--display); font-weight: 400; color: #fff; }
+.telem b.bad { color: #ff8a7a; }
+.telem[hidden] { display: none; }
+
+body.tel-on #hud .radar, body.tel-on #hud .kit { margin-top: 26px; } /* telemetria ligada: minimapa e granadas descem (16/11) */

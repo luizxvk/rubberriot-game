@@ -2,6 +2,7 @@
 // no jogo e na Rovex; o botao leva pra pagina do Elite (mesmo link do banner). Segue a regra do controle
 // (vault: controle-popup.md): role=dialog + hidden, fecha no .lb-x / Esc / B, o foco volta pro banner.
 // Icones: Material Icons (Apache 2.0); selo = EliteHexIcon do template-magazine.
+import { stickerCanvas, STK_ELITE } from './stickers.js'; // itens Elite no banner (16/11)
 import { t } from './i18n.js';
 import { audio } from './audio.js';
 import { me, loadMe, elitePresent, loadShop, igReward } from './rovex.js';
@@ -35,7 +36,7 @@ const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}
 const HEX = '<svg viewBox="0 0 64 64" aria-hidden="true"><path class="ep-hex-in" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path class="ep-hex-out" d="M32 3L57 17V45L32 59L7 45V17L32 3Z"/><path d="M32 18L35.5 26L44 27L38 33L39 42L32 38L25 42L26 33L20 27L28.5 26L32 18Z"/></svg>';
 // beneficios: no jogo (o que o codigo libera de verdade) e na Rovex (pagina do Elite)
 // 10/11 (pedido dele): a lista mostra TODO premio do Elite no jogo (variantes do mes, Pass, exclusivos, banner/traçado/efeito)
-const GAME = [['xp', 'el_xp'], ['box', 'el_bm'], ['pass', 'el_rrpass'], ['star', 'el_excl'], ['frame', 'el_ebanner'], ['camo', 'el_pack'], ['camo', 'el_camo'], ['look', 'el_look'], ['badge', 'el_badge']];
+const GAME = [['xp', 'el_xp'], ['box', 'el_bm'], ['star', 'el_disc'], ['camo', 'el_stk'], ['badge', 'el_kc'], ['pass', 'el_rrpass'], ['star', 'el_excl'], ['frame', 'el_ebanner'], ['camo', 'el_pack'], ['camo', 'el_camo'], ['look', 'el_look'], ['badge', 'el_badge']];
 const ROVEX = [['pass', 'el_pass'], ['zions', 'el_zions'], ['xp', 'el_xpRovex'], ['vault', 'el_vault'], ['video', 'el_vbg'], ['frame', 'el_banners'], ['border', 'el_borders'], ['cards', 'el_cards'], ['flame', 'el_boss'], ['puzzle', 'el_glyph'], ['words', 'el_lexis'], ['grid', 'el_trama']];
 
 let opener = null;
@@ -133,36 +134,48 @@ export function openEliteWelcome() {
 }
 // presente do mes (10/11, pedido dele): 4 variantes do Mercado Negro sorteadas no servidor; popup agradecendo com elas e o 2x XP.
 // Pede uma vez por abertura do jogo; o servidor so entrega uma vez por mes (o resto volta vazio)
-let giftAsked = false, giftWait = null, giftBusy = false;
+let giftAsked = false, giftWait = null, giftBusy = false, giftExtras = [];
 // Novidades esperam enquanto o Elite tem popup pra mostrar (parabens pendente, presente sendo pedido ou na fila)
-export function eliteBusy() { let at = 0; try { at = +localStorage.getItem(WAIT) || 0; } catch { /* */ } return giftBusy || !!giftWait || (!!at && !!me?.elite); }
+export function eliteBusy() { let at = 0; try { at = +localStorage.getItem(WAIT) || 0; } catch { /* */ } const open = document.getElementById('elitePop')?.hidden === false; return open || giftBusy || !!giftWait || (!!at && !!me?.elite); } // 16/11: popup do Elite aberto tambem segura as Novidades (abriam por cima)
 // fotos das variantes prontas ANTES do popup (a foto e montada em 3D e leva um tempo); no maximo 20 s de espera (corre por tras, o jogador nem ve)
+// foto dos contadores Elite pronta antes do banner (16/11: abria com a caixa vazia)
+const preKc = (ex) => Promise.race([Promise.all(ex.filter(g => g.startsWith('kc:')).map(g => pieceShot('kc', g.slice(3)).catch(() => null))), new Promise(r => setTimeout(r, 15000))]);
 const preShots = (ids) => Promise.race([Promise.all(ids.map(id => pieceShot('bp', id).catch(() => null))), new Promise(r => setTimeout(r, 20000))]);
 async function giftCheck() {
   // so no localhost (10/11, pedido dele "triga o popup de novo"): ?presente mostra o popup com 4 variantes sorteadas, sem dar nada
-  if (import.meta.env.DEV && !giftAsked && new URLSearchParams(location.search).has('presente')) { giftAsked = true; const all = Object.keys(BM_VARIANTS).sort(() => Math.random() - 0.5).slice(0, 4); await preShots(all); giftWait = all; showGift(); return; }
+  if (import.meta.env.DEV && !giftAsked && new URLSearchParams(location.search).has('presente')) { giftAsked = true; const all = Object.keys(BM_VARIANTS).sort(() => Math.random() - 0.5).slice(0, 4); await preShots(all); giftExtras = ['kc:el_cofre', 'kc:el_brasao', 'kc:el_coroa', ...STK_ELITE.map(x => 'stk:' + x)]; await preKc(giftExtras); giftWait = all; showGift(); return; }
   if (giftAsked || !me?.elite) return;
   giftAsked = true; giftBusy = true;
   try {
     const j = await elitePresent();
-    if (!j?.novos?.length) return;
+    if (!j?.novos?.length && !j?.extras?.length) return;
     await loadShop();
-    await preShots(j.novos); // 10/11 (pedido dele): abre ja com as fotos das armas, nunca com a caixinha no lugar
-    giftWait = j.novos; showGift();
+    await preShots(j.novos || []); // 10/11 (pedido dele): abre ja com as fotos das armas, nunca com a caixinha no lugar
+    giftExtras = j.extras || []; await preKc(giftExtras); giftWait = j.novos || []; showGift();
   } finally { giftBusy = false; }
+}
+// 16/11 (pedido dele): contadores e adesivos exclusivos do Elite entram no mesmo banner do presente
+function extrasHtml() {
+  const ex = giftExtras || []; giftExtras = []; if (!ex.length) return '';
+  const it = (g) => { const [k, id] = g.split(':'), img = k === 'stk' ? stickerCanvas(id, 96).toDataURL() : null;
+    const shot = k === 'kc' ? pieceShotNow('kc', id) : null;
+    return `<li class="elg-ex ex-${k}">${img ? `<img src="${img}" alt="">` : shot ? `<img src="${shot}" alt="">` : `<span class="elp-shot" data-shot="kc:${id}">${ico('star')}</span>`}<b>${t('lk_' + k + '_' + id)}</b><small>${t(k === 'stk' ? 'shk_stk' : 'shk_kc')}</small></li>`; };
+  return `<h3 class="elg-h">${t('elg_new')}</h3><ul class="elg-extras">${ex.map(it).join('')}</ul>`;
 }
 function showGift() {
   if (!giftWait) return;
   if (document.body.classList.contains('ingame')) { setTimeout(showGift, 4000); return; } // no meio da partida espera voltar pro menu
-  const pop = document.getElementById('elitePop'); const other = [...document.querySelectorAll('[role=dialog][aria-modal=true]')].some(d => d !== pop && !d.hidden && d.offsetParent !== null); // outro popup aberto (Novidades, presente): espera, um de cada vez
+  const pop = document.getElementById('elitePop'); const other = [...document.querySelectorAll('[role=dialog][aria-modal=true], #newsPop')].some(d => d !== pop && !d.hidden && d.offsetParent !== null); // 16/11: Novidades nao tem aria-modal e o presente abria junto // outro popup aberto (Novidades, presente): espera, um de cada vez
   if (!pop || !pop.hidden || other || !sceneReady()) { setTimeout(showGift, 1500); return; }
   const ids = giftWait; giftWait = null; opener = null;
   const pt = getLang() === 'pt';
   const card = (id) => { const V = BM_VARIANTS[id]; if (!V) return ''; return `<li class="elg-card r-${V.rar}"><span class="elg-shot" data-shot="bp:${id}">${pieceShotNow('bp', id) ? `<img src="${pieceShotNow('bp', id)}" alt="">` : ico('box')}</span><b>${pt ? V.pt : V.en}</b><small>${partName('body', V.lo.body)} · ${t('rar_' + V.rar)}</small></li>`; };
   pop.innerHTML = `<div class="elp-box elp-welcome elp-gift">
-    <header class="elp-head"><span class="elp-hex">${HEX}</span><div><h2 id="elpTitle">${t('elg_title')}</h2><p>${t('elg_sub', { n: ids.length })}</p></div></header>
-    <div class="elg-scroll"><ul class="elg-grid">${ids.map(card).join('')}</ul>
+    <header class="elp-head"><span class="elp-hex">${HEX}</span><div><h2 id="elpTitle">${t('elg_title')}</h2><p>${ids.length ? t('elg_sub', { n: ids.length }) : t('elg_subNew')}</p></div></header>
+    <div class="elg-scroll">${ids.length ? `<ul class="elg-grid">${ids.map(card).join('')}</ul>` : ''}
+    ${extrasHtml()}
     <div class="elg-xp">${XP2}<span><b>${t('el_xp')}</b><small>${t('elg_xp')}</small></span></div>
+    <ul class="elg-perks"><li><b>−15%</b><span>${t('elg_pShop')}</span></li><li><b>−20%</b><span>${t('elg_pBm')}</span></li><li><b>−10%</b><span>${t('elg_pChest')}</span></li></ul>
     <p class="elg-note">${t('elg_note')}</p></div>
     <button class="big elp-go" id="elpDone">${t('elg_go')}</button>
   </div>`;

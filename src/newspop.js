@@ -9,7 +9,8 @@ import { audio } from './audio.js';
 import { me, claimGift } from './rovex.js';
 import { sceneReady } from './popgate.js';
 import { eliteBusy } from './elitepop.js';
-import { updateCampaign, UPDATE_ZP } from '../shared/version.js';
+import { DIVISIONS } from '../shared/divisions.js'; // 0.20: Divisoes no carrossel
+import { updateCampaign, UPDATE_ZP, GAME_VERSION } from '../shared/version.js';
 
 // 10/11 (pedido dele): campanha nova = abre de novo pra todo mundo, com as novidades da leva e o Mercado Negro ABERTO
 // 13/11 (pedido dele): campanha da 0.19: carrossel com as 19 armas novas e o Gancho do Palco no topo
@@ -40,7 +41,8 @@ const P = {
 };
 const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
 // 0.19 (13/11): o resto da leva em fichas ([chave do texto, icone])
-const ITEMS = [['maps', 'maps'], ['akimbo', 'parts'], ['hud', 'hud'], ['hit', 'hit'], ['vo', 'mic'], ['run', 'run']];
+// 0.20 (16/11, pedido dele): Divisoes em destaque no carrossel; o resto da leva em fichas
+const ITEMS = [['v20friends', 'lobby'], ['v20trigger', 'parts'], ['v20elite', 'elite'], ['v20stk', 'models'], ['v20perf', 'run'], ['v20shop', 'shop']];
 // carrossel do topo: o gancho abre, depois as 19 armas novas (foto de cada uma inteira, nunca cortada)
 const NEW_GUNS = ['pistol_12', 'pistol_13', 'pistol_14', 'pistol_15', 'subfusil_14', 'subfusil_15', 'subfusil_16', 'fusil_14', 'fusil_15', 'fusil_16',
   'shotgun_4', 'shotgun_5', 'shotgun_6', 'shotgun_7', 'lmg_3', 'lmg_4', 'lmg_5', 'sniper_5', 'sniper_6'];
@@ -48,18 +50,19 @@ const catOf = (id) => id.startsWith('lmg') ? 'lmg' : id.startsWith('subfusil') ?
 const BASE = import.meta.env.BASE_URL;
 // o gancho (13/11, pedido dele): so o icone do gancho, grande, balancando na ponta da corda
 const HOOK_ART = `<svg class="np-hook-art" viewBox="0 0 24 24" aria-hidden="true"><g class="np-hook-ico"><path d="${P.hook}"/></g></svg>`;
+// carrossel da 0.20: abre com os 12 brasoes das Divisoes e passa por cada uma (brasao, nome e lema)
+const crestSvg = (d, cls = '') => `<span class="dv-crest ${cls}" style="--dc:${d.color};--di:${d.ink}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${d.ico}"/></svg><b>${d.tag}</b></span>`;
 function reelHtml() {
-  const n = NEW_GUNS.length + 1;
-  const hook = `<figure class="np-slide hook on" data-i="0"><span class="np-tag">${t('nq_tagHook')}</span>${HOOK_ART}<figcaption><b>${t('fd_hook')}</b><small>${t('nq_hookD')}</small></figcaption></figure>`;
-  const guns = NEW_GUNS.map((b, i) => { const nm = partName('body', b);
-    return `<figure class="np-slide gun" data-i="${i + 1}" aria-hidden="true"><span class="np-tag">${t('nq_tagGun')} · ${wName(catOf(b))}</span><img src="${BASE}banners/mst/${b}.webp" alt="${nm}" decoding="async" draggable="false"><figcaption><b>${nm}</b></figcaption></figure>`; }).join('');
-  return `<section class="np-reel" aria-roledescription="carousel" aria-label="${t('nq_reel')}">
-    <div class="np-reel-track">${hook}${guns}</div>
+  const n = DIVISIONS.length + 1;
+  const hero = `<figure class="np-slide dvh on" data-i="0"><span class="np-tag">${t('v20_tag')}</span><div class="np-dv-wall">${DIVISIONS.map(d => crestSvg(d)).join('')}</div><figcaption><b>${t('dvTab')}</b><small>${t('v20_dvD')}</small></figcaption></figure>`;
+  const each = DIVISIONS.map((d, i) => `<figure class="np-slide dvs" data-i="${i + 1}" aria-hidden="true" style="--dc:${d.color}"><span class="np-tag">${t('dvTab')} · ${d.tag}</span>${crestSvg(d, 'xl')}<figcaption><b>${t('dv_' + d.id)}</b><small>${t('dvm_' + d.id)}</small></figcaption></figure>`).join('');
+  return `<section class="np-reel" aria-roledescription="carousel" aria-label="${t('dvTab')}">
+    <div class="np-reel-track">${hero}${each}</div>
     <button class="np-reel-btn prev" type="button" aria-label="${t('nq_prev')}">${ico('prev')}</button><button class="np-reel-btn next" type="button" aria-label="${t('nq_next')}">${ico('next')}</button>
     <p class="np-reel-n"><b>1</b> / ${n}</p><i class="np-reel-bar"></i></section>`;
 }
 // passa sozinho (gancho 4 s, cada arma 2,4 s), para com o mouse/foco em cima; setas e arrastar pro lado trocam
-let reelI = 0, reelT = 0, reelHold = false;
+let reelI = 0, reelT = 0, reelHold = false, reelDone = false;
 function reelGo(el, i) {
   const sl = el.querySelectorAll('.np-slide'), N = sl.length; if (!N) return;
   reelI = (i + N) % N;
@@ -67,12 +70,13 @@ function reelGo(el, i) {
   sl.forEach((x, k) => { x.classList.toggle('on', k === reelI); x.toggleAttribute('aria-hidden', k !== reelI); });
   el.querySelector('.np-reel-n b').textContent = reelI + 1;
   el.querySelector('.np-reel-bar').style.setProperty('--k', ((reelI + 1) / N).toFixed(3));
+  if (reelI === N - 1 && !reelDone) { reelDone = true; const g = el.querySelector('#npGift'); if (g) { g.disabled = false; g.removeAttribute('aria-describedby'); g.classList.add('ready'); el.querySelector('#npGiftHint')?.remove(); audio.play('unlock', { ui: true, vol: 0.6 }); } } // chegou no fim: libera o resgate
   reelTick(el);
 }
 function reelTick(el) { clearTimeout(reelT); reelT = setTimeout(() => { if (!pop() || pop().hidden) return; if (reelHold || document.hidden) return reelTick(el); reelGo(el, reelI + 1); }, reelI === 0 ? 4000 : 2400); }
 function reelInit(el) {
   const R = el.querySelector('.np-reel'); if (!R) return;
-  reelHold = false; reelGo(el, 0);
+  reelHold = false; reelDone = false; reelGo(el, 0);
   R.querySelector('.prev').onclick = () => { audio.play('ui_hover', { ui: true, vol: 0.5 }); reelGo(el, reelI - 1); };
   R.querySelector('.next').onclick = () => { audio.play('ui_hover', { ui: true, vol: 0.5 }); reelGo(el, reelI + 1); };
   R.onpointerenter = (e) => { if (e.pointerType === 'mouse') reelHold = true; }; R.onpointerleave = () => { reelHold = false; };
@@ -89,14 +93,20 @@ const COIN = `<img class="np-coin" src="${import.meta.env.BASE_URL}brand/zion-po
 const zp = () => UPDATE_ZP.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'pt-BR');
 function giftHtml() {
   if (!me) return `<p class="np-gift-note">${t('np_giftLogin', { n: zp() })}</p>`;
-  return `<button class="np-gift" id="npGift">${COIN}<span>${t('np_gift', { n: zp() })}</span></button>`;
+  // 16/11 (pedido dele): so libera depois de ver o carrossel ate o fim
+  return `<button class="np-gift" id="npGift" ${reelDone ? '' : 'disabled aria-describedby="npGiftHint"'}>${COIN}<span>${t('np_gift', { n: zp() })}</span></button>${reelDone ? '' : `<p class="np-gift-hint" id="npGiftHint">${t('np_giftHint')}</p>`}`;
 }
+// 16/11 (pedido dele): Novidades como capa de jornal, com a data de HOJE do aparelho
+const paperDate = () => { const L = document.documentElement.lang === 'en' ? 'en-US' : 'pt-BR'; const d = new Date().toLocaleDateString(L, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); return d.charAt(0).toUpperCase() + d.slice(1); };
 function draw(el) {
+  reelDone = false; // cada abertura comeca travada (o botao nasce desabilitado)
   el.innerHTML = `<div class="np-card" role="document">
     <button class="lb-x" aria-label="${t('close')}">${ico('close')}</button>
-    <header class="np-head"><h2 id="npTitle">${t('np_title')}</h2><p>${t('nq_sub')}</p></header>
+    <header class="np-mast"><div class="np-mast-top"><span>${t('np_ed', { v: GAME_VERSION.split('.').slice(0, 2).join('.') })}</span><time datetime="${new Date().toISOString().slice(0, 10)}">${paperDate()}</time><span>${t('np_price')}</span></div>
+      <h2 id="npTitle" class="np-mast-name">${t('np_paper')}</h2><div class="np-mast-rule" aria-hidden="true"></div></header>
+    <h3 class="np-headline">${t('v20_head')}</h3><p class="np-deck">${t('v20_sub')}</p>
     ${reelHtml()}
-    <ul class="np-list">${ITEMS.map(([k, i]) => `<li><span class="np-ico">${ico(i)}</span><span><b>${t('nq_' + k)}</b><small>${t('nq_' + k + 'D')}</small></span></li>`).join('')}</ul>
+    <ul class="np-list np-cols">${ITEMS.map(([k, i]) => `<li><span class="np-ico">${ico(i)}</span><span><b>${t(k)}</b><small>${t(k + 'D')}</small></span></li>`).join('')}</ul>
     <footer class="np-foot"><div class="np-gift-slot" aria-live="polite">${giftHtml()}</div></footer>
   </div>`;
   el.querySelector('.lb-x').onclick = () => { audio.play('ui_back', { ui: true }); closeNews(); };

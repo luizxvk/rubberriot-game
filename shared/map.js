@@ -1920,8 +1920,11 @@ export function rayPlayer(o, d, p, maxDist) {
   const crouch = p.anim === 'crouch' || p.anim === 'slide' || p.anim === 'seat' || p.anim === 'drive'; // sentado no carro: caixa baixa
   const hb = p.mob ? MOBS[p.mob]?.hb : null; // vilao da noite: caixa da ficha (chefao de 6 m, borrao baixinho)
   const bodyH = hb ? hb.h : crouch ? 0.9 : 1.3;
-  const headY = p.pos[1] + (hb ? hb.head : crouch ? 1.15 : 1.6);
-  const hr = hb ? hb.hr : 0.34;
+  // evento Cabecao/Alfinete (16/11, bug dele: a cuca nao tinha o tamanho da cabeca): headK = escala da cabeca desenhada. Medido no
+  // boneco: o raio cresce junto e o centro sobe 0,133 m por unidade de escala (a cabeca cresce a partir do pescoco)
+  const hk = hb ? 1 : (p.headK || 1);
+  const headY = p.pos[1] + (hb ? hb.head : crouch ? 1.15 : 1.6) + (hk - 1) * 0.133;
+  const hr = hb ? hb.hr : 0.34 * hk;
   const hc = [p.pos[0] - o[0], headY - o[1], p.pos[2] - o[2]];
   const tc = hc[0] * d[0] + hc[1] * d[1] + hc[2] * d[2];
   if (tc > 0 && tc < maxDist) {

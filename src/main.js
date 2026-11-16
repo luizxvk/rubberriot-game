@@ -1,3 +1,4 @@
+import { myDivTag, divChip, divTagText } from './divview.js'; // divisoes (16/11)
 import './glbshrink.js'; // antes de qualquer modelo carregar
 import * as THREE from 'three';
 import { offscreen } from './offscreen.js';
@@ -323,7 +324,9 @@ function smithBackdrop() {
   const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return tx;
 }
 smithScene.background = smithBackdrop();
-{ let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { smithScene.background?.dispose?.(); smithScene.background = smithBackdrop(); }, 250); }); }
+// 16/11 (bug dele: Arsenal com chuvisco colorido no fundo, app em OpenGL + AMD): o fundo velho era liberado na mesma hora em que o novo
+// entrava, ainda preso no desenho, e a placa mostrava memoria crua. Agora o velho so sai 1 s depois, com o novo ja na tela
+{ let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { const old = smithScene.background; smithScene.background = smithBackdrop(); if (old?.isTexture) setTimeout(() => old.dispose(), 1000); }, 250); }); }
 smithScene.add(new THREE.HemisphereLight(0xffffff, 0x8a857c, 1.6));
 const sl = new THREE.DirectionalLight(0xffffff, 2.2); sl.position.set(2, 3, 2); smithScene.add(sl);
 const smithCam = new THREE.PerspectiveCamera(30, 1, 0.3, 30);
@@ -658,6 +661,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('pocPodio'))
   const c = G.net.core; let i = 1; for (const x of c.players.values()) x.score = i++ * 10; c.players.get(G.myId).score = 9000; c.end(G.myName); c.overT = 180;
 })();
 window.__smithShow = (cat, lo, charm = 'none') => { smithHolder.clear(); const gun = ARS.buildGun(cat, lo); const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; smithHolder.add(gun); if (charm !== 'none' && cat !== 'melee') attachCharm(gun, charm, 1); };
+if (import.meta.env.DEV) window.__CMP = () => composer; // bancada de custo por ajuste (16/11)
 if (import.meta.env.DEV) window.__applySet = (c) => { Object.assign(settings, { draw: 'mid', outl: 'near', chars: 'mid' }, c); applySettings(); }; // bateria de desempenho
 if (import.meta.env.DEV) window.__solo = (o) => startGame(new LocalNet(o), 'Teste'); // teste de desempenho (08/11): partida solo por script
 if (import.meta.env.DEV) window.__soloW = (o) => startGame(soloNet({ lobby: false, ...o }), 'Teste'); // 14/11: partida solo no WORKER por script (medir os bots)
@@ -823,7 +827,7 @@ function warmChar(r) {
 function remoteFor(p) {
   let r = G.remotes.get(p.id);
   if (!r) {
-    r = { id: p.id, mob: p.mob || null, char: p.mob ? new MobChar(p.mob) : new Character(p.team, p.name, lookOf(p)), pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
+    r = { id: p.id, mob: p.mob || null, char: p.mob ? new MobChar(p.mob) : new Character(p.team, divTagText(p.dt) + p.name, lookOf(p)), pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
     scene.add(r.char.root);
     G.remotes.set(p.id, r);
     warmChar(r);
@@ -945,7 +949,7 @@ function onSnap(s) {
     seen.add(p.id);
     const r = remoteFor(p);
     // trocou de time (infectado): o boneco e' refeito na cor nova
-    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; warmChar(r); }
+    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, divTagText(p.dt) + p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; warmChar(r); }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
     { // 14/11 (pedido dele: 'bots lagando no offline'): o worker manda 60 estados/s e a tela roda a 75+; quadro sem estado novo = bot
@@ -1061,6 +1065,7 @@ function nameOf(id) {
   const p = G.snap?.players.find(x => x.id === id);
   return p ? (p.mob ? t('mob_' + p.mob) : p.name) : '?';
 }
+const divChipOf = (id) => { const p = G.snap?.players.find(x => x.id === id); return p?.dt ? divChip(p.dt) : ''; }; // tag da divisao no killfeed (16/11)
 function teamCls(id) {
   const p = G.snap?.players.find(x => x.id === id);
   return p?.team === 'red' ? 'r' : p?.team === 'blue' ? 'b' : '';
@@ -1170,7 +1175,7 @@ function onEvent(e) {
         audio.play('death', { pos: [vPos[0], vPos[1] + 1, vPos[2]], vol: 0.8, key: 'death', max: 3 });
       }
       const wn = gunName(e.a, e.wpn);
-      const html = e.a ? `<span class="${teamCls(e.a)}">${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>${FEED_ICO[e.wpn] ? `<i class="kf-ico">${FEED_ICO[e.wpn]}</i>` : ''}${e.head ? HS_ICON : ''}` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
+      const html = e.a ? `<span class="${teamCls(e.a)}">${divChipOf(e.a)}${esc(nameOf(e.a))}</span> ${e.head ? t('f_head') : t('f_kill')} <span class="${teamCls(e.v)}">${divChipOf(e.v)}${esc(nameOf(e.v))}</span> <small>(${esc(wn)})</small>${FEED_ICO[e.wpn] ? `<i class="kf-ico">${FEED_ICO[e.wpn]}</i>` : ''}${e.head ? HS_ICON : ''}` : `<span class="${teamCls(e.v)}">${esc(nameOf(e.v))}</span> ${t('f_self')}`;
       if (inGame && G.mode !== 'borroes') hud.feed(html, e.a === G.myId || e.v === G.myId); // noite dos borroes: sem killfeed (pedido dele)
       if (inGame && !G.tutorial && !G.range) { if (e.a === G.myId && e.v !== G.myId) wpnTrack(e.wpn, G.player?.lo(e.wpn)?.body, { k: 1, hk: e.head ? 1 : 0 }); if (e.v === G.myId && G.player?.wpn) wpnTrack(G.player.wpn, G.player.lo(G.player.wpn)?.body, { d: 1 }); } // Arsenal: numeros de cada arma
       if (e.a === G.myId && inGame) {
@@ -1896,7 +1901,7 @@ function showEnd(winner) {
   // 08/11 (pedido dele): placar com nocautes, quedas, assistencias e pontos de cada um + o resumo completo da sua partida
   const all = G.endInfo?.players || [...(G.snap?.players || [])].filter(p => !p.mob).sort((a, b) => b.score - a.score);
   $('endBoard').innerHTML = `<div class="eb-head"><span>${t('ebPlayer')}</span><b>${t('ebK')}</b><b>${t('ebD')}</b><b>${t('ebA')}</b><b>${t('ebPts')}</b></div>`
-    + ps.map((p, i) => `<div class="${p.id === G.myId ? 'me' : ''}"><span><em>${i + 1}</em>${esc(p.name)}</span><b>${p.kills | 0}</b><b>${p.deaths | 0}</b><b>${p.assists | 0}</b><b>${Math.round(p.score || 0)}</b></div>`).join('');
+    + ps.map((p, i) => `<div class="${p.id === G.myId ? 'me' : ''}"><span><em>${i + 1}</em>${p.dt ? divChip(p.dt) : ''}${esc(p.name)}</span><b>${p.kills | 0}</b><b>${p.deaths | 0}</b><b>${p.assists | 0}</b><b>${Math.round(p.score || 0)}</b></div>`).join('');
   renderEndMe(all);
   // progresso: XP por tipo, nivel subindo na barra e tudo o que liberou
   const L = G.matchLog || newMatchLog();
@@ -2082,7 +2087,7 @@ function sendLoadout() {
   // equipamento de campo (um so; o nivel tem que ter liberado). O botao de toque mostra o icone dele.
   G.field = G.tutorial?.fieldOverride || (FIELD[settings.field] && unlockLevel() >= FIELD[settings.field].lvl ? settings.field : null); // treino: a Mola emprestada vale
   setFieldHud(G.field);
-  G.net.send({ t: 'loadout', primary: settings.primary, los, lvl: progressInfo().level, ul: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field, bn: myBanner(), streaks: G.streaks, lethal: G.lethal, tactical: G.tactical, now: !!(G.range || G.tutorial) }); // now: campo de treino/tutorial trocam na hora; na partida vale no proximo renascimento
+  G.net.send({ t: 'loadout', dt: myDivTag(), primary: settings.primary, los, lvl: progressInfo().level, ul: unlockLevel(), prest: progressInfo().prestige, tracer: settings.tracer, elite: !!rovexMe?.elite, rk: myTier(), skills: G.skills, field: G.field, bn: myBanner(), streaks: G.streaks, lethal: G.lethal, tactical: G.tactical, now: !!(G.range || G.tutorial) }); // now: campo de treino/tutorial trocam na hora; na partida vale no proximo renascimento
   if (G.tutorial?.fieldOverride) { const me = G.net.core?.players.get(G.myId); if (me) me.field = G.tutorial.fieldOverride; } // o servidor local checa o nivel; no treino passa
   G.net.send({ t: 'look', look: wornLook() }); // visual do boneco (os outros veem)
   G.net.send({ t: 'dev', v: devNow() });
@@ -2583,6 +2588,7 @@ document.addEventListener('pointerdown', (e) => {
 $('resume').onclick = () => { audio.play('ui_click', { ui: true }); setPaused(false); };
 $('quit').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
 initPocket(() => settings, () => { if (G.state === 'game') hud.message(t('boostOn'), 2.4); });
+$('pauseFriends').onclick = () => { audio.play('ui_click', { ui: true }); ui.openPauseFriends({ room: G.net?.ws && G.net.room ? G.net.room : null, leave: () => quitGame() }); }; // Amigos na pausa (16/11)
 $('goPocket').onclick = openPocket; $('pausePocket').onclick = openPocket; $('lbPocket').onclick = openPocket;
 $('pauseSettings').onclick = () => { $('pause').hidden = true; $('menu').hidden = false; ui.go('settings', true); };
 
@@ -2736,8 +2742,24 @@ try { navigator.getBattery?.().then(b => { PERF.bat = b; }).catch(() => {}); } c
 { let due = performance.now() + 100; setInterval(() => { const n = performance.now(); PERF.tq = Math.max(PERF.tq || 0, n - due); due = n + 100; }, 100); }
 renderer.info.autoReset = false; // conta o quadro inteiro (o composer desenha em varias passadas); zera no inicio de cada quadro
 const pq = (a, p) => +(a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0).toFixed(1);
+// telemetria (16/11, pedido dele): Ajustes > Graficos. Canto superior esquerdo: FPS, ping, perda de pacotes e horario
+const TEL = { n: 0, t0: 0, fps: 0 };
+function telemTick(now) {
+  const el = $('telem'); if (!el) return;
+  document.body.classList.toggle('tel-on', !!settings.telemetry); // minimapa desce pra nao ficar embaixo da telemetria
+  if (!settings.telemetry) { if (!el.hidden) el.hidden = true; return; }
+  TEL.n++; if (now - TEL.t0 < 500) return;
+  TEL.fps = Math.round(TEL.n * 1000 / (now - TEL.t0)); TEL.n = 0; TEL.t0 = now;
+  const net = G.net, online = !!net?.ws, me = G.snap?.players?.find(x => x.id === G.myId);
+  const got = net?.snapN || 0, lost = net?.snapLost || 0, loss = online && got + lost > 0 ? lost / (got + lost) * 100 : 0;
+  if (online && got + lost > 400) { net.snapN = Math.round(got / 2); net.snapLost = Math.round(lost / 2); } // janela que anda: o numero acompanha o agora
+  const ping = !online ? t('telLocal') : me?.pg ? me.pg + ' ms' : '–';
+  const L = document.documentElement.lang === 'en' ? 'en-US' : 'pt-BR';
+  el.hidden = false;
+  el.innerHTML = `<span><b>${TEL.fps}</b> ${t('qps')}</span><span>${t('telPing')} <b class="${online && me?.pg > 150 ? 'bad' : ''}">${ping}</b></span><span>${t('telLoss')} <b class="${loss > 2 ? 'bad' : ''}">${online ? loss.toFixed(1) + '%' : '0%'}</b></span><span><b>${new Date().toLocaleTimeString(L)}</b></span>`;
+}
 function perfTick(ms, now) {
-  if (G.state !== 'game' || !G.net?.ws || document.hidden) { PERF.ft.length = PERF.cpu.length = PERF.rnd.length = PERF.dr.length = 0; PERF.t0 = now; PERF.lt = PERF.ltMs = 0; return; }
+  if (G.state !== 'game' || document.hidden) { PERF.ft.length = PERF.cpu.length = PERF.rnd.length = PERF.dr.length = 0; PERF.t0 = now; PERF.lt = PERF.ltMs = 0; return; }
   if (ms > 0 && ms < 5000) { PERF.ft.push(ms); PERF.dr.push(renderer.info.render.calls); }
   if (now - PERF.t0 < 10000) return;
   const a = PERF.ft.sort((x, y) => x - y), n = a.length, cpu = PERF.cpu.sort((x, y) => x - y), rnd = PERF.rnd.sort((x, y) => x - y), dr = PERF.dr.sort((x, y) => x - y);
@@ -2748,6 +2770,10 @@ function perfTick(ms, now) {
   const prog = I.programs?.length || 0, newProg = PERF.prog0 < 0 ? 0 : Math.max(0, prog - PERF.prog0); PERF.prog0 = prog;
   let near = 0, far = 0; const cp = camera.position; for (const r of G.remotes.values()) { if (!r.char?.root?.visible) continue; const d = Math.hypot(r.pos[0] - cp.x, r.pos[2] - cp.z); if (d < 18) near++; else far++; }
   const cv = renderer.domElement, B = PERF.bat;
+  // 16/11 (banner de recomendacao grafica): o FPS medido fica guardado no aparelho, online e no solo (antes so media online)
+  const fpsNow = Math.round(n * 1000 / sum), cpuNow = +(pq(cpu, .5) + pq(rnd, .5)).toFixed(1);
+  try { const L = JSON.parse(localStorage.getItem('rr_perf_last') || '{}'), w = (L.w || []).slice(-29); w.push([fpsNow, cpuNow]); localStorage.setItem('rr_perf_last', JSON.stringify({ w, at: Date.now(), map: G.M?.id || '' })); } catch { /* */ }
+  if (!G.net?.ws) return; // solo: so guarda aqui, sem relatorio pro servidor
   const gap = Math.round(G.net.gapMax || 0), pmax = PERF.pmax || 0, tq = Math.round(PERF.tq || 0); G.net.gapMax = 0; PERF.pmax = 0; PERF.tq = 0;
   G.net.send({ t: 'perf',
     // 15/11: rede x PC. gap = maior buraco entre estados (normal ~50-70), pmax = pior ping, tq = maior atraso do app pra rodar uma tarefa da fila
@@ -2779,7 +2805,7 @@ function frame() {
   const now = performance.now();
   const cap = +settings.fpsCap || 0; // limite de FPS (10/11); 0 = sem limite (no app de PC o navegador nao trava em 60)
   if (cap && now - lastDraw < 1000 / cap - 1.5) return;
-  perfTick(now - lastDraw, now); renderer.info.reset();
+  perfTick(now - lastDraw, now); telemTick(now); renderer.info.reset();
   lastDraw = now; dynResTick(now); HOSE_FRAME.n++;
   const realDt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -3089,6 +3115,7 @@ function frameBody(now, realDt) {
     if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); try { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); } catch (e) { reportaErro(e, 'boneco ' + G.mode + '/' + (r.wpn || '')); } r.animAcc = 0; } // 15/11: erro num boneco nao para o quadro (travava todo mundo)
     if (chStep === !!r.frozen) { r.frozen = !chStep; if (r.frozen) r.char.root.updateMatrixWorld = NO_MATRIX; else delete r.char.root.updateMatrixWorld; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
+    r.headK = bh; // area do tiro na cuca acompanha (shared/map.js rayPlayer)
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
     r.char.lod(camD * lodK);
     r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || r === aimedFoe); // 09/11 (pedido dele): nome do inimigo so com ele na mira
@@ -3512,10 +3539,12 @@ if ('serviceWorker' in navigator && !inRovex) navigator.serviceWorker.register('
 // instalar: o botao fica sempre no menu (some so com o app ja instalado). Com o atalho do Chrome
 // instala direto; sem ele (iPhone, Chrome que ainda nao ofereceu, dentro da Rovex) abre o guia.
 let installEvt = null;
-const installed = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+// 16/11 (pedido dele): no app de PC o jogo ja esta instalado, sem 'Instalar app'
+const IN_APP = !!window.rrDesktop || /RubberRiotDesktop|Electron/.test(navigator.userAgent);
+const installed = () => IN_APP || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
 const syncInstall = () => { $('installApp').hidden = installed(); };
 syncInstall();
-addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('gateInstall').hidden = false; syncInstall(); });
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); if (IN_APP) return; installEvt = e; $('gateInstall').hidden = false; syncInstall(); });
 addEventListener('appinstalled', () => { installEvt = null; $('installApp').hidden = true; $('gateInstall').hidden = true; });
 $('gateInstall').onclick = () => $('installApp').click();
 $('installApp').onclick = async () => {
@@ -3538,8 +3567,10 @@ $('installGuide').onclick = (e) => { if (e.target === $('installGuide')) $('inst
 
 // tela cheia: no menu inicial e na pausa. iPad usa o webkit; iPhone nao deixa pagina ir pra tela cheia (03/11): o
 // botao abre o guia "Adicionar a Tela de Inicio" (aberto por la o jogo roda sem a barra do Safari)
-const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+// 16/11 (pedido dele): no app de PC a tela cheia e a da JANELA do app (a mesma dos Ajustes > Modo da janela), nao a da pagina
+const appFull = () => !!window.rrDesktop?.setWindow && settings.winMode === 'full';
+const fsEl = () => appFull() || document.fullscreenElement || document.webkitFullscreenElement;
+const fsOk = !!window.rrDesktop?.setWindow || !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
 const iosNoFs = !fsOk && /iP(hone|od|ad)/.test(navigator.userAgent) && !navigator.standalone;
 const syncFs = () => {
   const on = !!fsEl();
@@ -3551,6 +3582,10 @@ const syncFs = () => {
 const toggleFs = async () => {
   audio.play('ui_click', { ui: true });
   if (iosNoFs) { $('installGuide').hidden = false; return; }
+  if (window.rrDesktop?.setWindow) { // app: alterna a janela entre tela cheia e maximizada (e os Ajustes acompanham)
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+    settings.winMode = settings.winMode === 'full' ? 'max' : 'full'; saveSettings(); syncFs(); return;
+  }
   try {
     const de = document.documentElement;
     if (fsEl()) { G.fsWanted = false; await (document.exitFullscreen || document.webkitExitFullscreen).call(document); }

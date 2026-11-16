@@ -1,10 +1,11 @@
+import { openDivisions } from './divview.js';
 import { BM_IDS } from '../shared/blackmarket.js';
 // Menus: inicio, modos, multiplayer, arsenal (gunsmith), ajustes.
 import { LETHALS, TACTICALS, NADES } from '../shared/weapons.js';
 import { MODES, WEAPONS, PRIMARIES, BLUEPRINTS, bodyTrait, SKILLS, SKILL_SLOTS, AMMO, AMMO_IDS, FIELD, FIELD_IDS, STREAKS, STREAK_PICK, pickStreaks } from '../shared/weapons.js';
 import { STREAK_SVG, NADE_SVG } from './hud.js';
 import { openHudScale } from './hudscale.js';
-import { getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
+import { TRIGGERS, getVariants, saveVariants, VARIANT_MAX } from './arsenal.js';
 // variante do jogador vale SO no modelo em que foi salva (02/11: aparecia em todas as armas da categoria).
 // Devolve a variante equipada nesta montagem, ou null se ela e de outro modelo / foi apagada
 const cvOf = (cat, lo) => (lo?.cv && (getVariants()[cat] || []).find(v => v.id === lo.cv && v.lo.body === lo.body)) || null;
@@ -31,7 +32,7 @@ import { DANCE_IDS, DANCE_INFO } from '../shared/looks.js';
 import { DANCES } from './dances.js';
 import { danceOpen, wornDances, bannerOpen } from './lookstore.js';
 import { bannerHtml } from './banners.js';
-import { CANTED_LVL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
+import { TRIGGER_LVL, CANTED_LVL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, DEBUG, progressInfo, wpnInfo, wpnLevel, partReq, partUnlocked, camoUnlocked, setUnlockAll, onProgress, reqProgress, bpUnlocked, doPrestige } from './progress.js';
 import { PICK_MAPS as MAP_IDS } from '../shared/map.js'; // a ilha e so do battle royale (nao aparece na escolha)
 import { kbBinds, padBinds, setKb, setPad, resetBinds, keyName, padName, ACTIONS, PAD_BTN, FIXED_KEYS } from './binds.js';
 import { t, wName, modeName, modeDesc, getLang, setLang } from './i18n.js';
@@ -72,7 +73,7 @@ const PAINTS = ['#a83a2c', '#d9822b', '#e3c14a', '#5f8f3a', '#2f6b5a', '#2f5b8a'
 
 export function initMenus(o) {
   const ui = { screen: 'home' };
-  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'friends'];
+  const screens = ['home', 'mp', 'arsenal', 'skills', 'settings', 'controls', 'challenges', 'look', 'profile', 'shop', 'friends', 'divisions'];
   initShop();
   initElitePop(); // banner do Elite abre o popup com os beneficios (03/11)
   initSupport(); // botao de apoiar no cartaz (04/11)
@@ -103,6 +104,7 @@ export function initMenus(o) {
     $('menu').classList.toggle('smithing', name === 'arsenal' || name === 'look');
     $('menu').classList.toggle('home', name === 'home');
     if (name === 'arsenal') { picking = false; renderSmith(); }
+    if (name === 'divisions') openDivisions($('divPane')); // Divisoes (16/11)
     if (name === 'skills') renderSkills(); // a dica-balao das Skills virou o tour da tela (07/11)
     if (name === 'mp') { ui.refreshRooms && ui.refreshRooms(); renderRanked(); }
     if (name === 'challenges') { renderChallenges(); markChallengesSeen(); }
@@ -200,6 +202,30 @@ export function initMenus(o) {
     const c = lastCfg();
     goMp({ room: newCode(), mode: c.mode || 'tdm', map: c.map || 'auto', bots: Number.isFinite(c.bots) ? Math.min(11, c.bots) : 5 });
   };
+  // ---------- amigos na pausa (16/11, pedido dele): entrar no lobby do amigo (sai desta partida) ou convidar pra ESTA partida ----------
+  ui.openPauseFriends = async ({ room, leave }) => {
+    const pop = $('pauseFr'), ul = $('pfList'); $('pfErr').textContent = '';
+    pop.hidden = false; $('pfClose').onclick = () => { audio.play('ui_back', { ui: true }); pop.hidden = true; };
+    pop.onclick = (e) => { if (e.target === pop) pop.hidden = true; };
+    $('pfSub').textContent = room ? t('pfSubOn') : t('pfSubOff');
+    if (!rovex.me) { ul.innerHTML = `<li class="lf-msg">${t('frGuest')}</li>`; return; }
+    ul.innerHTML = `<li class="lf-msg">${t('inviteLoading')}</li>`;
+    let list, rooms;
+    try { [list, rooms] = await Promise.all([rovex.friends(), rovex.friendRooms().catch(() => [])]); } catch { ul.innerHTML = `<li class="lf-msg">${t('inviteErr')}</li>`; return; }
+    if (!list.length) { ul.innerHTML = `<li class="lf-msg">${t('inviteNone')}</li>`; return; }
+    const roomOf = new Map(rooms.map(s => [s.amigoId, s]));
+    list.sort((a, b) => (!!roomOf.get(b.id) - !!roomOf.get(a.id)) || (b.online - a.online) || a.name.localeCompare(b.name));
+    ul.innerHTML = list.map(f => { const r = roomOf.get(f.id), same = r && room && r.code === room;
+      return `<li class="${f.online ? 'on' : ''}"><span class="lf-av">${f.avatar ? `<img alt="" src="${esc(f.avatar)}">` : esc(f.name.slice(0, 1))}</span><span class="lf-nm">${esc(f.name)}<small>${same ? t('pfHere') : r ? t('frInRoom') : f.online ? t('online') : t('offline')}</small></span>`
+        + `<span class="pf-acts">${r && !same ? `<button data-join="${esc(r.code)}">${t('pfJoin')}</button>` : ''}${room && !same ? `<button data-inv="${esc(f.id)}">${t('pfInvite')}</button>` : ''}</span></li>`; }).join('');
+    ul.querySelectorAll('[data-join]').forEach(b => b.onclick = () => { audio.play('ui_click', { ui: true }); pop.hidden = true; leave(); setTimeout(() => goMp({ room: b.dataset.join, join: true }), 300); });
+    ul.querySelectorAll('[data-inv]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await rovex.invite(b.dataset.inv, room); b.textContent = t('inviteSent'); b.classList.add('sent'); audio.play('ui_click', { ui: true }); }
+      catch { b.disabled = false; $('pfErr').textContent = t('inviteErr'); audio.play('empty', { ui: true }); }
+    });
+  };
+
   // ---------- amigos (05/11, pedido dele): amigos da Rovex, quem esta online, entrar na sala deles ou chamar pra sua ----------
   async function renderFriends() {
     const ul = $('frPeople'); $('frErr').textContent = '';
@@ -262,6 +288,7 @@ export function initMenus(o) {
     ['seg', 'hudMode', 's_hudMode', [['simple', 'hm_simple'], ['full', 'hm_full']]],
     ['toggle', 'autoSprint', 's_auto'],
     ['toggle', 'showFps', 's_fps'],
+    ['toggle', 'telemetry', 's_telemetry'], // telemetria (16/11): FPS, ping, perda de pacotes e horario
     ['toggle', 'threatRing', 's_threat'],
     ['toggle', 'autoReload', 's_autoReload'],
     ['toggle', 'dmgNums', 's_dmgNums'], // 13/11 (pedido dele): numeros de dano que saem do alvo
@@ -271,7 +298,7 @@ export function initMenus(o) {
     ['xhair'],
     ['retglow'], // brilho da reticula (14/11, pedido dele): com previa ao vivo do shader de verdade
   ];
-  if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll']);
+  if (DEBUG) defs.push(['toggle', 'unlockAll', 's_unlockAll'], ['toggle', 'eliteTest', 's_eliteTest']); // Elite de teste (16/11): so no localhost
   // app de PC (14/11, pedido dele): tamanho da janela. So os tamanhos que cabem no monitor
   if (window.rrDesktop) {
     const fit = [[1280, 720], [1600, 900], [1920, 1080], [2560, 1440], [3840, 2160]].filter(([w, h]) => w <= screen.width && h <= screen.height);
@@ -299,8 +326,8 @@ export function initMenus(o) {
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
     autoFire: 'play', adsFireBtn: 'touch', fireLBtn: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
-    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', upscale: 'video', fsrSharp: 'video', texQ: 'video', winMode: 'video', winSize: 'video', angle: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video',
-    master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game' };
+    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', upscale: 'video', fsrSharp: 'video', texQ: 'video', winMode: 'video', winSize: 'video', angle: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video', telemetry: 'video',
+    master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game', eliteTest: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[0] === 'autogfx' ? 'gfxPreset' : d[0] === 'retglow' ? 'retglow' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
   const padOn = () => [...(navigator.getGamepads?.() || [])].some(Boolean);
@@ -309,7 +336,40 @@ export function initMenus(o) {
   const sl = $('settingsList');
   S.lang = getLang();
   S.unlockAll = progressInfo().unlockAll;
-  const buildSettings = () => { sl.innerHTML = `<nav class="set-tabs" role="tablist">${TABS.map(g => `<button role="tab" data-sg="${g}" aria-selected="${g === setTab}">${t('sg_' + g)}</button>`).join('')}</nav><div class="set-body">` + defs.filter(d => grp(d) === setTab).map(d => {
+  if (DEBUG) { try { const v = localStorage.getItem('rr_elite_test'); S.eliteTest = v ? v === 'on' : !!rovex.me?.elite; } catch { /* */ } }
+  // recomendacao grafica (16/11, pedido dele): banner no topo da aba Video com o que trocar pra ganhar FPS nesta maquina.
+  // Ganhos medidos 16/11 no RX 580 (Xilindro, 11 bots): OpenGL -> DirectX 11 +24% e sem travada no abate; Bonecos alto -> baixo +32%.
+  // Le o FPS das ultimas partidas (rr_perf_last, gravado pelo relatorio de desempenho, online e solo)
+  const valName = (k, v) => { if (typeof v === 'boolean') return t(v ? 'rec_on' : 'rec_off'); const d = defs.find(x => x[1] === k); const l = d?.[3]?.find(x => x[0] === v)?.[1]; return l ? t(l) : String(v); };
+  const recPlan = () => {
+    let L = {}; try { L = JSON.parse(localStorage.getItem('rr_perf_last') || '{}'); } catch { /* */ }
+    const w = (L.w || []).map(x => x[0]).sort((a, b) => a - b), fps = w.length >= 3 ? w[Math.floor(w.length / 2)] : 0;
+    const low = !!fps && fps < 60, mid = !fps || fps < 100, out = [];
+    if (window.rrDesktop && S.angle === 'gl') out.push({ k: 'angle', v: 'd3d11', g: 'rec_g_angle', restart: true });
+    if (S.chars === 'high') out.push({ k: 'chars', v: low ? 'low' : 'mid', g: 'rec_g_big' });
+    else if (S.chars === 'mid' && low) out.push({ k: 'chars', v: 'low', g: 'rec_g_mid' });
+    if (S.aa === '8x' || S.aa === '4x') out.push({ k: 'aa', v: '2x', g: 'rec_g_mid' });
+    else if (S.aa === '2x' && low) out.push({ k: 'aa', v: 'off', g: 'rec_g_small' });
+    if (S.outl === 'full') out.push({ k: 'outl', v: 'near', g: 'rec_g_mid' });
+    else if (S.outl === 'near' && low) out.push({ k: 'outl', v: 'eco', g: 'rec_g_small' });
+    if (S.fxQ === 'high' && mid) out.push({ k: 'fxQ', v: 'mid', g: 'rec_g_small' });
+    if (S.draw === 'far' && mid) out.push({ k: 'draw', v: 'mid', g: 'rec_g_mid' });
+    if (low && !S.dynRes) out.push({ k: 'dynRes', v: true, g: 'rec_g_steady' });
+    return { fps, out };
+  };
+  // 16/11: DESLIGADO em producao. Regra dele: 99,5% assertivo. Bancada no RX 580 (8 rodadas alternadas) deu cara ou coroa pra
+  // Bonecos/AA/Efeitos e empate OpenGL x DirectX 11: nenhum ganho fixo se sustenta. Volta quando medir no PC do proprio jogador.
+  // rr_rec_beta=1 no localStorage mostra (teste)
+  const recOn = () => { try { return localStorage.getItem('rr_rec_beta') === '1'; } catch { return false; } };
+  const recBanner = () => {
+    if (!recOn()) return '';
+    const { fps, out } = recPlan(); if (!out.length) return '';
+    return `<section class="rec-card" aria-labelledby="recTitle"><div class="rec-head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>`
+      + `<div><b id="recTitle">${t('rec_title')}</b><small>${fps ? t('rec_fps', { n: fps }) : t('rec_nofps')}</small></div></div>`
+      + `<ul class="rec-list">${out.map(r => `<li><span class="rec-k">${t(defs.find(x => x[1] === r.k)?.[2] || 'rec_dyn')}</span><span class="rec-v">${valName(r.k, S[r.k])} <i aria-hidden="true">→</i> <b>${valName(r.k, r.v)}</b></span><span class="rec-g">${t(r.g)}</span></li>`).join('')}</ul>`
+      + `<button type="button" class="rec-go" id="recApply">${t('rec_apply')}</button></section>`;
+  };
+  const buildSettings = () => { sl.innerHTML = `<nav class="set-tabs" role="tablist">${TABS.map(g => `<button role="tab" data-sg="${g}" aria-selected="${g === setTab}">${t('sg_' + g)}</button>`).join('')}</nav><div class="set-body">` + (setTab === 'video' ? recBanner() : '') + defs.filter(d => grp(d) === setTab).map(d => {
     if (d[0] === 'range') return `<label class="field"><span>${t(d[2])} <b data-out="${d[1]}"></b></span><input type="range" data-k="${d[1]}" min="${d[3]}" max="${d[4]}" step="${d[5]}"></label>`;
     if (d[0] === 'retglow') return `<div class="field rg-field"><span>${t('s_retGlow')} <b id="rgOut">${Math.round((S.retGlow ?? 1) * 100)}%</b></span><div class="rg-row"><canvas id="rgPrev" width="240" height="160" aria-label="${t('s_retGlowPrev')}"></canvas><input type="range" id="rgIn" min="0" max="1" step="0.05" value="${S.retGlow ?? 1}" aria-label="${t('s_retGlow')}"></div></div>`;
     if (d[0] === 'autogfx') return `<div class="field"><span>${t('s_autoGfx')} <b id="agOut"></b></span><button type="button" class="hs-open" id="agRun">${t('autoGfxBtn')}</button></div>`;
@@ -380,11 +440,20 @@ export function initMenus(o) {
         .catch(() => { bt.disabled = false; if (out) out.textContent = ''; });
       return;
     }
+    if (e.target.closest('#recApply')) {
+      const { out } = recPlan(); audio.play('ui_click', { ui: true });
+      for (const r of out) S[r.k] = r.v;
+      S.gfxPreset = 'custom'; o.saveSettings(); buildSettings(); refresh();
+      if (out.some(r => r.restart)) askRestart();
+      return;
+    }
     if (e.target.closest('#hsOpen')) { audio.play('ui_click', { ui: true }); openHudScale({ value: S.hudScale || 1, onDone: (k, save) => { if (save) { S.hudScale = k; o.saveSettings(); } const out = sl.querySelector('#hsOut'); if (out) out.textContent = Math.round((S.hudScale || 1) * 100) + '%'; } }); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.sg) { if (b.dataset.sg !== setTab) { setTab = b.dataset.sg; buildSettings(); refresh(); audio.play('ui_hover', { ui: true, vol: 0.5 }); const tb = sl.querySelector(`.set-tabs [data-sg="${setTab}"]`); tb?.focus({ preventScroll: true }); tb?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } return; }
     const seg = b.parentElement.dataset.seg;
+    const angleWas = S.angle || 'auto';
     if (seg) S[seg] = b.dataset.v;
+    if (seg === 'angle' && S.angle !== angleWas && window.rrDesktop) setTimeout(askRestart, 120); // 16/11: vale ao reabrir -> pergunta se reinicia ja
     if (seg === 'winSize' && S.winMode !== 'full') S.winMode = 'win'; // tamanho na janela/maximizada = janela com esse tamanho; na tela cheia = resolucao dela
     if (seg === 'gfxPreset' && GFX_PRESETS[S.gfxPreset]) Object.assign(S, GFX_PRESETS[S.gfxPreset]);
     else if ((seg && GFX_KEYS.has(seg)) || (b.dataset.t && GFX_KEYS.has(b.dataset.t))) S.gfxPreset = 'custom';
@@ -392,6 +461,7 @@ export function initMenus(o) {
     if (b.dataset.t) S[b.dataset.t] = !S[b.dataset.t];
     if (b.dataset.xc) S.xhairColor = b.dataset.xc;
     if (b.dataset.t === 'unlockAll') setUnlockAll(S.unlockAll);
+    if (b.dataset.t === 'eliteTest') { rovex.setEliteTest(S.eliteTest); location.reload(); } // Elite de teste: recarrega com tudo do Elite (loja, popups, desconto)
     audio.play('ui_click', { ui: true, vol: 0.6 });
     refresh(); o.saveSettings();
   });
@@ -401,8 +471,8 @@ export function initMenus(o) {
   let loadouts = getLoadouts();
   let cat = 'rifle', slot = 'body', picking = false; // picking = painel mostrando as opcoes de um slot
   const CATS = ['pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'lmg', 'melee'];
-  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'accent']; // 13/11: 'paint' entrou no 'accent' (botao Pintura)
-  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', visual: 'slot_visual', canted: 'slot_canted', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_paint' };
+  const SLOTS = ['bp', 'body', 'scope', 'visual', 'charger', 'handle', 'muzzle', 'trigger', 'conv', 'laser', 'ammo', 'tracer', 'camo', 'accent']; // 13/11: 'paint' entrou no 'accent' (botao Pintura)
+  const SLOT_LABEL = { bp: 'slot_bp', body: 'slot_body', scope: 'slot_scope', ret: 'slot_ret', visual: 'slot_visual', canted: 'slot_canted', charger: 'slot_charger', handle: 'slot_handle', muzzle: 'slot_muzzle', trigger: 'slot_trigger', conv: 'slot_conv', laser: 'slot_laser', ammo: 'slot_ammo', tracer: 'slot_tracer', camo: 'slot_camo', paint: 'slot_paint', accent: 'slot_paint' };
 
   // desafios: diarios (3) e carreira (Bronze/Prata/Ouro)
   let chPickOpen = false;
@@ -517,6 +587,18 @@ export function initMenus(o) {
   }
   rankMini();
 
+  // ---------- reiniciar o app (16/11, pedido dele): ajuste que so vale ao reabrir pergunta se ja reinicia ----------
+  function askRestart() {
+    const pop = $('restartPop'); if (!pop) return;
+    const can = !!window.rrDesktop?.relaunch; // app antigo (1.0.5) nao sabe reiniciar sozinho: pede pra fechar e abrir
+    $('rsBody').textContent = t(can ? 'rs_body' : 'rs_bodyOld');
+    $('rsGo').hidden = !can; $('rsLater').textContent = t(can ? 'rs_later' : 'igOk');
+    pop.hidden = false; (can ? $('rsGo') : $('rsLater')).focus();
+    $('rsGo').onclick = () => { audio.play('ui_click', { ui: true }); o.saveSettings(); setTimeout(() => window.rrDesktop.relaunch(), 150); };
+    $('rsLater').onclick = () => { audio.play('ui_back', { ui: true }); pop.hidden = true; };
+    pop.onclick = (e) => { if (e.target === pop) pop.hidden = true; };
+  }
+
   // ---------- pill NOVO: tudo que esta aberto agora (o newstuff compara com o que ja estava) ----------
   function openKeys() {
     const out = [];
@@ -548,7 +630,9 @@ export function initMenus(o) {
     if (shopBtn) { shopBtn.querySelector('.nw')?.remove(); shopBtn.insertAdjacentHTML('beforeend', newPill(t('chNew'))); shopBtn.querySelector('.nw')?.classList.add('hot'); shopBtn.classList.add('shop-hot'); }
   }
   ui.markNewStuff = markNewStuff;
-  onProgress(() => { if (ui.screen === 'home') markNewStuff(); });
+  // 16/11 (travada de 50+ ms a cada abate): na partida a tela continua marcada como 'home' e todo XP varria o arsenal inteiro.
+  // Na partida nao recalcula; voltar pro menu (show 'home') ja refaz
+  onProgress(() => { if (ui.screen === 'home' && !o.inGame()) markNewStuff(); });
 
   // selo no botao "Desafios" do menu enquanto houver desafio que o jogador nao viu
   function markNewChallenges() {
@@ -642,6 +726,7 @@ export function initMenus(o) {
     LASERS.forEach((id, n) => add('laser', id, n + 1, partReq(n + 1, id)));
     convOptions(lo.body).filter(id => id === 'convMax').forEach(id => add('conv', id, 1, partReq(1, id))); // kit de conversao do ultimo nivel (13/11)
     muzzleOptions(lo.body).forEach(id => add('muzzle', id, 1, MUZZLE_LVL[id] || 1, 'mz:' + id));
+    if (cat === 'pistol') TRIGGERS.forEach(id => add('trigger', id, 1, TRIGGER_LVL[id] || 1, 'tg:' + id, t(id))); // gatilho (16/11)
     for (const id of AMMO_IDS) if (!AMMO[id].only || AMMO[id].only === cat) add('ammo', id, 1, AMMO_LVL[id] || 1, 'am:' + id, t('am_' + id));
     return out;
   }
@@ -852,7 +937,7 @@ export function initMenus(o) {
     // so mostra o pente quando o corpo aceita mais de um
     // lamina: so modelo e camuflagem; pente so quando o corpo aceita mais de um
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
-    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'canted' || cantedFits(cat, lo.body)) && (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length)); // kit e bocal so no modelo que tem
+    const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'canted' || cantedFits(cat, lo.body)) && (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length) && (s !== 'trigger' || cat === 'pistol')); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
     $('slotList').innerHTML = slots.map(s => {
       const disabled = s === 'handle' && !C.handles.length;
@@ -955,7 +1040,7 @@ export function initMenus(o) {
     lo[k] = v;
     if (k === 'paint') lo.accent = v; // 05/11, pedido dele: uma cor so pinta tudo (modelo novo pode nao ter parte verde)
     // mexeu numa peca na mao: deixa de ser a variante (camo, cor e tracado podem trocar sem perder)
-    if (['body', 'scope', 'charger', 'handle', 'laser', 'conv', 'muzzle'].includes(k)) delete lo.bp;
+    if (['body', 'scope', 'charger', 'handle', 'laser', 'conv', 'muzzle', 'trigger'].includes(k)) delete lo.bp;
     // variante do jogador equipada: mexeu, a variante se atualiza sozinha e sobe pra conta (02/11, pedido dele)
     // trocou de MODELO: a variante e do modelo antigo, entao sai (nunca vira variante do modelo novo)
     if (k !== 'bp' && lo.cv) {
@@ -972,7 +1057,7 @@ export function initMenus(o) {
 
   // ---------- variantes do jogador (02/11) ----------
   // campos da montagem que entram na variante (tudo que muda a arma; o 'saved' por modelo nao)
-  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'pat', 'pat2', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'ws'];
+  const CV_KEYS = ['body', 'scope', 'charger', 'handle', 'laser', 'muzzle', 'trigger', 'conv', 'ammo', 'tracer', 'camo', 'paint', 'accent', 'pat', 'pat2', 'ret', 'retColor', 'ret45', 'retColor45', 'bp', 'ws'];
   const cvPick = (lo) => Object.fromEntries(CV_KEYS.filter(k => lo[k] != null).map(k => [k, lo[k]]));
   // skins de MODELO da Loja (04/11): aparecem como variante com o nome delas, so no modelo que elas trocam
   function wsHtml(lo) {
@@ -1195,15 +1280,16 @@ export function initMenus(o) {
     else if (slot === 'laser') opts = [null, ...LASERS];
     else if (slot === 'conv') opts = [null, ...convOptions(lo.body)];
     else if (slot === 'muzzle') opts = [null, ...muzzleOptions(lo.body)];
+    else if (slot === 'trigger') opts = [null, ...TRIGGERS];
     else opts = [null, ...C.handles.filter(h => handleFits(lo.body, cat, h))];
     const cur = slot === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : slot === 'scope' && !lo.scope && cat !== 'sniper' ? 'iron_own' : lo[slot];
     p.innerHTML = opts.map((id, i0) => {
       const i = slot === 'scope' ? [null, ...C.scopes].indexOf(id) : slot === 'handle' ? [null, ...C.handles].indexOf(id) : i0; /* 04/11: a lista de empunhaduras vem filtrada; pelo indice dela a peca aparecia aberta e a validacao tirava ao equipar */ // nivel da mira pelo lugar na lista original (as de trilho entraram na frente)
       if (slot === 'scope' && !scopeFits(lo.body, cat, id)) return ''; // mira que nao cabe (sniper: so luneta)
-      const open = slot === 'muzzle' ? !id || partUnlocked(cat, i, 'mz:' + id) : IRONS[id] || partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
+      const open = slot === 'trigger' ? !id || partUnlocked(cat, 1, 'tg:' + id) : slot === 'muzzle' ? !id || partUnlocked(cat, i, 'mz:' + id) : IRONS[id] || partUnlocked(cat, i, id) || (slot === 'scope' && !!id && id === freeScope(cat, lo.body));
       const lockCh = !open && id && (LOCKED_BY[cat + ':' + id] || LOCKED_BY[id]);
       // pros e contras da peca (estilo COD), so em pente e empunhadura
-      const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser' || slot === 'conv' || slot === 'muzzle') && id ? partEffects(cat, lo, slot, id) : [];
+      const fx = (slot === 'charger' || slot === 'handle' || slot === 'laser' || slot === 'conv' || slot === 'muzzle' || slot === 'trigger') && id ? partEffects(cat, lo, slot, id) : [];
       const fxHtml = fx.length ? `<span class="fx">${fx.slice(0, 4).map(([k, v]) => `<b class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '+' : '−'} ${t(k)}</b>`).join('')}</span>` : '';
       const pill = slot === 'body' ? modePill(id) + (open ? `<small class="blv">${t('lvlShort', { n: wpnLevel(cat, id) })}</small>` : '') : '';
       return `<button class="opt ${id === cur ? 'on' : ''} ${open ? '' : 'locked'} ${preview?.k === slot && preview.v === id ? 'peek' : ''}" data-id="${id ?? ''}" ${open ? '' : 'aria-disabled="true"'}>${partName(slot, id)}${pill}${slot === 'charger' && id === nativePart(lo.body, 'charger') ? `<br><small>${t('origTag')}</small>` : ''}${fxHtml}${open ? '' : lockCh ? `<small class="req-ch">${unlockActive(lockCh.id) ? t('reqCh') + ': ' + chName(lockCh) : t('reqQueue')}</small><span class="ubar"><i style="width:${Math.round(unlockProg(lockCh.id) * 100)}%"></i></span>` : BODY_MIN_LVL[id] ? `<small>${t('lookLvl', { n: BODY_MIN_LVL[id] })}</small>` : (() => { const rq = slot === 'muzzle' ? MUZZLE_LVL[id] : partReq(i, id); return `<small>${t('reqWpn', { n: rq })}</small><span class="ubar"><i style="width:${Math.round(reqProgress(cat, { wpn: rq }) * 100)}%"></i></span>`; })()}</button>`;
@@ -1279,7 +1365,7 @@ export function initMenus(o) {
     ];
     $('statBars').classList.toggle('dense', picking || rows.length > 10 || innerHeight < 520); // lista aberta ou linha a mais (Metralhadora): compacta, nada de cortar a ultima
     const W_S = wpnTracked(cat, lo.body), wsCell = (k, v) => `<li><b>${v}</b><span>${t(k)}</span></li>`, wsN = (n) => Number(n || 0).toLocaleString(getLang() === 'pt' ? 'pt-BR' : 'en-US');
-    const wsHtml = `<ul class="wstats">${wsCell('ws_kills', wsN(W_S.k))}${wsCell('ws_acc', W_S.s ? Math.round(W_S.h / W_S.s * 100) + '%' : '0%')}${wsCell('ws_head', wsN(W_S.hk))}${wsCell('ws_kd', W_S.d ? ((W_S.k || 0) / W_S.d).toFixed(2) : wsN(W_S.k))}${wsCell('ws_dmg', wsN(W_S.dmg))}${wsCell('ws_xp', wsN(W_S.xp))}</ul>`;
+    const wsHtml = `<ul class="wstats">${wsCell('ws_kills', wsN(W_S.k))}${wsCell('ws_acc', W_S.s ? Math.min(100, Math.round((W_S.h || 0) / W_S.s * 100)) + '%' : '0%')}${wsCell('ws_head', wsN(W_S.hk))}${wsCell('ws_kd', W_S.d ? ((W_S.k || 0) / W_S.d).toFixed(2) : wsN(W_S.k))}${wsCell('ws_dmg', wsN(W_S.dmg))}${wsCell('ws_xp', wsN(W_S.xp))}</ul>`;
     $('statBars').innerHTML = `<div class="fmrow">${modePill(lo.body)}</div>${wsHtml}` + rows.map(([n, v, b, max]) => {
       const pct = Math.min(100, v / max * 100);
       const d = v - b, rel = b ? d / b : 0;

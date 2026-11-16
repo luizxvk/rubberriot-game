@@ -8,8 +8,13 @@ import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
 export const STK_FREE = ['pow', 'estrela', 'coracao', 'raio'];
 // 14/11 (pedido dele): 16 novos, todos ANIMADOS (e mais caros). STK_ANIM: modo do shader de cada um (ver stickerMat)
 export const STK_ANIM = { bonk: 'pulse', plaft: 'shine', bigode: 'wobble', joinha: 'pulse', nota: 'wobble', lua: 'holo', sol: 'spin', cafe: 'float',
-  disco: 'spin', claquete: 'shine', cartola: 'wobble', bomba: 'pulse', pirulito: 'hue', fantasma: 'float', cogumelo: 'hue', planeta: 'holo' };
-export const STK_IDS = ['pow', 'estrela', 'coracao', 'raio', 'caveira', 'olho', 'tinta', 'bigorna', 'sorriso', 'chama', 'trevo', 'dado', 'dinamite', 'banana', 'coroa', 'alvo', ...Object.keys(STK_ANIM)];
+  disco: 'spin', claquete: 'shine', cartola: 'wobble', bomba: 'pulse', pirulito: 'hue', fantasma: 'float', cogumelo: 'hue', planeta: 'holo',
+  // 16/11 (pedido dele): 6 ELITE (de graca pra quem assina) e 6 animados novos
+  el_emblema: 'shine', el_coroa: 'holo', el_asas: 'float', el_diamante: 'shine', el_trofeu: 'pulse', el_cometa: 'spin',
+  kaboom: 'pulse', apito: 'wobble', balao: 'float', bilhete: 'shine', gato: 'wobble', arcoiris: 'hue' };
+export const STK_ELITE = ['el_emblema', 'el_coroa', 'el_asas', 'el_diamante', 'el_trofeu', 'el_cometa'];
+const STK_STATIC2 = ['pipoca', 'ancora', 'chave', 'ferradura', 'bala', 'oito']; // 16/11: estaticos novos
+export const STK_IDS = ['pow', 'estrela', 'coracao', 'raio', 'caveira', 'olho', 'tinta', 'bigorna', 'sorriso', 'chama', 'trevo', 'dado', 'dinamite', 'banana', 'coroa', 'alvo', ...STK_STATIC2, ...Object.keys(STK_ANIM)];
 export const STK_MAX = 4;
 const INK = '#141210', PAPER = '#faf8f2';
 const P = {
@@ -45,6 +50,48 @@ const ART = {
   banana(g) { g.fillStyle = '#ffd23a'; const p = new Path2D(P.banana); g.fill(p); g.stroke(p); g.fillStyle = '#6b4a2a'; g.fillRect(2.6, 3.4, 2, 2.4); },
   coroa(g) { g.fillStyle = '#e0b13a'; const p = new Path2D(P.crown); g.fill(p); g.stroke(p); g.fillStyle = '#e0301e'; for (const x of [8, 12, 16]) { g.beginPath(); g.arc(x, 15, 1.2, 0, 7); g.fill(); } },
   alvo(g) { for (const [r, c] of [[10, '#e0301e'], [7, PAPER], [4, '#e0301e'], [1.6, PAPER]]) { g.fillStyle = c; g.beginPath(); g.arc(12, 12, r, 0, 7); g.fill(); g.stroke(); } },
+  // ---- ELITE (16/11, pedido dele): violeta da Rovex Elite, animados, de graca pra quem assina ----
+  el_emblema(g) { g.fillStyle = '#8b5cf6'; g.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283 - 1.571; g.lineTo(12 + Math.cos(a) * 10.4, 12 + Math.sin(a) * 10.4); } g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = '#f2c94c'; g.lineWidth = 1.2; g.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283 - 1.571; g.lineTo(12 + Math.cos(a) * 8.2, 12 + Math.sin(a) * 8.2); } g.closePath(); g.stroke(); g.strokeStyle = INK; g.lineWidth = 1;
+    g.fillStyle = '#f2c94c'; g.save(); g.translate(12, 12.4); g.scale(0.5, 0.5); g.translate(-12, -12); const p = new Path2D(P.star); g.fill(p); g.stroke(p); g.restore(); },
+  el_coroa(g) { g.fillStyle = '#8b5cf6'; const p = new Path2D(P.crown); g.fill(p); g.stroke(p); g.fillStyle = '#f2c94c'; for (const x of [8, 12, 16]) { g.beginPath(); g.arc(x, 15, 1.3, 0, 7); g.fill(); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,.45)'; g.fillRect(4.6, 18.6, 7, 1); },
+  el_asas(g) { g.fillStyle = '#ddd6fe'; for (const s of [-1, 1]) { g.save(); g.translate(12, 12); g.scale(s, 1); g.beginPath(); g.moveTo(1.6, 2); g.bezierCurveTo(6, -6, 11, -5, 11.4, -2); g.lineTo(8.6, -1.4); g.lineTo(10.6, 1.2); g.lineTo(7.4, 1.4); g.lineTo(8.8, 4); g.lineTo(5, 3.8); g.closePath(); g.fill(); g.stroke(); g.restore(); }
+    g.fillStyle = '#8b5cf6'; g.beginPath(); g.arc(12, 13, 3.4, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#f2c94c'; g.beginPath(); g.arc(12, 13, 1.3, 0, 7); g.fill(); },
+  el_diamante(g) { g.fillStyle = '#a78bfa'; g.beginPath(); g.moveTo(6, 4); g.lineTo(18, 4); g.lineTo(22, 9); g.lineTo(12, 21.5); g.lineTo(2, 9); g.closePath(); g.fill(); g.stroke();
+    g.lineWidth = 0.8; g.beginPath(); g.moveTo(2, 9); g.lineTo(22, 9); g.moveTo(8.6, 4); g.lineTo(7.6, 9); g.lineTo(12, 21.5); g.lineTo(16.4, 9); g.lineTo(15.4, 4); g.stroke(); g.lineWidth = 1;
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.moveTo(8.6, 4.6); g.lineTo(11, 4.6); g.lineTo(9, 8.4); g.closePath(); g.fill(); },
+  el_trofeu(g) { g.fillStyle = '#f2c94c'; g.beginPath(); g.moveTo(6, 3); g.lineTo(18, 3); g.lineTo(17.4, 9.4); g.quadraticCurveTo(16.6, 13.6, 12, 14.2); g.quadraticCurveTo(7.4, 13.6, 6.6, 9.4); g.closePath(); g.fill(); g.stroke();
+    g.lineWidth = 1.6; for (const s of [-1, 1]) { g.beginPath(); g.arc(12 + s * 6.8, 6.6, 2.6, s > 0 ? -1.6 : 1.6, s > 0 ? 1.6 : 4.7); g.stroke(); } g.lineWidth = 1;
+    g.fillStyle = '#8b5cf6'; g.fillRect(10.6, 14, 2.8, 3.6); g.strokeRect(10.6, 14, 2.8, 3.6); g.beginPath(); g.roundRect(6.6, 17.6, 10.8, 3.8, 1); g.fill(); g.stroke(); },
+  el_cometa(g) { g.fillStyle = '#c4b5fd'; g.beginPath(); g.moveTo(2, 21); g.quadraticCurveTo(8, 12, 14.6, 6.4); g.lineTo(17.6, 9.4); g.quadraticCurveTo(10, 15, 2, 21); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#8b5cf6'; g.save(); g.translate(17, 7); g.scale(0.46, 0.46); g.translate(-12, -12); const p = new Path2D(P.star); g.fill(p); g.stroke(p); g.restore(); burst(g, '#f2c94c', 1.8, 0.7, 8, 5, 6); },
+  // ---- animados novos (16/11) ----
+  kaboom(g) { burst(g, '#e0301e', 11.6, 7, 22); word(g, 'KABUM!', 4.6, '#ffd23a'); },
+  apito(g) { g.fillStyle = '#c9ccd1'; g.beginPath(); g.roundRect(3, 9, 12, 9, 4.4); g.fill(); g.stroke(); g.beginPath(); g.rect(13, 9, 8.4, 4); g.fill(); g.stroke(); g.fillStyle = INK; g.beginPath(); g.arc(8, 13.6, 1.8, 0, 7); g.fill();
+    g.lineWidth = 1.2; for (const [x, y] of [[19, 5.6], [21.6, 7.4]]) { g.beginPath(); g.moveTo(x - 1, y + 1); g.lineTo(x + 1, y - 1); g.stroke(); } g.lineWidth = 1; },
+  balao(g) { g.lineWidth = 1; g.beginPath(); g.moveTo(12, 17.4); g.bezierCurveTo(10, 19.6, 14, 21, 12, 23.4); g.stroke(); g.fillStyle = '#e0301e'; g.beginPath(); g.ellipse(12, 9.6, 7, 8, 0, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(10.6, 17.4); g.lineTo(13.4, 17.4); g.lineTo(12, 16); g.closePath(); g.fill(); g.stroke(); g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.ellipse(9.2, 6.4, 1.6, 2.6, -0.4, 0, 7); g.fill(); },
+  bilhete(g) { g.fillStyle = '#ffd23a'; const p = new Path2D('M2 7h20v3a2 2 0 0 0 0 4v3H2v-3a2 2 0 0 0 0-4z'); g.fill(p); g.stroke(p); g.setLineDash([1.2, 1]); g.beginPath(); g.moveTo(16, 7.6); g.lineTo(16, 16.4); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#e0301e'; g.font = '400 3.3px Bowlby One, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('ENTRADA', 8.8, 10.4); g.fillText('ÚNICA', 8.8, 13.8); },
+  gato(g) { g.fillStyle = '#26231f'; g.beginPath(); g.moveTo(4, 6); g.lineTo(8.4, 9); g.lineTo(15.6, 9); g.lineTo(20, 6); g.lineTo(20, 15); g.bezierCurveTo(20, 21, 4, 21, 4, 15); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = PAPER; g.beginPath(); g.ellipse(12, 16, 5.4, 3.6, 0, 0, 7); g.fill(); for (const x of [8.6, 15.4]) { g.beginPath(); g.ellipse(x, 12, 1.8, 2.4, 0, 0, 7); g.fill(); }
+    g.fillStyle = INK; for (const x of [9, 15.8]) { g.beginPath(); g.ellipse(x, 12.4, 0.8, 1.4, 0, 0, 7); g.fill(); } g.beginPath(); g.ellipse(12, 15, 1.2, 0.8, 0, 0, 7); g.fill(); },
+  arcoiris(g) { const C = ['#e0301e', '#f08a2a', '#ffd23a', '#47b04b', '#2f5b8a', '#6b3fb3']; for (let i = 0; i < C.length; i++) { g.strokeStyle = C[i]; g.lineWidth = 1.6; g.beginPath(); g.arc(12, 17, 10 - i * 1.5, Math.PI, 0); g.stroke(); }
+    g.strokeStyle = INK; g.lineWidth = 1; g.fillStyle = PAPER; for (const x of [3, 21]) { g.beginPath(); g.arc(x, 17.4, 2.6, 0, 7); g.fill(); g.stroke(); } },
+  // ---- estaticos novos (16/11) ----
+  pipoca(g) { g.fillStyle = PAPER; for (const [x, y] of [[8, 6], [12, 4.6], [16, 6], [10, 8], [14, 8]]) { g.beginPath(); g.arc(x, y, 2.8, 0, 7); g.fill(); g.stroke(); }
+    g.fillStyle = '#e0301e'; g.beginPath(); g.moveTo(5, 9); g.lineTo(19, 9); g.lineTo(17, 22); g.lineTo(7, 22); g.closePath(); g.fill(); g.stroke(); g.fillStyle = PAPER; for (const x of [9.4, 13.4]) g.fillRect(x, 9.4, 1.6, 12.2); },
+  ancora(g) { g.lineWidth = 2.2; g.beginPath(); g.arc(12, 5, 2.2, 0, 7); g.moveTo(12, 7.2); g.lineTo(12, 20.4); g.moveTo(7, 10.4); g.lineTo(17, 10.4); g.moveTo(4, 14); g.quadraticCurveTo(5, 20.4, 12, 20.4); g.quadraticCurveTo(19, 20.4, 20, 14); g.stroke();
+    g.strokeStyle = '#2f5b8a'; g.lineWidth = 1; g.stroke(); g.strokeStyle = INK; },
+  chave(g) { g.fillStyle = '#e0b13a'; g.beginPath(); g.arc(7.4, 12, 5, 0, 7); g.fill(); g.stroke(); g.fillStyle = PAPER; g.beginPath(); g.arc(7.4, 12, 2, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = '#e0b13a'; g.beginPath(); g.rect(12, 10.8, 10, 2.4); g.fill(); g.stroke(); g.beginPath(); g.rect(17.6, 13, 1.8, 3); g.fill(); g.stroke(); g.beginPath(); g.rect(20.2, 13, 1.8, 2); g.fill(); g.stroke(); },
+  ferradura(g) { g.lineWidth = 5; g.beginPath(); g.arc(12, 11, 7.4, Math.PI * 0.85, Math.PI * 2.15, false); g.stroke(); g.strokeStyle = '#9aa0a6'; g.lineWidth = 3; g.stroke(); g.strokeStyle = INK; g.lineWidth = 1;
+    g.fillStyle = INK; for (const a of [1.2, 1.7, 2.3, 2.8]) for (const s of [-1, 1]) { const x = 12 + Math.cos(Math.PI * 1.5 + s * (a - 2)) * 7.4, y = 11 + Math.sin(Math.PI * 1.5 + s * (a - 2)) * 7.4; g.beginPath(); g.arc(x, y, 0.55, 0, 7); g.fill(); } },
+  bala(g) { g.save(); g.translate(12, 12); g.rotate(-0.78); g.fillStyle = '#e0b13a'; g.beginPath(); g.rect(-3, -1, 6, 10); g.fill(); g.stroke(); g.fillStyle = '#b06a2a'; g.beginPath(); g.moveTo(-3, -1); g.lineTo(-3, -4); g.quadraticCurveTo(0, -11, 3, -4); g.lineTo(3, -1); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.45)'; g.fillRect(-2, 0, 1, 7.6); g.restore(); },
+  oito(g) { g.fillStyle = '#1d1b19'; g.beginPath(); g.arc(12, 12, 10, 0, 7); g.fill(); g.stroke(); g.fillStyle = PAPER; g.beginPath(); g.arc(12, 11, 4.6, 0, 7); g.fill(); g.fillStyle = INK; g.font = '400 6.4px Bowlby One, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('8', 12, 11.4);
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.ellipse(7.6, 6.8, 2.2, 1.2, -0.7, 0, 7); g.fill(); },
   // ---- animados (14/11) ----
   bonk(g) { burst(g, '#6fc4ff', 11.6, 7.6, 20); word(g, 'BONK!', 5.6, '#ffd23a'); },
   plaft(g) { g.fillStyle = '#ff8fb0'; g.beginPath(); for (let i = 0; i < 18; i++) { const a = i / 18 * 6.283, r = i % 2 ? 7 : 9.6 + (i % 3) * 0.8; g.lineTo(12 + Math.cos(a) * r, 12 + Math.sin(a) * r * 0.86); } g.closePath(); g.fill(); g.stroke();
@@ -186,6 +233,24 @@ export function pickOnGun(gun, raycaster) {
   const p = gun.worldToLocal(h.point.clone()), n = N.clone().transformDirection(M4.copy(gun.matrixWorld).invert()).normalize();
   return { p: p.toArray().map(v => +v.toFixed(4)), n: n.toArray().map(v => +v.toFixed(3)) };
 }
+// 16/11 (bug dele: adesivo esticando e desfigurando em partes da arma). Duas causas:
+// 1) a caixa do decalque atravessava a peca e pintava faces quase de lado pra ela (topo, chanfro, o outro lado): viravam tiras
+//    esticadas. Agora so ficam os triangulos virados pro carimbo (cosseno > 0,35) e a caixa e mais rasa.
+// 2) clique num chanfro dava uma direcao torta pro carimbo. Direcao perto de um eixo da arma (ate ~35 graus) encaixa nele
+function facingOnly(geo, dir, min = 0.35) {
+  const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv, P = [], NN = [], U = [];
+  for (let i = 0; i + 2 < p.count; i += 3) {
+    const nx = n.getX(i) + n.getX(i + 1) + n.getX(i + 2), ny = n.getY(i) + n.getY(i + 1) + n.getY(i + 2), nz = n.getZ(i) + n.getZ(i + 1) + n.getZ(i + 2), l = Math.hypot(nx, ny, nz) || 1;
+    if ((nx * dir.x + ny * dir.y + nz * dir.z) / l < min) continue;
+    for (let k = i; k < i + 3; k++) { P.push(p.getX(k), p.getY(k), p.getZ(k)); NN.push(n.getX(k), n.getY(k), n.getZ(k)); U.push(uv.getX(k), uv.getY(k)); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(NN, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  geo.dispose(); return g;
+}
+// quanto do desenho ficou na peca (area no UV, 0..1): peca mais fina que o adesivo (haste, cano) corta ele numa tira
+function coverage(geo) { const u = geo.attributes.uv; let A = 0; for (let i = 0; i + 2 < u.count; i += 3) A += Math.abs((u.getX(i + 1) - u.getX(i)) * (u.getY(i + 2) - u.getY(i)) - (u.getX(i + 2) - u.getX(i)) * (u.getY(i + 1) - u.getY(i))) / 2; return A; }
+function snapAxis(n) { const a = [Math.abs(n.x), Math.abs(n.y), Math.abs(n.z)], m = Math.max(...a); if (m < 0.82) return n; const i = a.indexOf(m); return new THREE.Vector3(i === 0 ? Math.sign(n.x) : 0, i === 1 ? Math.sign(n.y) : 0, i === 2 ? Math.sign(n.z) : 0); }
 // cola os adesivos salvos: acha a peca no ponto (raio pela normal) e projeta o decalque nela; fica filho da arma
 export function applyStickers(gun, list) {
   if (!gun) return;
@@ -196,11 +261,19 @@ export function applyStickers(gun, list) {
   const T = targets(gun), L = gunSize(T);
   const inv = M4.copy(gun.matrixWorld).invert().clone();
   for (const s of list) {
-    const pw = new THREE.Vector3(...s.p).applyMatrix4(gun.matrixWorld), nw = new THREE.Vector3(...s.n).transformDirection(gun.matrixWorld).normalize();
+    const pw = new THREE.Vector3(...s.p).applyMatrix4(gun.matrixWorld), nw = snapAxis(new THREE.Vector3(...s.n).normalize()).transformDirection(gun.matrixWorld).normalize();
     ray.set(pw.clone().addScaledVector(nw, L * 0.05), nw.clone().negate()); ray.far = L * 0.2;
     const h = cast(ray, T)[0]; if (!h) continue;
     Q.setFromUnitVectors(Z, nw); E.setFromQuaternion(Q); const e = new THREE.Euler().setFromQuaternion(Q.multiply(new THREE.Quaternion().setFromAxisAngle(Z, s.r || 0)));
-    const sz = L * (s.s || 0.12), geo = new DecalGeometry(h.object, h.point, e, new THREE.Vector3(sz, sz, sz * 1.2));
+    // adesivo inteiro sempre (16/11): se nao cabe na peca, encolhe ate caber (ate 40% do tamanho escolhido)
+    let geo = null;
+    for (const k of [1, 0.8, 0.62, 0.5, 0.4]) {
+      const sz = L * (s.s || 0.12) * k, g = facingOnly(new DecalGeometry(h.object, h.point, e, new THREE.Vector3(sz, sz, sz * 0.6)), nw);
+      if (!g.attributes.position.count) { g.dispose(); continue; }
+      if (geo) geo.dispose(); geo = g;
+      if (coverage(g) >= 0.55) break;
+    }
+    if (!geo) continue;
     geo.applyMatrix4(inv); // decalque nasce no mundo: passa pro espaco da arma (segue a arma quando ela anda)
     const mesh = stickerMesh(geo, s.id);
     mesh.userData.noFx = true; mesh.userData.stk = true; mesh.renderOrder = 2;

@@ -3,7 +3,7 @@
 // producao nem leva o codigo. Liga sozinho no dev sem login; `?semconta` desliga (testar visitante), `?zerar` limpa o estado.
 // As rotas que precisam do servidor da Rovex respondem aqui com a MESMA logica do servidor (shared/shop.js e
 // shared/blackmarket.js), com saldo, carteira e pecas guardados no localStorage (rr_fake_v1). `?peca` = peca em toda partida.
-import { SHOP_ITEMS, shopPrice, zpCredit } from '../shared/shop.js';
+import { SHOP_ITEMS, shopPrice, dealPrice, elitePrice, zpCredit } from '../shared/shop.js';
 import { BM_VARIANTS, BM_CHEST, BM_PIECES, BM_DROP, bmShowcase, bmPrice, bmRoll, bmRefund } from '../shared/blackmarket.js';
 
 const KEY = 'rr_fake_v1', qs = new URLSearchParams(location.search);
@@ -17,12 +17,14 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch
 const bal = () => ({ zionsPoints: S.zionsPoints, zions: S.zions });
 const wait = (ms = 250) => new Promise(r => setTimeout(r, ms)); // parece rede (a animacao do bau espera a resposta)
 
+// Elite da conta falsa: o mesmo que a tela mostra (Elite de teste nos Ajustes ou ?semElite)
+const fakeElite = () => { try { const v = localStorage.getItem('rr_elite_test'); if (v) return v === 'on'; } catch { /* */ } return !qs.has('semElite'); };
 export const fakeMe = () => ({ id: 'dev', name: 'luizxvk', elite: true, email: 'dev@localhost', ...bal(), rrOwned: [...S.itens], fake: true });
 
 export async function loja() { await wait(120); return { itens: [...S.itens], ...bal() }; }
 export async function comprar(sku) {
   await wait();
-  const it = SHOP_ITEMS[sku], preco = it ? shopPrice(sku) : undefined;
+  const it = SHOP_ITEMS[sku]; let preco = it ? dealPrice(sku) : undefined; if (Number.isFinite(preco) && fakeElite()) preco = elitePrice(preco, 'shop'); // igual ao servidor: oferta + Elite 15% (16/11)
   if (!it || !Number.isFinite(preco) || preco <= 0) return { code: 'erro' };
   const faltam = it.give.filter(g => !S.itens.includes(g));
   if (!faltam.length) return { code: 'ja_tem' };
@@ -32,7 +34,7 @@ export async function comprar(sku) {
 }
 export async function resgatar(sku) { await wait(); const it = SHOP_ITEMS[sku]; if (!it) return { code: 'erro' }; for (const g of it.give) if (!S.itens.includes(g)) S.itens.push(g); save(); return { ok: true, itens: [...S.itens] }; }
 // presente do Elite (10/11): 4 variantes do Mercado Negro por mes, sem repetir (mesma regra da rota da Rovex)
-export async function elitePresente() { await wait(); const mes = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7); S.eg ||= {}; if (S.eg[mes] || qs.has('semPresente')) return { novos: [], mes }; const tem = new Set(S.itens), livres = Object.keys(BM_VARIANTS).filter(id => !tem.has('bp:' + id)).sort(() => Math.random() - 0.5), novos = livres.slice(0, 4); S.eg[mes] = novos; for (const id of novos) S.itens.push('bp:' + id); save(); return { novos, mes, itens: [...S.itens] }; }
+export async function elitePresente() { await wait(); const mes = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7); S.eg ||= {}; if (S.eg[mes] || qs.has('semPresente')) return { novos: [], mes }; const tem = new Set(S.itens), livres = Object.keys(BM_VARIANTS).filter(id => !tem.has('bp:' + id)).sort(() => Math.random() - 0.5), novos = livres.slice(0, 4); S.eg[mes] = novos; for (const id of novos) S.itens.push('bp:' + id); const extras = Object.values(SHOP_ITEMS).filter(it => it.elite && (it.kind === 'kc' || it.kind === 'stk')).flatMap(it => it.give).filter(g => !S.itens.includes(g)); S.itens.push(...extras); save(); return { novos, extras, mes, itens: [...S.itens] }; } // 16/11: itens Elite junto
 export async function instagram() { await wait(); if (S.ig) return { code: 'ja_resgatou', ...bal() }; S.ig = true; S.zionsPoints += 500; save(); return { ok: true, total: 500, ...bal() }; } // 13/11: presente de atualizacao = 500
 export async function presente() { await wait(); if (S.gift) return { code: 'ja_resgatou', ...bal() }; S.gift = true; S.zionsPoints += 1000; save(); return { ok: true, total: 1000, ...bal() }; }
 
@@ -48,7 +50,7 @@ function aplicarPeca(roll) {
 export async function mercado() { await wait(150); return { vitrine: bmShowcase(Date.now()), itens: [...S.itens], pecas: S.pecas, agora: Date.now(), ...bal() }; }
 export async function mercadoComprar(id) {
   await wait();
-  const preco = bmPrice(id);
+  let preco = bmPrice(id); if (Number.isFinite(preco) && fakeElite()) preco = elitePrice(preco, 'bm'); // Elite 20% (16/11)
   if (!BM_VARIANTS[id] || !Number.isFinite(preco)) return { code: 'erro' };
   if (!bmShowcase(Date.now()).ids.includes(id)) return { code: 'fora_da_vitrine' };
   if (S.itens.includes('bp:' + id)) return { code: 'ja_tem' };
@@ -60,8 +62,9 @@ export async function mercadoComprar(id) {
 }
 export async function mercadoBau() {
   await wait(400);
-  if (S.zionsPoints < BM_CHEST.zp) return { code: 'sem_saldo', preco: BM_CHEST.zp, saldo: S.zionsPoints };
-  S.zionsPoints -= BM_CHEST.zp;
+  const cz = fakeElite() ? elitePrice(BM_CHEST.zp, 'chest') : BM_CHEST.zp; // Elite 10% (16/11)
+  if (S.zionsPoints < cz) return { code: 'sem_saldo', preco: cz, saldo: S.zionsPoints };
+  S.zionsPoints -= cz;
   const out = aplicarPeca(bmRoll(S.pecas, donos())); save();
   return { ok: true, ...out, itens: [...S.itens], pecas: S.pecas, ...bal() };
 }

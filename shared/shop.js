@@ -113,10 +113,14 @@ export const SHOP_ITEMS = {
   pGaragem: { kind: 'bundle', r: 'pacote', give: ['skin:papelao', 'camo:vinyl'], price: 1600, feat: 1 },
   // contadores de abates (13/11, pedido dele): 15 temas, aparecem so na SUA arma (src/killcounter.js)
   kcDespertador: { kind: 'kc', r: 'raro', give: ['kc:despertador'] }, kcRadio: { kind: 'kc', r: 'raro', give: ['kc:radio'] }, kcLetreiro: { kind: 'kc', r: 'lendario', give: ['kc:letreiro'], feat: 1 }, kcTv: { kind: 'kc', r: 'epico', give: ['kc:tv'] }, kcDinamite: { kind: 'kc', r: 'epico', give: ['kc:dinamite'] }, kcCaveira: { kind: 'kc', r: 'epico', give: ['kc:caveira'] }, kcFerradura: { kind: 'kc', r: 'raro', give: ['kc:ferradura'] }, kcTinta: { kind: 'kc', r: 'raro', give: ['kc:tinta'] }, kcTrofeu: { kind: 'kc', r: 'lendario', give: ['kc:trofeu'], feat: 1 }, kcBigorna: { kind: 'kc', r: 'raro', give: ['kc:bigorna'] }, kcFliperama: { kind: 'kc', r: 'lendario', give: ['kc:fliperama'], feat: 1 }, kcEngrenagem: { kind: 'kc', r: 'epico', give: ['kc:engrenagem'] }, kcXerife: { kind: 'kc', r: 'epico', give: ['kc:xerife'] }, kcTaximetro: { kind: 'kc', r: 'raro', give: ['kc:taximetro'] }, kcCartola: { kind: 'kc', r: 'lendario', give: ['kc:cartola'], feat: 1 },
+  // contadores ELITE (16/11, pedido dele): resgate de graca pra quem assina
+  kcElCofre: { kind: 'kc', r: 'lendario', give: ['kc:el_cofre'], price: 1600, elite: 1 }, kcElBrasao: { kind: 'kc', r: 'lendario', give: ['kc:el_brasao'], price: 1600, elite: 1 }, kcElCoroa: { kind: 'kc', r: 'lendario', give: ['kc:el_coroa'], price: 1600, elite: 1 },
   // adesivos (13/11): o jogador arrasta na arma no Arsenal; 4 vem de graca (src/stickers.js STK_FREE)
   skCaveira: { kind: 'stk', r: 'epico', give: ['stk:caveira'] }, skOlho: { kind: 'stk', r: 'raro', give: ['stk:olho'] }, skTinta: { kind: 'stk', r: 'raro', give: ['stk:tinta'] }, skBigorna: { kind: 'stk', r: 'epico', give: ['stk:bigorna'] }, skSorriso: { kind: 'stk', r: 'raro', give: ['stk:sorriso'] }, skChama: { kind: 'stk', r: 'epico', give: ['stk:chama'] }, skTrevo: { kind: 'stk', r: 'raro', give: ['stk:trevo'] }, skDado: { kind: 'stk', r: 'raro', give: ['stk:dado'] }, skDinamite: { kind: 'stk', r: 'epico', give: ['stk:dinamite'] }, skBanana: { kind: 'stk', r: 'epico', give: ['stk:banana'] }, skCoroa: { kind: 'stk', r: 'epico', give: ['stk:coroa'] }, skAlvo: { kind: 'stk', r: 'raro', give: ['stk:alvo'] },
   // adesivos animados (14/11)
   skBonk: { kind: 'stk', r: 'lendario', give: ['stk:bonk'] }, skPlaft: { kind: 'stk', r: 'lendario', give: ['stk:plaft'] }, skBigode: { kind: 'stk', r: 'lendario', give: ['stk:bigode'] }, skJoinha: { kind: 'stk', r: 'lendario', give: ['stk:joinha'] }, skNota: { kind: 'stk', r: 'lendario', give: ['stk:nota'] }, skLua: { kind: 'stk', r: 'lendario', give: ['stk:lua'] }, skSol: { kind: 'stk', r: 'lendario', give: ['stk:sol'] }, skCafe: { kind: 'stk', r: 'lendario', give: ['stk:cafe'] }, skDisco: { kind: 'stk', r: 'lendario', give: ['stk:disco'] }, skClaquete: { kind: 'stk', r: 'lendario', give: ['stk:claquete'] }, skCartola: { kind: 'stk', r: 'lendario', give: ['stk:cartola'] }, skBomba: { kind: 'stk', r: 'lendario', give: ['stk:bomba'] }, skPirulito: { kind: 'stk', r: 'lendario', give: ['stk:pirulito'] }, skFantasma: { kind: 'stk', r: 'lendario', give: ['stk:fantasma'] }, skCogumelo: { kind: 'stk', r: 'lendario', give: ['stk:cogumelo'] }, skPlaneta: { kind: 'stk', r: 'lendario', give: ['stk:planeta'] },
+  // adesivos novos (16/11, pedido dele): Elite (resgate de graca pra quem assina), animados e estaticos
+  skElEmblema: { kind: 'stk', r: 'lendario', give: ['stk:el_emblema'], price: 1200, elite: 1 }, skElCoroa: { kind: 'stk', r: 'lendario', give: ['stk:el_coroa'], price: 1200, elite: 1 }, skElAsas: { kind: 'stk', r: 'lendario', give: ['stk:el_asas'], price: 1200, elite: 1 }, skElDiamante: { kind: 'stk', r: 'lendario', give: ['stk:el_diamante'], price: 1200, elite: 1 }, skElTrofeu: { kind: 'stk', r: 'lendario', give: ['stk:el_trofeu'], price: 1200, elite: 1 }, skElCometa: { kind: 'stk', r: 'lendario', give: ['stk:el_cometa'], price: 1200, elite: 1 }, skKaboom: { kind: 'stk', r: 'lendario', give: ['stk:kaboom'] }, skApito: { kind: 'stk', r: 'lendario', give: ['stk:apito'] }, skBalao: { kind: 'stk', r: 'lendario', give: ['stk:balao'] }, skBilhete: { kind: 'stk', r: 'lendario', give: ['stk:bilhete'] }, skGato: { kind: 'stk', r: 'lendario', give: ['stk:gato'] }, skArcoiris: { kind: 'stk', r: 'lendario', give: ['stk:arcoiris'] }, skPipoca: { kind: 'stk', r: 'raro', give: ['stk:pipoca'] }, skAncora: { kind: 'stk', r: 'raro', give: ['stk:ancora'] }, skChave: { kind: 'stk', r: 'epico', give: ['stk:chave'] }, skFerradura: { kind: 'stk', r: 'epico', give: ['stk:ferradura'] }, skBala: { kind: 'stk', r: 'raro', give: ['stk:bala'] }, skOito: { kind: 'stk', r: 'epico', give: ['stk:oito'] },
   // Futuristic Weapon Pack (04/11): as duas skins de modelo juntas (so vende o pack); Agulha e Relampago futuristas
   // elite: 1 (05/11, pedido dele): quem assina o Elite resgata de graca (POST /loja/resgatar); e a unica excecao a regra de cima
   pFuturo: { kind: 'bundle', r: 'pacote', give: ['wskin:pulse', 'wskin:fiction'], price: 10000, feat: 1, weapon: 1, elite: 1, until: Date.UTC(2026, 10, 16) }, // lancamento: pacote da semana fixo ate 16/11 (segunda)
@@ -149,6 +153,14 @@ export const shopPrice = (id) => { const it = SHOP_ITEMS[id]; return it ? it.pri
 
 const DAY = 86400000;
 // sorteio fixo por dia/semana (igual pra todo mundo): embaralha com semente
+// rodizio (16/11, bug dele: itens que nao trocavam quando o prazo acabava): embaralha UMA vez por ciclo e cada periodo pega o
+// proximo lote da fila. Com mais itens que vagas, o lote nunca repete o do periodo anterior (o sorteio solto repetia)
+function rotate(list, period, n) {
+  if (list.length <= n) return seeded(list, period);
+  const per = Math.ceil(list.length / n), cyc = Math.floor(period / per), a = seeded([...list].sort(), cyc + 7919), off = (period % per) * n, out = [];
+  for (let i = 0; i < n; i++) out.push(a[(off + i) % a.length]);
+  return out;
+}
 function seeded(list, seed) {
   const a = [...list]; let s = seed * 9301 + 49297;
   for (let i = a.length - 1; i > 0; i--) { s = (s * 9301 + 49297) % 233280; const j = Math.floor(s / 233280 * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -158,22 +170,30 @@ function seeded(list, seed) {
 // Destaque = 1 lendario grande + 1 pacote largo + 2 pequenos; dia = 8 ofertas que nao repetem o destaque.
 // Prateleiras (04/11): o resto do catalogo por tipo, sorteado na semana, sem repetir o que ja esta em cima.
 // O rodizio e so vitrine: a compra confere o catalogo, nao o rodizio.
-export const SHELVES = [['kc', 3], ['stk', 4], ['dance', 4], ['banner', 3], ['charm', 2], ['death', 2], ['face', 2], ['bundle', 4], ['react', 4], ['camo', 8], ['skin', 4], ['hat', 4], ['stamp', 6], ['ret', 8]];
+export const SHELVES = [['kc', 3], ['stk', 4], ['dance', 4], ['banner', 3], ['charm', 1], ['death', 1], ['face', 2], ['bundle', 4], ['react', 2], ['camo', 4], ['skin', 4], ['hat', 4], ['stamp', 4], ['ret', 8]]; // 16/11 (pedido dele): Camuflagens e Estampas com 4
 // ofertas do dia (09/11, pedido dele): 15% off. O servidor cobra por aqui
 export const DEAL_OFF = 0.15;
 let dealMemo = { end: 0, ids: new Set() };
 export function isDeal(id, now = Date.now()) { if (now >= dealMemo.end) { const R = shopRotation(now); dealMemo = { end: R.dayEnd, ids: new Set(R.daily) }; } return dealMemo.ids.has(id); }
+// desconto do Elite (16/11, pedido dele): Loja 15%, armas do Mercado Negro 20%, bau do Mercado Negro 10%. O servidor confere o
+// Elite na hora de cobrar (o cliente so mostra). Em cima da oferta do dia, arredonda de 5 em 5
+export const ELITE_OFF = { shop: 0.15, bm: 0.20, chest: 0.10 };
+export const elitePrice = (p, k) => p == null || !Number.isFinite(p) ? p : Math.max(5, Math.round(p * (1 - (ELITE_OFF[k] || 0)) / 5) * 5);
 export const dealPrice = (id, now = Date.now()) => { const p = shopPrice(id); return p != null && isDeal(id, now) ? Math.round(p * (1 - DEAL_OFF) / 5) * 5 : p; };
 export const shelfOf = (id) => (SHOP_ITEMS[id].react ? 'react' : SHOP_ITEMS[id].kind);
 export function shopRotation(now = Date.now()) {
   const day = Math.floor(now / DAY), week = Math.floor((day + 3) / 7);
   const ids = Object.keys(SHOP_ITEMS), feat = ids.filter(id => SHOP_ITEMS[id].feat);
-  const hero = seeded(feat.filter(id => SHOP_ITEMS[id].r !== 'pacote'), week);
+  const hero = rotate(feat.filter(id => SHOP_ITEMS[id].r !== 'pacote'), week, 1);
   const pack = feat.find(id => SHOP_ITEMS[id].r === 'pacote' && SHOP_ITEMS[id].until > now) || seeded(feat.filter(id => SHOP_ITEMS[id].r === 'pacote'), week)[0];
-  const rest = seeded(ids.filter(id => !SHOP_ITEMS[id].feat), week);
+  const rest = rotate(ids.filter(id => !SHOP_ITEMS[id].feat), week, 2);
   const featured = [hero[0], pack, rest[0], rest[1]];
-  const daily = seeded(ids.filter(id => !featured.includes(id) && SHOP_ITEMS[id].r !== 'pacote' && !SHOP_ITEMS[id].react), day).slice(0, 8); // reativa fica na prateleira dela
+  const daily = rotate(ids.filter(id => !featured.includes(id) && SHOP_ITEMS[id].r !== 'pacote' && !SHOP_ITEMS[id].react), day, 8); // reativa fica na prateleira dela
   const used = new Set([...featured, ...daily]);
-  const shelves = SHELVES.map(([k, n]) => ({ k, items: seeded(ids.filter(id => shelfOf(id) === k && !used.has(id)), week).slice(0, n) })).filter(s => s.items.length);
+  // 16/11 (pedido dele): o que esta na oferta do dia so aparece la (com o desconto). Confere pelo que a compra ENTREGA: o mesmo item
+  // vendido com outro codigo (sozinho ou dentro de pacote) tambem sai das prateleiras de baixo
+  const dayGives = new Set(daily.flatMap(id => SHOP_ITEMS[id]?.give || []));
+  const clash = (id) => (SHOP_ITEMS[id]?.give || []).some(g => dayGives.has(g));
+  const shelves = SHELVES.map(([k, n]) => ({ k, items: rotate(ids.filter(id => shelfOf(id) === k && !featured.includes(id)), week, n).filter(id => !used.has(id) && !clash(id)) })).filter(s => s.items.length);
   return { featured, daily, shelves, dayEnd: (day + 1) * DAY, weekEnd: ((week + 1) * 7 - 3) * DAY };
 }
