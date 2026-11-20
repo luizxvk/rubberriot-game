@@ -1,5 +1,6 @@
 // Mapas da Rubber Riot: dados puros (navegador e servidor) + fisica/raio por mapa.
 // Caixas sao AABB { min:[x,y,z], max:[x,y,z], kind, ... }. Cada sala carrega o seu mapa.
+import { makeTraps } from './bhtraps.js';
 import { MOBS } from './mobs.js';
 
 // conteiner aberto (05/11, pedido dele): da pra entrar, atravessa de ponta a ponta. Paredes finas e teto de verdade (colisao e tiro), as portas ficam
@@ -1545,21 +1546,266 @@ function cortejo() {
   };
 }
 
-const BUILDERS = { vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo, xilindro, trapiche, estande };
+// ---------- Pulo do Gato (Bunny Hop, 19/11, pedido dele): 5 percursos suspensos, cada um com tema proprio ----------
+// So faca, ninguem da dano; tocou o chao (y < BH_FALL) volta pro inicio. Cada plataforma e uma coluna do chao ate o topo
+// (o mapa.py desenha a coluna no tema: casinha, tambor de circo, pilha de caixote, viga de aco, borrao de nanquim).
+// Pulo do jogo: impulso 7,4 e gravidade 24 = 1,14 m de altura e ~5,9 m de alcance correndo. O gerador respeita: vao entre
+// bordas <= 5,2 m, subida <= 0,9 m, e subindo o vao cai pra no maximo 4,2 m. Mesmo percurso sempre (semente fixa)
+export const BH_FALL = 1.6;
+export const BHOP_MAPS = ['telhados', 'picadeiro', 'caixotes', 'montagem', 'nanquim'];
+// 19/11 b (pedido dele: "plataformas diversas em cada mapa"): cada percurso sorteia entre 4 tipos de plataforma com silhueta e tamanho
+// proprios. [tipo, [largura], [comprimento], peso, entra a partir de t]. O comprimento fica alinhado com o pulo (prancha, viga, pena)
+const BH_PROFILES = {
+  telhados: [['bhroof', [3.0, 4.6], [3.0, 4.6], 5, 0], ['bhchimney', [1.4, 1.8], [1.4, 1.8], 2, 0.25], ['bhtank', [2.6, 3.2], [2.6, 3.2], 2, 0.1], ['bhplank', [1.2, 1.4], [4.6, 6.0], 2, 0.35]],
+  picadeiro: [['bhdrum', [2.4, 3.6], [2.4, 3.6], 5, 0], ['bhpole', [1.3, 1.6], [1.3, 1.6], 2, 0.3], ['bhball', [2.2, 2.8], [2.2, 2.8], 2, 0.15], ['bhseesaw', [1.2, 1.4], [4.6, 5.6], 2, 0.4]],
+  caixotes: [['bhcrate', [2.2, 3.4], [2.2, 3.4], 5, 0], ['bhbarrel', [1.7, 2.1], [1.7, 2.1], 3, 0.15], ['bhpiling', [1.3, 1.5], [1.3, 1.5], 2, 0.35], ['bhgang', [1.2, 1.4], [5.0, 6.2], 2, 0.25]],
+  montagem: [['bhbeam', [1.2, 1.4], [4.4, 5.8], 4, 0], ['bhgear', [2.8, 3.4], [2.8, 3.4], 3, 0.1], ['bhmachine', [2.6, 3.2], [2.6, 3.2], 3, 0], ['bhpipe', [1.5, 1.8], [1.5, 1.8], 2, 0.35]],
+  nanquim: [['bhink', [2.2, 3.0], [2.2, 3.0], 5, 0], ['bhdrop', [1.4, 1.7], [1.4, 1.7], 3, 0.2], ['bhnib', [1.2, 1.3], [4.2, 5.4], 2, 0.3], ['bhcloud', [3.6, 4.4], [3.6, 4.4], 2, 0]],
+};
+function bhCourse(A, o) {
+  const { boxes, box } = builder(A);
+  let s = o.seed >>> 0; const R = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const L = (a, b, t) => a + (b - a) * t;
+  let x = o.sx, z = o.sz, y = o.y0, dir = o.dir, hw = 3, hd = 3;
+  box(x, z, 6, 6, y, 0, 'bhstart', { skin: o.skin });
+  const plats = [{ x, z, w: 6, d: 6, y, dr: dir }]; // 19/11: armadilhas (bhtraps.js) leem o percurso
+  const placed = [[x, z, 3, 3]], spawns = [[x - 1.4, z - 1.4], [x + 1.4, z - 1.4], [x - 1.4, z + 1.4], [x + 1.4, z + 1.4]], start = [x, y, z];
+  const clear = (cx, cz, w, d) => placed.slice(0, -1).every(([px, pz, pw, pd]) => Math.abs(px - cx) > pw + w / 2 + 2.2 || Math.abs(pz - cz) > pd + d / 2 + 2.2);
+  // vao REAL entre as bordas (na diagonal conta os dois eixos): anda o centro na direcao ate o vao bater no alvo
+  const edgeGap = (cx, cz, w, d) => Math.hypot(Math.max(0, Math.abs(cx - x) - hw - w / 2), Math.max(0, Math.abs(cz - z) - hd - d / 2));
+  const spot = (dr, w, d, gap) => { let cd = 0.5; for (let k = 0; k < 400; k++, cd += 0.05) { const cx = x + Math.sin(dr) * cd, cz = z + Math.cos(dr) * cd; if (edgeGap(cx, cz, w, d) >= gap) return [cx, cz]; } return null; };
+  const tryPlace = (gap, pw, pl, turn) => { // pw = largura, pl = comprimento (alinhado com a direcao do pulo)
+    for (let k = 0; k < 18; k++) {
+      const dr = dir + (k ? (R() - 0.5) * 2.6 : (R() - 0.5) * turn);
+      const along = Math.abs(Math.sin(dr)) > Math.abs(Math.cos(dr));
+      const w = along ? pl : pw, d = along ? pw : pl;
+      const c = spot(dr, w, d, gap); if (!c) continue;
+      const [cx, cz] = c;
+      if (Math.abs(cx) + w / 2 > A - 4 || Math.abs(cz) + d / 2 > A - 4 || !clear(cx, cz, w, d)) continue;
+      return { cx, cz, w, d, dr };
+    }
+    return null;
+  };
+  // 19/11 c (pedido dele: "cada fase com distancia diferente, todas longas, seja criativo"): cada percurso tem um FORMATO.
+  // shape(i, t) devolve a direcao que o percurso quer seguir agora; o sorteio so mexe um pouco em volta dela
+  // pente (comb): fileiras compridas indo e voltando, com uma curta de lado entre elas (row plataformas, cross de lado)
+  const comb = (i, wig) => { const per = o.row + o.cross, k = Math.floor(i / per), m = i % per; return m < o.row ? o.dir + (k % 2 ? Math.PI : 0) + (wig ? Math.sin(m * 0.55) * wig : 0) : o.dir + o.side * Math.PI / 2; };
+  const SHAPES = {
+    zigzag: (i) => o.dir + (Math.floor(i / 7) % 2 ? 0.95 : -0.95), // vai e volta pela vila, de 7 em 7 casas
+    spiral: (i, t) => { const r = Math.hypot(x, z) || 1, R0 = L(A - 10, 14, t), tan = Math.atan2(x, z) + Math.PI / 2 * o.spin; return tan + Math.max(-0.7, Math.min(0.7, (r - R0) * 0.05)) * o.spin; }, // orbita o centro fechando a roda
+    snake: (i) => comb(i, 0.55), // serpente: fileiras ondulando
+    square: (i) => comb(i, 0), // esteira: retas e curva de 90 graus
+    loops: (i, t) => { const r = Math.hypot(x, z) || 1, R0 = L(10, A - 12, t), tan = Math.atan2(x, z) + Math.PI / 2 * o.spin; return tan - Math.max(-0.7, Math.min(0.7, (R0 - r) * 0.05)) * o.spin + 0.45 * Math.sin(i * 0.42); }, // nanquim: redemoinho abrindo do centro pra fora, ondulando
+  };
+  const shapeDir = SHAPES[o.shape];
+  let st = (o.seed * 7919 + 17) >>> 0; const RT = () => ((st = (Math.imul(st, 1664525) + 1013904223) >>> 0) / 4294967296);
+  let lastTrap = -9, miss = 0;
+  for (let i = 0; i < o.n && miss < 60; i++) {
+    const t = i / Math.max(1, o.n - 1);
+    if (shapeDir) {
+      let want = shapeDir(i, t);
+      const edge = Math.max(Math.abs(x), Math.abs(z)) - (A - 16); if (edge > 0 && o.shape !== 'snake' && o.shape !== 'square') { const c = Math.atan2(-x, -z); let e = c - want; e = Math.atan2(Math.sin(e), Math.cos(e)); want += e * Math.min(1, edge / 8); }
+      let d = want - dir; d = Math.atan2(Math.sin(d), Math.cos(d)); dir += d * 0.7;
+    }
+    // 19/11 c (pedido dele: armadilha em base pequena derrubava quase sempre): plataforma de armadilha nasce LARGA
+    const trapHere = !!o.trapEvery && i >= 3 && i < o.n - 2 && i - lastTrap >= 2 && RT() < o.trapEvery;
+    let rise = (R() - 0.45) * 2 * o.rise; if (y + rise > o.y0 + (o.yUp || 7)) rise = -Math.abs(rise); if (o.climb) rise += o.climb; if (y + rise < Math.max(3, o.y0 - 2.5)) rise = Math.abs(rise); // nunca perto da linha de queda (BH_FALL)
+    rise = Math.max(-1.6, Math.min(0.9, rise));
+    const gapMax = rise > 0.45 ? Math.min(4.1, o.gap[1]) : o.gap[1], gap = Math.min(gapMax, L(o.gap[0], gapMax, t) * (0.88 + R() * 0.24));
+    const prof = (BH_PROFILES[o.skin] || []).filter(q => t >= q[4]), tot = prof.reduce((a, q) => a + q[3], 0);
+    let pick = null; if (tot) { let r = R() * tot; pick = prof.find(q => (r -= q[3]) < 0) || prof[0]; }
+    if (trapHere && prof.length) pick = prof[0]; // armadilha: o tipo principal do tema (casinha, tambor, caixote, viga, borrao)
+    const shrink = L(1, 0.85, t); let pw = pick ? L(pick[1][0], pick[1][1], R()) * shrink : L(o.size[1], o.size[0], t), pl = pick ? L(pick[2][0], pick[2][1], R()) * shrink : pw;
+    if (trapHere) { pw = Math.max(pw, 4.2); pl = Math.max(pl, 4.2); }
+    const P = tryPlace(gap, pw, pl, o.turn);
+    if (!P) { i--; miss++; dir = Math.atan2(-x, -z); continue; } // encurralado: vira pro meio e tenta de novo
+    y = Math.round((y + rise) * 10) / 10; dir = P.dr;
+    box(P.cx, P.cz, P.w, P.d, y, 0, pick ? pick[0] : o.kind, { skin: o.skin, seed: i });
+    placed.push([P.cx, P.cz, P.w / 2, P.d / 2]); plats.push({ x: P.cx, z: P.cz, w: P.w, d: P.d, y, dr: P.dr, trap: trapHere }); if (trapHere) lastTrap = i; x = P.cx; z = P.cz; hw = P.w / 2; hd = P.d / 2;
+  }
+  // chegada: 6x6, na mesma altura da ultima, pela mesma regra (vao de 2,6 m, sem encostar em nada)
+  let G = null; for (let k = 0; k < 80 && !G; k++) { G = tryPlace(2.6 + (k > 40 ? 0.8 : 0), 6, 6, 1.2); if (!G) dir += 0.7; }
+  let gx, gz, gw = 6, gd = 6;
+  if (G) { gx = G.cx; gz = G.cz; box(gx, gz, 6, 6, y, 0, 'bhgoal', { skin: o.skin }); }
+  else { const lb = boxes.pop(); plats.pop(); gx = (lb.min[0] + lb.max[0]) / 2; gz = (lb.min[2] + lb.max[2]) / 2; gw = Math.max(4, lb.max[0] - lb.min[0]); gd = Math.max(4, lb.max[2] - lb.min[2]); box(gx, gz, gw, gd, y, 0, 'bhgoal', { skin: o.skin }); } // 19/11 c: sem lugar pra chegada (encurralado) = a ultima plataforma vira a chegada
+  // yaw do jogo: frente = (-sin, -cos); o gerador anda em (sin, cos) -> meia volta pra nascer olhando pro percurso
+  const f = placed[1] || placed[0];
+  // armadilhas com sorteio PROPRIO (o do percurso nao muda: as plataformas estao assadas no .glb do mapa)
+  let s2 = (o.seed * 7919 + 17) >>> 0; const R2 = () => ((s2 = (Math.imul(s2, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const traps = makeTraps(plats, R2);
+  return { traps, boxes, start, spawns, goal: { min: [gx - gw / 2, y - 0.2, gz - gd / 2], max: [gx + gw / 2, y + 3.5, gz + gd / 2] }, startYaw: Math.atan2(-(f[0] - start[0]), -(f[1] - start[2])) };
+}
+function bhMap(id, A, o, theme) {
+  const C = bhCourse(A, o);
+  return { id, arena: A, boxes: C.boxes, theme, fixedSpawns: true, noGround: true,
+    spawns: { red: C.spawns, blue: C.spawns, ffa: C.spawns }, bh: { start: C.start, goal: C.goal, fall: BH_FALL, yaw: C.startYaw, traps: C.traps, skin: o.skin },
+    flagBase: { red: [C.start[0], C.start[1], C.start[2]], blue: [C.start[0], C.start[1], C.start[2]] }, zones: [], pickups: [] };
+}
+// 19/11 c: todos LONGOS e de tamanho diferente (antes ~190 m cada). Percurso = soma das distancias entre plataformas
+// 1) Telhados da Vila (~420 m): zigue-zague de casinha em casinha, o mais facil
+function telhados() { return bhMap('telhados', 84, { seed: 11, sx: -72, sz: -72, y0: 6, dir: 0.8, n: 60, gap: [2.2, 4.4], size: [3.0, 4.6], rise: 0.8, turn: 0.5, kind: 'bhroof', skin: 'telhados', trapEvery: 0.5, shape: 'zigzag' }, 'bh_telhados'); }
+// 2) Picadeiro (~500 m): espiral fechando em volta do picadeiro e SUBINDO ate o alto da lona
+function picadeiro() { return bhMap('picadeiro', 84, { seed: 23, sx: -10, sz: -74, y0: 4, dir: 1.57, n: 70, gap: [2.4, 4.6], size: [2.4, 3.6], rise: 0.6, climb: 0.18, yUp: 16, turn: 0.5, kind: 'bhdrum', skin: 'picadeiro', shape: 'spiral', spin: 1, trapEvery: 0.6 }, 'bh_picadeiro'); }
+// 3) Caixotes do Cais (~560 m): serpente comprida sobre o mar dos tubaroes
+function caixotes() { return bhMap('caixotes', 92, { seed: 37, sx: -80, sz: 0, y0: 4, dir: 1.57, n: 78, gap: [2.0, 4.8], size: [2.2, 3.4], rise: 0.7, turn: 0.5, kind: 'bhcrate', skin: 'caixotes', shape: 'snake', row: 22, cross: 3, side: 1, trapEvery: 0.6 }, 'bh_caixotes'); }
+// 4) Linha de Montagem (~620 m): retas de esteira com curva de 90 graus, sobe e desce
+function montagem() { return bhMap('montagem', 92, { seed: 53, sx: 78, sz: -78, y0: 7, dir: -1.57, n: 86, gap: [2.0, 4.6], size: [2.2, 3.2], rise: 0.8, turn: 0.4, kind: 'bhbeam', skin: 'montagem', shape: 'square', row: 18, cross: 3, side: 1, trapEvery: 0.6 }, 'bh_montagem'); }
+// 5) Nuvens de Nanquim (~720 m): lacos que trocam de sentido, plataformas pequenas e vaos no limite (o mais dificil)
+function nanquim() { return bhMap('nanquim', 100, { seed: 72, sx: 0, sz: 0, y0: 8, dir: -2.4, n: 100, gap: [2.6, 5.2], size: [1.9, 3.0], rise: 0.9, turn: 0.6, kind: 'bhink', skin: 'nanquim', trapEvery: 0.75, shape: 'loops', spin: -1 }, 'bh_nanquim'); }
+
+// ---------- Expresso Dourado (id expresso; 19/11, pedido dele: Roubo ao Trem) ----------
+// Trem parado no meio do patio, de leste a oeste: locomotiva, tender, VAGAO-FORTE (dinheiro, arromba), VAGAO DE LUXO
+// (joias, pesadas), passageiros e breque. Vagoes BEM largos (5,6 m; 5,1 m livres por dentro, 3,6 m de pe-direito), porta
+// dos dois lados, porta nas pontas e passarela entre um vagao e outro; entre os vagoes da pra cruzar o trilho pelos lados
+// da passarela (1,9 m de cada lado). Norte: plataforma da estacao no nivel do piso do trem (a defesa nasce atras da
+// estacao). Sul: patio de carga com 2o trilho e vagao-plataforma, conteineres, guarita e o caminhao de fuga.
+export const TRAIN = { CW: 2.8, FY: 1.0, WH: 4.6, T: 0.25 };
+function expresso() {
+  const A = 42, { boxes, box, stairs, walls, walkIn } = builder(A);
+  walls();
+  const { CW, FY, WH, T } = TRAIN, DH = 2.6, PLAT = [-30, 29]; // porta: 2,6 m; plataforma da estacao de x -30 a 29
+  const onPlat = (x) => x > PLAT[0] + 1 && x < PLAT[1] - 1;
+  // 19/11 b (pedido dele: o trem CHEGA e VAI EMBORA): portas fora de M.boxes (o jogo fecha/abre: heist.js trainSets) e toda peca
+  // do trem marcada train: 1 (some da colisao quando o trem nao esta na estacao; vai num .glb proprio que anda)
+  const doors = [], door = (cx, cz, w, d) => doors.push({ min: [cx - w / 2, FY, cz - d / 2], max: [cx + w / 2, FY + DH, cz + d / 2], kind: 'tdoor', train: 1 });
+  // parede de um lado do vagao (z = zc), de x0 a x1, com aberturas [a, b, 'door'|'win']
+  const sideWall = (x0, x1, zc, ops, col, skin) => {
+    let x = x0; const y0 = FY;
+    const seg = (a, b, ya, yb) => { if (b - a > 0.05 && yb - ya > 0.05) box((a + b) / 2, zc, b - a, T, yb - ya, ya, 'twall', { col, skin }); };
+    for (const [a, b, k] of ops.sort((p, q) => p[0] - q[0])) {
+      seg(x, a, y0, WH);
+      const top = k === 'door' ? y0 + DH : y0 + 2.3, bot = k === 'door' ? y0 : y0 + 1.1;
+      seg(a, b, y0, bot); seg(a, b, top, WH);
+      x = b;
+    }
+    seg(x, x1, y0, WH);
+  };
+  const endWall = (xc, hz, col, skin) => { // parede da ponta com porta de 1,6 m no meio
+    const a = 0.8; box(xc, -(hz + a) / 2, T, hz - a, WH - FY, FY, 'twall', { col, skin }); box(xc, (hz + a) / 2, T, hz - a, WH - FY, FY, 'twall', { col, skin });
+    box(xc, 0, T, 2 * a, WH - FY - DH, FY + DH, 'twall', { col, skin });
+  };
+  // degraus do chao ate o piso (2 de 0,5 m) na porta; s = -1 sul, +1 norte
+  const doorSteps = (xc, w, s, hz = CW) => stairs(xc, s * (hz + 1.0), 0, -s, w, 2, 0.5, 0.5, 'tstep');
+  // vagao: chassi (piso em FY), paredes, teto; portas dos lados em `doors` ([x, largura, lado]), janelas no resto
+  const car = (x0, x1, skin, col, o = {}) => {
+    const cx = (x0 + x1) / 2, L = x1 - x0, hz = CW;
+    box(cx, 0, L, 2 * hz, FY, 0, 'tchassis', { skin });
+    for (const s of [-1, 1]) {
+      const ds = o.doors.filter(d => d[2] === s), ops = ds.map(([x, w]) => [x - w / 2, x + w / 2, 'door']);
+      if (o.win) { // janelas de 1,4 m entre as portas, com 0,7 m de coluna
+        const free = (a, b) => !ops.some(p => b > p[0] - 0.6 && a < p[1] + 0.6);
+        for (let a = x0 + 1.0; a + 1.4 <= x1 - 1.0; a += 2.1) if (free(a, a + 1.4)) ops.push([a, a + 1.4, 'win']);
+      }
+      sideWall(x0, x1, s * (hz - T / 2), ops, col, skin);
+      for (const [x, w] of ds) if (s < 0 || !onPlat(x)) doorSteps(x, w, s, hz);
+    }
+    endWall(x0 + T / 2, hz - T, col, skin); endWall(x1 - T / 2, hz - T, col, skin);
+    for (const s of [-1, 1]) for (const [x, w] of o.doors.filter(d => d[2] === s)) door(x, s * (hz - T / 2), w, T);
+    door(x0 + T / 2, 0, T, 1.6); door(x1 - T / 2, 0, T, 1.6);
+    box(cx, 0, L + 0.3, 2 * hz + 0.3, 0.25, WH, 'troof', { skin, col });
+  };
+  const gang = (a, b) => box((a + b) / 2, 0, b - a, 1.8, 0.12, FY - 0.12, 'tgang'); // passarela entre vagoes
+  // ---- o trem (de oeste pra leste) ----
+  const i0 = boxes.length;
+  car(-39, -33, 'breque', 0xa8453a, { doors: [[-36, 1.8, -1], [-36, 1.8, 1]], win: true });
+  box(-36, 0, 2.2, 2.4, 1.05, WH + 0.25, 'tcupola', { col: 0xa8453a }); // guarita do breque no teto
+  box(-37.8, 1.6, 0.9, 0.9, 1.2, FY, 'tstove');
+  gang(-33, -31);
+  car(-31, -17, 'passageiros', 0x4f7a5a, { doors: [[-27.8, 2, -1], [-20.2, 2, -1], [-27.8, 2, 1], [-20.2, 2, 1]], win: true });
+  for (const x of [-25.6, -24, -22.4]) for (const s of [-1, 1]) { box(x - 0.1, s * 1.75, 0.8, 1.6, 0.5, FY, 'tseat'); box(x + 0.4, s * 1.75, 0.2, 1.6, 1.05, FY, 'tseatb'); } // bancos (assento + encosto; corredor de 1,9 m)
+  box(-24, 0, 12.6, 2.4, 0.4, WH + 0.25, 'troofc', { col: 0x4f7a5a }); // lanternim do teto
+  gang(-17, -15);
+  car(-15, -1, 'luxo', 0x6e2a32, { doors: [[-12.8, 2, -1], [-3.2, 2, -1], [-12.8, 2, 1], [-3.2, 2, 1]], win: true });
+  for (const x of [-10.2, -5.8]) box(x, 2.05, 1.6, 0.8, 1.05, FY, 'tcase'); // vitrines das joias (parede norte)
+  box(-8, -2.0, 3.2, 0.6, 0.45, FY, 'tsofa'); box(-8, -2.425, 3.2, 0.25, 0.95, FY, 'tsofab'); // sofa (assento + encosto na parede sul, entre as portas)
+  box(-8, 0, 12.6, 2.4, 0.4, WH + 0.25, 'troofc', { col: 0x6e2a32 });
+  box(-14.2, 1.6, 0.9, 1.6, 1.15, FY, 'tbar'); // balcao do bar
+  gang(-1, 1);
+  car(1, 13, 'forte', 0x5d6066, { doors: [[3.4, 1.8, 1], [10.6, 1.8, -1]] }); // forte: sem janela, porta estreita, uma de cada lado (desencontradas)
+  box(7, 1.9, 2.2, 1.3, 2.4, FY, 'tsafe'); // cofre na parede norte (de frente pra porta do sul)
+  box(3.6, -2.2, 2.6, 0.7, 2.0, FY, 'tshelf'); // prateleira de malotes
+  box(12, 2.0, 1.4, 1.0, 0.8, FY, 'tgold'); // pilha de barras
+  gang(13, 15);
+  box(18, 0, 6, 4.4, FY, 0, 'tchassis', { skin: 'tender' }); box(18, 0, 6, 4.4, 2.2, FY, 'ttender');
+  gang(21, 23);
+  // locomotiva: cabine andavel (x 23-28), caldeira (28-37), chamine, domo e limpa-trilhos
+  const LC = 0x2e2a28;
+  box(30.5, 0, 15, 4.4, FY, 0, 'tchassis', { skin: 'loco' });
+  for (const s of [-1, 1]) sideWall(23, 28, s * (2.2 - T / 2), [[24, 25.8, 'door']], LC, 'loco');
+  doorSteps(24.9, 1.8, -1, 2.2);
+  endWall(23 + T / 2, 2.2 - T, LC, 'loco'); box(28 - T / 2, 0, T, 4.4 - 2 * T, 3.4, FY, 'twall', { col: LC, skin: 'loco' });
+  box(25.5, 0, 5.3, 4.7, 0.25, 4.4, 'troof', { skin: 'loco', col: LC });
+  box(32.5, 0, 9, 3, 3, FY, 'tboiler'); box(36, 0, 1.2, 1.2, 1.6, 4.0, 'tstack'); box(32.6, 0, 1.2, 1.2, 0.7, 4.0, 'tdome');
+  box(38.7, 0, 1.4, 3.2, 0.9, 0, 'tcow');
+  for (const s of [-1, 1]) door(24.9, s * (2.2 - T / 2), 1.8, T); door(23 + T / 2, 0, T, 1.6);
+  for (let i = i0; i < boxes.length; i++) boxes[i].train = 1;
+  // tuneis nas duas pontas (so enfeite: boca de pedra com o fundo preto; solido, ninguem entra). O trem sai de um e entra no outro
+  box(-41.2, 0, 1.6, 9, 7.5, 0, 'ttunnel'); box(41.2, 0, 1.6, 9, 7.5, 0, 'ttunnel');
+  // ---- norte: plataforma da estacao no nivel do piso, cobertura, estacao e cabine de sinal ----
+  box((PLAT[0] + PLAT[1]) / 2, 5.95, PLAT[1] - PLAT[0], 6.2, FY, 0, 'tplat');
+  stairs(PLAT[0] - 1, 6, 1, 0, 4, 2, 0.5, 0.5, 'tstep'); stairs(PLAT[1] + 1, 6, -1, 0, 4, 2, 0.5, 0.5, 'tstep');
+  for (const x of [-16, 0, 16]) stairs(x, 10.05, 0, -1, 3, 2, 0.5, 0.5, 'tstep');
+  for (const x of [-26, -13, 0, 13, 26]) box(x, 8.4, 0.3, 0.3, WH - FY, FY, 'post');
+  box(0, 6.4, 56, 5.6, 0.2, WH, 'tcanopy');
+  for (const x of [-21, -6, 8, 21]) box(x, 7.6, 2.4, 0.7, 0.85, FY, 'bench');
+  walkIn(0, 17, 18, 8, '-z', { col: 0xd9b48f }); // estacao (porta pra plataforma)
+  walkIn(30, 20, 8, 7, '-x', { floors: 2, col: 0xc98f6a }); // cabine de sinal (2 andares: vigia do patio)
+  box(-30, 21, 5, 5, 8, 0, 'tank'); // caixa d'agua da locomotiva
+  for (const [x, z] of [[-18, 27], [-20.5, 27.4], [14, 28], [-6, 30], [22, 31]]) box(x, z, 2.2, 2.2, 1.5, 0, 'crate');
+  for (const [x, z] of [[-36, 12], [37, 12], [9, 24], [-12, 24]]) box(x, z, 1.3, 1.3, 1.3, 0, 'barrel');
+  box(-36, 30, 6, 2.5, 2.6, 0, 'container', { seed: 4 });
+  // ---- sul: patio de carga (2o trilho em z -14 com vagao-plataforma), conteineres, guarita e o caminhao de fuga ----
+  box(-3, -14, 14, 3, 1.1, 0, 'tflat');
+  for (const x of [-7.5, 1.5]) box(x, -14, 2.2, 2.2, 1.5, 1.1, 'crate');
+  box(-24, -20, 6, 2.5, 2.6, 0, 'container', { seed: 1 }); box(24, -21, 2.5, 6, 2.6, 0, 'container', { seed: 3 }); box(24, -21, 2.5, 6, 2.6, 2.6, 'container', { seed: 5 });
+  walkIn(-16, -28, 7, 6, '+z', { col: 0xe3cfae }); // guarita do patio
+  box(14, -8, 6, 1.1, 1.2, 0, 'tsleepers'); // pilha de dormentes
+  for (const [x, z] of [[-30, -8], [-34, -26], [12, -27], [31, -9], [-6, -24], [6, -21]]) box(x, z, 2.2, 2.2, 1.5, 0, 'crate');
+  for (const [x, z] of [[-27, -32], [30, -32], [17, -17.5], [-19, -9]]) box(x, z, 1.3, 1.3, 1.3, 0, 'barrel');
+  for (const [x, z] of [[-10, -6], [10, -32], [-34, -18], [35, -28]]) box(x, z, 0.35, 0.35, 4.2, 0, 'lamp');
+  box(0, -36, 2.7, 5.1, 2.5, 0, 'truck', { seed: 0 }); // caminhao de fuga (modelo do Tripo no jogo)
+  return {
+    id: 'expresso', arena: A, boxes, theme: 'expresso', trainDoors: doors, trainX: [-39, 39.4],
+    heistPts: { vault: [7, -0.4], van: [0, -31.6], lux: [-8, -0.4], drop: 'truck' }, // dinheiro no vagao-forte, joias no luxo, entrega no caminhao
+    spawns: {
+      red: [[-8, -38.5], [8, -38.5], [-14, -37], [14, -37], [-21, -38], [21, -38], [-28, -37], [28, -37]],
+      blue: [[-8, 37.5], [8, 37.5], [-15, 37], [15, 37], [0, 38], [-25, 37], [26, 37], [-33, 36]],
+      ffa: [[-36, -36], [36, -36], [-36, 36], [36, 36], [0, -10], [-20, 12], [20, 12], [-30, -6], [32, -6], [0, 26]],
+    },
+    flagBase: { red: [0, 0, -30], blue: [0, 0, 32] },
+    zones: [{ id: 'A', pos: [-24, 0, -12], r: 4 }, { id: 'B', pos: [-8, FY, 0], r: 3 }, { id: 'C', pos: [20, 0, -12], r: 4 }],
+    pickups: [{ kind: 'hp', pos: [-30, 0, -20] }, { kind: 'hp', pos: [30, 0, -16] }, { kind: 'hp', pos: [-24, FY, 0] }, { kind: 'hp', pos: [0, 0, 24] }],
+  };
+}
+
+const BUILDERS = { telhados, picadeiro, caixotes, montagem, nanquim, vila, fabrica, fronteira, estaleiro, refinaria, ilha, bonde, apito, ferradura, tinteiro, deserto, docas, moeda, becos, feira, largo, cortejo, xilindro, trapiche, estande, expresso };
 // 13/11 (pedido dele): mapa que so roda em alguns modos. Fora deles nao aparece na lista nem no sorteio
 export const MAP_MODES = { xilindro: ['ffa', 'tdm', 'ctf', 'dom', 'gungame', 'infect'], estande: ['ffa'] }; // estande: so o Campo de treino (main.js startRange)
 export const mapAllows = (id, mode) => !MAP_MODES[id] || MAP_MODES[id].includes(mode);
 export const SMUGGLE_MAPS = ['docas', 'trapiche']; // Contrabando: Cais do Sol Poente e Trapiche
 export const PVE_ONLY = ['tinteiro']; // Noite dos Borroes: so a noite usa (e a noite so usa ele)
-export const HEIST_ONLY = ['ferradura', 'moeda', 'docas', 'trapiche']; // mapas de objetivo proprio (Cofre / Contrabando): fora da lista dos outros modos
+export const TRAIN_MAPS = ['expresso']; // Roubo ao Trem (19/11): Expresso Dourado
+export const HEIST_ONLY = ['ferradura', 'moeda', 'docas', 'trapiche', 'expresso']; // mapas de objetivo proprio (Cofre / Contrabando): fora da lista dos outros modos
 // Canyon Poeira (04/11): mapa grande so pra bandeira e dominacao (normal e blitz); nos outros modos nao entra
 export const BIG_OBJ_ONLY = ['deserto', 'becos', 'feira', 'largo'], BIG_OBJ_MODES = ['ctf', 'dom']; // mapa feito pro Roube o Cofre (fora dele nao entra na lista)
 export const ESCORT_MAPS = ['bonde', 'apito', 'cortejo']; // mapas com trilho (so a escolta usa)
+// 19/11 (pedido dele: "a Casa da Moeda aparece no mata-mata"): UMA regra so de mapa x modo, usada pelo servidor (criar/configurar
+// sala), pelo lobby, pela tela dividida e pelo sorteio. Cada mapa de objetivo so no modo dele, e cada modo de objetivo so nos mapas dele
+const HEIST_PLAY = ['ferradura', 'moeda']; // = HEIST_MAPS (shared/heist.js)
+export function mapFitsMode(id, mode) {
+  if (!id || id === 'auto') return true;
+  if (id === 'estande') return false; // campo de treino abre por fora das listas
+  const own = { br: ['ilha'], borroes: PVE_ONLY, escort: ESCORT_MAPS, smuggle: SMUGGLE_MAPS, heist: HEIST_PLAY, trem: TRAIN_MAPS, bhop: BHOP_MAPS }[mode];
+  if (own) return own.includes(id);
+  if (BHOP_MAPS.includes(id) || id === 'ilha' || PVE_ONLY.includes(id) || ESCORT_MAPS.includes(id) || SMUGGLE_MAPS.includes(id) || HEIST_ONLY.includes(id)) return false;
+  if (BIG_OBJ_ONLY.includes(id) && !BIG_OBJ_MODES.includes(mode)) return false;
+  return mapAllows(id, mode);
+}
 // mapas que aparecem na escolha do lobby (a ilha e so do battle royale)
 export const PICK_MAPS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria'];
 export const MAP_IDS = Object.keys(BUILDERS);
 // mapa sugerido por modo
-export const MODE_MAP = { borroes: 'tinteiro', smuggle: 'docas', heist: 'ferradura', escort: 'bonde', br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
+export const MODE_MAP = { trem: 'expresso', bhop: 'telhados', borroes: 'tinteiro', smuggle: 'docas', heist: 'ferradura', escort: 'bonde', br: 'ilha', ffa: 'fabrica', gungame: 'estaleiro', tdm: 'vila', dom: 'vila', ctf: 'fronteira', infect: 'refinaria' };
 // pontos de bomba (x, z) perto do lado da defesa (azul nasce em +z); a altura sai da grade
 export const BOMB_SITES = {
   vila: { A: [-20, 27], B: [20, 27] },
@@ -1570,7 +1816,7 @@ export const BOMB_SITES = {
   ferradura: { A: [0, -2], B: [-12.5, 8] }, // cofre no fosso do subsolo
 };
 // arma no chao: so UMA minigun, no meio de cada mapa (as outras sairam). Vida continua onde estava.
-const MINIGUN_AT = { xilindro: [6.6, 3.7, 0], trapiche: [0, 0, 13.5], largo: [0, 1.5, 0], cortejo: [-34, 0.5, 34], moeda: [0, 0, -16], docas: [0, 0, 0], deserto: [0, 3.3, 0], ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
+const MINIGUN_AT = { expresso: [-3, 1.1, -14], xilindro: [6.6, 3.7, 0], trapiche: [0, 0, 13.5], largo: [0, 1.5, 0], cortejo: [-34, 0.5, 34], moeda: [0, 0, -16], docas: [0, 0, 0], deserto: [0, 3.3, 0], ferradura: [0, 0.5, 31], apito: [10, 3, -5], bonde: [-28, 5.5, -26], vila: [0, 1.5, 0], fabrica: [0, 3, 0], fronteira: [0, 1.2, 0], estaleiro: [0, 1.2, 0], refinaria: [-3, 3, -3] };
 // mapa apertado: abate sai mais rapido, entao a meta (e o tempo pra chegar nela) sobe.
 // So nos modos por abate (contra todos e mata-mata); vila e fronteira ficam como sao.
 const MAP_PACE = { xilindro: { goal: 1.25, time: 1.15 }, estaleiro: { goal: 1.5, time: 1.25 }, fabrica: { goal: 1.25, time: 1.15 }, refinaria: { goal: 1.25, time: 1.15 } };

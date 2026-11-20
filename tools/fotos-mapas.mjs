@@ -8,7 +8,14 @@ import { standable, floorAt } from '../shared/nav.js';
 const require = createRequire('file:///D:/Desktop/fokusstudios/template-magazine/package.json');
 const { chromium } = require('playwright');
 const OVERRIDE = { trapiche: { c: [-2.6, 2, -23], t: [1, 2.4, 14] }, xilindro: { c: [-2.4, 2, -21], t: [1.5, 2.6, 6] }, estaleiro: { c: [-19, 2, 11], t: [6, 2.2, -3] }, bonde: { c: [14, 2, 30], t: [20, 1.6, -8] } }; // { mapa: { c: [x,y,z], t: [x,y,z] } }: ajuste manual de um mapa
+function bhView(M) { // bunny hop: atras e acima da largada, olhando o comeco do percurso (o bestView pula altura > 3,2 m)
+  const s = M.bh.start, fx = -Math.sin(M.bh.yaw), fz = -Math.cos(M.bh.yaw), T = M.bh.traps.slice(0, 3);
+  const t = T.length ? [T.reduce((a, q) => a + q.x, 0) / T.length, 0, T.reduce((a, q) => a + q.z, 0) / T.length] : [s[0] + fx * 25, 0, s[2] + fz * 25];
+  t[1] = (T[0]?.top ?? s[1]) - 1;
+  return { c: [s[0] - fx * 5, s[1] + 5.5, s[2] - fz * 5], t, score: 0 };
+}
 function bestView(M) {
+  if (M.bh) return bhView(M);
   const anchors = [...(M.zones || []).map(z => z.pos), ...Object.values(M.flagBase || {}), [0, 0, 0]];
   let best = null;
   for (const a of anchors) for (let k = 0; k < 16; k++) for (const d of [9, 13, 18]) {
@@ -32,7 +39,9 @@ function bestView(M) {
   }
   return best;
 }
-const list = process.argv[2] ? process.argv[2].split(',') : MAP_IDS;
+// expresso (19/11): o trem so entra na partida (cena do roubo), entao a foto dele sai de uma partida de verdade no Chrome
+// (posicao [39, 3.6, -15] olhando pra [-2, 1], HUD e maos escondidos). Aqui ele so roda se pedir pelo nome.
+const list = process.argv[2] ? process.argv[2].split(',') : MAP_IDS.filter(id => id !== 'expresso');
 fs.mkdirSync('public/maps', { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', args: ['--use-angle=d3d11', '--enable-gpu'] });
 const p = await b.newPage({ viewport: { width: 640, height: 360 }, deviceScaleFactor: 1 });

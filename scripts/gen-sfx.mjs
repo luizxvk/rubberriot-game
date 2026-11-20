@@ -38,6 +38,13 @@ const SFX = {
   headshot: ['cartoon bonk on head with bell ding', 0.6],
   killstamp: ['cartoon cymbal crash short with honk', 0.8],
   music: ['1930s ragtime jazz piano and brass loop, upbeat, old gramophone sound, instrumental', 20],
+  // Roubo ao Trem (19/11 b): chegada e partida do trem (suaves, sem estourar)
+  train_chug: ['old steam locomotive chugging steadily on rails, rhythmic choo choo puffs and wheel clacks, smooth, medium distance, no whistle, no music', 4],
+  train_brake: ['steam train braking to a stop at a station, long soft metal brake squeal fading with a big gentle steam hiss at the end, no whistle', 3.5],
+  train_door_open: ['old wooden train carriage doors sliding open with a soft clunk, several doors, gentle', 1.5],
+  train_door_close: ['old train carriage doors sliding shut one after another, soft wooden thuds and latch clicks', 1.8],
+  train_depart: ['steam locomotive starting to leave the station, slow heavy puffs speeding up, wheels starting to roll, smooth, no whistle', 4],
+  train_bell: ['old railway station bell ringing a few gentle times, brass, warm, short', 2],
   // 29/10: momentos que estavam mudos (contagem, inicio de rodada, fim, assistencia, renascer)
   tick: ['single cartoon wooden clock tick, short and dry, toy clock', 0.5],
   go: ['short cartoon referee whistle toot, playful, single blow', 0.6],

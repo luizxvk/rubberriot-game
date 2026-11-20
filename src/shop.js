@@ -349,11 +349,11 @@ function eliteSection() {
     </section>`;
 }
 function tile(id, size, newTag) {
-  const it = SHOP_ITEMS[id], mine = owned(id), name = itemName(id);
+  const it = SHOP_ITEMS[id], mine = owned(id), name = itemName(id), ext = size === 'ext';
   return `<button class="shop-tile r-${it.r} ${size} ${mine ? 'owned' : ''}" data-item="${id}" aria-label="${name}, ${t('rar_' + it.r)}, ${mine ? t('shopOwned') : fmt(price(id)) + ' Zions Points'}">
     <span class="st-bg"></span><span class="st-art">${svg(it.kind)}</span>
     ${mine ? `<span class="st-tag own">${t('shopOwned')}</span>` : newTag ? `<span class="st-tag">${t('shopNew')}</span>` : ''}
-    <span class="st-foot"><b>${name}</b><small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && !eliteOnly(id) && cut(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : lockedElite(id) ? `<span class="st-elonly">${HEX}Elite+</span>` : (cut(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>` + (me?.elite ? `<i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '')}</em></span>
+    <span class="st-foot"><b>${name}</b>${ext ? `<span class="st-rar">${t('rar_' + it.r)}</span><span class="st-desc">${t('shd_' + it.kind)}</span>` : ''}<small>${kindName(id)}</small><em class="st-price ${!mine && !canRedeem(id) && !eliteOnly(id) && cut(id) ? 'deal' : ''}">${mine ? '' : canRedeem(id) ? t('shopRedeem') : lockedElite(id) ? `<span class="st-elonly">${HEX}Elite+</span>` : (cut(id) ? `<s>${fmt(basePrice(id))}</s>` : '') + `<span>${coin}${fmt(price(id))}</span>` + (me?.elite ? `<i class="el-off">${t('eliteOff', { n: 15 })}</i>` : '')}</em></span>
   </button>`;
 }
 
@@ -384,8 +384,8 @@ export function renderShop(boot) { // boot = chegou agora na tela: mostra o load
       <div class="shop-grid daily">${RT.daily.map(id => tile(id, '', false)).join('')}</div>
     </section>
     ${RT.shelves.map(s => `<section class="shop-sec" aria-labelledby="shopSh_${s.k}">
-      <header><h3 id="shopSh_${s.k}">${t('shopShelf_' + s.k)}</h3><span class="shop-left">${t('shopWeekly')}</span></header>
-      <div class="shop-grid">${s.items.map(id => tile(id, '', false)).join('')}</div>
+      <header><h3 id="shopSh_${s.k}">${t('shopShelf_' + s.k)}</h3><span class="shop-left">${t('shopDailyShelf')}</span></header>
+      <div class="shop-grid${s.items.length < 4 ? ' few' : ''}" style="--n:${s.items.length}">${s.items.map(id => tile(id, s.items.length < 4 ? 'ext' : '', false)).join('')}</div>
     </section>`).join('')}
     <p class="shop-note">${t('shopNote')}</p>`;
   pane.querySelectorAll('.shop-tile').forEach(b => {

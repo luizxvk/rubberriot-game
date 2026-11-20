@@ -6,19 +6,20 @@ import { audio } from './audio.js';
 import * as rovex from './rovex.js';
 import { TEAM_MAX, TEAM_MAX_BLITZ, MODES, BR } from '../shared/weapons.js';
 import { LIMIT_MODES, TIME_MODES, MAP_IDS, RANKED_MODES } from '../shared/core.js';
-import { HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, SMUGGLE_MAPS } from '../shared/map.js';
+import { HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, mapFitsMode, SMUGGLE_MAPS } from '../shared/map.js';
 import { HEIST_MAPS } from '../shared/heist.js';
 import { BLITZ_BASE, BLITZ_MAPS, SOON_MODES } from '../shared/weapons.js';
 import { currentEvent } from '../shared/events.js';
+import { modeSvg } from './modeicons.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const TIPS = 12;
 // categorias da tela de modos (03/11, pedido dele): ordem das abas e dos cartoes dentro de cada uma
 const MODE_CATS = [
-  ['especial', ['blitz', 'blitz_ctf', 'blitz_dom']], // primeiro (pedido dele 03/11)
-  ['casual', ['tdm', 'ffa', 'gungame', 'infect']],
-  ['competitivo', ['escort', 'heist', 'smuggle', 'ctf', 'dom', 'bomb']],
+  ['especial', ['pnb', 'blitz', 'blitz_ctf', 'blitz_dom']], // primeiro (pedido dele 03/11); Preto no Branco (hardcore) 19/11
+  ['casual', ['tdm', 'ffa', 'gungame', 'infect', 'bhop']],
+  ['competitivo', ['escort', 'heist', 'trem', 'smuggle', 'ctf', 'dom', 'bomb']],
   ['br', ['br', 'bounce', 'duo']],
   ['pve', ['borroes', 'arte']],
 ];
@@ -26,21 +27,21 @@ const HOT_MODES = ['ctf']; // selo "HOT" no cartao
 
 // linhas de opcao da partida: as mesmas no lobby e no "Alterar partida" (matchvote.js)
 export function cfgRows(c, mapNow = c.map) {
-    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce', night = raw === 'borroes' || raw === 'arte';
+    const raw = c.mode === 'duo' ? 'br' : c.mode, br = raw === 'br' || raw === 'bounce', night = raw === 'borroes' || raw === 'arte', bh = raw === 'bhop'; // 19/11: Pulo do Gato sem bot (sem linha de jogadores/dificuldade)
     const mins = (s) => t('cfgMin', { n: Math.round(s / 60) });
     const limits = [0, ...[0.5, 0.75, 1.5, 2, 3].map(k => Math.max(1, Math.round(c.defLimit * k / (c.defLimit >= 20 ? 5 : 1)) * (c.defLimit >= 20 ? 5 : 1)))].filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => x - y);
     return [
       ['mode', Object.keys(MODES).filter(k => !SOON_MODES.includes(k)), c.mode, (v) => modeName(v)],
-      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['auto', ...SMUGGLE_MAPS] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => x !== 'ilha' && x !== 'bonde' && x !== 'apito' && x !== 'cortejo' && !HEIST_ONLY.includes(x) && !PVE_ONLY.includes(x) && mapAllows(x, raw) && (!BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(raw)))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? (SMUGGLE_MAPS.includes(c.map) ? c.map : 'auto') /* 13/11: marcava o Cais mesmo com o Trapiche escolhido */ : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + mapNow))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
+      ['map', br ? ['ilha'] : night ? ['tinteiro'] : raw === 'escort' ? ['auto', 'bonde', 'apito', 'cortejo'] : raw === 'heist' ? ['auto', ...HEIST_MAPS] : raw === 'smuggle' ? ['auto', ...SMUGGLE_MAPS] : BLITZ_BASE[raw] ? ['auto', ...BLITZ_MAPS.filter(x => !BIG_OBJ_ONLY.includes(x) || BIG_OBJ_MODES.includes(BLITZ_BASE[raw]))] : ['auto', ...MAP_IDS.filter(x => mapFitsMode(x, MODES[raw]?.base || raw))], br ? 'ilha' : raw === 'heist' ? (HEIST_MAPS.includes(c.map) ? c.map : 'auto') : raw === 'smuggle' ? (SMUGGLE_MAPS.includes(c.map) ? c.map : 'auto') /* 13/11: marcava o Cais mesmo com o Trapiche escolhido */ : raw === 'escort' ? (['bonde', 'apito', 'cortejo'].includes(c.map) ? c.map : 'auto') : c.map, (v) => v === 'auto' ? `${esc(t('map_' + mapNow))} <small>${esc(t('cfgAutoTag'))}</small>` : esc(t('map_' + v)), true],
       // battle royale (os 3): sempre BR.field na ilha, travado (bots saem conforme entra gente)
       // horario (07/11, pedido dele): Roubo ao Cofre de dia ou de noite
       ...(!night ? [['tod', ['day', 'night'], c.tod || 'day', (v) => t(v === 'night' ? 'todNight' : 'todDay')]] : []),
-      br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)], // blitz: ate 24
+      ...(bh ? [] : [br ? ['players', [BR.field], BR.field, (v) => String(v)] : ['players', Array.from({ length: (c.cap || 16) - 1 }, (_, i) => i + 2), c.bots + 1, (v) => String(v)]]), // blitz: ate 24
       ...(LIMIT_MODES.includes(raw) ? [['limit', limits, c.limit || 0, (v) => v ? String(v) : t('cfgDef', { n: c.defLimit })]] : []),
       // Arte-Final: onda que vence a noite (10 a 50)
       ...(raw === 'arte' ? [['wave', [10, 15, 20, 25, 30, 40, 50], Math.max(10, Math.min(50, c.limit || MODES.arte.limit)), (v) => String(v)]] : []),
       ...(TIME_MODES.includes(raw) ? [['time', [0, 300, 600, 900, 1200, 1800], c.time || 0, (v) => v ? mins(v) : t('cfgDef', { n: mins(c.defTime) })]] : []),
-      ['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')],
+      ...(bh ? [] : [['difficulty', [0.7, 1, 1.35], c.difficulty, (v) => t(v < 0.9 ? 'easy' : v > 1.2 ? 'hard' : 'mid')]]),
       // rankeada na sala de amigos (02/11): linha SEMPRE a vista; nos modos sem rankeada fica travada e diz onde vale
       RANKED_MODES.includes(raw) ? ['ranked', [false, true], !!c.ranked, (v) => t(v ? 'cfgRkOn' : 'cfgRkOff')] : ['ranked', [false], false, () => t('cfgRkNo')],
       // evento de fim de semana: o host liga/desliga (so aparece quando tem evento no ar ou a sala ja esta nele)
@@ -188,7 +189,8 @@ export class Lobby {
       $('lbModes').dataset.cat = cat;
       $('lbModesSub').textContent = t('mcatd_' + cat);
       const list = MODE_CATS.find(([k]) => k === cat)[1].filter(k => MODES[k]);
-      g.innerHTML = list.map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}"${SOON_MODES.includes(k) ? ' class="soon" aria-disabled="true"' : ''}>${SOON_MODES.includes(k) ? `<i class="soon-pill">${esc(t('soonPill'))}</i>` : ''}${HOT_MODES.includes(k) ? `<i class="hot-pill">${esc(t('hotPill'))}</i>` : ''}<b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em>${BLITZ_BASE[k] ? `<i class="blitz-pill">${esc(t('blitzPill'))}</i>` : ''}<small>${esc(modeDesc(k))}</small></button>`).join('');
+      g.innerHTML = list.map(k => `<button role="radio" aria-checked="${k === c.mode}" data-m="${k}"${SOON_MODES.includes(k) ? ' class="soon" aria-disabled="true"' : ''}>${SOON_MODES.includes(k) ? `<i class="soon-pill">${esc(t('soonPill'))}</i>` : ''}${HOT_MODES.includes(k) ? `<i class="hot-pill">${esc(t('hotPill'))}</i>` : ''}<span class="md-head"><svg class="md-ico" viewBox="0 0 48 48" aria-hidden="true">${modeSvg(k)}</svg><span class="md-t"><b>${esc(modeName(k))}</b><em>${t(MODES[k].teams ? 'teams' : 'solo')}</em></span></span>${BLITZ_BASE[k] ? `<i class="blitz-pill">${esc(t('blitzPill'))}</i>` : ''}<small class="md-desc">${esc(modeDesc(k))}</small></button>`).join('');
+      this.autoDesc(g);
       for (const b of g.querySelectorAll('[data-m]')) b.onclick = () => {
         if (b.classList.contains('soon')) { audio.play('empty', { ui: true, vol: 0.4 }); return; } // PvE em breve
         const v = b.dataset.m; this.closeModes();
@@ -209,7 +211,29 @@ export class Lobby {
     audio.play('ui_click', { ui: true, vol: 0.6 });
     g.querySelector('[aria-checked="true"]')?.focus();
   }
-  closeModes() { $('lbModes').hidden = true; this.closeMaps(); }
+  closeModes() { $('lbModes').hidden = true; this.closeMaps(); cancelAnimationFrame(this.descRaf); this.descRaf = 0; }
+  // 19/11 (pedido dele): descricao que nao cabe no cartao rola sozinha devagar: para no topo pra ler, desce no ritmo de
+  // leitura, para no fim e volta. Mouse/dedo em cima pausa. So roda com o popup aberto
+  autoDesc(g) {
+    cancelAnimationFrame(this.descRaf);
+    const PX = 10, HOLD = 3000, ds = [...g.querySelectorAll('.md-desc')].map(el => ({ el, y: 0, wait: HOLD, hold: false }));
+    for (const d of ds) { d.el.onpointerenter = () => (d.hold = true); d.el.onpointerleave = () => (d.hold = false); d.el.onwheel = () => (d.wait = HOLD * 2); }
+    let last = performance.now();
+    const tick = (now) => {
+      if (!g.isConnected || $('lbModes').hidden) { this.descRaf = 0; return; }
+      const dt = Math.min(0.1, (now - last) / 1000); last = now;
+      for (const d of ds) {
+        const el = d.el, max = el.scrollHeight - el.clientHeight;
+        el.classList.toggle('more', max > 2 && el.scrollTop < max - 2);
+        if (max <= 2 || d.hold) continue;
+        if (d.wait > 0) { d.wait -= dt * 1000; if (d.wait <= 0 && d.y >= max) { d.y = 0; el.scrollTo({ top: 0, behavior: 'smooth' }); d.wait = HOLD; } continue; }
+        d.y = Math.min(max, Math.max(d.y, el.scrollTop) + PX * dt); el.scrollTop = d.y;
+        if (d.y >= max) d.wait = HOLD;
+      }
+      this.descRaf = requestAnimationFrame(tick);
+    };
+    this.descRaf = requestAnimationFrame(tick);
+  }
   // seletor de mapas (08/11, pedido dele): fotos em slide; a lista e a mesma da linha Mapa (respeita modo, blitz, escolta)
   openMaps(c, row) {
     audio.play('ui_click', { ui: true, vol: 0.6 });
@@ -347,22 +371,31 @@ export class Lobby {
 }
 
 // intertitulo de cinema mudo: mapa, modo, dica e a tira de filme enchendo (minimo ~1,6 s)
+// 19/11 (pedido dele: "a barra vai ate o fim e fica parada, como se algo carregasse"): a barra segue as ETAPAS de verdade
+// (loadProgress(k) em main.js: cortina, mapa, armas e bonecos, shaders). Entre uma etapa e outra ela anda devagar rumo a proxima
+// sem chegar nela; so enche de vez no hideLoading
+let ldGoal = 0, ldNext = 0, ldShown = 0, ldRaf = 0;
+export function loadProgress(k, next = k) { ldGoal = Math.max(ldGoal, k); ldNext = Math.max(ldNext, next, ldGoal); }
 export function runLoading({ map, mode, join = false, min = 1600 }) {
   $('ldMap').textContent = t('map_' + map);
   $('ldMode').textContent = join ? t('lbJoin') : modeName(mode);
   $('ldTip').textContent = t('tip' + (1 + Math.floor(Math.random() * TIPS)));
   const bar = $('ldBar');
-  bar.style.width = '0%';
+  bar.style.width = '0%'; ldGoal = 0; ldNext = 0.15; ldShown = 0;
   $('loading').hidden = false;
-  const t0 = performance.now();
-  return new Promise(res => {
-    const step = () => {
-      const k = Math.min(1, (performance.now() - t0) / min);
-      // enche rapido no comeco e assenta no fim, como carga de verdade
-      bar.style.width = (100 * (1 - (1 - k) ** 2.2)).toFixed(1) + '%';
-      if (k < 1) requestAnimationFrame(step); else setTimeout(res, 120);
-    };
-    step();
-  });
+  const t0 = performance.now(); let last = t0;
+  cancelAnimationFrame(ldRaf);
+  const step = (now = performance.now()) => {
+    if ($('loading').hidden) return;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (now - t0 < min) loadProgress(0.15 * Math.min(1, (now - t0) / min), 0.45); // a cortina e a 1a etapa
+    const cap = ldGoal + (ldNext - ldGoal) * 0.85; // ate a proxima etapa chegar, para antes dela
+    const want = Math.max(ldGoal, Math.min(cap, ldShown + dt * 0.06));
+    ldShown += (want - ldShown) * Math.min(1, dt * 8);
+    bar.style.width = (ldShown * 100).toFixed(1) + '%';
+    ldRaf = requestAnimationFrame(step);
+  };
+  step();
+  return new Promise(res => setTimeout(res, min + 120));
 }
-export function hideLoading() { $('loading').hidden = true; }
+export function hideLoading() { cancelAnimationFrame(ldRaf); const bar = $('ldBar'); if (bar) bar.style.width = '100%'; $('loading').hidden = true; }

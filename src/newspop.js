@@ -3,13 +3,12 @@
 // Abre sozinho uma vez por campanha (rr_news_seen) e de novo pelo cartao "Remasterizado" do carrossel de anuncios.
 // Regra do controle (vault controle-popup.md): role=dialog + hidden, fecha no .lb-x / Esc / B, o foco volta pra quem abriu.
 // Icones: Material Icons (Apache 2.0).
-import { t, wName } from './i18n.js';
+import { t, wName, modeName } from './i18n.js';
 import { partName } from './arsenal.js';
 import { audio } from './audio.js';
 import { me, claimGift } from './rovex.js';
 import { sceneReady } from './popgate.js';
 import { eliteBusy } from './elitepop.js';
-import { DIVISIONS } from '../shared/divisions.js'; // 0.20: Divisoes no carrossel
 import { updateCampaign, UPDATE_ZP, GAME_VERSION } from '../shared/version.js';
 
 // 10/11 (pedido dele): campanha nova = abre de novo pra todo mundo, com as novidades da leva e o Mercado Negro ABERTO
@@ -35,6 +34,7 @@ const P = {
   hit: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
   mic: 'M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z',
   run: 'M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z',
+  music: 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z',
   prev: 'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z',
   next: 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z',
   close: 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
@@ -42,7 +42,8 @@ const P = {
 const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
 // 0.19 (13/11): o resto da leva em fichas ([chave do texto, icone])
 // 0.20 (16/11, pedido dele): Divisoes em destaque no carrossel; o resto da leva em fichas
-const ITEMS = [['v20friends', 'lobby'], ['v20trigger', 'parts'], ['v20elite', 'elite'], ['v20stk', 'models'], ['v20perf', 'run'], ['v20shop', 'shop']];
+// 0.21 (19/11, pedido dele): os 2 modos novos no carrossel (foto de cada mapa); otimizacoes e correcoes nas fichas
+const ITEMS = [['v21traps', 'hit'], ['v21perf', 'run'], ['v21streak', 'fx'], ['v21music', 'music'], ['v21cards', 'hud'], ['v21fix', 'balance']];
 // carrossel do topo: o gancho abre, depois as 19 armas novas (foto de cada uma inteira, nunca cortada)
 const NEW_GUNS = ['pistol_12', 'pistol_13', 'pistol_14', 'pistol_15', 'subfusil_14', 'subfusil_15', 'subfusil_16', 'fusil_14', 'fusil_15', 'fusil_16',
   'shotgun_4', 'shotgun_5', 'shotgun_6', 'shotgun_7', 'lmg_3', 'lmg_4', 'lmg_5', 'sniper_5', 'sniper_6'];
@@ -50,13 +51,14 @@ const catOf = (id) => id.startsWith('lmg') ? 'lmg' : id.startsWith('subfusil') ?
 const BASE = import.meta.env.BASE_URL;
 // o gancho (13/11, pedido dele): so o icone do gancho, grande, balancando na ponta da corda
 const HOOK_ART = `<svg class="np-hook-art" viewBox="0 0 24 24" aria-hidden="true"><g class="np-hook-ico"><path d="${P.hook}"/></g></svg>`;
-// carrossel da 0.20: abre com os 12 brasoes das Divisoes e passa por cada uma (brasao, nome e lema)
-const crestSvg = (d, cls = '') => `<span class="dv-crest ${cls}" style="--dc:${d.color};--di:${d.ink}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${d.ico}"/></svg><b>${d.tag}</b></span>`;
+// carrossel da 0.21: abre com as 6 fotos (o trem e os 5 percursos) e passa por cada mapa
+const NEW_MAPS = [['expresso', 'trem'], ['telhados', 'bhop'], ['picadeiro', 'bhop'], ['caixotes', 'bhop'], ['montagem', 'bhop'], ['nanquim', 'bhop']];
+const mapImg = (id) => `<img src="${BASE}maps/${id}.jpg" alt="" draggable="false" loading="lazy" decoding="async">`;
 function reelHtml() {
-  const n = DIVISIONS.length + 1;
-  const hero = `<figure class="np-slide dvh on" data-i="0"><span class="np-tag">${t('v20_tag')}</span><div class="np-dv-wall">${DIVISIONS.map(d => crestSvg(d)).join('')}</div><figcaption><b>${t('dvTab')}</b><small>${t('v20_dvD')}</small></figcaption></figure>`;
-  const each = DIVISIONS.map((d, i) => `<figure class="np-slide dvs" data-i="${i + 1}" aria-hidden="true" style="--dc:${d.color}"><span class="np-tag">${t('dvTab')} · ${d.tag}</span>${crestSvg(d, 'xl')}<figcaption><b>${t('dv_' + d.id)}</b><small>${t('dvm_' + d.id)}</small></figcaption></figure>`).join('');
-  return `<section class="np-reel" aria-roledescription="carousel" aria-label="${t('dvTab')}">
+  const n = NEW_MAPS.length + 1;
+  const hero = `<figure class="np-slide mph on" data-i="0"><span class="np-tag">${t('v21_tag')}</span><div class="np-mp-wall">${NEW_MAPS.map(([id]) => mapImg(id)).join('')}</div><figcaption><b>${modeName('trem')} · ${modeName('bhop')}</b><small>${t('v21_heroD')}</small></figcaption></figure>`;
+  const each = NEW_MAPS.map(([id, mode], i) => `<figure class="np-slide mps" data-i="${i + 1}" aria-hidden="true">${mapImg(id)}<span class="np-tag">${modeName(mode)}</span><figcaption><b>${t('map_' + id)}</b><small>${t('v21m_' + id)}</small></figcaption></figure>`).join('');
+  return `<section class="np-reel" aria-roledescription="carousel" aria-label="${t('v21_tag')}">
     <div class="np-reel-track">${hero}${each}</div>
     <button class="np-reel-btn prev" type="button" aria-label="${t('nq_prev')}">${ico('prev')}</button><button class="np-reel-btn next" type="button" aria-label="${t('nq_next')}">${ico('next')}</button>
     <p class="np-reel-n"><b>1</b> / ${n}</p><i class="np-reel-bar"></i></section>`;
@@ -73,7 +75,7 @@ function reelGo(el, i) {
   if (reelI === N - 1 && !reelDone) { reelDone = true; const g = el.querySelector('#npGift'); if (g) { g.disabled = false; g.removeAttribute('aria-describedby'); g.classList.add('ready'); el.querySelector('#npGiftHint')?.remove(); audio.play('unlock', { ui: true, vol: 0.6 }); } } // chegou no fim: libera o resgate
   reelTick(el);
 }
-function reelTick(el) { clearTimeout(reelT); reelT = setTimeout(() => { if (!pop() || pop().hidden) return; if (reelHold || document.hidden) return reelTick(el); reelGo(el, reelI + 1); }, reelI === 0 ? 4000 : 2400); }
+function reelTick(el) { clearTimeout(reelT); reelT = setTimeout(() => { if (!pop() || pop().hidden) return; if (reelHold || document.hidden) return reelTick(el); reelGo(el, reelI + 1); }, reelI === 0 ? 4000 : 3200); } // 0.21: foto de mapa com legenda pede mais tempo que a de arma
 function reelInit(el) {
   const R = el.querySelector('.np-reel'); if (!R) return;
   reelHold = false; reelDone = false; reelGo(el, 0);
@@ -104,7 +106,7 @@ function draw(el) {
     <button class="lb-x" aria-label="${t('close')}">${ico('close')}</button>
     <header class="np-mast"><div class="np-mast-top"><span>${t('np_ed', { v: GAME_VERSION.split('.').slice(0, 2).join('.') })}</span><time datetime="${new Date().toISOString().slice(0, 10)}">${paperDate()}</time><span>${t('np_price')}</span></div>
       <h2 id="npTitle" class="np-mast-name">${t('np_paper')}</h2><div class="np-mast-rule" aria-hidden="true"></div></header>
-    <h3 class="np-headline">${t('v20_head')}</h3><p class="np-deck">${t('v20_sub')}</p>
+    <h3 class="np-headline">${t('v21_head')}</h3><p class="np-deck">${t('v21_sub')}</p>
     ${reelHtml()}
     <ul class="np-list np-cols">${ITEMS.map(([k, i]) => `<li><span class="np-ico">${ico(i)}</span><span><b>${t(k)}</b><small>${t(k + 'D')}</small></span></li>`).join('')}</ul>
     <footer class="np-foot"><div class="np-gift-slot" aria-live="polite">${giftHtml()}</div></footer>

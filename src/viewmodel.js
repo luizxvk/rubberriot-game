@@ -3,8 +3,8 @@
 // erguida no ombro com o braco bombeando), recarga e troca.
 import * as THREE from 'three';
 import { umbrellaMesh } from './fieldview.js';
-import { ink, toon, PAL, wordTexture } from './toon.js';
-import { Hose } from './character.js';
+import { ink, toon, PAL, wordTexture, outlineVar } from './toon.js';
+import { Hose, bundleHoses } from './character.js';
 import { buildGun, sightIsBig } from './arsenal.js';
 import { attachCharm, tickCharm } from './charms.js';
 import { attachKc, getKc } from './killcounter.js';
@@ -299,6 +299,43 @@ function makeProp(kind) {
   return g;
 }
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
+// 20/11 (FPS): junta as malhas filhas diretas de um grupo da luva por material + papel (dedo/bloco), no espaco do grupo.
+// Contorno vira um casco so com espessura por vertice (outlineVar). A troca de cor/estilo continua (material compartilhado, flags no userData)
+function fuseGlove(group) {
+  const sets = new Map();
+  for (const o of group.children) {
+    if (!o.isMesh || Array.isArray(o.material)) continue;
+    const k = (o.material.isMeshBasicMaterial ? 'b' : 't') + o.material.uuid + (o.userData.finger ? 'f' : '') + (o.userData.mitt ? 'm' : '') + (o.visible ? '' : 'h');
+    let s = sets.get(k); if (!s) sets.set(k, s = []); s.push(o);
+  }
+  for (const list of sets.values()) {
+    if (list.length < 2) continue;
+    const fills = [], hulls = [];
+    for (const o of list) {
+      o.updateMatrix();
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(a)) g.deleteAttribute(a);
+      g.clearGroups(); g.applyMatrix4(o.matrix); fills.push(g);
+      const ol = o.children.find(c => c.material?.uniforms?.th);
+      if (ol) {
+        let h = ol.geometry.index ? ol.geometry.toNonIndexed() : ol.geometry.clone();
+        for (const a of Object.keys(h.attributes)) if (a !== 'position' && a !== 'normal') h.deleteAttribute(a);
+        h.applyMatrix4(o.matrix);
+        h.setAttribute('aTh', new THREE.BufferAttribute(new Float32Array(h.attributes.position.count).fill(ol.material.uniforms.th.value), 1));
+        hulls.push(h);
+      }
+    }
+    if (hulls.length && hulls.length !== list.length) continue; // mistura com e sem contorno: deixa solto
+    const fg = mergeGeometries(fills, false), hg = hulls.length ? mergeGeometries(hulls, false) : null;
+    for (const g of fills) g.dispose(); for (const g of hulls) g.dispose();
+    if (!fg || (hulls.length && !hg)) { fg?.dispose(); hg?.dispose(); continue; }
+    const m0 = list[0], mesh = new THREE.Mesh(fg, m0.material);
+    Object.assign(mesh.userData, m0.userData); mesh.visible = m0.visible; mesh.renderOrder = m0.renderOrder;
+    if (hg) outlineVar(mesh, hg);
+    for (const o of list) { for (const c of [...o.children]) o.remove(c); group.remove(o); o.geometry.dispose(); }
+    group.add(mesh);
+  }
+}
 
 export class ViewModel {
   constructor() {
@@ -312,11 +349,12 @@ export class ViewModel {
     this.rig.add(this.holder);
     this.armR = new Hose(0.042, PAL.ink, 0.012);
     this.armL = new Hose(0.042, PAL.ink, 0.012);
-    this.scene.add(this.armR.mesh, this.armL.mesh);
+    this.arms = bundleHoses([this.armR, this.armL]); this.scene.add(this.arms); // 20/11: 4 -> 2 chamadas
     // luva com duas maos: aberta (segurando arma de fogo) e fechada (punho: soco e cabo da faca)
     // luva estilo Mickey (01/11, pedido dele): mao mais quadrada (menos bola), 3 dedos gordos + polegar = 4,
     // 3 costuras pretas nas costas da mao e punho largo em sino com a borda dobrada
-    const stitch = (parent, xs, y, z, len, rx = 0) => { for (const x of xs) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.003, len), new THREE.MeshBasicMaterial({ color: PAL.ink })); l.position.set(x, y, z); l.rotation.x = rx; parent.add(l); } };
+    const stitchMat = new THREE.MeshBasicMaterial({ color: PAL.ink });
+    const stitch = (parent, xs, y, z, len, rx = 0) => { for (const x of xs) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.003, len), stitchMat); l.position.set(x, y, z); l.rotation.x = rx; parent.add(l); } };
     const glove = () => {
       const g = new THREE.Group(), open = new THREE.Group(), fist = new THREE.Group();
       const palm = ink(new THREE.SphereGeometry(0.05, 12, 10), PAL.white, 0.008);
@@ -359,7 +397,9 @@ export class ViewModel {
       stitch(grip, [-0.018, 0, 0.018], 0.036, 0.05, 0.04);
       grip.visible = false;
       fist.visible = false;
-      g.add(open, fist, grip); g.userData = { open, fist, cuff, grip };
+      g.add(open, fist, grip);
+      for (const p of [open, fist, grip, g]) fuseGlove(p); // 20/11: 38 -> ~14 desenhos nas duas luvas (pecas da mesma pose viram uma malha)
+      g.userData = { open, fist, grip };
       return g;
     };
     this.gloveR = glove(); this.gloveL = glove();
@@ -1010,7 +1050,7 @@ export class ViewModel {
     this.armR.set(...rArm);
     this.armL.set(...arm(this.gloveL, pL, new THREE.Vector3(-0.38, -0.6, 0.05), new THREE.Vector3(-0.3, -0.35, -0.1)));
     this.rig.visible = !hideHands;
-    for (const o of [this.gloveR, this.gloveL, this.armR.mesh, this.armL.mesh]) o.visible = !hideHands;
+    for (const o of [this.gloveR, this.gloveL, this.arms]) o.visible = !hideHands;
 
     // laser: feixe longo na primeira pessoa (o ponto no mundo e' do main); correndo desliga
     if (g.laser && !g.laser.light) {

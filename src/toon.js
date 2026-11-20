@@ -1,5 +1,6 @@
 // Materiais toon + contorno de tinta (casco invertido com normais suavizadas).
 import * as THREE from 'three';
+import { mergeGeometries as mergeKitGeos } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mergeVertices, mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const grad = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 165, 165, 165, 255, 255, 255, 255, 255]), 3, 1);
@@ -26,13 +27,16 @@ export function toon(color, opts = {}) {
 // contorno so de perto (07/11, pedido dele): alem de OUTLINE_FAR (onde a nevoa ja come quase tudo) o casco nem e desenhado.
 // Valor atualizado todo quadro pelo main.js; 1e9 = sem limite (menus, luneta)
 export const OUTLINE_FAR = { value: 1e9 };
+// 19/11 (regra dele: "na MIRA nao pode ter trecho preto ao redor"): mirando, o contorno da arma NA MAO some perto do centro da tela
+// (onde ficam massa, alca e luneta). So vale no desenho da arma (post.js liga em volta da passada da arma); o mundo nao muda
+export const SIGHT_CLEAR = { value: new THREE.Vector3(0, 1.78, 0.2) };
 // 09/11: Ajustes > Contornos. map = ate onde o contorno do cenario e desenhado; thin = molduras e vidros (a maioria dos triangulos)
 export const OUTLINE_CFG = { map: 1e9, thin: 1e9 };
 const outlineMat = new THREE.ShaderMaterial({
-  uniforms: { th: { value: 0.045 }, uFar: OUTLINE_FAR, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
+  uniforms: { th: { value: 0.045 }, uFar: OUTLINE_FAR, uClr: SIGHT_CLEAR, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
   fog: true,
   vertexShader: `
-    uniform float th, uFar;
+    uniform float th, uFar; uniform vec3 uClr;
     attribute float _x;
     #include <fog_pars_vertex>
     void main(){
@@ -40,6 +44,7 @@ const outlineMat = new THREE.ShaderMaterial({
       vec3 n = normalize(normalMatrix * normal);
       // espessura cresce um pouco com a distancia pra nao sumir longe
       float k = th * clamp(-mv.z * 0.06 + 0.7, 0.7, 3.0);
+      if (uClr.x > 0.0) { vec4 c0 = projectionMatrix * mv; vec2 q = c0.xy / max(c0.w, 1e-4); k *= mix(1.0, smoothstep(uClr.z * 0.55, uClr.z, length(vec2(q.x * uClr.y, q.y))), uClr.x); }
       mv.xyz += n * k;
       gl_Position = projectionMatrix * mv;
       if (-mv.z > uFar) gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // longe: fora do recorte, o triangulo nem rasteriza
@@ -57,7 +62,7 @@ const outlineMats = new Map();
 // liga e desliga todos os contornos de uma vez (desenho do vidro da luneta em maquina que nao segura)
 export function outlinesOn(v) { for (const m of outlineMats.values()) m.visible = v; }
 function getOutlineMat(th) {
-  if (!outlineMats.has(th)) { const m = outlineMat.clone(); m.uniforms.th.value = th; m.uniforms.uFar = OUTLINE_FAR; m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = 3; outlineMats.set(th, m); }
+  if (!outlineMats.has(th)) { const m = outlineMat.clone(); m.uniforms.th.value = th; m.uniforms.uFar = OUTLINE_FAR; m.uniforms.uClr = SIGHT_CLEAR; m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = 3; outlineMats.set(th, m); }
   return outlineMats.get(th);
 }
 
@@ -171,13 +176,30 @@ export function outline(mesh, th = 0.04) {
   return mesh;
 }
 
+// contorno com espessura POR VERTICE (atributo aTh = espessura de cada peca): varias pecas juntadas (arma) com tracos diferentes
+// viram UM contorno so. Mesmo shader do contorno normal (th = 1 aqui, o traco vem do atributo). hull = casco ja pronto (smoothGeo das pecas)
+let varOutlineMat = null;
+export function outlineVar(mesh, hull) {
+  if (!varOutlineMat) {
+    const m = outlineMat.clone(); m.uniforms.th.value = 1; m.uniforms.uFar = OUTLINE_FAR; m.uniforms.uClr = SIGHT_CLEAR; m.polygonOffset = true; m.polygonOffsetFactor = 0; m.polygonOffsetUnits = 3;
+    m.vertexShader = 'attribute float aTh;\n' + m.vertexShader.replace('float k = th * ', 'float k = th * aTh * ');
+    outlineMats.set('var', varOutlineMat = m);
+  }
+  const o = new THREE.Mesh(hull, varOutlineMat);
+  OUTLS.push(o);
+  o.raycast = () => {};
+  o.renderOrder = mesh.renderOrder;
+  mesh.add(o);
+  return o;
+}
+
 // contorno de InstancedMesh (floresta, 03/11): mesmo casco invertido, lendo a matriz de cada copia.
 // Divide o instanceMatrix com a malha (mexeu numa, mexeu no contorno) = 2 chamadas de desenho pra N copias
 const instOutlineMats = new Map();
 export function outlineInstanced(mesh, th = 0.04) {
   let mat = instOutlineMats.get(th);
   if (!mat) {
-    mat = getOutlineMat(th).clone(); mat.uniforms.th.value = th;
+    mat = getOutlineMat(th).clone(); mat.uniforms.th.value = th; mat.uniforms.uFar = OUTLINE_FAR; mat.uniforms.uClr = SIGHT_CLEAR;
     mat.vertexShader = mat.vertexShader.replace('vec4 mv = modelViewMatrix * vec4(position, 1.0);', 'vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);')
       .replace('normalize(normalMatrix * normal)', 'normalize(normalMatrix * mat3(instanceMatrix) * normal)');
     instOutlineMats.set(th, mat);
@@ -490,4 +512,35 @@ export function tankTexture() {
   for (const y of [60, 452]) { g.fillRect(0, y - 14, 1024, 28); for (let x = 16; x < 1024; x += 32) { g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fillStyle = '#faf8f2'; g.fill(); g.fillStyle = '#3a3632'; } }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+// 19/11 (desempenho): objeto montado de varias pecas `ink()` (cada uma 2 chamadas de desenho: peca + contorno) vira UMA malha com
+// cor por vertice + UM contorno = 2 chamadas. Montado uma vez por nome. O contorno so pega as pecas que ja tinham contorno
+const KIT = new Map();
+let kitMat = null;
+export function mergedKit(name, make) {
+  let K = KIT.get(name);
+  if (!K) {
+    const src = make(); src.updateMatrixWorld(true);
+    const all = [], hull = []; let th = 0;
+    src.traverse(o => {
+      if (!o.isMesh || o.parent?.isMesh) return; // contorno antigo (filho da peca) fica de fora
+      let g = o.geometry.clone().applyMatrix4(o.matrixWorld); g = g.index ? g.toNonIndexed() : g;
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+      const c = o.material.color, n = g.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3)); all.push(g);
+      const ol = o.children.find(x => x.isMesh); if (ol) { hull.push(g); th = Math.max(th, ol.material.uniforms?.th?.value || 0.04); }
+    });
+    K = { geo: mergeKitGeos(all), hull: hull.length ? mergeKitGeos(hull.map(g => { const h = g.clone(); h.deleteAttribute('color'); return h; })) : null, th: th || 0.04 };
+    sharedSet.add(K.geo); if (K.hull) sharedSet.add(K.hull); // compartilhada: quem limpa a cena nao libera
+    KIT.set(name, K);
+  }
+  const m = new THREE.Mesh(K.geo, kitMat ||= toon(0xffffff, { vertexColors: true, unique: true }));
+  if (K.hull) outlineHull(m, K.hull, K.th);
+  const g = new THREE.Group(); g.add(m); return g;
+}
+function outlineHull(mesh, hullGeo, th) {
+  const o = new THREE.Mesh(smoothGeo(hullGeo), getOutlineMat(th));
+  OUTLS.push(o); o.raycast = () => {}; o.renderOrder = mesh.renderOrder; mesh.add(o);
 }

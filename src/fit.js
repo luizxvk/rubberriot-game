@@ -16,8 +16,16 @@ function fit(e) {
   }
   e.style.overflow = 'visible';
 }
-const run = () => { pending = 0; document.querySelectorAll(FIT).forEach(fit); };
-const later = () => { pending ||= setTimeout(run, 120); };
+const dirty = new Set(); let full = true;
+// 19/11 (perfil da partida: 2% da CPU, busca na pagina inteira a cada linha nova do feed de abates): so o pedaco que mudou e medido;
+// a pagina inteira so na abertura, no resize e quando as fontes chegam
+const run = () => {
+  pending = 0;
+  if (full) { full = false; dirty.clear(); document.querySelectorAll(FIT).forEach(fit); return; }
+  for (const el of dirty) { if (!el.isConnected) continue; const own = el.closest?.(FIT); if (own) fit(own); el.querySelectorAll?.(FIT).forEach(fit); }
+  dirty.clear();
+};
+const later = (el) => { if (el) dirty.add(el); else full = true; pending ||= setTimeout(run, 120); };
 export function startFit() {
   // 10/11 (desempenho no app de PC): na partida a HUD muda todo quadro (municao, relogio, placar) e cada mudanca refazia a busca
   // e a medida de todo texto da tela. Mudanca dentro da HUD so conta se tiver texto ajustavel nela
@@ -26,8 +34,8 @@ export function startFit() {
   // elemento (muda texto ajustavel ou nao) fica guardada 2 s; o mesmo contador da HUD mudando 144x/s nao refaz a busca
   const seen = new WeakMap();
   const counts = (el, now) => { const c = seen.get(el); if (c && now - c.t < 2000) return c.v; const v = !el.closest(QUIET) || !!el.closest(SEL) || !!el.querySelector?.(SEL); seen.set(el, { v, t: now }); return v; };
-  const watch = (recs) => { const now = performance.now(); for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!el) continue; if (counts(el, now)) { later(); return; } } };
+  const watch = (recs) => { const now = performance.now(); for (const r of recs) { const el = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!el) continue; if (counts(el, now)) later(el); } };
   new MutationObserver(watch).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
-  addEventListener('resize', later); document.fonts?.ready?.then(later);
+  addEventListener('resize', () => later()); document.fonts?.ready?.then(() => later());
   later();
 }

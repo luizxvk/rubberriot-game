@@ -536,7 +536,10 @@ html.touch-boot .boot { display: grid; }
   <div class="dom-cap" id="domCap" hidden><span class="dc-pin" id="dcPin" aria-hidden="true"></span><div class="dc-body"><div class="dc-track"><i id="dcFill"></i></div><small id="dcState" aria-live="polite"></small></div></div>
   <div class="chute-canopy" aria-hidden="true"><svg viewBox="0 0 400 90" preserveAspectRatio="none"><path d="M0 0H400V40Q375 70 350 40Q325 70 300 40Q275 70 250 40Q225 70 200 40Q175 70 150 40Q125 70 100 40Q75 70 50 40Q25 70 0 40Z" fill="#a83a2c" stroke="#141210" stroke-width="5"/><path d="M50 0V40M100 0V40M150 0V40M200 0V40M250 0V40M300 0V40M350 0V40" stroke="#ece9e1" stroke-width="22" opacity=".9"/><path d="M0 0H400V40Q375 70 350 40Q325 70 300 40Q275 70 250 40Q225 70 200 40Q175 70 150 40Q125 70 100 40Q75 70 50 40Q25 70 0 40Z" fill="none" stroke="#141210" stroke-width="5"/></svg><i class="cord l"></i><i class="cord r"></i></div>
   <div class="chute-hud" id="chuteHud" hidden><b id="chuteAlt">0 m</b><span id="chuteTxt"></span></div>
-  <div class="xp-chip" id="xpChip" hidden aria-live="off"><span class="c">2x</span>XP<span class="t"></span></div>
+  <div class="xp-chips" id="xpChips"><!-- 19/11: XP da conta e XP de arma lado a lado, cada um com o seu icone -->
+    <div class="xp-chip" id="xpChip" hidden aria-live="off"><span class="c">2x</span><svg class="xi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>XP<span class="t"></span></div>
+    <div class="xp-chip wpn" id="wxpChip" hidden aria-live="off"><span class="c">2x</span><svg class="xi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg><span class="lb"></span><span class="t"></span></div>
+  </div>
   <div class="hud-top">
     <div class="plaque" id="scorePlaque"></div>
   </div>

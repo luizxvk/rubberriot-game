@@ -1,0 +1,7 @@
+{
+ "train_soon": "[excited] Here comes the train! Everybody, get ready!",
+ "train_open": "[excited] The train is in, and the cargo is open! Thieves, go get it! Guards, hold the line!",
+ "train_closing": "[excited] All aboard? No, all OFF! The train is leaving the station!",
+ "train_gone": "[excited] And there goes the train! Whatever stayed on board is gone for good!",
+ "train_crushed": "[laughs] Somebody missed their stop!"
+}

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 *.log
+.perf/
 .env*
 escolha-silenciador/
 # Blender (07/11): arquivos de trabalho pesados ficam fora do repo; os .py e os *-layout.json entram

@@ -33,7 +33,7 @@ function load() {
   // desbloquear tudo e debug nosso: so vale no vite dev (npm run dev); na build sai sempre desligado
   // meta = set Ouro da Borracha ganho (semana em que a comunidade bateu a meta); st = estatisticas do Perfil
   // lg = XP das armas na hora da progressao nova (04/11): o que ja estava aberto na regra antiga continua aberto
-  return { ws: d.ws && typeof d.ws === 'object' ? d.ws : {}, lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, boost: boostLoad(d.boost), pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
+  return { ws: d.ws && typeof d.ws === 'object' ? d.ws : {}, lg: d.lg && typeof d.lg === 'object' ? d.lg : { ...(d.wpn || {}) }, passXp: d.passXp || 0, st: d.st && typeof d.st === 'object' ? d.st : {}, meta: d.meta && Number.isInteger(d.meta.week) ? d.meta : null, xp: d.xp || 0, wpn: d.wpn || {}, unlockAll: DEBUG && !!d.unlockAll, kills: d.kills || 0, matches: d.matches || 0, prestige: Math.max(0, Math.min(MAX_PRESTIGE, d.prestige | 0)), rp: Math.max(0, d.rp | 0), rkPeak: Number.isInteger(d.rkPeak) ? d.rkPeak : -1, rkGames: d.rkGames | 0, boost: boostLoad(d.boost), wboost: boostLoad(d.wboost), pk: Number(d.pk) >= 1 ? Math.min(1 + PRESTIGE_XP * MAX_PRESTIGE, Number(d.pk)) : 1 };
 }
 // fichas de XP em dobro (06/11, pedido dele): n = fichas no Bolso, ms = tempo que falta da ficha ativa (so anda em partida),
 // mo = meses em que o Elite ja recebeu as 6 do mes, pg = niveis do Pass que ja pagaram a ficha extra
@@ -250,6 +250,7 @@ const monthKey = () => { const d = new Date(); return d.getFullYear() + '-' + St
 export function boostSync() {
   const B = data.boost; let got = 0;
   if (rovexMe?.elite) { const m = monthKey(); if (!B.mo.includes(m)) { B.mo.push(m); B.n += BOOST_ELITE; got += BOOST_ELITE; } }
+  if (rovexMe?.elite) { const W = data.wboost, m = monthKey(); if (!W.mo.includes(m)) { W.mo.push(m); W.n += BOOST_ELITE; got += BOOST_ELITE; } } // ficha de arma: mesma quantia
   const tr = passTrack();
   for (const l of BOOST_PASS_ELITE) if (passOn() && tr >= l && !B.pg.includes('e' + l)) { B.pg.push('e' + l); B.n++; got++; }
   for (const l of BOOST_PASS_FREE) if (tr >= l && !B.pg.includes('f' + l)) { B.pg.push('f' + l); B.n++; got++; }
@@ -257,6 +258,17 @@ export function boostSync() {
   return got;
 }
 export const boostInfo = () => ({ n: data.boost.n, ms: data.boost.ms, active: data.boost.ms > 0 });
+// 19/11 (pedido dele): ficha de XP de ARMA em dobro, separada da ficha da conta. Mesma regra (1 hora de partida, relogio so jogando)
+// e o Elite ganha a mesma quantia por mes (BOOST_ELITE). So dobra o XP que vai pro modelo na mao; a conta segue normal
+export const wboostInfo = () => ({ n: data.wboost.n, ms: data.wboost.ms, active: data.wboost.ms > 0 });
+export function wboostUse() { const B = data.wboost; if (B.n <= 0) return false; B.n--; B.ms += BOOST_MS; save(); emit({ kind: 'boost' }); return true; }
+let wboostSaved = 0;
+export function wboostTick(ms) {
+  const B = data.wboost; if (B.ms <= 0) return;
+  B.ms = Math.max(0, B.ms - ms);
+  if (B.ms === 0 || Math.abs(wboostSaved - B.ms) > 15000) { wboostSaved = B.ms; save(); }
+  if (B.ms === 0) emit({ kind: 'boost', ended: true, wpn: true });
+}
 // usar: com uma ja rodando, soma mais 1 hora (nada se perde)
 export function boostUse() { const B = data.boost; if (B.n <= 0) return false; B.n--; B.ms += BOOST_MS; save(); emit({ kind: 'boost' }); return true; }
 let boostSaved = 0;

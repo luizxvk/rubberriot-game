@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><title>andar e idle</title><style>body{margin:0;background:#dcd7cb}</style>
+<script type="module">
+// folha do andar com arma e da olhada na arma no idle (19/11): linha de cima = passada (6 quadros), de baixo = idle aos 7,0..9,6 s
+import * as THREE from 'three';
+import { Character } from '../src/character.js';
+import { loadArsenal } from '../src/arsenal.js';
+await loadArsenal();
+const W = 220, H = 280, N = 6, r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W * N, H * 2); r.setClearColor(0xdcd7cb); r.autoClear = false; document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(2, 3, -3); sc.add(dl);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshLambertMaterial({ color: 0xbdb6a6 })); floor.rotation.x = -Math.PI / 2; sc.add(floor);
+const ch = new Character('red', '', {}); ch.setWeapon(new URLSearchParams(location.search).get('w') || 'rifle'); sc.add(ch.root);
+const cam = new THREE.PerspectiveCamera(36, W / H, 0.1, 80), a = Number(new URLSearchParams(location.search).get('a') ?? 0.9); cam.position.set(Math.sin(a) * -6, 2.2, -Math.cos(a) * 6); cam.lookAt(0, 1.2, 0);
+r.setScissorTest(true);
+let T = 0; const dt = 1 / 60;
+const shot = (i, row) => { r.setViewport(i * W, (1 - row) * H, W, H); r.setScissor(i * W, (1 - row) * H, W, H); r.clear(); r.render(sc, cam); };
+// andar: 1 s pra embalar, depois 6 quadros espalhados num ciclo de passada
+while (T < 1) { T += dt; ch.update(dt, { anim: 'run', alive: true, speed: 5, t: T, pitch: 0 }); }
+for (let i = 0; i < N; i++) { for (let k = 0; k < 4; k++) { T += dt; ch.update(dt, { anim: 'run', alive: true, speed: 5, t: T, pitch: 0 }); } shot(i, 0); }
+// idle: parado, quadros dos 7,0 aos 9,6 s
+let idle = 0; const marks = [6.5, 7.3, 7.9, 8.5, 9.1, 9.7];
+for (let i = 0; i < N; i++) { while (idle < marks[i]) { idle += dt; T += dt; ch.update(dt, { anim: 'idle', alive: true, speed: 0, t: T, pitch: 0 }); } shot(i, 1); }
+document.title = 'pronto';
+</script>

@@ -1,6 +1,6 @@
 // Regra (05/11, pedido dele): toda fileira que passa da tela ganha a setinha pra avancar pro proximo. Basta o seletor estar aqui.
 // Os botoes sao fixos na tela e medem a fileira a cada mudanca, porque as fileiras do Arsenal moram em grid e nao tem pai posicionado.
-const SEL = '#slotList, #catTabs, .stk-cards, #picker, .elp-cols, #rkbList, .zb-list, .set-tabs, .psx-track, .lm-track';
+const SEL = '.lb-modes-grid, #slotList, #catTabs, .stk-cards, #picker, .elp-cols, #rkbList, .zb-list, .set-tabs, .psx-track, .lm-track';
 const ICO = { next: 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z', prev: 'M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6z', down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z', up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z' };
 const BOX = new Map();
 function btn(k, label, on) {
@@ -13,7 +13,7 @@ function ensure(el) {
   const B = { next: btn('next', 'Próximo', () => go(1, 0)), prev: btn('prev', 'Anterior', () => go(-1, 0)), down: btn('down', 'Mais abaixo', () => go(0, 1)), up: btn('up', 'Mais acima', () => go(0, -1)) };
   el.addEventListener('scroll', later, { passive: true });
   // 09/11 (print dele): no popup de mapas (z-index 16) a setinha ficava atras dele; e clicar nela nao tira o foco do cartao (Esc e setas do teclado continuam valendo)
-  if (el.closest('.lb-maps')) for (const b of Object.values(B)) { b.style.zIndex = '17'; b.addEventListener('mousedown', e => e.preventDefault()); }
+  if (el.closest('.lb-maps, .lb-modes')) for (const b of Object.values(B)) { b.style.zIndex = '17'; b.addEventListener('mousedown', e => e.preventDefault()); }
   BOX.set(el, B); return B;
 }
 function run() {
@@ -26,7 +26,9 @@ function run() {
     const cx = r.left + r.width / 2, midY = r.top + (el.matches('.lm-track') ? r.height / 2 : Math.min(r.height / 2, 28)); // mapas: na altura do meio da foto
     place(B.next, seen && X && el.scrollLeft + el.clientWidth < el.scrollWidth - 2, r.right - 14, midY);
     place(B.prev, seen && X && el.scrollLeft > 2, r.left + 14, midY);
-    place(B.down, seen && Y && el.scrollTop + el.clientHeight < el.scrollHeight - 2, cx, r.bottom - 10);
+    // 19/11 (pedido dele): setinha so na grade de modos (descer pros de baixo); a descricao do cartao rola sozinha (lobby.js)
+    const grid = el.matches('.lb-modes-grid'); // grade de modos: setinha na borda de baixo (no meio tampava o texto do cartao)
+    place(B.down, seen && Y && el.scrollTop + el.clientHeight < el.scrollHeight - 2, cx, grid ? r.bottom + 4 : r.bottom - 10);
     place(B.up, seen && Y && el.scrollTop > 2, cx, r.top + 10);
   });
 }

@@ -92,6 +92,9 @@ export const SHOP_ITEMS = {
   // leva de 05/11: banners animados premium, chaveiros do Tripo, rosto e morte
   bCortina: { kind: 'banner', r: 'lendario', give: ['banner:cortina'] }, bHolofote: { kind: 'banner', r: 'lendario', give: ['banner:holofote'] }, bCarrossel: { kind: 'banner', r: 'lendario', give: ['banner:carrossel'] }, bVitrola: { kind: 'banner', r: 'lendario', give: ['banner:vitrola'] }, bFoguete: { kind: 'banner', r: 'lendario', give: ['banner:foguete'] }, bZepelim: { kind: 'banner', r: 'lendario', give: ['banner:zepelim'] },
   kDado: { kind: 'charm', r: 'raro', give: ['charm:dado'] }, kPato: { kind: 'charm', r: 'raro', give: ['charm:pato'] },
+  // 19/11 (pedido dele: 4 por secao na Loja): 2 chaveiros e 2 mortes novas, exclusivos da Loja
+  kLocomotiva: { kind: 'charm', r: 'raro', give: ['charm:locomotiva'] }, kRelogio: { kind: 'charm', r: 'raro', give: ['charm:relogio'] },
+  mFoguete: { kind: 'death', r: 'lendario', give: ['death:foguete'] }, mApagado: { kind: 'death', r: 'lendario', give: ['death:apagado'] },
   fGargalhada: { kind: 'face', r: 'raro', give: ['face:gargalhada'] }, fLingua: { kind: 'face', r: 'raro', give: ['face:lingua'] }, fFantasma: { kind: 'face', r: 'lendario', give: ['face:fantasma'] }, fBandido: { kind: 'face', r: 'raro', give: ['face:bandido'] }, fMocinho: { kind: 'face', r: 'raro', give: ['face:mocinho'] }, fPalhaco: { kind: 'face', r: 'raro', give: ['face:palhaco'] }, fGas: { kind: 'face', r: 'lendario', give: ['face:gas'] }, fLuchador: { kind: 'face', r: 'lendario', give: ['face:luchador'] }, mBalao: { kind: 'death', r: 'lendario', give: ['death:balao'] }, mMola: { kind: 'death', r: 'lendario', give: ['death:mola'] },
   // estampas de pintura (09/11, pedido dele): abstratas e radiais, valem na Pintura e no Destaque
   eAgulhas: { kind: 'stamp', r: 'raro', give: ['stamp:agulhas'] }, eGota: { kind: 'stamp', r: 'raro', give: ['stamp:gota'] }, eRosacea: { kind: 'stamp', r: 'raro', give: ['stamp:rosacea'] }, eDardos: { kind: 'stamp', r: 'raro', give: ['stamp:dardos'] }, eTabuleiro: { kind: 'stamp', r: 'raro', give: ['stamp:tabuleiro'] }, eXadrez: { kind: 'stamp', r: 'raro', give: ['stamp:xadrez'] }, eBandeirolas: { kind: 'stamp', r: 'raro', give: ['stamp:bandeirolas'] }, ePinceladas: { kind: 'stamp', r: 'raro', give: ['stamp:pinceladas'] },
@@ -170,7 +173,7 @@ function seeded(list, seed) {
 // Destaque = 1 lendario grande + 1 pacote largo + 2 pequenos; dia = 8 ofertas que nao repetem o destaque.
 // Prateleiras (04/11): o resto do catalogo por tipo, sorteado na semana, sem repetir o que ja esta em cima.
 // O rodizio e so vitrine: a compra confere o catalogo, nao o rodizio.
-export const SHELVES = [['kc', 3], ['stk', 4], ['dance', 4], ['banner', 3], ['charm', 1], ['death', 1], ['face', 2], ['bundle', 4], ['react', 2], ['camo', 4], ['skin', 4], ['hat', 4], ['stamp', 4], ['ret', 8]]; // 16/11 (pedido dele): Camuflagens e Estampas com 4
+export const SHELVES = [['kc', 4], ['stk', 4], ['dance', 4], ['banner', 4], ['charm', 4], ['death', 4], ['face', 4], ['bundle', 4], ['react', 4], ['camo', 4], ['skin', 4], ['hat', 4], ['stamp', 4], ['ret', 4]]; // 19/11 (pedido dele): 4 em toda secao; secao com menos item que vaga mostra todos em cartao largo (src/shop.js)
 // ofertas do dia (09/11, pedido dele): 15% off. O servidor cobra por aqui
 export const DEAL_OFF = 0.15;
 let dealMemo = { end: 0, ids: new Set() };
@@ -198,6 +201,8 @@ export function shopRotation(now = Date.now()) {
   // vendido com outro codigo (sozinho ou dentro de pacote) tambem sai das prateleiras de baixo
   const dayGives = new Set(daily.flatMap(id => SHOP_ITEMS[id]?.give || []));
   const clash = (id) => (SHOP_ITEMS[id]?.give || []).some(g => dayGives.has(g));
-  const shelves = SHELVES.map(([k, n]) => ({ k, items: rotate(ids.filter(id => shelfOf(id) === k && !featured.includes(id)), week, n).filter(id => !used.has(id) && !clash(id)) })).filter(s => s.items.length);
+  // 19/11 (pedido dele: "precisa aparecer 4 e mudar"): troca TODO DIA (era semanal) e completa a vaga: o que caiu na oferta do dia
+  // sai daqui e o proximo da fila entra no lugar (antes a vaga ficava vazia e a secao mostrava 2 ou 3)
+  const shelves = SHELVES.map(([k, n]) => { const pool = ids.filter(id => shelfOf(id) === k && !featured.includes(id)); return { k, n, items: rotate(pool, day, pool.length).filter(id => !used.has(id) && !clash(id)).slice(0, n) }; }).filter(s => s.items.length);
   return { featured, daily, shelves, dayEnd: (day + 1) * DAY, weekEnd: ((week + 1) * 7 - 3) * DAY };
 }

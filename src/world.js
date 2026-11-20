@@ -2,9 +2,10 @@
 import { podiumClear } from '../shared/podiumspot.js';
 import * as THREE from 'three';
 import { TracerFx, TRACER_GLOW } from './tracerfx.js';
+import { BulletBatch, flatMat } from './bulletfx.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving, splitByCell, outlineCells, OUTLINE_FAR, OUTLINE_CFG } from './toon.js';
+import { ink, toon, outline, outlineInstanced, geo, freeGeos, PAL, hatchTexture, facadeTexture, tankTexture, wordTexture, mergeStatic, mergeMoving, splitByCell, outlineCells, OUTLINE_FAR, OUTLINE_CFG, mergedKit } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { standable, floorAt } from '../shared/nav.js';
 import { buildGun, rocketMesh } from './arsenal.js';
@@ -13,6 +14,12 @@ export const BEAT = 2.2; // batidas por segundo da danca da cidade
 
 const FROZEN_MW = () => {}; // 14/11: galho parado do cenario fora do percurso de matrizes (ver freeze)
 const THEME = {
+  // Pulo do Gato (19/11): o chao e a queda, la embaixo; cada percurso com o seu ceu
+  bh_telhados: { sky: 0xe9d6b4, ground: ['#b8ad98', '#6e6656'], fog: [70, 200], roads: true, trees: [] },
+  bh_picadeiro: { sky: 0xe8c9b0, ground: ['#d8b98a', '#8a6a40'], fog: [60, 180], trees: [] },
+  bh_caixotes: { sky: 0xb9d3dc, ground: ['#7aa3b0', '#3e6470'], fog: [60, 190], docks: true, trees: [] },
+  bh_montagem: { sky: 0xbdb8ae, ground: ['#a7a196', '#59554e'], fog: [60, 180], hazard: true, trees: [] },
+  bh_nanquim: { sky: 0x2a2632, ground: ['#26232b', '#0c0b0e'], fog: [50, 170], trees: [] },
   bonde: { sky: 0xd6d2c6, ground: ['#cdc6b6', '#7a7366'], trees: [] }, // Ladeira do Bonde: a rua vem do trilho (escortview)
   // bairros grandes e avenida (08/11): as ruas vem do proprio mapa (M.roads)
   becos: { sky: 0xcfc8ba, ground: ['#b8b0a0', '#6a6458'], fog: [70, 230], trees: [] },
@@ -30,6 +37,8 @@ const THEME = {
   moeda: { sky: 0xd2d6d0, ground: ['#bcc0b4', '#646a60'], roadList: [[12, 124, -30, 0], [8, 124, 30, 0], [124, 10, 0, 42], [40, 26, 0, -38]], trees: [[-14, -17], [14, -17], [-40, -46], [40, -46]] },
   // Cais do Sol Poente (04/11): docas no por do sol, mas na paleta do jogo (laranja e rosa desbotados, nada saturado)
   // Vila Muamba (13/11 b): vila de reboco quente, terra batida na rua
+  // Expresso Dourado (19/11): patio de trem no fim de tarde, cascalho dourado
+  expresso: { sky: 0xe9cfa3, ground: ['#cbb48c', '#7d6a4c'], fog: [70, 220], trees: [] },
   muamba: { sky: 0xe6d8bc, ground: ['#cdbf9f', '#857659'], fog: [60, 200], trees: [] },
   docas: { sky: 0xf0b48c, ground: ['#b99c78', '#6d5a46'], fog: [50, 160], docks: true, trees: [] },
   // Xilindro (13/11): presidio de concreto, ceu de chumbo; chao de cimento do patio e do pavilhao
@@ -382,7 +391,7 @@ export function buildWorld(scene, M) {
   const studio = TH.dark ? tinteiroDecor(root, M.studio || ARENA) : null;
   const preForest = new Set(root.children); // o que e do estudio/mapa (a mata vem depois e fica de fora do recorte)
   const forest = M.forest ? forestDecor(root, M, forestTrees) : null;
-  if (TH.docks) docksDecor(root, M); // mar, borda de pedra do cais e o sol baixo
+  if (TH.docks && !M.bh) docksDecor(root, M); // mar, borda de pedra do cais e o sol baixo (bunny hop nao tem cais: quayZ indefinido dava malha NaN; o mar la e o chao mortal)
   // Floresta (03/11, desempenho): o miolo do estudio vai num grupo proprio (juntado a parte). Da mata, atras da parede
   // de 12 m, ele nem aparece mas era desenhado (~550 chamadas olhando pro estudio); cull() some com ele la fora.
   // Fora do recorte: a mata (malhas instanciadas na origem) e lampada com luz de verdade (luz que some muda a
@@ -829,7 +838,9 @@ export function buildObjectives(scene, M) {
   };
 }
 
-function anvilMesh() {
+// 19/11: bigorna = 1 malha + 1 contorno (eram 8 chamadas; a fileira solta 12 caindo + 12 no chao)
+export function anvilMesh() { return mergedKit('anvil', anvilParts); }
+function anvilParts() {
   const g = new THREE.Group();
   const base = ink(geo(THREE.BoxGeometry, 1.2, 0.35, 0.8), PAL.ink, 0.04); base.position.y = 0.18; g.add(base);
   const neck = ink(geo(THREE.BoxGeometry, 0.6, 0.35, 0.5), PAL.ink, 0.04); neck.position.y = 0.5; g.add(neck);
@@ -929,6 +940,114 @@ function tracerMaterial(style, len) {
   });
 }
 
+// 19/11 (pedido dele: "quando os outros atiram o FPS despenca"): cada bala criava um ShaderMaterial NOVO (ou um clone do giz) e nunca
+// liberava. Material novo = o three monta a chave do programa de novo (le o codigo do shader inteiro) e sobe tudo pra placa; com 11
+// jogadores atirando eram dezenas por quadro. Agora: UM material por estilo; cada bala guarda o proprio uK/uLen e manda na hora de
+// desenhar (onBeforeRender + uniformsNeedUpdate). Giz/plasma: opacidade em 8 degraus, um material por degrau
+const TR_MAT = new Map(), TR_KEYS = Object.keys(TRACERS), GLOW_C = {}; let LZ_INK = null, B_INK = null;
+const trShared = (style) => { let m = TR_MAT.get(style); if (!m) TR_MAT.set(style, m = tracerMaterial(style, 1)); return m; };
+function trBefore(r, s, c, g, mat) { const u = mat.uniforms; if (!u?.uK) return; u.uK.value = this.userData.uK; u.uLen.value = this.userData.uLen; mat.uniformsNeedUpdate = true; }
+const BASIC_STEPS = 8;
+function basicSteps(base, hex) { const a = []; for (let i = 0; i < BASIC_STEPS; i++) { const m = base.clone(); if (hex != null) m.color.setHex(hex); m.opacity = (i + 1) / BASIC_STEPS; a.push(m); } return a; }
+function setFade(obj, steps, op) { if (op <= 0.001) { obj.visible = false; return; } obj.visible = true; obj.material = steps[Math.min(BASIC_STEPS - 1, Math.max(0, Math.ceil(op * BASIC_STEPS) - 1))]; }
+
+// fumaca em lote (19/11): mesma bolinha de desenho (luz chapada + contorno), mesmo movimento e tamanho de antes; uma InstancedMesh
+// pra todas + o contorno instanciado. Cor por bolinha. Cheio: a mais velha da lugar
+const PUFF_MAX = 700, PV = new THREE.Vector3(), PM = new THREE.Matrix4(), PQ = new THREE.Quaternion(), PS = new THREE.Vector3(), PC = new THREE.Color();
+class PuffBatch {
+  constructor(scene, geo) {
+    this.scene = scene;
+    this.mesh = new THREE.InstancedMesh(geo, toon(0xffffff, { unique: true }), PUFF_MAX);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.mesh.frustumCulled = false; this.mesh.count = 0; this.mesh.raycast = () => {};
+    this.mesh.setColorAt(0, PC.set(0xffffff)); this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    outlineInstanced(this.mesh, 0.08);
+    this.p = []; this.cols = new Map();
+  }
+  add(x, y, z, vx, vy, vz, s0, life, color) {
+    if (this.p.length >= PUFF_MAX) this.p.shift();
+    this.p.push({ x, y, z, vx, vy, vz, s0, life, t: 0, c: this.cols.get(color) || this.cols.set(color, new THREE.Color(color)).get(color) });
+  }
+  update(dt) {
+    const M = this.mesh; if (M.parent !== this.scene) this.scene.add(M);
+    let n = 0;
+    for (let i = 0; i < this.p.length; i++) {
+      const P = this.p[i]; P.t += dt;
+      if (P.t >= P.life) continue;
+      P.x += P.vx * dt; P.y += P.vy * dt; P.z += P.vz * dt;
+      const k = P.t / P.life, sc = Math.max(0.001, P.s0 * (k < 0.25 ? k / 0.25 : 1 - (k - 0.25) / 0.75));
+      PV.set(P.x, P.y, P.z); PS.set(sc, sc, sc); PM.compose(PV, PQ, PS); M.setMatrixAt(n, PM); M.setColorAt(n, P.c);
+      this.p[n++] = P;
+    }
+    this.p.length = n; M.count = n; M.visible = n > 0;
+    if (n) { M.instanceMatrix.needsUpdate = true; M.instanceColor.needsUpdate = true; M.children[0].count = n; }
+  }
+}
+
+// manchas de tinta no chao em lote (19/11): 8 formas, uma InstancedMesh por forma; vive 9 s, cresce no comeco e some no fim
+const SPLAT_N = 8, SPLAT_MAX = 96, SPLAT_LIFE = 9, SM = new THREE.Matrix4(), SQ = new THREE.Quaternion(), SE = new THREE.Euler(), SV = new THREE.Vector3(), SS = new THREE.Vector3();
+class SplatBatch {
+  constructor(scene) {
+    this.scene = scene; this.p = [];
+    const mat = flatMat(THREE.FrontSide); mat.polygonOffset = true; mat.polygonOffsetFactor = -3; // mesmo empurrao de antes (fica por cima do chao)
+    this.layers = Array.from({ length: SPLAT_N }, () => {
+      const g = new THREE.CircleGeometry(1, 14), a = g.attributes.position;
+      for (let i = 1; i < a.count; i++) { const k = 0.7 + Math.random() * 0.55; a.setXY(i, a.getX(i) * k, a.getY(i) * k); }
+      const col = new THREE.InstancedBufferAttribute(new Float32Array(SPLAT_MAX * 4), 4); col.setUsage(THREE.DynamicDrawUsage); g.setAttribute('aC', col);
+      const m = new THREE.InstancedMesh(g, mat, SPLAT_MAX); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; m.raycast = () => {}; m.visible = false;
+      return m;
+    });
+    this.cols = new Map();
+  }
+  add(pos, size, color) {
+    const c = this.cols.get(color) || this.cols.set(color, new THREE.Color(color)).get(color);
+    if (this.p.length >= SPLAT_MAX * 2) this.p.shift();
+    this.p.push({ x: pos[0], y: (pos[1] || 0) + 0.03, z: pos[2], s: size, rz: Math.random() * 6, f: Math.floor(Math.random() * SPLAT_N), t: 0, c });
+  }
+  update(dt) {
+    if (!this.p.length && !this.any) return;
+    const L = this.layers, n = new Array(SPLAT_N).fill(0);
+    for (const m of L) if (m.parent !== this.scene) this.scene.add(m);
+    let w = 0;
+    for (const P of this.p) {
+      P.t += dt; const k = P.t / SPLAT_LIFE; if (k >= 1) continue;
+      this.p[w++] = P;
+      const m = L[P.f], i = n[P.f]; if (i >= SPLAT_MAX) continue;
+      const sc = P.s * Math.min(1, k * 40);
+      SE.set(-Math.PI / 2, 0, P.rz); SQ.setFromEuler(SE); SM.compose(SV.set(P.x, P.y, P.z), SQ, SS.set(sc, sc, sc)); m.setMatrixAt(i, SM);
+      const A = m.geometry.attributes.aC.array; A[i * 4] = P.c.r; A[i * 4 + 1] = P.c.g; A[i * 4 + 2] = P.c.b; A[i * 4 + 3] = k > 0.8 ? (1 - k) * 5 * 0.85 : 0.85;
+      n[P.f] = i + 1;
+    }
+    this.p.length = w; this.any = w > 0;
+    L.forEach((m, f) => { m.count = n[f]; m.visible = n[f] > 0; if (n[f]) { m.instanceMatrix.needsUpdate = true; m.geometry.attributes.aC.needsUpdate = true; } });
+  }
+}
+
+// furo de bala em lote (19/11): circulo de tinta colado na parede (2 cm pra fora), some nos ultimos 20% dos 6 s
+const HOLE_MAX = 160, HOLE_LIFE = 6, HZ = new THREE.Vector3(0, 0, 1), HN = new THREE.Vector3();
+class HoleBatch {
+  constructor(scene) {
+    this.scene = scene; this.p = [];
+    const g = new THREE.CircleGeometry(0.16, 8), col = new THREE.InstancedBufferAttribute(new Float32Array(HOLE_MAX * 4), 4); col.setUsage(THREE.DynamicDrawUsage); g.setAttribute('aC', col);
+    const mat = flatMat(THREE.FrontSide); mat.polygonOffset = true; mat.polygonOffsetFactor = -4; mat.depthWrite = true;
+    this.mesh = new THREE.InstancedMesh(g, mat, HOLE_MAX); this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.raycast = () => {}; this.mesh.visible = false;
+    this.ink = new THREE.Color(PAL.ink);
+  }
+  add(pos, normal) {
+    if (this.p.length >= HOLE_MAX) this.p.shift();
+    HN.fromArray(normal).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(HZ, HN), m = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(pos).addScaledVector(HN, 0.02), q, new THREE.Vector3(1, 1, 1));
+    this.p.push({ m, t: 0 });
+  }
+  update(dt) {
+    const M = this.mesh; if (!this.p.length && !M.visible) return;
+    if (M.parent !== this.scene) this.scene.add(M);
+    const A = M.geometry.attributes.aC.array, c = this.ink; let n = 0;
+    for (const P of this.p) { P.t += dt; const k = P.t / HOLE_LIFE; if (k >= 1) continue; this.p[n] = P; M.setMatrixAt(n, P.m); A[n * 4] = c.r; A[n * 4 + 1] = c.g; A[n * 4 + 2] = c.b; A[n * 4 + 3] = k > 0.8 ? (1 - k) * 5 : 1; n++; }
+    this.p.length = n; M.count = n; M.visible = n > 0;
+    if (n) { M.instanceMatrix.needsUpdate = true; M.geometry.attributes.aC.needsUpdate = true; }
+  }
+}
+
 // quantidade de particulas (10/11, Ajustes > Video > Efeitos): 0,5 / 1 / 1,4
 export const FX_Q = { k: 1 };
 export class FX {
@@ -951,19 +1070,20 @@ export class FX {
     const len = a.distanceTo(b);
     if (len < 0.5) return;
     if (style === 'chalk' || !TRACERS[style]) {
-      const m = new THREE.Mesh(this.tracerGeo, this.tracerMat.clone());
+      const steps = this.chalkSteps ||= basicSteps(this.tracerMat);
+      const m = new THREE.Mesh(this.tracerGeo, steps[BASIC_STEPS - 1]);
       m.position.copy(a); m.lookAt(b);
       m.scale.set(1, 1, len);
-      this.add(m, 0.09, (f, k) => { f.obj.material.opacity = 1 - k; f.obj.scale.x = f.obj.scale.y = 1 - k * 0.6; });
+      this.add(m, 0.09, (f, k) => { setFade(f.obj, steps, 1 - k); f.obj.scale.x = f.obj.scale.y = 1 - k * 0.6; });
       return;
     }
     const T = TRACERS[style];
-    const mat = tracerMaterial(style, len);
-    const m = new THREE.Mesh(this.tracerGeo, mat);
+    const m = new THREE.Mesh(this.tracerGeo, trShared(style));
+    m.userData.uK = 0; m.userData.uLen = len; m.onBeforeRender = trBefore;
     m.position.copy(a); m.lookAt(b);
     m.scale.set(T.w, T.w, len);
     m.renderOrder = 3;
-    this.add(m, T.life, (f, k) => { mat.uniforms.uK.value = k; f.obj.scale.x = f.obj.scale.y = T.w * (1 + k * T.grow); });
+    this.add(m, T.life, (f, k) => { f.obj.userData.uK = k; f.obj.scale.x = f.obj.scale.y = T.w * (1 + k * T.grow); });
   }
 
   // uma bala do tiro: sai da boca, percorre ate o impacto e some ali (skin do tracado no risco)
@@ -978,26 +1098,12 @@ export class FX {
     const seg = Math.min(len, Math.max(B.seg, speed * 0.008)), tail = 0.06;
     const dir = b.clone().sub(a).normalize();
     const T = TRACERS[style], w = (T ? T.w : style === 'plasma' ? 2.2 : 1) * 0.6;
-    const mat = T ? tracerMaterial(style, seg) : this.tracerMat.clone();
-    if (style === 'plasma') mat.color.setHex(0xbffcff); // pack futurista (09/11): miolo claro, halo ciano
     (this.tfx ||= new TracerFx(this.scene)).emit(style, a, b); // pedacinhos 3D do tipo do tracado
-    const m = new THREE.Mesh(this.tracerGeo, mat);
-    m.position.copy(a); m.lookAt(b); m.scale.set(w, w, 0.01);
-    m.renderOrder = 3;
-    // contorno de tinta (como os bonecos): sem ele o giz claro sumia no ceu e no chao de papel
-    // laser: contorno vermelho escuro (o preto engolia o raio visto de tras)
-    const ink = new THREE.Mesh(this.tracerGeo, style === 'laser' ? (this.laserInk ??= new THREE.MeshBasicMaterial({ color: 0x8a0a06, side: THREE.BackSide, transparent: true, opacity: 0.9, depthWrite: false }))
-      : (this.bulletInk ??= new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.BackSide, transparent: true, opacity: 0.85, depthWrite: false })));
-    ink.scale.set(1.6, 1.6, 1); m.add(ink);
-    if (TRACER_GLOW[style]) { const halo = new THREE.Mesh(this.tracerGeo, (this.haloMat ||= {})[style] ||= new THREE.MeshBasicMaterial({ color: TRACER_GLOW[style], side: THREE.DoubleSide, transparent: true, opacity: 0.3, depthWrite: false })); halo.scale.set(2.8, 2.8, 1); halo.renderOrder = 2; m.add(halo); } // brilho em mistura normal (somar luz estoura no papel claro)
-    const life = fly + tail;
-    this.add(m, life, (f, k) => {
-      const t = k * life, d = Math.min(len, t * speed), s = Math.max(0, d - seg);
-      f.obj.position.copy(a).addScaledVector(dir, s);
-      f.obj.scale.z = Math.max(0.01, d - s);
-      const fade = t > fly ? (t - fly) / tail : 0; // chegou: o risco some no alvo
-      if (T) mat.uniforms.uK.value = 0.15 + fade * 0.85; else mat.opacity = 1 - fade;
-    });
+    // 19/11: todas as balas em lote (src/bulletfx.js): 4 chamadas de desenho no total, em vez de 3-4 por bala
+    const bb = this.bb ||= new BulletBatch(this.scene, this.tracerGeo, trShared('fire'));
+    const lin = (hex, a) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b, a]; };
+    bb.add({ a, dir, len, seg, speed, fly, tail, w, sIdx: T ? TR_KEYS.indexOf(style) : -1, col: lin(style === 'plasma' ? 0xbffcff : 0xfaf8f2, 1),
+      ink: style === 'laser' ? (LZ_INK ||= lin(0x8a0a06, 0.9)) : (B_INK ||= lin(0x141210, 0.85)), glow: TRACER_GLOW[style] ? (GLOW_C[style] ||= lin(TRACER_GLOW[style], 0.3)) : null });
   }
 
   word(text, pos, size = 1.4, life = 0.55) {
@@ -1014,19 +1120,14 @@ export class FX {
     });
   }
 
+  // 19/11 (pedido dele: killstreak e tiro derrubando o FPS): cada bolinha de fumaca era uma malha nova + contorno (2 chamadas
+  // de desenho cada; a fileira de bigornas soltava ~100 de uma vez). Agora todas moram num lote so (PuffBatch): 2 chamadas no total
   puff(pos, n = 4, size = 0.35, color = PAL.paper, life = 0.5) {
     n = Math.max(1, Math.round(n * FX_Q.k));
+    const P = this.pb ||= new PuffBatch(this.scene, this.puffGeo), R = Math.random;
     for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(this.puffGeo, toon(color));
-      outline(m, 0.08);
-      m.position.set(pos[0] + (Math.random() - 0.5) * size, pos[1] + (Math.random() - 0.5) * size, pos[2] + (Math.random() - 0.5) * size);
-      const v = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(size * 5);
-      const s0 = size * (0.5 + Math.random() * 0.6);
-      this.add(m, life * (0.7 + Math.random() * 0.6), (f, k, dt) => {
-        f.obj.position.addScaledVector(v, dt);
-        const sc = s0 * (k < 0.25 ? k / 0.25 : 1 - (k - 0.25) / 0.75);
-        f.obj.scale.setScalar(Math.max(0.001, sc));
-      });
+      const v = PV.set(R() - 0.5, R() * 0.8, R() - 0.5).multiplyScalar(size * 5);
+      P.add(pos[0] + (R() - 0.5) * size, pos[1] + (R() - 0.5) * size, pos[2] + (R() - 0.5) * size, v.x, v.y, v.z, size * (0.5 + R() * 0.6), life * (0.7 + R() * 0.6), color);
     }
   }
 
@@ -1065,15 +1166,9 @@ export class FX {
   }
 
   // sem fumacinha (03/11, pedido dele): a bolinha branca nascia na hora no alvo e parecia uma segunda bala
+  // 19/11 (relatorio do log: 1 material novo por furo, vivo 6 s, 1 desenho cada): todos os furos num lote (HoleBatch) = 1 chamada
   impact(pos, normal) {
-    if (normal) {
-      // 14/11 (medido no app: vazamento na placa, ~1 geometria nova por tiro que acertava e nunca era liberada): o furo usa UMA
-      // geometria compartilhada e o material de cada furo e liberado quando ele some
-      const m = new THREE.Mesh(this.holeGeo ||= new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: PAL.ink, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }));
-      m.position.fromArray(pos).addScaledVector(new THREE.Vector3().fromArray(normal), 0.02);
-      m.lookAt(m.position.clone().add(new THREE.Vector3().fromArray(normal)));
-      this.add(m, 6, (f, k) => { f.obj.material.opacity = k > 0.8 ? (1 - k) * 5 : 1; }, (o) => o.material.dispose());
-    }
+    if (normal) (this.hb ||= new HoleBatch(this.scene)).add(pos, normal);
   }
 
   explosion(pos) {
@@ -1095,18 +1190,10 @@ export class FX {
   }
 
   // mancha de tinta no chao (morte, explosao)
+  // 19/11 (handoff e: ~30 manchas vivas no Campo de tiro = 30 desenhos + 30 materiais novos): todas as manchas num lote por
+  // forma (SplatBatch: 8 formas sorteadas uma vez = no maximo 8 chamadas), cor e transparencia por mancha. Mesmo visual de antes
   splat(pos, size = 1.6, color = PAL.ink) {
-    // 8 formas sorteadas uma vez e reaproveitadas (antes: geometria nova por mancha, nunca liberada)
-    const pool = this.splatGeos ||= Array.from({ length: 8 }, () => {
-      const g = new THREE.CircleGeometry(1, 14), a = g.attributes.position;
-      for (let i = 1; i < a.count; i++) { const k = 0.7 + Math.random() * 0.55; a.setXY(i, a.getX(i) * k, a.getY(i) * k); }
-      return g;
-    });
-    const g = pool[Math.floor(Math.random() * pool.length)];
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, polygonOffset: true, polygonOffsetFactor: -3, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.rotation.z = Math.random() * 6;
-    m.position.set(pos[0], (pos[1] || 0) + 0.03, pos[2]);
-    this.add(m, 9, (f, k) => { const sc = size * Math.min(1, k * 40); f.obj.scale.setScalar(sc); f.obj.material.opacity = k > 0.8 ? (1 - k) * 5 * 0.85 : 0.85; }, (o) => o.material.dispose());
+    (this.sb ||= new SplatBatch(this.scene)).add(pos, size, color);
   }
 
   // estrelinhas girando na cabeca de quem caiu
@@ -1158,11 +1245,13 @@ export class FX {
   }
 
   // escudo de nascimento (02/11): bolha de sabao azulada em volta do boneco, com contorno de tinta tracejado
+  // 19/11 (queda de FPS ao matar no Campo de tiro): malha e materiais COMPARTILHADOS (antes cada boneco criava os seus) e
+  // compilados no pre-aquecimento (a 1a bolha compilava shader no meio da partida)
   protBubble() {
-    const g = new THREE.Group();
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1.15, 20, 14), new THREE.MeshBasicMaterial({ color: 0x7fb3e6, transparent: true, opacity: 0.22, depthWrite: false }));
+    const g = new THREE.Group(), M = PROT_MAT.s ||= [new THREE.MeshBasicMaterial({ color: 0x7fb3e6, transparent: true, opacity: 0.22, depthWrite: false }), new THREE.MeshBasicMaterial({ color: 0x2f5b8a })];
+    const m = new THREE.Mesh(geo(THREE.SphereGeometry, 1.15, 20, 14), M[0]);
     m.scale.set(1, 1.25, 1); m.position.y = 1.0; g.add(m);
-    const r = new THREE.Mesh(new THREE.TorusGeometry(1.18, 0.035, 6, 40), new THREE.MeshBasicMaterial({ color: 0x2f5b8a }));
+    const r = new THREE.Mesh(geo(THREE.TorusGeometry, 1.18, 0.035, 6, 40), M[1]);
     r.rotation.x = Math.PI / 2; r.position.y = 0.15; g.add(r);
     g.userData.spin = r;
     return g;
@@ -1184,6 +1273,11 @@ export class FX {
       const b = ink(geo(THREE.CylinderGeometry, 0.075, 0.075, 0.22, 12), 0x3a3632, 0.012); g.add(b);
       const band = ink(geo(THREE.CylinderGeometry, 0.078, 0.078, 0.06, 12), 0xf08a2a, 0); g.add(band);
       const c = ink(geo(THREE.CylinderGeometry, 0.04, 0.05, 0.05, 10), 0xc9a34a, 0.006); c.position.y = 0.13; g.add(c);
+    } else if (kind === 'goo') { // Grudenta: o modelo do Blender (bolota rosa derretendo); antes de chegar, bolinha de codigo
+      if (GOO?.goo_nade) return gooBuild(GOO.goo_nade, 0.008);
+      gooModel();
+      const b = ink(geo(THREE.SphereGeometry, 0.1, 10, 8), 0xe0507f, 0.01); g.add(b);
+      const c = ink(geo(THREE.CylinderGeometry, 0.035, 0.03, 0.045, 8), 0xf2c14e, 0.004); c.position.y = 0.11; g.add(c);
     } else if (kind === 'smoke') { // fumaca: lata cinza com faixa verde e furos em cima
       const b = ink(geo(THREE.CylinderGeometry, 0.065, 0.065, 0.24, 12), 0x8e958c, 0.012); g.add(b);
       const band = ink(geo(THREE.CylinderGeometry, 0.067, 0.067, 0.05, 12), 0x5f8f5f, 0); band.position.y = 0.03; g.add(band);
@@ -1195,6 +1289,13 @@ export class FX {
       const b = ink(geo(THREE.CylinderGeometry, 0.06, 0.06, 0.22, 10), PAL.light, 0.01); g.add(b);
       const c = ink(geo(THREE.CylinderGeometry, 0.035, 0.035, 0.05, 8), PAL.dark, 0.006); c.position.y = 0.13; g.add(c);
     }
+    return g;
+  }
+
+  // poca da Grudenta: modelo de raio 1 (o main.js escala pro raio da regra e encolhe no fim)
+  gooPool(pos) {
+    const g = GOO?.goo_pool ? gooBuild(GOO.goo_pool, 0) : (() => { gooModel(); const d = new THREE.Group(); const m = new THREE.Mesh(geo(THREE.CylinderGeometry, 1, 1, 0.05, 24), toon(0xe0507f)); m.position.y = 0.025; d.add(m); return d; })();
+    g.position.set(pos[0], (pos[1] || 0) + 0.015, pos[2]); g.rotation.y = Math.random() * 6.28;
     return g;
   }
 
@@ -1220,7 +1321,7 @@ export class FX {
   }
 
   update(dt) {
-    this.tfx?.update(dt);
+    this.tfx?.update(dt); this.bb?.update(dt); this.pb?.update(dt); this.sb?.update(dt); this.hb?.update(dt);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const f = this.list[i];
       f.t += dt;
@@ -1246,6 +1347,7 @@ function docksDecor(root, M) {
   lip(0, A + 1.4, A * 2 + 3, 0.8); lip(-A - 1.4, (QZ + A + 1) / 2, 0.8, A + 1 - QZ); lip(A + 1.4, (QZ + A + 1) / 2, 0.8, A + 1 - QZ);
   { const BW = (M.boatW || 24) / 2; for (const sx of [-1, 1]) lip(sx * (BW + (A + 1 - BW) / 2), QZ - 0.4, A + 1 - BW, 0.8); } // frente do cais (dos lados do barco; 13/11: largura do barco de cada mapa)
 }
+const PROT_MAT = {}; // materiais da bolha de nascimento (compartilhados entre todos os bonecos)
 const DOCKS = {
   // barco de carga: casco vermelho escuro afundado no mar, borda branca; o conves (topo) e chao
   boat(w, h, d) {
@@ -1700,8 +1802,8 @@ function tripoModel(file) {
 
 // ---------- mapas modelados no Blender (06/11) ----------
 // pecas que o .glb NAO desenha (ficam as do jogo): carro do Tripo (chega depois) e o frontao com a placa pintada em canvas
-const MAP_KEEP = { ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], trapiche: ['car', 'truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
-const MAP_GLB = { estande: 'estande.glb', xilindro: 'xilindro.glb', trapiche: 'trapiche.glb', vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
+const MAP_KEEP = { expresso: ['truck'], ferradura: ['car', 'marble+sign'], moeda: ['car', 'mintsign'], tinteiro: ['rock', 'log'], ilha: ['ringfloor', 'rope', 'post'], deserto: ['truck'], trapiche: ['car', 'truck'], becos: ['car', 'truck'], feira: ['car', 'truck'], largo: ['car', 'truck'], cortejo: ['car', 'truck'] }; // tinteiro: a floresta fica a do jogo
+const MAP_GLB = { expresso: 'expresso.glb', telhados: 'telhados.glb', picadeiro: 'picadeiro.glb', caixotes: 'caixotes.glb', montagem: 'montagem.glb', nanquim: 'nanquim.glb', estande: 'estande.glb', xilindro: 'xilindro.glb', trapiche: 'trapiche.glb', vila: 'vila.glb', fronteira: 'fronteira.glb', estaleiro: 'estaleiro.glb', fabrica: 'fabrica.glb', refinaria: 'refinaria.glb', ferradura: 'ferradura.glb', docas: 'docas.glb', tinteiro: 'tinteiro.glb', moeda: 'moeda.glb', bonde: 'bonde.glb', apito: 'apito.glb', ilha: 'ilha.glb', deserto: 'deserto.glb', becos: 'becos.glb', feira: 'feira.glb', largo: 'largo.glb', cortejo: 'cortejo.glb' }; // 06/11: Fronteira remodelada no Blender (tools/blender/mapa.py)
 const MAP_CELL = 40, MAP_SPLIT_MIN = 12000; // so malha pesada de verdade e dividida (celula de 40 m): dividir as leves gastava mais em chamadas de desenho do que economizava em triangulos (ver mapModel)
 const MAP_THIN_FAR = 42; // celular: contorno de acabamento (moldura e vidro) so ate aqui; numa tela pequena nem da pra ver e sao centenas de milhares de triangulos
 const MAPM = new Map(), MAPG = new Map(); // MAPG: modelo ja pronto (o mapa monta direto com ele, sem as caixas antes)
@@ -1711,6 +1813,26 @@ function mapLoader() {
   const l = new GLTFLoader();
   if (!draco) { draco = new DRACOLoader(); draco.setDecoderPath(import.meta.env.BASE_URL + 'draco/'); }
   l.setDRACOLoader(draco); return l;
+}
+// Grudenta (19/11): granada e poca modeladas no Blender (tools/blender/goo.py -> public/models/goo.glb, Draco, 19 KB). Baixa uma
+// vez so; cada material vira toon da cor dele (geometria e material compartilhados: nada a liberar por granada/poca).
+// Ate chegar, a granada usa a bolinha de codigo e a poca um disco rosa.
+let GOO = null, GOOP = null;
+export function gooModel() {
+  return (GOOP ||= mapLoader().loadAsync(import.meta.env.BASE_URL + 'models/goo.glb').then(g => {
+    const out = {};
+    for (const top of g.scene.children) {
+      const parts = []; top.updateMatrixWorld(true);
+      top.traverse(o => { if (o.isMesh) parts.push({ geo: o.geometry, mat: toon(o.material?.color?.getHex?.() ?? 0xe0507f), m: o.matrixWorld.clone() }); });
+      out[top.name] = parts;
+    }
+    return (GOO = out);
+  }).catch(e => { console.warn('goo.glb:', e); return null; }));
+}
+function gooBuild(parts, th) {
+  const g = new THREE.Group();
+  for (const p of parts) { const m = new THREE.Mesh(p.geo, p.mat); m.applyMatrix4(p.m); if (th) outline(m, th); g.add(m); }
+  return g;
 }
 // baixa o modelo do mapa antes da partida (tela de carregamento): quando o mundo monta, ja entra o do Blender direto
 export function preloadMap(id) { return MAP_GLB[id] ? mapModel(MAP_GLB[id]) : Promise.resolve(null); }
@@ -1726,13 +1848,26 @@ function trimMapCache(keep) {
     MAPG.delete(f); MAPM.delete(f);
   }
 }
-function mapModel(file) {
+export function mapModel(file) {
   if (MAPM.has(file)) return MAPM.get(file);
   const p = mapLoader().loadAsync(import.meta.env.BASE_URL + 'models/maps/' + file).then(gl => {
     const g = new THREE.Group();
     gl.scene.updateMatrixWorld(true);
+    // 19/11 (log dele no Expresso: 418 chamadas por quadro, orcamento 250): o Blender exporta uma malha por COR e cada uma ganhava
+    // contorno = 2 chamadas por cor (Expresso: ~120 so de cenario). Agora as cores comuns viram UMA malha por bloco de 40 m
+    // (cor no vertice) + o contorno do bloco: a camera continua descartando o bloco fora da tela. Vidro, janela, lampada e marmore
+    // ficam soltos (a noite acende eles pelo nome).
+    const SOLO = /glass|adobe_hole|lamp_glow|lamp_red|marble/, merged = [];
     gl.scene.traverse(o => {
       if (!o.isMesh || !/^vila_|^map_/.test(o.name)) return; // so as malhas do mapa (nada que tenha ficado selecionado no Blender)
+      if (!SOLO.test(o.name) && !o.material?.map && !(import.meta.env.DEV && globalThis.__noMapMerge)) { // __noMapMerge: so a bancada A/B do dev
+        let geo = o.geometry.clone().applyMatrix4(o.matrixWorld); geo = geo.index ? geo.toNonIndexed() : geo; geo.computeVertexNormals();
+        for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+        const c = o.material?.color || new THREE.Color(0xffffff), n = geo.attributes.position.count, col = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); merged.push(geo);
+        return;
+      }
       const geo = o.geometry.clone().applyMatrix4(o.matrixWorld); geo.computeVertexNormals();
       const col = o.material?.color ? o.material.color.getHex() : 0xffffff;
       const glass = /glass/.test(o.name);
@@ -1747,6 +1882,13 @@ function mapModel(file) {
       outline(m, th);
       g.add(m);
     });
+    if (merged.length) {
+      const all = mergeGeometries(merged); for (const m of merged) m.dispose();
+      const mat = toon(0xffffff, { vertexColors: true, unique: true }), parts = new Map();
+      for (const [key, c] of splitByCell(all, MAP_CELL)) { const m = new THREE.Mesh(c, mat); m.name = 'map_merged'; m.userData.keep = true; parts.set(key, m); g.add(m); }
+      const hull = all.clone(); hull.deleteAttribute('color');
+      outlineCells(parts, hull, 0.045, MAP_CELL); all.dispose();
+    }
     if (g.children.length) { MAPG.set(file, g); trimMapCache(file); }
     return g.children.length ? g : null;
   }).catch(e => { console.warn(file + ' nao carregou', e); return null; });

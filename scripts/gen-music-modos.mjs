@@ -12,6 +12,13 @@ const TRACKS = {
   music_bomb: '1930s cartoon ticking time bomb suspense, woodblock ticking clock rhythm with pizzicato bass and nervous clarinet, comedic tension' + END,
   music_escort: '1930s cartoon train ride music, chugging rhythm with banjo, slide whistle and steam whistle accents, bouncy locomotive groove' + END,
   music_deserto: '1930s cartoon western music, galloping banjo, harmonica and whistling melody, dusty desert showdown, comedic cowboy' + END,
+  // 19/11 (pedido dele): Roubo ao Trem e um tema por percurso do Pulo do Gato
+  music_trem: '1930s rubber hose cartoon train heist music, chugging locomotive rhythm on snare brushes, sneaky muted trumpet and pizzicato, steam whistle accents, daring robbery on a moving train' + END,
+  music_bh_telhados: '1930s cartoon rooftop chase music, bouncy piano and clarinet hopping melody, cats jumping across village roofs, playful and quick' + END,
+  music_bh_picadeiro: '1930s cartoon circus music, oompah tuba and calliope organ, acrobats leaping, marching circus galop, cheerful and dizzy' + END,
+  music_bh_caixotes: '1930s cartoon sea shanty music, accordion and fiddle, jumping over crates on the docks with sharks below, bouncy nautical jig' + END,
+  music_bh_montagem: '1930s cartoon factory music, clanking percussion and pumping brass, conveyor belts and pistons rhythm, mechanical comedic march' + END,
+  music_bh_nanquim: '1930s cartoon dreamy surreal music, celesta and muted strings with wobbly saw sound, floating on ink clouds, mysterious and whimsical' + END,
 };
 const only = process.argv[2];
 for (const [name, text] of Object.entries(TRACKS)) {

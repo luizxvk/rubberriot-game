@@ -4,8 +4,9 @@
 import * as THREE from 'three';
 
 const W = 384, H = 256;
+export const KC_CV = 'kc:canvas';
 let rt = null, buf = null, cv = null, lastUrl = null;
-const cam = new THREE.PerspectiveCamera(42, W / H, 0.05, 300);
+const cam = new THREE.PerspectiveCamera(42, W / H, 0.05, 45); // 19/11 b: close de 2 m no rosto; ate 300 m desenhava 450-840 chamadas
 
 // 03/11 (desempenho): a leitura da placa era sincrona (readRenderTargetPixels para tudo esperando a GPU) + toDataURL,
 // no quadro da morte: ~150 ms de tela parada. Agora le assincrono (WebGL2) e codifica com toBlob
@@ -20,8 +21,9 @@ async function snap(renderer, scene) {
   const g = cv.getContext('2d'), img = g.createImageData(W, H);
   for (let y = 0; y < H; y++) img.data.set(buf.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4); // a leitura vem de cabeca pra baixo
   g.putImageData(img, 0, 0);
-  if (lastUrl) URL.revokeObjectURL(lastUrl); // a foto da morte anterior sai da memoria
-  return (lastUrl = await new Promise(r => cv.toBlob(b => r(b ? URL.createObjectURL(b) : null), 'image/jpeg', 0.82)));
+  // 20/11 (medido: desenhar 1-2 ms, ler 8-20 ms, o resto do ~1 s era CODIFICAR o JPEG): a foto nao vira arquivo; o quadrinho
+  // e um <canvas> que recebe o desenho direto (paintKc). A tira aparece logo depois da leitura
+  return KC_CV;
 }
 
 // k: { pos, yaw } de quem matou; v: posicao de quem caiu. Uma foto so: o close no rosto (o 2o quadrinho e a arma,
@@ -42,9 +44,20 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function stripHtml(imgs, { killer, wpn, dist, head, t, icon, lvl, variant, hp }) {
   const sfx = head ? t('kc_head') : ['BANG!', 'POW!', 'BLAM!'][Math.floor(Math.random() * 3)];
   const p = (i, inner, cap, extra = '') => `<figure class="kc-p kc-${i}">${inner}<figcaption>${cap}</figcaption>${extra}</figure>`;
-  return p(1, imgs[0] ? `<img src="${imgs[0]}" alt="">` : '<i class="kc-blank"></i>', esc(t('kc_who', { n: killer })), (lvl ? `<b class="kc-lvl">${esc(t('kc_lvl', { n: lvl }))}</b>` : '') + (hp ? `<b class="kc-hp">${esc(t('kc_hp', { n: hp }))}</b>` : ''))
+  return p(1, imgs[0] === KC_CV ? '<canvas class="kc-cv" aria-hidden="true"></canvas>' : imgs[0] ? `<img src="${imgs[0]}" alt="">` : '<i class="kc-blank"></i>', esc(t('kc_who', { n: killer })), (lvl ? `<b class="kc-lvl">${esc(t('kc_lvl', { n: lvl }))}</b>` : '') + (hp ? `<b class="kc-hp">${esc(t('kc_hp', { n: hp }))}</b>` : ''))
     // meio: so a arma dele, inteira e de lado, com o nome do modelo (sem foto do tiro)
     // sequencia (Torta Atomica, bigornas, dirigivel...): o icone dela no lugar da arma (01/11)
     + p(2, imgs[1] ? `<img class="kc-gun" src="${imgs[1]}" alt="${esc(wpn)}">${variant ? `<b class="kc-var">${esc(variant)}</b>` : ''}<b class="kc-gname">${esc(wpn)}</b>` : icon ? `<svg class="kc-ico" viewBox="0 0 48 48" aria-hidden="true">${icon}</svg><b class="kc-gname">${esc(wpn)}</b>` : `<i class="kc-blank"></i><b class="kc-gname">${esc(wpn)}</b>`, esc(t('kc_dist', { d: dist })))
     + p(3, `<i class="kc-blank"></i><b class="kc-sfx kc-big">PLAFT!</b>`, esc(t('kc_you')));
+}
+
+// pinta a foto da morte nos <canvas class="kc-cv"> de `root`, cobrindo o quadro como o object-fit: cover da imagem
+export function paintKc(root) {
+  if (!cv) return;
+  for (const c of root.querySelectorAll('canvas.kc-cv')) {
+    const w = c.clientWidth || W, h = c.clientHeight || H, d = Math.min(2, devicePixelRatio || 1);
+    c.width = Math.round(w * d); c.height = Math.round(h * d);
+    const k = Math.max(c.width / W, c.height / H), sw = c.width / k, sh = c.height / k;
+    c.getContext('2d').drawImage(cv, (W - sw) / 2, (H - sh) / 2, sw, sh, 0, 0, c.width, c.height);
+  }
 }

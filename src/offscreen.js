@@ -5,6 +5,6 @@ import * as THREE from 'three';
 
 let R = null;
 export function offscreen() {
-  if (!R) { R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); R.setPixelRatio(1); }
+  if (!R) { R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); R.setPixelRatio(1); if (import.meta.env.PROD) R.debug.checkShaderErrors = false; } // 19/11: igual ao principal (a checagem esperava a placa a cada shader novo)
   return R;
 }

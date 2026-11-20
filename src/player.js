@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { carStep, seatPos, rayCar } from '../shared/cars.js';
 import { moveBody, raycast, rayPlayer, hasLOS, wallThickness, headroom } from '../shared/map.js';
 import { standable, floorAt } from '../shared/nav.js';
-import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, HEIST, SMUGGLE, bodyTrait, STREAK_FREE, GADGETS, gadgetOf, isSilenced, INTEGRAL_SIL } from '../shared/weapons.js';
+import { WEAPONS, PRIMARIES, NADES, INFECT, SKILLS, AMMO, FIELD, BR, HEIST, SMUGGLE, TRAIN_HEIST, bodyTrait, STREAK_FREE, GADGETS, gadgetOf, isSilenced, INTEGRAL_SIL } from '../shared/weapons.js';
 import { EV } from '../shared/events.js';
 import { BOR } from '../shared/mobs.js';
 import { loadoutStats, nativePart, CATEGORY, infectLoadout, bpLoadout, isSaber, meleeBody } from './arsenal.js';
@@ -97,11 +97,11 @@ export class Player {
     this.air = !!ev.air; this.chute = false; this.cutChute = false;
     this.yaw = ev.yaw; this.pitch = 0;
     this.alive = true; this.hp = 100;
-    this.nades = this.g.mode === 'br' ? { frag: 0, flash: 0 } : { frag: 1, flash: 1 }; this.patIdx = 0;
+    this.nades = this.g.mode === 'br' || this.g.mode === 'bhop' ? { frag: 0, flash: 0 } : { frag: 1, flash: 1 }; this.patIdx = 0; // Pulo do Gato: sem granada
     this.owned = []; this.ammo = {}; this.stash = {};
     // escada de armas e infectado: o servidor decide o kit (infectado = so a lamina)
     if (this.g.mode === 'gungame') { this.give(ev.wpn, false); this.equip(ev.wpn, true); }
-    else if ((this.g.mode === 'infect' || this.g.mode === 'br' || this.g.mode === 'borroes' || EV(ev.mut ?? this.g.snap?.mut)?.kit) && ev.owned?.length) { // infectado, battle royale, noite dos borroes e evento com armas fixas: o servidor decide o kit
+    else if ((this.g.mode === 'infect' || this.g.mode === 'br' || this.g.mode === 'borroes' || this.g.mode === 'bhop' || EV(ev.mut ?? this.g.snap?.mut)?.kit) && ev.owned?.length) { // infectado, battle royale, noite dos borroes e evento com armas fixas: o servidor decide o kit
       for (const w of ev.owned) this.give(w, false);
       this.equip(ev.wpn, true);
     }
@@ -220,7 +220,7 @@ export class Player {
     // contagem de inicio (todo mundo carregando / 3, 2, 1): da pra olhar em volta, nao da pra se mexer
     // plantando / desarmando: parado no lugar, segurando o botao
     const B = this.g.snap?.bomb, acting = (B && B.actor === this.g.myId && B.prog > 0) || this.g.pumping; // dupla: enchendo a bomba no parceiro = parado
-    if (this.g.mode === 'bomb' || this.g.mode === 'br' || this.g.mode === 'borroes' || this.g.mode === 'heist' || this.g.mode === 'smuggle') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
+    if (this.g.mode === 'bomb' || this.g.mode === 'br' || this.g.mode === 'borroes' || this.g.mode === 'heist' || this.g.mode === 'smuggle' || this.g.mode === 'trem') { const use = !!inp.use; if (use !== this.lastUse) { this.lastUse = use; this.g.net?.send({ t: 'use', v: use }); } }
     if (this.g.snap?.freeze > 0 || acting || this.g.me?.fr) inp =  { ...inp, moveX: 0, moveZ: 0, fire: false, firePressed: false, jumpPressed: false, crouchPressed: false, sprint: false, meleePressed: false, fragPressed: false, flashPressed: false, streakPressed: false, reloadPressed: false };
     // dupla: caido so rasteja (nada de tiro, pulo, corrida, granada, faca ou equipamento)
     // Contrabando (04/11): caixote nas maos = sem tiro, pulo, corrida, granada nem faca; atirar PASSA o caixote pro colega na mira
@@ -347,8 +347,9 @@ export class Player {
     if (this.crouch) speed = 3.7;
     speed *= (st.move ?? 1) * this.sk('borracha', 'move');
     if (this.g.stimBoostT > 0) speed *= FIELD.stim.boost; // estimulante: um pouco mais de correria durante o efeito (03/11)
-    if (this.bagged) { speed *= HEIST.carrySlow; this.sprint = false; this.tac = false; } // Roube o Cofre: com a bolsa nas costas
+    if (this.bagged) { speed *= this.jeweled ? TRAIN_HEIST.jewelSlow : HEIST.carrySlow; this.sprint = false; this.tac = false; } // Roube o Cofre: com a bolsa nas costas (Trem: joia pesa mais)
     if (this.crated) { speed *= SMUGGLE.carrySlow; this.sprint = false; this.tac = false; } // Contrabando: caixote pesado
+    if (this.g.gooT > 0) { speed *= NADES.goo.slow; this.sprint = false; this.tac = false; inp = { ...inp, jumpPressed: false }; } // Grudenta (19/11): grudado na poca
     if (this.adsK > 0.3) speed *= 0.6;
     if (W.id === 'minigun' || this.wpn === 'minigun') speed *= this.firing ? 0.6 : 0.85;
     if (W.moveK) speed *= this.sprint || this.tac ? W.runK : W.moveK; // Metralhadora (04/11, hotfix): pesa so com ela na mao
@@ -375,7 +376,8 @@ export class Player {
     const E = EV(this.g.snap?.mut); // evento de fim de semana (fisica)
     if (E?.boost) speed *= E.boost;
     // chao: acelera e freia firme (sem patinar); no ar quase nao muda a direcao. Chao de sabao: patina tudo
-    const acc = air ? 5 : this.onGround ? (E?.ice ? 2.2 : 22) : 1.6;
+    if (this.knockT > 0) this.knockT -= dt; // 19/11: empurrao de armadilha (Pulo do Gato): voando, o controle quase nao segura
+    const acc = this.knockT > 0 ? 0.3 : air ? 5 : this.onGround ? (E?.ice ? 2.2 : 22) : 1.6;
     if (this.slideT > 0) {
       // escorregando: direcao quase presa (vira devagar pro lado do analogico), velocidade caindo na curva
       this.slideT = Math.max(0, this.slideT - dt);
@@ -602,7 +604,7 @@ export class Player {
     this.lean = damp(this.lean || 0, leanT, 6.5, dt);
     // camera
     { const vm = this.g.vm; if (vm?.gun?.userData.canted && inp.cantedPressed && this.adsK > 0.3) { vm.canted = !vm.canted; audio.play('ui_click', { vol: 0.5 }); } }
-    this.zoomNow = this.g.vm?.canted ? this.g.vm.sight().zoom : st.zoom || W.zoom;
+    this.zoomNow = this.g.vm?.canted ? this.g.vm.sight().zoom : this.wpn === 'sniper' && this.lo(this.wpn)?.scope === 'iron_own' ? 1.35 : st.zoom || W.zoom; // 19/11: sniper na mira de ferro = zoom de ferro (o de luneta ficava estranho)
     if (this.g.vmScopeKind?.() === 'vari') { // variavel: ~3x e ~6x. 08/11 (pedido dele): a troca corre e passa um tico do ponto antes de assentar
       this.zoomVar = damp(this.zoomVar ?? 0.75, this.zoomStep ? 1.5 : 0.75, 11, dt);
       this.zoomPulse = Math.max(0, (this.zoomPulse || 0) - dt * 3.2);

@@ -145,6 +145,7 @@ export function initMenus(o) {
     o.onRange?.(cat, body);
   };
   ui.fromLobby = () => fromLobby;
+  ui.refreshSmith = () => { if (ui.screen === 'arsenal') renderSmith(); }; // 19/11: os modelos chegaram depois de abrir o Arsenal: remonta a arma da vitrine
   addEventListener('keydown', (e) => {
     if (e.defaultPrevented) return; // um popup por cima (item da loja) ja tratou o Esc
     if (e.key === 'Escape' && fromLobby && ['arsenal', 'skills', 'challenges'].includes(ui.screen)) { audio.play('ui_back', { ui: true }); fromLobby = false; o.onBackToLobby(false); return; }
@@ -285,6 +286,7 @@ export function initMenus(o) {
     ['seg', 'draw', 's_draw', [['near', 'draw_near'], ['mid', 'draw_mid'], ['far', 'draw_far']]], // 07/11: voltou (pedido dele), com nevoa
     ['seg', 'outl', 's_outl', [['eco', 'q_eco'], ['near', 'q_near'], ['full', 'q_full']]], // 09/11: o que mais pesa nos mapas grandes
     ['seg', 'chars', 's_chars', [['low', 'q_low'], ['mid', 'q_mid'], ['high', 'q_high']]], // 09/11: o que mais pesa com muitos bots
+    ['toggle', 'hideOtherFx', 's_hideOtherFx'], // 19/11: efeito e skin animada dos outros voltam pro padrao (mais leve)
     ['seg', 'aa', 's_aa', [['off', 'aa_off'], ['2x', 'aa_2'], ['4x', 'aa_4'], ['8x', 'aa_8']]], // antisserrilhado (07/11, pedido dele): menos = mais leve
     ['toggle', 'invertY', 's_invert'],
     ['seg', 'adsMode', 's_adsMode', [['hold', 'lm_hold'], ['toggle', 'lm_toggle']]], // 09/11 (pedido dele): segurar pra mirar ou alternar
@@ -331,7 +333,7 @@ export function initMenus(o) {
   // abas (pills) dos Ajustes (03/11): cada opcao no seu grupo; toque so aparece no celular
   const GROUP = { sens: 'ctrl', adsSens: 'ctrl', mouseSmooth: 'ctrl', mouseAccel: 'ctrl', rawMouse: 'ctrl', gunSway: 'ctrl', invertY: 'ctrl', aimAssist: 'play', touchSens: 'touch', touchAdsSens: 'touch', adsMode: 'play', holdCrouch: 'play', leanMode: 'play', autoSprint: 'play', padSens: 'pad', padAdsSens: 'pad', padSmooth: 'pad', padAccel: 'pad',
     autoFire: 'play', adsFireBtn: 'touch', fireLBtn: 'touch', hudMode: isTouch ? 'touch' : 'game', autoChute: 'play', autoReload: 'play', dmgNums: 'play', modeTips: 'game',
-    gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', upscale: 'video', fsrSharp: 'video', texQ: 'video', winMode: 'video', winSize: 'video', angle: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video', telemetry: 'video',
+    hideOtherFx: 'video', gfxPreset: 'video', fpsCap: 'video', dynRes: 'video', fxQ: 'video', fov: 'video', vmFov: 'video', fovScale: 'video', grain: 'video', res: 'video', upscale: 'video', fsrSharp: 'video', texQ: 'video', winMode: 'video', winSize: 'video', angle: 'video', film: 'video', scopeQ: 'video', retglow: 'video', outl: 'video', chars: 'video', draw: 'video', aa: 'video', showFps: 'video', telemetry: 'video',
     master: 'audio', music: 'audio', sfx: 'audio', vo: 'audio', voSubs: 'audio', lang: 'game', threatRing: 'game', xhair: 'game', unlockAll: 'game', eliteTest: 'game' };
   const grp = (d) => { const g = GROUP[d[0] === 'xhair' ? 'xhair' : d[0] === 'hudscale' ? 'hudMode' : d[0] === 'autogfx' ? 'gfxPreset' : d[0] === 'retglow' ? 'retglow' : d[1]] || 'game'; return isTouch && g === 'ctrl' ? 'touch' : g; };
   // celular: Toque primeiro; Controle so com um controle ligado. PC: Teclado e mouse, Controle. Comandos gerais (agachar, inverter) vao na 1a aba
@@ -944,8 +946,11 @@ export function initMenus(o) {
     const hasBp = BP_ORDER.some(id => BLUEPRINTS[id].wpn === cat);
     const slots = cat === 'melee' ? ['body', isSaber(lo.body) ? 'accent' : 'camo'] /* sabre: so a cor do brilho */ : SLOTS.filter(s => (s !== 'canted' || cantedFits(cat, lo.body)) && (s !== 'charger' || chargerOptions(lo.body, cat).length > 1) && (s !== 'bp' || hasBp || cat !== 'melee') && (s !== 'conv' || convOptions(lo.body).length) && (s !== 'muzzle' || muzzleOptions(lo.body).length) && (s !== 'trigger' || cat === 'pistol')); // kit e bocal so no modelo que tem
     if (!slots.includes(slot)) slot = 'body';
+    // 19/11 (pedido dele): variante pronta (de elite/pacote) nao se edita; so a Montagem livre (ou a variante que a pessoa montou e deu nome)
+    const bpLock = cat !== 'melee' && !!(lo.bp || lo.ws) && !(cvOf(cat, lo) && lo.cvName);
+    if (bpLock && slot !== 'bp') { slot = 'bp'; picking = false; }
     $('slotList').innerHTML = slots.map(s => {
-      const disabled = s === 'handle' && !C.handles.length;
+      const disabled = s === 'handle' && !C.handles.length, locked = bpLock && s !== 'bp';
       let val;
       if (s === 'bp') val = lo.ws && !lo.bp && !(cvOf(cat, lo) && lo.cvName) ? `<i class="cmini ws-dot"></i> ${t('ws_' + lo.ws)}` : cvOf(cat, lo) && lo.cvName ? `${esc(lo.cvName)} <em class="cv-pill">${t('cvPill')}</em>` : lo.bp ? `<i class="cmini" style="background:${CAMO_SWATCH[BLUEPRINTS[lo.bp].lo.camo]}"></i> ${t(lo.bp)}` : t('bpNone');
       else if (s === 'camo') { const cm = CAMOS.find(c => c.id === (lo.camo || 'none')) || CAMOS[0]; val = `<i class="cmini" style="background:${CAMO_SWATCH[cm.id]}"></i> ${t('camo_' + cm.id)}`; }
@@ -955,9 +960,13 @@ export function initMenus(o) {
       else if (s === 'ret') val = lo.scope ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${RET_COLORS[lo.retColor || 'red']};vertical-align:-1px;border:2px solid currentColor"></i> ${t('ret_' + (lo.ret || 'auto'))}` : t('ret_none');
       else if (s === 'paint' || s === 'accent') val = lo[s] ? `<i style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;background:${lo[s]};vertical-align:-2px"></i> ${(s === 'accent' && (lo.pat2 || lo.pat)) ? t('stamp_' + (lo.pat2 || lo.pat)) : lo[s]}` : (s === 'accent' && (lo.pat2 || lo.pat)) ? t('stamp_' + (lo.pat2 || lo.pat)) : t('original');
       else val = partName(s, s === 'charger' ? (lo.charger || nativePart(lo.body, 'charger')) : lo[s]);
-      return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''}" data-s="${s}" ${disabled ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew(s === 'visual' ? 'look|charm|' : 'arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
+      return `<button class="slot slot-${s} ${s === 'bp' && (lo.bp || cvOf(cat, lo)) ? 'set' : ''} ${disabled ? 'disabled' : ''} ${locked ? 'locked' : ''}" data-s="${s}" ${disabled || locked ? 'aria-disabled="true"' : ''}><small>${t(SLOT_LABEL[s])}${anyNew(s === 'visual' ? 'look|charm|' : 'arsenal|' + cat + '|' + s + '|') ? newPill(t('chNew')) : ''}</small><span>${val}</span></button>`;
     }).join('');
-    $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
+    { $('bpLockNote')?.remove(); const bl = document.createElement('div'); bl.id = 'bpLockNote'; bl.className = 'bp-lock'; bl.setAttribute('role', 'status'); $('slotList').prepend(bl); // dentro da lista: no celular ocupa a linha inteira da grade
+      bl.hidden = !bpLock || picking; document.body.classList.toggle('bp-locked', bpLock && !picking);
+      if (bpLock) { bl.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V8a3 3 0 0 0-6 0z" fill="currentColor"/></svg><span>${t('bpLockMsg')}</span><button type="button" id="bpLockGo">${t('bpLockGo')}</button>`;
+        $('bpLockGo').onclick = () => { slot = 'bp'; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); }; } }
+    $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => { if (b.classList.contains('disabled')) return; if (b.classList.contains('locked')) { const bl = $('bpLockNote'); bl?.classList.remove('pulse'); void bl?.offsetWidth; bl?.classList.add('pulse'); audio.play('ui_back', { ui: true, vol: 0.5 }); return; } slot = b.dataset.s; picking = true; preview = null; audio.play('ui_click', { ui: true, vol: 0.6 }); renderSmith(); });
     // blocos de pecas OU a lista de opcoes do slot escolhido (o painel troca, nao empilha)
     $('slotList').hidden = picking; $('pickWrap').hidden = !picking;
     { let seen = false; try { seen = !!localStorage.getItem('rr_smith_hint'); } catch { /* */ } const hn = $('smithHint'); if (hn.parentElement !== document.body) document.body.appendChild(hn); /* 08/11: dentro do cartao (com transform) o 'fixed' caia em cima das pecas no celular deitado */ hn.hidden = picking || seen; }
@@ -978,7 +987,7 @@ export function initMenus(o) {
       markSeen(pre);
     }
     renderStats(view);
-    o.onSmith(buildGun(cat, view), cat, preview?.k === 'charm' ? preview.v : getLook().charm, cat === 'melee' ? null : { kc: preview?.k === 'kc' ? preview.v : getKc(), kills: wpnTracked(cat, view.body).k || 0, stk: getStickers(view.body) });
+    o.onSmith(buildGun(cat, view), cat, preview?.k === 'charm' ? preview.v : getLook().charm, cat === 'melee' ? null : { kc: preview?.k === 'kc' ? preview.v : getKc(), kills: wpnTracked(cat, view.body).k || 0, stk: getStickers(view.body) }, cat + ':' + (view?.body || '')); // 5o: arma/modelo (19/11: o fade com loader so na troca de arma)
   }
 
   // ---------- skills passivas: 2 medalhoes + cartas ----------
@@ -1280,7 +1289,7 @@ export function initMenus(o) {
     }
     let opts;
     if (slot === 'body') opts = C.bodies;
-    else if (slot === 'scope') opts = cat === 'sniper' ? [null, ...C.scopes] : [...ironOptions(cat), null, ...C.scopes].filter(x => x !== null); // sem 'Mira de ferro': o padrao e a de trilho
+    else if (slot === 'scope') opts = cat === 'sniper' ? ['iron_own', ...C.scopes] /* 19/11 (pedido dele): sniper tambem com mira de ferro */ : [...ironOptions(cat), null, ...C.scopes].filter(x => x !== null); // sem 'Mira de ferro': o padrao e a de trilho
     else if (slot === 'charger') opts = chargerOptions(lo.body, cat);
     else if (slot === 'laser') opts = [null, ...LASERS];
     else if (slot === 'conv') opts = [null, ...convOptions(lo.body)];

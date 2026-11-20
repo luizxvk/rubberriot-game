@@ -16,7 +16,7 @@ export class MatchVote {
   constructor({ G, send, onApplied, onCloseEditor }) { Object.assign(this, { G, send, onApplied, onCloseEditor }); this.card = null; this.ed = null; this.v = null; this.onKey = this.onKey.bind(this); addEventListener('keydown', this.onKey, true); addEventListener('mv-pad', (e) => this.vote(e.detail)); }
 
   // ---------- quadro do host ----------
-  canEdit() { const G = this.G; return !!G.lobbyCfg && G.lobbyHost === G.myId && !G.lobbyCfg.ranked && !G.tutorial && !G.range && !G.snap?.over; }
+  canEdit() { const G = this.G; return !!G.net?.ws /* 19/11 (pedido dele): so online; no solo nao aparece */ && !!G.lobbyCfg && G.lobbyHost === G.myId && !G.lobbyCfg.ranked && !G.tutorial && !G.range && !G.snap?.over; }
   openEditor() {
     const base = this.G.lobbyCfg; if (!base) return;
     this.base = base; this.draft = { ...base };

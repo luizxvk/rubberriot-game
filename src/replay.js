@@ -32,7 +32,7 @@ const lerpA = (a, b, k) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2
 export class Replay {
   constructor() { this.hist = []; this.shots = []; this.swings = []; this.kill = null; this.on = false; this.lastRec = -1; this.dt = 0; }
 
-  reset(scene) { this.overAt = null; this.done = null; this.stop(scene); this.hist.length = 0; this.shots.length = 0; this.swings.length = 0; this.kill = null; this.mine = null; this.lastRec = -1; }
+  reset(scene) { this.overAt = null; this.done = null; this.stop(scene); (this.pool ||= []).push(...this.hist); this.hist.length = 0; this.shots.length = 0; this.swings.length = 0; this.kill = null; this.mine = null; this.lastRec = -1; }
 
   // uma foto de todo mundo (remotos + eu)
   record(now, G) {
@@ -41,12 +41,16 @@ export class Replay {
     // e o replay acabava sem mostrar a morte. Grava mais um pouco; depois congela (o clipe repassa o fim)
     if (G.snap?.over) { this.overAt ??= now; if (now - this.overAt > CLIP_AFTER) return; }
     this.lastRec = now;
-    const p = new Map();
-    for (const r of G.remotes.values()) p.set(r.id, { pos: [...r.pos], yaw: r.char.root.rotation.y, pitch: r.pitch || 0, anim: r.anim, alive: r.alive, speed: r.speed || 0, wpn: r.wpn, ad: r.ad || 0, ca: r.ca || 0, eye: EYE(r.anim) });
+    // 20/11 (log dele: travadas de 200-250 ms sem evento = coleta de lixo): o quadro velho que sai da gravacao volta pro estoque e
+    // e reaproveitado (antes: Map + 1 objeto + 1 array por jogador, 20 vezes por segundo, jogados fora 10 s depois)
+    const F = (this.pool ||= []).pop() || { t: 0, p: new Map(), c: new Map() }, p = F.p, C = F.c; F.t = now; p.clear();
+    const put = (id) => { let e = C.get(id); if (!e) C.set(id, e = { pos: [0, 0, 0] }); p.set(id, e); return e; };
+    for (const r of G.remotes.values()) { const e = put(r.id); e.pos[0] = r.pos[0]; e.pos[1] = r.pos[1]; e.pos[2] = r.pos[2]; e.yaw = r.char.root.rotation.y; e.pitch = r.pitch || 0; e.anim = r.anim; e.alive = r.alive; e.speed = r.speed || 0; e.wpn = r.wpn; e.ad = r.ad || 0; e.ca = r.ca || 0; e.eye = EYE(r.anim); }
     const P = G.player;
-    if (P) p.set(G.myId, { pos: [...P.pos], yaw: P.yaw, pitch: P.pitch, anim: G.me?.anim || 'idle', alive: P.alive, speed: Math.hypot(P.vel[0], P.vel[2]), wpn: P.wpn, ad: P.adsK || 0, ca: G.vm?.canted ? 1 : 0, eye: P.eye || 1.55 });
-    this.hist.push({ t: now, p });
-    while (this.hist.length && now - this.hist[0].t > KEEP) this.hist.shift();
+    if (P) { const e = put(G.myId); e.pos[0] = P.pos[0]; e.pos[1] = P.pos[1]; e.pos[2] = P.pos[2]; e.yaw = P.yaw; e.pitch = P.pitch; e.anim = G.me?.anim || 'idle'; e.alive = P.alive; e.speed = Math.hypot(P.vel[0], P.vel[2]); e.wpn = P.wpn; e.ad = P.adsK || 0; e.ca = G.vm?.canted ? 1 : 0; e.eye = P.eye || 1.55; }
+    if (C.size > p.size + 16) for (const k of [...C.keys()]) if (!p.has(k)) C.delete(k); // quem saiu da sala nao fica no estoque pra sempre
+    this.hist.push(F);
+    while (this.hist.length && now - this.hist[0].t > KEEP) this.pool.push(this.hist.shift());
     while (this.shots.length && now - this.shots[0].t > KEEP) this.shots.shift();
     while (this.swings.length && now - this.swings[0].t > KEEP) this.swings.shift();
   }

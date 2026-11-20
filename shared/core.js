@@ -1,8 +1,8 @@
 // Nucleo da partida. Mesmo codigo no solo (navegador) e no multiplayer (node).
 // send(to, msg): to = id do cliente ou null pra todos.
 import { isDivTag, botDivTag } from './divisions.js'; // divisoes (16/11)
-import { CONV_RANGE, BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS, isSilenced , SOON_MODES } from './weapons.js';
-import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, SMUGGLE_MAPS, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallSpan, matchRules, clampArena, headroom } from './map.js';
+import { CONV_RANGE, BR, AMMO, FIELD, WEAPONS, GUN_LADDER, ggPickLadder, SPAWN_KIT, MODES, BOT_HP, MAX_PLAYERS, TEAM_MAX, TEAM_MAX_BLITZ, BLITZ_MAX, BLITZ_MAPS, BLITZ_BASE, HC_BASE, HC, GADGETS, gadgetOf, SKILLS, SKILL_SLOTS, BLAST, hasSkill, PRIMARIES, NADES, STREAKS, STREAK_FREE, pickStreaks, INFECT, BOMB, BLUEPRINTS, botSkill, bodyTrait, bpMods, botBody, WSKINS, LETHALS, TACTICALS, isSilenced , SOON_MODES } from './weapons.js';
+import { getMap, MAP_IDS as ALL_MAPS, MODE_MAP, ESCORT_MAPS, HEIST_ONLY, PVE_ONLY, BIG_OBJ_ONLY, BIG_OBJ_MODES, mapAllows, mapFitsMode, BHOP_MAPS, SMUGGLE_MAPS, TRAIN_MAPS, BOMB_SITES, propBoxes, moveBody, raycast, hasLOS, wallSpan, matchRules, clampArena, headroom } from './map.js';
 import { navPath, floorAt, standable, roomy, hop, lowAt, freeNear, warmNav } from './nav.js';
 import { CAR, carsInit, carsTick, carEnter, carExit, carsSnap, seatPos, carDamage } from './cars.js';
 import { cleanLook, DANCE_IDS } from './looks.js';
@@ -15,7 +15,7 @@ import { bannerOk, botBanner, BANNER_DEFAULT } from './banners.js';
 import { fieldReset, fieldUse, fieldHoleUsed, fieldBlocks, fieldTick, fieldSnap, botField, botPickField, fieldReady, botHookTick } from './field.js';
 import { escInit, escTick, escSpawn, escGoal, escSnap, escPos, escTimeout, trainBox } from './escort.js';
 import { EVENTS, EV } from './events.js';
-import { carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, heistPass, heistBotPass, heistCfg, HEIST_MAPS } from './heist.js';
+import { trainBoxesFor, carryingBag, heistInit, heistTick, heistSpawns, heistRespawn, heistGoal, heistSnap, heistTimeout, heistBoxes, heistPass, heistBotPass, heistCfg, HEIST_MAPS } from './heist.js';
 import { strikeReset, strikeUse, strikeTick, strikeSnap, tickBomber, abxDrop, abxTake, abxShot } from './strikes.js';
 import { borInit, borBoxes, borTick, borHit, borKilled, borDown, borRescue, borBotShop, borSnap, borHoldSpawn } from './borroes.js';
 import { MOBS } from './mobs.js';
@@ -56,9 +56,9 @@ const SPAWN_PROT = 2.8;   // s de escudo ao nascer (08/11, pedido dele: era 1,8)
 const AFK_PLAY = 120, AFK_LOBBY = 480; // s parado ate sair da sala
 const STREAK_GAP = 4; // s de folga entre uma sequencia acabar e a proxima poder entrar
 const BOT_YIELD = 8; // s que o bot espera com a sala livre quando um jogador tem sequencia guardada (vez dos jogadores, 03/11)
-export const LIMIT_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'bomb'];
-export const TIME_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'gungame', 'ctf', 'dom', 'infect'];
-export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto', 'becos', 'feira', 'largo', 'xilindro']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
+export const LIMIT_MODES = ['ffa', 'tdm', 'pnb', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'bomb'];
+export const TIME_MODES = ['ffa', 'tdm', 'pnb', 'blitz', 'blitz_ctf', 'blitz_dom', 'gungame', 'ctf', 'dom', 'infect'];
+export const MAP_IDS = ['vila', 'fabrica', 'fronteira', 'estaleiro', 'refinaria', 'ilha', 'deserto', 'becos', 'feira', 'largo', 'xilindro', 'telhados', 'picadeiro', 'caixotes', 'montagem', 'nanquim']; // deserto (04/11): sem ele a escolha caia em auto e a seta do lobby dava voltas
 // kit de sequencias do bot (03/11): uma de cada faixa, sorteada; as grandes novas entram aqui
 const BOT_BIG = ['plane', 'train', 'bomber', 'hand'];
 const BOT_KIT = [['uav', 'milk', 'talc'], ['anvil', 'rpg', 'blimp', 'anvline', 'sentry', 'sentry'], ['plane', 'train', 'blimp'], ['bomber', 'hand', 'nuke']];
@@ -95,6 +95,33 @@ const CITY_ROUTES = ['becos', 'feira', 'largo', 'cortejo'];
 const QC_N = 10; // frases do Chat Rapido (src/quickchat.js)
 // bot provocando (10/11): de vez em quando solta uma do Chat Rapido ao derrubar alguem (seu noob, volta aqui, isso foi sorte...)
 const BOT_TAUNTS = [2, 5, 7, 9];
+// Pulo do Gato (19/11): volta pro inicio. why: 'fall' (caiu), 'done' (chegou) ou false (nascer). O relogio zera aqui
+function bhReset(c, p, why) {
+  const B = c.M.bh; if (!B) return;
+  const sp = c.M.spawns.ffa[Math.floor(Math.random() * c.M.spawns.ffa.length)];
+  p.pos = [sp[0], B.start[1], sp[1]]; p.vel = [0, 0, 0]; p.yaw = B.yaw || 0;
+  p.bh ||= { best: 0, done: 0, falls: 0, t0: 0 };
+  p.bh.t0 = c.clock || 0; p.bh.run = false; p.tpUntil = (c.clock || 0) + 0.8; // 19/11 (pedido dele): o relogio so corre quando sair da largada
+  if (why) c.event({ k: 'bhReset', id: p.id, why, pos: p.pos, yaw: p.yaw });
+}
+function bhTick(c) {
+  const B = c.M.bh; if (!B || c.over || c.freezeT > 0) return;
+  const g = B.goal;
+  for (const p of c.players.values()) {
+    if (!p.alive || p.bot || !p.bh) continue;
+    if (p.pos[1] < B.fall) { p.bh.falls++; p.deaths = (p.deaths || 0) + 1; bhReset(c, p, 'fall'); continue; }
+    const q = p.pos;
+    // largada: o relogio comeca quando o pe sai do bloco de largada (6x6 em volta do inicio), nao no nascer
+    if (!p.bh.run) { if (Math.abs(q[0] - B.start[0]) > 3.1 || Math.abs(q[2] - B.start[2]) > 3.1) { p.bh.run = true; p.bh.t0 = c.clock || 0; c.send(p.id, { t: 'ev', k: 'bhGo' }); } else continue; }
+    if (q[0] > g.min[0] && q[0] < g.max[0] && q[2] > g.min[2] && q[2] < g.max[2] && q[1] > g.min[1] && q[1] < g.max[1]) {
+      const t = Math.round(((c.clock || 0) - p.bh.t0) * 100) / 100, rec = !p.bh.best || t < p.bh.best;
+      p.bh.done++; if (rec) p.bh.best = t; p.kills = p.bh.done; p.score = p.bh.best ? Math.round(100000 / p.bh.best) : 0; // placar: mais chegadas e o melhor tempo
+      c.event({ k: 'bhDone', id: p.id, t, best: p.bh.best, rec, n: p.bh.done });
+      bhReset(c, p, 'done');
+    }
+  }
+}
+
 export class Core {
   constructor({ mode = 'ffa', map, bots = 7, difficulty = 1, send, lobby = true, limit = 0, time = 0, autoNext = false, ranked = false, mut = null, coop = false, onFlag = null, onRanked = null, onPerf = null, onMatch = null }) {
     this.coop = coop; // tela dividida (01/11): a gente do sofa joga junta no vermelho contra os bots
@@ -107,17 +134,21 @@ export class Core {
     this.duo = mode === 'duo';
     this.bounce = mode === 'bounce';
     this.blitz = BLITZ_BASE[mode] ? mode : false; // blitz (id do modo): regras de base (mata-mata/bandeira/dominacao), 24 vagas, so mapa grande
+    this.hc = HC_BASE[mode] ? mode : false; // 19/11: Preto no Branco (hardcore), regras do Mata-Mata
     this.borArt = mode === 'arte'; // Noite dos Borroes: Arte-Final (armas do Arsenal, ate a onda escolhida)
-    this.mode = this.duo || this.bounce ? 'br' : this.blitz ? BLITZ_BASE[this.blitz] : this.borArt ? 'borroes' : MODES[mode] ? mode : 'ffa';
+    this.mode = this.duo || this.bounce ? 'br' : this.blitz ? BLITZ_BASE[this.blitz] : this.hc ? HC_BASE[this.hc] : this.borArt ? 'borroes' : MODES[mode] ? mode : 'ffa';
     this.cfg = MODES[this.modeId()];
     if (this.blitz) bots = Math.max(bots | 0, BLITZ_MAX - 1); // sala rapida de blitz ja nasce cheia (12x12 desde 07/11)
+    if (this.mode === 'bhop') bots = 0; // Pulo do Gato: bot nao faz percurso
     { const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(BLITZ_BASE[mode] || mode)); if (this.blitz && !bz.includes(map)) map = bz[Math.floor(Math.random() * bz.length)]; }
     if (!this.blitz && BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
     if (!mapAllows(map, mode)) map = 'auto'; // 13/11: Xilindro so nos modos dele
+    if (!this.blitz && !(map === 'estande' && this.mode === 'ffa') && !mapFitsMode(map, this.mode)) map = 'auto'; // 19/11: mapa de outro modo (ex. Casa da Moeda no mata-mata) cai no sorteio do modo
     // Noite dos Borroes so no Estudio Tinteiro (e o Tinteiro so nela)
     if (this.mode === 'borroes') map = 'tinteiro';
     else if (this.mode === 'heist') map = HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)];
     else if (this.mode === 'smuggle') map = SMUGGLE_MAPS.includes(map) ? map : 'auto'; // Contrabando: Cais ou Trapiche (auto sorteia)
+    else if (this.mode === 'trem') map = TRAIN_MAPS.includes(map) ? map : 'auto'; // Roubo ao Trem (19/11): Expresso Dourado
     else if (this.mode === 'escort' && !ESCORT_MAPS.includes(map)) map = ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]; // escolta precisa de trilho: sala criada com outro mapa quebrava o servidor
     else if (PVE_ONLY.includes(map)) map = 'auto';
     if (this.mode === 'borroes') bots = Math.min(3, bots | 0);
@@ -169,13 +200,13 @@ export class Core {
       blue: { state: 'home', pos: [...M.flagBase.blue], carrier: null, dropT: 0 },
     };
     this.zones = M.zones.map(z => ({ id: z.id, pos: z.pos, r: z.r, owner: null, prog: 0 }));
-    this.burns = []; this.smokes = [];
+    this.burns = []; this.smokes = []; this.goos = []; // goos: pocas da Grudenta (19/11)
     this.cars = carsInit(this); // carro da Captura de Bandeira (04/11)
     this.domBonus = null; // bandeira extra D (04/11): aparece no meio da partida, vale 2,5x e some depois de um tempo
     this.pickups = M.pickups.map((p, i) => ({ id: i, ...p, active: !(this.mode === 'gungame' && p.kind === 'wpn'), t: 0 }));
     if (this.mode === 'br') brInit(this);
     this.esc = null; if (this.mode === 'escort') escInit(this);
-    this.heist = null; if (this.mode === 'heist' || this.mode === 'smuggle') heistInit(this); // Contrabando (04/11): mesmo motor do Cofre
+    this.heist = null; if (this.mode === 'heist' || this.mode === 'smuggle' || this.mode === 'trem') heistInit(this); // Contrabando (04/11): mesmo motor do Cofre
     this.night = this.mode !== 'borroes' && this.tod === 'night'; // 07/11 (pedido dele): o host escolhe Dia ou Noite no lobby (linha Horario)
     if (this.bor) for (const p of [...this.players.values()]) if (p.mob) this.players.delete(p.id); // viloes da noite passada saem
     this.bor = null; if (this.mode === 'borroes') borInit(this);
@@ -415,17 +446,18 @@ export class Core {
     this.duo = mode === 'duo';
     this.bounce = mode === 'bounce';
     this.blitz = BLITZ_BASE[mode] ? mode : false;
+    this.hc = HC_BASE[mode] ? mode : false;
     this.borArt = mode === 'arte';
-    this.mode = this.duo || this.bounce ? 'br' : this.blitz ? BLITZ_BASE[this.blitz] : this.borArt ? 'borroes' : mode;
+    this.mode = this.duo || this.bounce ? 'br' : this.blitz ? BLITZ_BASE[this.blitz] : this.hc ? HC_BASE[this.hc] : this.borArt ? 'borroes' : mode;
     this.cfg = MODES[mode];
     let map = MAP_OK(m.map) ? m.map : 'auto';
     if (this.blitz && map !== 'auto' && !BLITZ_MAPS.includes(map)) map = 'auto';
     if (BIG_OBJ_ONLY.includes(map) && !BIG_OBJ_MODES.includes(this.mode)) map = 'auto'; // Canyon Poeira: so bandeira e dominacao
-    if (!this.blitz && !mapAllows(map, this.mode)) map = 'auto';
+    if (!this.blitz && !(map === 'estande' && this.mode === 'ffa') && !mapFitsMode(map, this.mode)) map = 'auto'; // 19/11: uma regra so de mapa x modo (shared/map.js)
     // escolta so roda na Ladeira do Bonde, e a Ladeira so serve pra escolta (o mapa precisa do trilho)
     // escolta: Ladeira ou Vale do Apito (auto sorteia); fora da escolta os mapas de trilho nao entram
     const bz = BLITZ_MAPS.filter(id => !BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(this.mode)); // blitz de mata-mata nao vai pro deserto
-    const map2 = this.blitz ? (bz.includes(map) ? map : bz[Math.floor(Math.random() * bz.length)]) : this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : this.mode === 'heist' ? (HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)]) : this.mode === 'smuggle' ? (SMUGGLE_MAPS.includes(map) ? map : SMUGGLE_MAPS[Math.floor(Math.random() * SMUGGLE_MAPS.length)]) : this.mode === 'borroes' ? 'tinteiro' : ESCORT_MAPS.includes(map) || HEIST_ONLY.includes(map) || PVE_ONLY.includes(map) ? 'auto' : map; // cofre no auto: metade das vezes no Banco Ferradura (o mapa dele)
+    const map2 = this.blitz ? (bz.includes(map) ? map : bz[Math.floor(Math.random() * bz.length)]) : this.mode === 'escort' ? (ESCORT_MAPS.includes(map) ? map : ESCORT_MAPS[Math.floor(Math.random() * ESCORT_MAPS.length)]) : this.mode === 'heist' ? (HEIST_MAPS.includes(map) ? map : HEIST_MAPS[Math.floor(Math.random() * HEIST_MAPS.length)]) : this.mode === 'smuggle' ? (SMUGGLE_MAPS.includes(map) ? map : SMUGGLE_MAPS[Math.floor(Math.random() * SMUGGLE_MAPS.length)]) : this.mode === 'trem' ? (TRAIN_MAPS.includes(map) ? map : TRAIN_MAPS[Math.floor(Math.random() * TRAIN_MAPS.length)]) : this.mode === 'borroes' ? 'tinteiro' : ESCORT_MAPS.includes(map) || HEIST_ONLY.includes(map) || PVE_ONLY.includes(map) ? 'auto' : map; // cofre no auto: metade das vezes no Banco Ferradura (o mapa dele)
     // mesmo modo e mesma escolha de mapa (so trocou evento, bots, tempo...): o mapa fica (01/11: trocar o evento
     // sorteava outro mapa da escolta no 'auto')
     if (!(mode === prevMode && map === prevRaw && this.M)) { // escolta: o lobby recebe a ESCOLHA (auto), nao o sorteado (02/11: a seta caia em auto = auto e nao trocava)
@@ -438,6 +470,7 @@ export class Core {
     if (!this.blitz && BLITZ_BASE[prevMode]) this.wantBots = Math.min(this.wantBots, 11); // saiu: volta pro tamanho normal
     this.wantBots = Math.max(0, Math.min(this.cap() - 1, this.wantBots));
     if (this.mode === 'borroes') this.wantBots = Math.min(3, this.wantBots); // noite: no maximo 4 no time
+    if (this.mode === 'bhop') this.wantBots = 0; // 19/11 (pedido dele): Pulo do Gato e so de jogador, nunca bot (trocar o modo no lobby mantinha os bots)
     if (m.tod === 'day' || m.tod === 'night') this.tod = m.tod; // horario do Roubo ao Cofre (07/11)
     if ([0.7, 1, 1.35].includes(m.difficulty)) { this.difficulty = m.difficulty; this.skill = botSkill(m.difficulty); }
     this.limitPick = Number.isFinite(m.limit) ? Math.max(0, Math.min(500, m.limit | 0)) : 0;
@@ -464,7 +497,7 @@ export class Core {
     this.event({ k: 'cfg' });
   }
 
-  modeId() { return this.duo ? 'duo' : this.bounce ? 'bounce' : this.borArt ? 'arte' : this.blitz || this.mode; }
+  modeId() { return this.duo ? 'duo' : this.bounce ? 'bounce' : this.borArt ? 'arte' : this.blitz || this.hc || this.mode; }
   cap() { return this.blitz ? BLITZ_MAX : MAX_PLAYERS; } // vagas da sala (blitz 24)
   // Bate-Volta: ainda da pra renascer? (ate a fase `until` da iris)
   bounceOpen() { return this.bounce && !!this.zone && this.zone.phase + (this.zone.state === 'shrink' ? 1 : 0) < BR.bounce.until + 1 && this.zone.phase < BR.bounce.until; }
@@ -477,7 +510,7 @@ export class Core {
     const modos = (this.ranked ? RANKED_MODES : QUICK_MODES).filter(m => m !== atual && !(ilha && (m === 'br' || m === 'bounce')));
     const mode = modos[Math.floor(Math.random() * modos.length)];
     const mapas = MAP_IDS.filter(id => id !== 'ilha' && !ESCORT_MAPS.includes(id) && id !== this.M.id && !PVE_ONLY.includes(id) && !HEIST_ONLY.includes(id) && mapAllows(id, MODES[mode]?.base || mode) && !(mode.startsWith('blitz') && MAP_MODES_BLOCK(id)) && (!BIG_OBJ_ONLY.includes(id) || BIG_OBJ_MODES.includes(MODES[mode]?.base || mode.replace('blitz_', '')))); // a Ladeira so serve a escolta (configure forca)
-    this.configure({ mode, map: mode === 'br' || mode === 'heist' || mode === 'smuggle' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
+    this.configure({ mode, map: mode === 'br' || mode === 'heist' || mode === 'smuggle' || mode === 'trem' ? 'auto' : mapas[Math.floor(Math.random() * mapas.length)] });
   }
 
   // Jogo Rapido: da pra cair nesta sala agora? Partida rolando, sem fim a vista, com vaga, sem dupla;
@@ -494,7 +527,7 @@ export class Core {
 
   join(id, name) {
     const p = this.addPlayer(id, (name || 'Player').slice(0, 24));
-    this.balanceBots();
+    this.balanceBots(); this._kfNow = true; // quem chegou recebe o estado inteiro ja no proximo envio
     this.send(id, { t: 'welcome', id, mode: this.mode, duo: this.duo, bounce: this.bounce, map: this.M.id, team: p.team, phase: this.phase });
     this.lobbyT = 0;
     // pecas das armas de quem ja estava na sala
@@ -580,7 +613,7 @@ export class Core {
     const humans = this.humans();
     const bots = [...this.players.values()].filter(p => p.bot && !p.mob); // vilao da noite nao e bot aliado
     // battle royale: campo fixo de BR.field (bots completam; sem escolha de bots)
-    const want = this.mode === 'br' ? Math.max(0, BR.field - humans) : this.mode === 'borroes' ? Math.max(0, Math.min(this.wantBots, 3) - Math.max(0, humans - 1), 0) : Math.max(0, Math.min(this.wantBots - Math.max(0, humans - 1), this.cap() - humans));
+    const want = this.mode === 'bhop' ? 0 : this.mode === 'br' ? Math.max(0, BR.field - humans) : this.mode === 'borroes' ? Math.max(0, Math.min(this.wantBots, 3) - Math.max(0, humans - 1), 0) : Math.max(0, Math.min(this.wantBots - Math.max(0, humans - 1), this.cap() - humans));
     while (bots.length < want) {
       const name = BOT_NAMES[this.botSeq++ % BOT_NAMES.length];
       bots.push(this.addPlayer('bot' + this.botSeq, name, true));
@@ -700,6 +733,7 @@ export class Core {
     if (this.bounce) { p.pos[1] = y + BR.bounce.dropH; p.drop = 30; p.chute = false; p.air = true; p.dropAt = [x, z]; } // dropAt: o ponto espalhado sorteado (bot cai ali)
     p.hp = p.bot && !this.bor ? BOT_HP : 100; // noite: bot e parceiro, vida cheia
     { const hk = EV(this.mut)?.hp; if (hk && !this.bor) p.hp = Math.round(p.hp * hk); } // evento Tanque/Casca de Ovo (08/11)
+    if (this.hc) p.hp = Math.round(p.hp * HC.hp); // Preto no Branco: metade da vida
     p.alive = true; p.shieldT = 0; p.stimT = 0;
     p.flameFuel = GADGETS.gd_flame.fuel; p.ubShells = GADGETS.gd_shot.shells; p.ubT = 0; // gadget cheio ao nascer
     if (p.losBase) { p.los = p.losBase; p.losBase = null; this.event({ k: 'lo', id: p.id, los: p.los, tracer: p.tracer }); } // largou a arma pega do chao
@@ -710,6 +744,7 @@ export class Core {
     p.nades = { frag: 1 + xn, flash: 1 + xn };
     p.owned = new Set(SPAWN_KIT);
     if (this.mode !== 'gungame' && this.mode !== 'br') p.owned.add('melee');
+    p.mgPick = false; // renasceu: minigun do mapa nao vem junto
     if (this.mode === 'gungame') p.wpn = this.ladder[Math.min(p.gunLvl, this.ladder.length - 1)].wpn;
     else if (infect && p.team === 'red') { p.owned = new Set(['melee']); p.wpn = 'melee'; p.hp = INFECT.hp; p.nades = { frag: 0, flash: 1 }; }
     else if (infect) {
@@ -719,6 +754,7 @@ export class Core {
     }
     else if (this.mode === 'br') { brSpawn(this, p); if (this.bounce && p.deaths > 0) { p.owned.add('pistol'); p.wpn = 'pistol'; } } // renasceu: volta com pistola
     else if (this.bor && !this.borArt) { p.owned = new Set(['pistol', 'melee']); p.wpn = 'pistol'; } // Rascunho: todo mundo so com a Estalo; o resto se compra
+    else if (this.mode === 'bhop') { p.owned = new Set(['melee']); p.wpn = 'melee'; p.nades = { frag: 0, flash: 0 }; p.skills = []; p.armor = 0; p.protUntil = 0; bhReset(this, p, false); } // Pulo do Gato: so a faca, sem skill nem granada
     else if (p.bot) {
       // 03/11 (pedido dele): bots com mais variedade, sniper tambem; e o MODELO da arma muda (corpo sorteado), nao so a
       // categoria. A montagem vai pro cliente (evento lo) e vale pra arma largada no chao
@@ -755,11 +791,12 @@ export class Core {
 
   // ---------- mensagens do cliente ----------
   handle(id, m) {
-    if (this._dyn) this.M.dyn = this._dyn; // 08/11: obstaculos moveis DESTA sala (o mapa e dividido entre salas no servidor)
+    if (this._dyn) this.M.dyn = this._dyn; if (this._boxes) this.M.boxes = this._boxes; // 08/11: obstaculos moveis DESTA sala (o mapa e dividido entre salas no servidor)
     const p = this.players.get(id);
     if (!p || !m || typeof m !== 'object') return;
-    if (m.t !== 'state' && m.t !== 'ping' && m.t !== 'lat' && m.t !== 'perf') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
+    if (m.t !== 'state' && m.t !== 'ping' && m.t !== 'lat' && m.t !== 'perf' && m.t !== 'kf') p.actAt = this.clock || 0; // qualquer acao conta como presente (AFK)
     switch (m.t) {
+      case 'kf': p.dsOk = true; this._kfNow = true; return; // 19/11: cliente (re)conectou e pede o estado inteiro no proximo envio (ver deltaSnap)
       // ping no Tab (04/11, pedido dele): o jogo mede a ida e volta e conta o que deu; o placar mostra de todo mundo
       case 'lat': { p.ping = Math.max(0, Math.min(999, m.ms | 0)); this.send(id, { t: 'latr', c: m.c }); break; }
       // 14/11 (pedido dele: ver o desempenho de quem joga): o jogo manda a cada 10 s; aqui so repassa pro log (1 a cada 8 s por pessoa)
@@ -841,7 +878,7 @@ export class Core {
         if (this.waitLoad?.delete(id) && !this.waitLoad.size) this.startCountdown();
         break;
       }
-      case 'field': fieldUse(this, p, m); break;
+      case 'field': if (this.mode !== 'bhop') fieldUse(this, p, m); break; // Pulo do Gato: sem equipamento de campo
       case 'holeUse': fieldHoleUsed(this, p, m); break;
       case 'respawn': {
         if (!p.alive && p.respawnT <= 0) p.wantSpawn = true;
@@ -896,6 +933,7 @@ export class Core {
         if (!Array.isArray(m.pos) || m.pos.length !== 3 || !m.pos.every(Number.isFinite)) return;
         if (!Number.isFinite(m.yaw) || !Number.isFinite(m.pitch)) return;
         if (Math.abs(m.yaw - p.yaw) > 0.02 || Math.abs(m.pos[0] - p.pos[0]) + Math.abs(m.pos[2] - p.pos[2]) > 0.05) p.actAt = this.clock || 0; // mexeu: presente
+        if ((p.tpUntil || 0) > (this.clock || 0)) { p.pitch = m.pitch; break; } // Pulo do Gato: acabou de voltar pro inicio; a posicao velha do cliente (ainda la embaixo) nao vale
         this.moveCheck(p, m.pos);
         p.pos = clampArena(this.M, m.pos); p.yaw = m.yaw; p.pitch = m.pitch; p.anim = String(m.anim).slice(0, 8);
         p.ads = m.ad === 1 ? 1 : 0; p.ca = m.ca === 1 ? 1 : 0; // mirando (04/11): brilho da luneta pros outros; ca = mira de 45 graus (aparece na tela de morte)
@@ -905,7 +943,11 @@ export class Core {
         }
         if (p.car) { const car = this.cars.find(k => k.id === p.car); if (car) p.pos = seatPos(car, p.seat); } // sentado: fica no lugar
         p.lean = this.mode === 'bomb' && Number.isFinite(m.ln) ? Math.max(-1, Math.min(1, m.ln)) : 0; // inclinar (so plantar a bomba)
-        if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn && (this.mode !== 'infect' || p.owned.has(m.wpn))) { p.lastWpn = p.wpn; p.wpn = m.wpn; }
+        if (this.mode !== 'gungame' && WEAPONS[m.wpn] && m.wpn !== p.wpn && ((this.mode !== 'infect' && this.mode !== 'bhop') || p.owned.has(m.wpn))) { // Pulo do Gato: so a faca
+          // 19/11 (pedido dele): a minigun do meio do mapa e emprestada; trocou pra outra arma, ela sai da mao (volta a girar no meio no tempo dela)
+          if (p.wpn === 'minigun' && p.mgPick) { p.mgPick = false; p.owned.delete('minigun'); this.event({ k: 'take', id: p.id, wpn: 'minigun' }); }
+          p.lastWpn = p.wpn; p.wpn = m.wpn;
+        }
         break;
       case 'swing':
         if (p.alive) this.event({ k: 'swing', id });
@@ -1044,7 +1086,7 @@ export class Core {
         abxTake(this, p, m.id);
         break;
       case 'streak':
-        if (p.alive) this.useStreak(p, m.kind);
+        if (p.alive && this.mode !== 'bhop') this.useStreak(p, m.kind);
         break;
       case 'pass': // Contrabando: passa o caixote (a mira vem junto; o yaw do servidor pode estar um tick atras)
         if (Number.isFinite(m.yaw)) p.yaw = m.yaw;
@@ -1156,7 +1198,7 @@ export class Core {
   enemies(a, b) { return a !== b && (!this.cfg.teams || a.team !== b.team); }
 
   damage(v, a, dmg, wpn, head, burn = false) {
-    if (this.over || this.freezeT > 0 || !v.alive || !Number.isFinite(dmg)) return;
+    if (this.over || this.freezeT > 0 || !v.alive || !Number.isFinite(dmg) || this.mode === 'bhop') return; // Pulo do Gato: ninguem machuca ninguem
     if (a && a !== v && !this.enemies(a, v)) return;
     if (a && a !== v && (v.protUntil || 0) > (this.clock || 0) && wpn !== 'iris') return; // escudo de nascimento
     if (fieldBlocks(this, v, a, wpn, head ? dmg * 1.6 : dmg)) return; // guarda-chuva aberto de frente pro tiro (gasta a vida dele)
@@ -1232,7 +1274,7 @@ export class Core {
     v.dmgBy = {};
     if (this.mode === 'br') brKill(this, v);
     if (this.bor) borKilled(this, v, a); // pontos do abate; gente so volta na onda seguinte
-    this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, ahp: suicide ? undefined : Math.max(1, Math.ceil(a.hp)), pos: v.pos, bn: suicide ? undefined : this.bnOf(a) });
+    this.event({ k: 'kill', a: suicide ? null : a.id, v: v.id, wpn, head, streak: suicide ? 0 : a.streak, ahp: suicide ? undefined : Math.max(1, Math.ceil(a.hp)), pos: v.pos, bn: suicide || v.bot ? undefined : this.bnOf(a) });
     // sobrevivente que cai (de qualquer jeito) vira infectado
     if (this.mode === 'infect' && v.team === 'blue' && this.infStarted) this.infect(v, suicide ? null : a);
     if (this.mode === 'ffa' && !suicide && a.kills >= this.limit) this.end(a.name);
@@ -1359,6 +1401,17 @@ export class Core {
     this.event({ k: 'throw', id: p.id, kind });
   }
 
+  // na poca da Grudenta de quem e do outro time (o dono e o time dele passam livres)
+  inGoo(p) {
+    const R = NADES.goo.pool;
+    for (const z of this.goos) {
+      if ((p.pos[0] - z.pos[0]) ** 2 + (p.pos[2] - z.pos[2]) ** 2 > R * R || Math.abs(p.pos[1] - z.pos[1]) > 1) continue;
+      const o = this.players.get(z.owner); if (z.owner === p.id || (o && !this.enemies(o, p))) continue;
+      return true;
+    }
+    return false;
+  }
+
   tickNades(dt) {
     for (let i = this.nades.length - 1; i >= 0; i--) {
       const n = this.nades[i];
@@ -1378,6 +1431,7 @@ export class Core {
       for (const v of this.players.values()) { if (!v.alive || (owner && v.id !== z.owner && !this.enemies(owner, v)) || v.id === z.owner) continue; if (Math.hypot(v.pos[0] - z.pos[0], v.pos[2] - z.pos[2]) < NADES.thermo.burnR && Math.abs(v.pos[1] - z.pos[1]) < 2) this.damage(v, owner || v, NADES.thermo.burnDps * dt, 'thermo', false, true); }
     }
     if (this.burns) this.burns = this.burns.filter(z => z.t > 0);
+    if (this.goos?.length) { for (const z of this.goos) z.t -= dt; this.goos = this.goos.filter(z => z.t > 0); }
     if (this.smokes) { for (const z of this.smokes) z.t -= dt; this.smokes = this.smokes.filter(z => z.t > 0); }
   }
 
@@ -1429,6 +1483,17 @@ export class Core {
         this.damage(v, owner || v, (T.dmg * (1 - d / T.radius) + 10) * (v.id === n.owner ? 0.5 : 1), 'thermo', false);
       }
       (this.burns ||= []).push({ pos: [n.pos[0], floorAt(this.M, n.pos[0], n.pos[2]), n.pos[2]], t: T.burn, owner: n.owner });
+    } else if (n.kind === 'goo') { // Grudenta (19/11): estouro pequeno e a poca que gruda o outro time
+      const T = NADES.goo, y = floorAt(this.M, n.pos[0], n.pos[2]), at = [n.pos[0], y, n.pos[2]];
+      this.event({ k: 'goo', pos: at, owner: n.owner, tm: owner?.team || null, dur: T.time, r: T.pool });
+      for (const v of this.players.values()) {
+        if (!v.alive) continue;
+        const c = [v.pos[0], v.pos[1] + 0.9, v.pos[2]], d = Math.sqrt(dist2(c, n.pos));
+        if (d > T.radius || !hasLOS(this.M, [n.pos[0], n.pos[1] + 0.3, n.pos[2]], c)) continue;
+        if (v.id !== n.owner && owner && !this.enemies(owner, v)) continue;
+        this.damage(v, owner || v, T.dmg * (1 - d / T.radius * 0.5) * (v.id === n.owner ? 0.5 : 1), 'goo', false);
+      }
+      (this.goos ||= []).push({ pos: at, t: T.time, owner: n.owner });
     } else if (n.kind === 'smoke') {
       (this.smokes ||= []).push({ pos: [...n.pos], t: NADES.smoke.time });
       this.event({ k: 'smoke', pos: n.pos, dur: NADES.smoke.time });
@@ -1900,7 +1965,7 @@ export class Core {
       const ideal = (WEAPONS[p.wpn]?.melee ? 0.8 : p.wpn === 'shotgun' ? 6 : p.wpn === 'sniper' ? 30 : 14) * (role === 0 ? 0.65 : role === 2 ? 1.35 : 1);
       let adv = d > ideal + 3 ? 1 : d < ideal - 3 ? -0.6 : 0;
       // ancora na distancia certa: para, agacha e atira (fica parado de proposito, da pra prever e flanquear)
-      ai.crouch = role === 2 && !adv && d > 12 && !WEAPONS[p.wpn]?.melee && ai.reloadT <= 0 && !ai.rescue && !['ctf', 'dom', 'escort', 'bomb', 'heist', 'smuggle'].includes(this.mode); // modo de objetivo: anda sempre
+      ai.crouch = role === 2 && !adv && d > 12 && !WEAPONS[p.wpn]?.melee && ai.reloadT <= 0 && !ai.rescue && !['ctf', 'dom', 'escort', 'bomb', 'heist', 'smuggle', 'trem'].includes(this.mode); // modo de objetivo: anda sempre
       // contra quem esta de lamina (infectado): recua atirando, nunca deixa encostar
       if (WEAPONS[t.wpn]?.melee && !WEAPONS[p.wpn]?.melee) adv = d < 9 ? -1 : d > 16 ? 0.4 : 0;
       const sw = role === 2 ? 0.25 : role === 1 ? 1 : 0.7; // quanto cada papel dança de lado
@@ -1943,7 +2008,7 @@ export class Core {
       if (ai.nadeT <= 0 && this.skill.nades && p.nades.frag > 0 && d > 9 && d < 24 && !this.over) {
         ai.nadeT = rnd(8, 16); p.nades.frag--;
         const up = 0.25 + d * 0.012;
-        p.botLethal ||= Math.random() < 0.6 ? 'frag' : 'thermo'; // bot sorteia a sua (nunca machadinha)
+        p.botLethal ||= ((r) => r < 0.5 ? 'frag' : r < 0.8 ? 'thermo' : 'goo')(Math.random()); // bot sorteia a sua (nunca machadinha)
         this.throwNade(p, p.botLethal, norm([fx, up, fz]));
         const n = this.nades[this.nades.length - 1];
         const sp = Math.min(19, 6 + d * 0.55);
@@ -1986,6 +2051,8 @@ export class Core {
     let speed = sprint ? 9.3 : ai.blind > 0 ? 3 : 6.4; // acompanha o jogador mais lento (01/11)
     if (WEAPONS[p.wpn]?.moveK) speed *= sprint ? WEAPONS[p.wpn].runK : WEAPONS[p.wpn].moveK; // bot com Metralhadora pesa igual
     if (this.mode === 'infect' && p.team === 'red') speed *= INFECT.speed;
+    if (this.goos?.length && this.inGoo(p)) speed *= NADES.goo.slow; // Grudenta: bot grudado tambem
+    if (this.heist?.kind === 'train' && this.heist.bags.some(b => b.jewel && b.state === 'carried' && b.carrier === p.id)) speed = Math.min(speed, 6.4) * heistCfg(this.heist).jewelSlow; // trem: joias pesadas
     if (this.heist?.kind === 'smuggle' && carryingBag(this, p)) { speed = Math.min(speed, 6.4) * heistCfg(this.heist).carrySlow; heistBotPass(this, p); } // caixote pesado: lento (e passa quando der)
     const ground = p.onGround;
     const acc = ground ? 12 : 3;
@@ -2115,7 +2182,7 @@ export class Core {
   // segue pro objetivo; quem carrega, resgata ou ja esta perto vai direto, entao o objetivo nunca e largado. Canyon fica como esta.
   objRoute(p, g) {
     const ai = p.ai, role = ai.role ?? (p.id.charCodeAt(p.id.length - 1) + p.id.length) % 3;
-    const cityR = CITY_ROUTES.includes(this.M.id); /* 09/11: nos mapas de cidade todo bot escolhe caminho ate o objetivo */ if (!g || (role !== 1 && !cityR) || this.M.arena >= 100 || ai.rescue || (!['ctf', 'dom', 'heist', 'smuggle'].includes(this.mode) && !(cityR && this.esc)) || this.carrying?.(p) || (this.heist && carryingBag(this, p))) return g;
+    const cityR = CITY_ROUTES.includes(this.M.id); /* 09/11: nos mapas de cidade todo bot escolhe caminho ate o objetivo */ if (!g || (role !== 1 && !cityR) || this.M.arena >= 100 || ai.rescue || (!['ctf', 'dom', 'heist', 'smuggle', 'trem'].includes(this.mode) && !(cityR && this.esc)) || this.carrying?.(p) || (this.heist && carryingBag(this, p))) return g;
     const key = Math.round(g[0] / 8) + ':' + Math.round(g[2] / 8);
     if (ai.objKey !== key) { ai.objKey = key; const r = Math.hypot(g[0] - p.pos[0], g[2] - p.pos[2]) > 22 ? this.routeTo(p, g) : []; ai.objVias = r.slice(0, -1); ai.objViaT = this.clock || 0; }
     while (ai.objVias?.length && (dist2(ai.objVias[0], p.pos) < 16 || (this.clock || 0) - ai.objViaT > 9)) { ai.objVias.shift(); ai.objViaT = this.clock || 0; } // 9 s sem chegar: desiste do ponto (nunca fica preso num beco)
@@ -2398,6 +2465,7 @@ export class Core {
     // 08/11 (producao: "buga com 3-5 jogadores"): salas no MESMO mapa dividem o objeto do mapa no servidor, e o M.dyn (bonde,
     // van, sentinela, carro) gravado por uma sala valia na outra: parede invisivel, bala barrada no nada. Cada sala recoloca o seu
     if (this._dyn) this.M.dyn = this._dyn;
+    if (this._boxes) this.M.boxes = this._boxes; // 19/11 b: colisao do trem DESTA sala (chegou, aberto, fechado, foi embora)
     // 14/11 (medido no app: FPS oscilando 150 -> 60): no solo a Core roda a CADA QUADRO, entao "3 rotas por tick" virava 450 rotas
     // por segundo a 150 FPS (quanto melhor rodava, mais os bots calculavam). Agora e por TEMPO: ~30 rotas e ~40 ms de busca por
     // segundo, igual em qualquer FPS (servidor e solo). Guarda no maximo o de 1 tick cheio (nada acumula pra estourar depois)
@@ -2459,7 +2527,8 @@ export class Core {
       else if (this.cfg.teams) winner = this.teamScore.red === this.teamScore.blue ? 'empate' : this.teamScore.red > this.teamScore.blue ? 'red' : 'blue';
       else {
         let best = null;
-        for (const p of this.players.values()) if (!best || p.kills > best.kills || (this.mode === 'gungame' && p.gunLvl > best.gunLvl)) best = p;
+        if (this.mode === 'bhop') { for (const p of this.players.values()) if (p.bh?.best && (!best || p.bh.best < best.bh.best)) best = p; } // Pulo do Gato: o menor tempo
+        else for (const p of this.players.values()) if (!best || p.kills > best.kills || (this.mode === 'gungame' && p.gunLvl > best.gunLvl)) best = p;
         winner = best ? best.name : 'ninguem';
       }
       if (winner) this.end(winner);
@@ -2496,6 +2565,7 @@ export class Core {
     if (this.mode === 'infect' && !(this.freezeT > 0)) this.tickInfect(dt);
 
     if (this.mode === 'bomb' && !(this.freezeT > 0)) this.tickBomb(dt);
+    if (this.mode === 'bhop') bhTick(this); // Pulo do Gato: queda e chegada
     if (this.mode === 'br' && !(this.freezeT > 0)) brTick(this, dt);
 
     for (const k of this.pickups) {
@@ -2507,6 +2577,7 @@ export class Core {
         if (this.mode === 'infect' && p.team === 'red') continue; // infectado nao pega nada
         if (k.kind === 'hp') { if (p.hp >= (p.maxHp || 100)) continue; p.hp = Math.min(p.maxHp || 100, p.hp + 50); }
         else {
+          if (k.wpn === 'minigun' && !p.owned.has('minigun')) p.mgPick = true; // pegou a do mapa (kit de evento com minigun nao conta)
           p.owned.add(k.wpn);
           if (p.bot) { p.wpn = k.wpn; this.botReload(p, true); }
           this.event({ k: 'give', id: p.id, wpn: k.wpn });
@@ -2523,8 +2594,9 @@ export class Core {
     if (this.esc && !this.over && !(this.freezeT > 0)) escTick(this, dt);
     if (this.heist && !this.over && !(this.freezeT > 0)) heistTick(this, dt);
     if (this.bor && !this.over && !(this.freezeT > 0)) borTick(this, dt);
-    this.M.dyn = [...(this.esc ? [trainBox(this.M, this.esc.d)] : this.heist ? heistBoxes(this.heist) : this.bor ? borBoxes(this) : []), ...propBoxes(this.blimps, this.cars)]; // bonde (01/11), cofre e van (03/11) solidos pros bots e pras balas; portas fechadas da noite; sentinela, sinalizador e carro parado
+    this.M.dyn = [...(this.esc ? [trainBox(this.M, this.esc.d)] : this.heist ? heistBoxes(this.heist, this.M) : this.bor ? borBoxes(this) : []), ...propBoxes(this.blimps, this.cars)]; // bonde (01/11), cofre e van (03/11) solidos pros bots e pras balas; portas fechadas da noite; sentinela, sinalizador e carro parado
     this._dyn = this.M.dyn;
+    if (this.M.trainDoors) { this.M.boxes = trainBoxesFor(this.M, this.heist); this._boxes = this.M.boxes; } // Expresso: o trem entra e sai da colisao
     this.snapshot(dt);
   }
 
@@ -2546,10 +2618,14 @@ export class Core {
     if (this.lobbyT > 0) return;
     this.lobbyT = 0.25;
     this.send(null, {
-      t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, map: this.M.id, host: this.hostId(),
-      cfg: { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, tod: this.tod || 'day', mode: this.modeId(), map: (this.mode === 'escort' || this.blitz ? this.mapRaw : this.mapPick) || 'auto', /* blitz: o lobby ve a ESCOLHA (auto mostrava o sorteado e a seta pulava) */ bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time },
+      t: 'lobby', phase: this.phase, countT: Math.max(0, this.countT), mode: this.mode, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, hc: this.hc || undefined, map: this.M.id, host: this.hostId(),
+      cfg: this.cfgObj(),
       players: [...this.players.values()].filter(p => !p.mob).map(p => ({ id: p.id, name: p.name, bot: p.bot, team: p.team, ready: p.bot || !!p.lobbyReady || p.id === this.hostId(), lvl: p.lvl || botLevel(p.id), pr: p.prest || 0, elite: !!p.elite, rk: p.rk ?? -1, dt: p.bot ? botDivTag(p.id) : p.dt })), // vilao da noite nao e do elenco (03/11)
     });
+  }
+  // configuracao da sala (lobby e, desde 19/11, o estado da partida: o Alterar partida online precisa dela mesmo sem ter passado pelo lobby)
+  cfgObj() {
+    return { cap: this.cap(), ranked: !!this.ranked, mut: this.mut, tod: this.tod || 'day', mode: this.modeId(), map: (this.mode === 'escort' || this.blitz ? this.mapRaw : this.mapPick) || 'auto', /* blitz: o lobby ve a ESCOLHA (auto mostrava o sorteado e a seta pulava) */ bots: this.wantBots, difficulty: this.difficulty, limit: this.limitPick || 0, time: this.timePick || 0, defLimit: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).limit, defTime: matchRules(this.mode, this.M.id, this.cfg, MATCH_TIME).time };
   }
 
   snapshot(dt) {
@@ -2567,13 +2643,18 @@ export class Core {
       players.push({
         id: p.id, name: p.name, bot: p.bot, team: p.team, lvl: p.lvl || botLevel(p.id) /* 07/11: banner e tela de morte com o nivel de verdade */, hp: Math.max(0, Math.round(p.hp)), alive: p.alive, pg: p.ping || undefined,
         pos: [r2(p.pos[0]), r2(p.pos[1]), r2(p.pos[2])], yaw: r3(p.yaw), pitch: r3(p.pitch), anim: p.anim, wpn: p.wpn,
+        ...(p.bh ? { bh: [p.bh.run ? r2(Math.max(0, (this.clock || 0) - p.bh.t0)) : 0, p.bh.best || 0, p.bh.done, p.bh.falls] } : null), // Pulo do Gato: [tempo correndo, melhor, chegadas, quedas]
         kills: p.kills, deaths: p.deaths, assists: p.assists || 0, score: Math.round(p.score), gunLvl: p.gunLvl, respawnT: r2(p.respawnT), // score arredondado: a escolta soma pontos por segundo (vinha 27.6703999...)
         nades: p.nades, ready: p.ready, streak: p.streak, elite: !!p.elite, dt: p.mob ? undefined : p.bot ? botDivTag(p.id) : p.dt, gh: hasSkill(p, 'fantasma') ? 1 : undefined, rk: p.rk ?? -1, fc: Math.round((p.fieldCharge || 0) * 100), armor: p.armor ? Math.round(p.armor) : 0, place: p.place || 0, dn: p.down > 0 ? Math.ceil(p.down) : 0, rv: p.reviveT > 0 ? r2(p.reviveT) : 0, sh: p.shieldT > 0 ? 1 : 0, pt: (p.protUntil || 0) > (this.clock || 0) ? 1 : undefined, fz: p.fuse > 0 ? Math.ceil(p.fuse) : 0, pr: p.prest || 0, dv: p.bot ? undefined : p.dev || undefined, ln: p.lean ? Math.round(p.lean * 10) / 10 : undefined, ad: p.wpn === 'sniper' && p.alive && (p.bot ? !!p.ai?.target : p.ads) ? 1 : undefined, // sniper mirando: reflexo da luneta (04/11)
                 ...(this.bor ? { mob: p.mob || undefined, mh: p.mob ? p.maxHp : undefined, cs: p.mob ? undefined : Math.round(p.cash || 0), fr: p.frozenT > 0 ? 1 : 0, hk: p.headK > 1.6 ? 1 : undefined } : null), // noite: tipo do vilao, vida cheia (barra do chefao), pontos, congelado, lente/olho exposto
               });
     }
-    this.send(null, {
-      t: 'snap', sc: r2(this.clock || 0) /* 15/11: relogio do servidor (o cliente desenha os outros 100 ms atras, pelo tempo daqui) */, lob: this.useLobby, host: this.over ? this.hostId() : undefined, mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
+    this.send(null, this.local ? this.snapMsg(players, r2, r3) : this.deltaSnap(this.snapMsg(players, r2, r3)));
+  }
+
+  snapMsg(players, r2, r3) {
+    return ({
+      t: 'snap', sc: r2(this.clock || 0) /* 15/11: relogio do servidor (o cliente desenha os outros 100 ms atras, pelo tempo daqui) */, lob: this.useLobby, host: this.hostId() /* 19/11: sempre (Alterar partida online); antes so no fim */, cfg: this.local ? undefined : this.cfgObj(), mode: this.mode, mut: this.mut, ranked: this.ranked, duo: this.duo, bounce: this.bounce, blitz: this.blitz || undefined, hc: this.hc || undefined, bOpen: this.bounceOpen(), map: this.M.id, limit: this.limit, time: r2(this.time), over: this.over, overT: this.overT,
       freeze: Math.max(0, this.freezeT || 0), loading: !!this.waitLoad, infT: this.mode === 'infect' && !this.infStarted ? Math.max(0, this.infT) : 0, lastStand: this.lastStand, infKit: this.mode === 'infect' ? this.infKit : null,
       bomb: this.mode === 'bomb' && this.bomb ? { state: this.bomb.state, pos: this.bomb.pos, carrier: this.bomb.carrier, site: this.bomb.site, t: this.bomb.t, prog: this.bomb.prog, actor: this.bomb.actor, kind: this.bomb.kind } : null,
       round: this.mode === 'bomb' ? { n: this.roundN, over: this.roundOver > 0 } : null, sites: this.mode === 'bomb' ? this.sites : null,
@@ -2592,6 +2673,51 @@ export class Core {
       field: fieldSnap(this),
       players,
     });
+  }
+
+  // 19/11 (pedido dele: otimizar pacotes): online, cada envio leva so o que MUDOU desde o anterior. Nome, time, nivel, divisao,
+  // placar, granadas, bandeiras, regras da sala... iam inteiros 20x/s pra cada pessoa (5 KB num 6x6, 10 KB no Blitz) e passavam
+  // por JSON + compressao por conexao no servidor e JSON no celular. Quadro inteiro a cada 2 s, quando alguem entra e quando o
+  // cliente pede (reconectou: 'kf'). Campo que sumiu vai em rm (jogador) / rmt (topo). O cliente junta (src/net.js mergeSnap).
+  // WebSocket entrega em ordem e sem perda: delta em cima do anterior e seguro.
+  deltaSnap(m) {
+    // cliente antigo (cache velho, app sem atualizar) nao sabe juntar: com qualquer humano que nao pediu 'kf' a sala segue no envio inteiro
+    for (const p of this.players.values()) if (!p.bot && !p.mob && !p.dsOk) { this._ds = null; return m; }
+    const enc = (v) => (v !== null && typeof v === 'object' ? JSON.stringify(v) : v);
+    const D = this._ds;
+    if (!D || this._kfNow || ++D.n >= 40) {
+      const top = {}, pl = new Map();
+      for (const k in m) if (k !== 'players' && m[k] !== undefined) top[k] = enc(m[k]);
+      for (const p of m.players) { const o = {}; for (const k in p) if (p[k] !== undefined) o[k] = enc(p[k]); pl.set(p.id, o); }
+      this._ds = { n: 0, top, pl }; this._kfNow = false;
+      return m;
+    }
+    const out = { t: 'snap', d: 1, sc: m.sc }, rmt = [];
+    for (const k in m) {
+      if (k === 't' || k === 'sc' || k === 'players') continue;
+      const v = m[k];
+      if (v === undefined) { if (k in D.top) { delete D.top[k]; rmt.push(k); } continue; }
+      const e = enc(v); if (D.top[k] !== e) { out[k] = v; D.top[k] = e; }
+    }
+    for (const k in D.top) if (!(k in m)) { delete D.top[k]; rmt.push(k); }
+    if (rmt.length) out.rmt = rmt;
+    const seen = new Set();
+    out.players = m.players.map(p => {
+      seen.add(p.id);
+      let prev = D.pl.get(p.id); if (!prev) { prev = {}; D.pl.set(p.id, prev); }
+      const o = { id: p.id }, rm = [];
+      for (const k in p) {
+        if (k === 'id') continue;
+        const v = p[k];
+        if (v === undefined) { if (k in prev) { delete prev[k]; rm.push(k); } continue; }
+        const e = enc(v); if (prev[k] !== e) { o[k] = v; prev[k] = e; }
+      }
+      for (const k in prev) if (!(k in p)) { delete prev[k]; rm.push(k); }
+      if (rm.length) o.rm = rm;
+      return o;
+    });
+    for (const id of D.pl.keys()) if (!seen.has(id)) D.pl.delete(id);
+    return out;
   }
 
   info() {
@@ -2637,7 +2763,7 @@ function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l
 // Jogo Rapido: modo sorteado quando nao tem partida aberta (dupla fica de fora: precisa de parceiro)
 // rankeada: so os modos competitivos (pedido dele 31/10)
 export const RANKED_MODES = ['ctf', 'dom', 'escort', 'heist', 'blitz_ctf', 'blitz_dom'];
-export const QUICK_MODES = ['ffa', 'tdm', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'escort', 'heist', 'smuggle', 'gungame', 'infect', 'bomb', 'br', 'bounce'];
+export const QUICK_MODES = ['ffa', 'tdm', 'pnb', 'blitz', 'blitz_ctf', 'blitz_dom', 'ctf', 'dom', 'escort', 'heist', 'smuggle', 'trem', 'gungame', 'infect', 'bomb', 'br', 'bounce'];
 export const QUICK_BOTS = 11;
 
 // 08/11 (desempenho): servidor do multiplayer chama ao ligar; um mapa por vez com folga entre eles (nao trava quem ja chegou)

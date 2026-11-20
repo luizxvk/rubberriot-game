@@ -2,7 +2,7 @@ import { myDivTag, divChip, divTagText } from './divview.js'; // divisoes (16/11
 import './glbshrink.js'; // antes de qualquer modelo carregar
 import * as THREE from 'three';
 import { offscreen } from './offscreen.js';
-import { buildWorld, buildObjectives, FX, FX_Q, LASER_BODY, preloadMap } from './world.js';
+import { buildWorld, buildObjectives, FX, FX_Q, LASER_BODY, preloadMap, anvilMesh } from './world.js';
 import { EscortView } from './escortview.js';
 import { rankResult, rankSync, TIERS, myTier, tierOf, badgeSvg } from './rank.js';
 import { Character, CHAR_LOD, HOSE_FRAME } from './character.js';
@@ -17,7 +17,8 @@ import { makeFsr } from './fsr.js';
 import { Tutorial, keyLabel } from './tutorial.js';
 import { Range } from './range.js';
 import { trainBox } from '../shared/escort.js';
-import { heistBoxes, heistCfg } from '../shared/heist.js';
+import { heistBoxes, trainBoxesFor, TR, heistCfg } from '../shared/heist.js';
+import { TrainView } from './trainview.js';
 import { borDoorBoxes } from '../shared/borroes.js';
 import { useBinds, bindLabel } from './binds.js';
 import * as ARS from './arsenal.js'; // so pro atalho de depuracao window.__A
@@ -47,7 +48,7 @@ import { SS } from './ssboot.js';
 import { Chat } from './chat.js';
 import { QuickChat } from './quickchat.js';
 import { audio } from './audio.js';
-import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, GADGETS, isSilenced, INTEGRAL_SIL, botBodyPool } from '../shared/weapons.js';
+import { HEIST, MODES, WEAPONS, STREAKS, LETHALS, TACTICALS, pickStreaks, GUN_LADDER, wpnOfBody, PRIMARIES, BLUEPRINTS, SKILLS, SKILL_SLOTS, FIELD, BR, AMMO, NADES, BLITZ_XP, HC, GADGETS, isSilenced, INTEGRAL_SIL, botBodyPool } from '../shared/weapons.js';
 import { makeHookView } from './hookview.js';
 import { SKILL_ICONS as HOOK_ICONS } from './skillicons.js';
 import { nadeLaunch, nadeStep } from '../shared/core.js';
@@ -69,8 +70,8 @@ import { initMenus, applyCrosshair } from './ui.js';
 import { t, wName, setLang, getLang, modeName } from './i18n.js';
 import { outlinesOn, ink, PAL, OUTLINE_FAR, OUTLINE_CFG, cullOutlines, isSharedGeo, smoothCacheSize, rigidCacheSize, dropObj } from './toon.js';
 import { SKIN_CODE, skinMat } from './looks3d.js';
-import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack, wpnTracked } from './progress.js';
-import { Lobby, runLoading, hideLoading } from './lobby.js';
+import { MAX_LEVEL, AMMO_LVL, MUZZLE_LVL, BODY_MIN_LVL, addXp, boostSync, boostInfo, boostUse, boostTick, wboostInfo, wboostTick, BOOST_ELITE, XP, onProgress, progressInfo, partReq, partUnlocked, camoUnlocked, level, levelXp, unlockLevel, setBodyResolver, grantMeta, statAdd, statMax , wpnTrack, wpnTracked } from './progress.js';
+import { Lobby, runLoading, loadProgress, hideLoading } from './lobby.js';
 import { funil, reportaErro } from './funil.js';
 import { unlockDone, LOCKED_BY, track, grantTutorial, missionById, MIS_ZP, misKey } from './challenges.js';
 import { camoTime, CAMOS } from './camos.js';
@@ -79,14 +80,16 @@ import { tip, tipClose } from './tips.js';
 import { wornLook } from './lookstore.js';
 import { botLook } from '../shared/looks.js';
 import { floorAt } from '../shared/nav.js';
-import { shootPanels, stripHtml } from './killcam.js';
+import { shootPanels, stripHtml, paintKc } from './killcam.js';
 import { Replay } from './replay.js';
 import { passEvent, renderEndPass, passArt, passName } from './passview.js';
 import { PASS, PASS_FREE } from './pass.js';
 import { startHomeTour, homeTourSeen } from './hometour.js';
 import { FieldView } from './fieldview.js';
 import { MatchVote } from './matchvote.js';
-import { StrikeView, bomberMesh, sentryMesh, beaconMesh, ammoboxMesh } from './strikeview.js';
+import { BhTrapView } from './bhtrapview.js';
+import { BhFloor, FLOOR } from './bhfloor.js';
+import { StrikeView, bomberMesh, sentryMesh, beaconMesh, ammoboxMesh, planeMesh, trainMesh, handMesh } from './strikeview.js';
 import { HeistView } from './heistview.js';
 import { CarView } from './carview.js';
 import { BorView } from './borview.js';
@@ -100,7 +103,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 // ---------- ajustes ----------
 // sensibilidade (05/11, pedido dele): cada aparelho tem a sua. O save vai pra conta: jogar no celular nao mexe na do PC, nem o contrario
-const DEFAULTS = { voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, adsFireBtn: true, fireLBtn: true, modeTips: true, draw: 'mid', aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid', upscale: isTouch ? 'off' : 'fsr', fsrSharp: 0.8, texQ: 'auto', winMode: 'max', winSize: '1600x900' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
+const DEFAULTS = { hideOtherFx: false /* 19/11: Ajustes > Video, esconde efeito/skin animada dos outros (mais leve) */, voSubs: !matchMedia('(pointer: coarse)').matches /* 13/11 (pedido dele): legenda do narrador so no PC por padrao */, adsMode: matchMedia('(pointer: coarse)').matches ? 'toggle' : 'hold', scopeQ: 'fast', v: 5, banner: 'ingresso', primary: 'smg', fov: 90, fovScale: 1, sens: 1, adsSens: 0.8, touchSens: 1, touchAdsSens: 0.8, padAdsSens: 0.8, mouseSmooth: 'off', mouseAccel: 0, padSens: 1, padSmooth: 'low', padAccel: 0, leanMode: 'hold', rawMouse: true, gunSway: true, vmFov: 58, invertY: false, master: 0.8, music: 0.45, sfx: 1, vo: 0.7, grain: 0.6, film: 'color', res: 0.8, showFps: false, holdCrouch: false, tracer: 'chalk', autoSprint: false, name: '', aimAssist: true, autoFire: true, xhair: 'cross', xhairColor: '#ece9e1', threatRing: true, skills: [], field: 'umbrella', autoChute: isTouch, autoReload: isTouch, dmgNums: true, adsFireBtn: true, fireLBtn: true, modeTips: true, draw: isTouch ? 'near' : 'mid' /* 19/11: celular comeca no Perto (agora proporcional ao mapa) */, aa: '2x', hudMode: 'full', outl: isTouch ? 'eco' : 'near', chars: isTouch ? 'low' : 'mid', gfxPreset: 'custom', fpsCap: '0', dynRes: isTouch, fxQ: isTouch ? 'low' : 'mid', upscale: isTouch ? 'off' : 'fsr', fsrSharp: 0.8, texQ: 'auto', winMode: 'max', winSize: '1600x900' }; // field: guarda-chuva por padrao (sem escolha o selo nem aparecia); nivel 2 ainda vale
 let settings = { ...DEFAULTS };
 try {
   const saved = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -142,6 +145,11 @@ const scene = new THREE.Scene();
 // distancia de desenho (03/11): curta pra todos; a luneta mirando enxerga longe
 // 07/11 (pedido dele): volta a opcao nos Ajustes (Curta/Media/Longa); a nevoa acompanha e esconde o corte
 const DRAW_DIST = { near: 75, mid: 110, far: 160, scope: 500 };
+// 19/11 (pedido dele: "no Xilindro, mesmo no minimo, desenha tudo"): a distancia era em metros fixos e o Perto (75 m) e quase o
+// Xilindro inteiro (80 m de lado). Agora sai da diagonal do mapa: Perto = 45%, Medio = 70%, Longe = 100% (teto nos valores de antes;
+// mapa grande fica igual). Cache por mapa
+const drawDist = (k) => { const A = G.M?.arena || 60, D = A * 2 * Math.SQRT2; if (k === 'scope') return DRAW_DIST.scope;
+  const f = { near: [0.45, 40], mid: [0.7, 60], far: [1, 90] }[k] || [0.7, 60]; return Math.round(Math.min(DRAW_DIST[k] || DRAW_DIST.mid, Math.max(f[1], D * f[0]))); };
 const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.1, 500); // 05/11: near 0,05 pra 0,1 dobra a precisao de profundidade (malha piscando de longe)
 camera.rotation.order = 'YXZ';
 // luneta 3D: a lente mostra esta camera ampliada (picture-in-picture)
@@ -207,18 +215,24 @@ const basePR = () => nativePR() * fullResK() * settings.res * (SS ? (SS.n > 2 ? 
 const sceneScalePR = () => basePR() * dynK;
 const fsrWanted = () => settings.upscale === 'fsr' && !SS && sceneScalePR() < nativePR() * 0.97;
 function setPR() { fsr.on = fsrWanted(); renderer.setPixelRatio(fsr.on ? nativePR() : sceneScalePR()); }
-let dynK = 1, dynN = 0, dynT = 0, lastDraw = 0;
+let dynK = 1, dynN = 0, dynT = 0, lastDraw = 0, dynBad = 0, dynGood = 0, dynChg = 0;
 function dynResTick(now) {
   dynN++;
   if (now - dynT < 1000) return;
   const fps = dynN * 1000 / (now - dynT); dynN = 0; dynT = now;
   if (!settings.dynRes || G.state !== 'game' || document.hidden) return;
   const goal = Math.min(+settings.fpsCap || 60, 60), was = dynK;
-  if (fps < goal * 0.85) dynK = Math.max(0.55, dynK - 0.08);
-  else if (fps > goal * 0.97 && dynK < 1) dynK = Math.min(1, dynK + 0.04);
-  if (dynK !== was) { setPR(); resize(); }
+  // 19/11 (perfil do celular): cada troca refaz o tamanho da tela e dos alvos de desenho (~110 ms parado no celular) e o FPS que
+  // oscilava em volta da meta trocava TODO segundo (travadinha por segundo). Agora: 2 s seguidos ruins pra descer (degrau maior),
+  // 5 s seguidos com folga pra subir, e no minimo 4 s entre trocas
+  dynBad = fps < goal * 0.85 ? dynBad + 1 : 0; dynGood = fps > goal * 0.97 ? dynGood + 1 : 0;
+  if (now - dynChg < 4000) return;
+  if (dynBad >= 2) dynK = Math.max(0.55, dynK - 0.12);
+  else if (dynGood >= 5 && dynK < 1) dynK = Math.min(1, dynK + 0.06);
+  if (dynK !== was) { dynChg = now; dynBad = dynGood = 0; setPR(); resize(); }
 }
 function applySettings() {
+  if (G.hideFxWas !== !!settings.hideOtherFx) { const had = G.hideFxWas != null; G.hideFxWas = !!settings.hideOtherFx; if (had) reapplyOtherLooks(); }
   ARS.RET_GLOW.value = Math.max(0, Math.min(1, settings.retGlow ?? 1)); // brilho da reticula (14/11): vale na hora pra toda lente
   document.body.style.setProperty('--hud-k', settings.hudScale || 1); // escala da HUD (08/11)
   document.body.classList.toggle('hud-simple', settings.hudMode === 'simple'); // HUD simples (01/11): botoes extras guardados no ⋯
@@ -327,17 +341,34 @@ function smithBackdrop() {
 smithScene.background = smithBackdrop();
 // 16/11 (bug dele: Arsenal com chuvisco colorido no fundo, app em OpenGL + AMD): o fundo velho era liberado na mesma hora em que o novo
 // entrava, ainda preso no desenho, e a placa mostrava memoria crua. Agora o velho so sai 1 s depois, com o novo ja na tela
-{ let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { const old = smithScene.background; smithScene.background = smithBackdrop(); if (old?.isTexture) setTimeout(() => old.dispose(), 1000); }, 250); }); }
+{ let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { const old = smithScene.background; smithScene.background = smithBackdrop(); if (typeof lookScene !== 'undefined') lookScene.background = smithScene.background; /* 19/11: Visual usa o mesmo palco */ if (old?.isTexture) setTimeout(() => old.dispose(), 1000); }, 250); }); }
 smithScene.add(new THREE.HemisphereLight(0xffffff, 0x8a857c, 1.6));
 const sl = new THREE.DirectionalLight(0xffffff, 2.2); sl.position.set(2, 3, 2); smithScene.add(sl);
 const smithCam = new THREE.PerspectiveCamera(30, 1, 0.3, 30);
 const smithHolder = new THREE.Group(); smithScene.add(smithHolder);
+// 19/11 (pedido dele): troca de arma na vitrine com fade + loader. O palco e a arma sao a MESMA cena (nao da pra apagar o canvas)
+// e os materiais de arma sao compartilhados (opacidade vazaria/recompilaria): um veu em DOM da cor do palco cobre a arma
+const SMITH_FADE = 170;
+function smithVeil(on) {
+  let v = $('smithVeil');
+  if (!v) { v = document.createElement('div'); v.id = 'smithVeil'; v.setAttribute('aria-hidden', 'true'); v.innerHTML = '<i class="sv-spin"></i>'; document.body.appendChild(v); }
+  if (on) { // em cima da arma que esta na tela (a caixa dela projetada pela camera da vitrine); sem arma: no meio
+    const g = smithHolder.children[0]; let r = null;
+    if (g) { const b = new THREE.Box3().setFromObject(g), x0 = [], y0 = []; if (!b.isEmpty() && b.max.x - b.min.x < 6) { for (const cx of [b.min.x, b.max.x]) for (const cy of [b.min.y, b.max.y]) for (const cz of [b.min.z, b.max.z]) { const q = new THREE.Vector3(cx, cy, cz).project(smithCam); x0.push((q.x + 1) / 2 * innerWidth); y0.push((1 - q.y) / 2 * innerHeight); } r = [Math.min(...x0), Math.min(...y0), Math.max(...x0), Math.max(...y0)]; } }
+    const cx = r ? (r[0] + r[2]) / 2 : innerWidth / 2, cy = r ? (r[1] + r[3]) / 2 : innerHeight * 0.42, w = Math.max(260, (r ? r[2] - r[0] : 600) * 1.35), h = Math.max(200, (r ? r[3] - r[1] : 260) * 1.7);
+    Object.assign(v.style, { left: cx - w / 2 + 'px', top: cy - h / 2 + 'px', width: w + 'px', height: h + 'px' });
+  }
+  v.classList.toggle('on', !!on);
+}
 if (import.meta.env.DEV) window.__smith = { holder: smithHolder, cam: smithCam, pick: (x, y) => smithPick(x, y), center: () => smithCenterPick() }; // depurar adesivo
-// cena do visual: o proprio boneco girando, mesma luz da vitrine
+// cena do visual: o proprio boneco girando. 19/11 (pedido dele): o MESMO palco do Arsenal no fundo, com mais luz no boneco
+// (no fundo escuro ele ficava apagado): luz de cima mais forte, preenchimento de frente e um contraluz quente que recorta o contorno
 const lookScene = new THREE.Scene();
-lookScene.background = new THREE.Color(0xdcd7cb);
-lookScene.add(new THREE.HemisphereLight(0xffffff, 0x8a857c, 1.6));
-{ const l = new THREE.DirectionalLight(0xffffff, 2.2); l.position.set(2, 3, 3); lookScene.add(l); }
+lookScene.background = smithScene.background;
+lookScene.add(new THREE.HemisphereLight(0xffffff, 0x9a948a, 2.3));
+{ const l = new THREE.DirectionalLight(0xffffff, 2.8); l.position.set(2, 3, 3); lookScene.add(l); }
+{ const f = new THREE.DirectionalLight(0xfff4e0, 1.1); f.position.set(-2, 1.2, 3); lookScene.add(f); }
+{ const r = new THREE.DirectionalLight(0xffd9a0, 1.6); r.position.set(0, 2.5, -3); lookScene.add(r); }
 const lookCam = new THREE.PerspectiveCamera(30, 1, 0.8, 30);
 let lookChar = null, lookTeamCur = null, lookDrag = 0;
 // Arsenal (05/11, pedido dele): arrasta pra girar a arma e ver o outro lado. Depois de girar, ela fica onde parou por um tempo
@@ -414,7 +445,7 @@ const weekend = () => { const d = new Date().getDay(); return d === 0 || d === 6
 // 06/11 (pedido dele): o Elite nao da mais 2x direto; da 6 fichas por mes (Bolso). A ficha ativa vale 2x e o relogio dela so anda
 // quando ela soma alguma coisa: em partida, fora do treino, fora do fim de semana e do Blitz (que ja dao 2x e nao acumulam)
 const boostCounts = () => G.state === 'game' && !G.snap?.over && !G.range && !G.tutorial && !weekend() && !G.blitz;
-const xpMult = () => Math.max(boostInfo().active && boostCounts() ? 2 : 1, weekend() ? 2 : 1, G.blitz ? BLITZ_XP : 1) * (onlyBots() && G.mode !== 'borroes' ? BOTS_ONLY_XP : 1);
+const xpMult = () => Math.max(boostInfo().active && boostCounts() ? 2 : 1, weekend() ? 2 : 1, G.blitz ? BLITZ_XP : 1, G.hc ? HC.xp : 1) * (onlyBots() && G.mode !== 'borroes' ? BOTS_ONLY_XP : 1);
 // Noite dos Borroes (03/11, pedido dele): abate de vilao rende bem menos que abate de gente (a noite acumula centenas)
 const BOR_XP = 0.2, BOR_XP_KINDS = ['kill', 'head', 'assist'];
 function wkndBadge() {
@@ -527,7 +558,8 @@ function gainXp(kind, wpn = null, mult = 1) {
   // 08/11 (conta Cafe com Xp): o XP de arma ia SEMPRE pro modelo equipado no Arsenal. Quem jogava com a Garoa da Escada de
   // Armas, pega do chao, do caixote ou do battle royale upava o Trovao equipado e a Garoa ficava parada. Agora vai pro modelo NA MAO
   let inHand = null; try { const b = WEAPONS[wpn] && CATEGORY[wpn] ? G.player?.lo?.(wpn)?.body : null; if (b && CATEGORY[wpn].bodies.includes(b)) inHand = b; } catch { /* sem arma montada */ }
-  addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : inHand, night ? base : amount);
+  const wx = wboostInfo().active && boostCounts() ? 2 : 1; // 19/11: ficha de XP de ARMA em dobro (so o modelo na mao; a conta nao muda)
+  addXp(kind, amount, WEAPONS[wpn] ? wpn : null, ras ? G.boxBody?.get(G.myId)?.[wpn] || CATEGORY[wpn].bodies[0] : inHand, (night ? base : amount) * wx);
   if (kind !== 'kill' && kind !== 'head') hud.xpPop(`+${amount} ${t('xp_' + kind)}`); // abate e cuca vao no cartao do lado da mira (hud.killTag)
   if (boostSync()) hud.message(t('boostGot'), 2.6); // subiu num nivel do Pass que paga ficha
   return amount;
@@ -558,15 +590,84 @@ function unlocksAt(wpn, wLevel, pLevel, only = null) {
 // cb recebe a imagem (ou null) na ordem em que entrou
 const shotQ = []; let shotBusy = false;
 function laterShot(u, cb) { shotQ.push([u, cb]); if (!shotBusy) { shotBusy = true; setTimeout(shotStep, 300); } }
-function shotStep() {
+async function shotStep() {
   const it = shotQ.shift(); if (!it) { shotBusy = false; return; }
-  let img = null; try { img = it[0] ? unlockShot(it[0]) : null; } catch (e) { console.warn('foto do desbloqueio', e); }
+  let img = null; try { img = it[0] ? await unlockShotAsync(it[0]) : null; } catch (e) { console.warn('foto do desbloqueio', e); }
   try { it[1](img); } catch (e) { console.warn('aviso do desbloqueio', e); }
   setTimeout(shotStep, 350);
 }
 // foto da arma com a peca nova (banner de desbloqueio)
-let shotR = null, shotScene = null, shotCam = null;
-function unlockShot(u) {
+// 19/11 (pedido dele: "matei varios e travou tudo"): a foto de camo/peca NOVA compilava os shaders dela no 2o contexto DENTRO da
+// chamada: 86-255 ms de processo parado por foto (medido no Chrome com cache frio; no app de PC em D3D11 e pior), e cada abate que
+// desbloqueia enfileira mais uma. Agora: monta a arma, compila em paralelo (KHR_parallel_shader_compile, o processo segue rodando
+// a partida) e so desenha/le quando a placa terminou, em outra tarefa. Uma foto por vez (a da tela de morte entra na mesma fila)
+let shotR = null, shotScene = null, shotCam = null, shotLock = Promise.resolve();
+// lista de armas (lobby/pausa): a foto entra quando fica pronta; a mesma arma com a mesma camo usa a foto guardada
+const shotCache = new Map();
+function fillShots(host) {
+  for (const im of host.querySelectorAll('img[data-shot]')) {
+    const w = im.dataset.shot, u = { wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }, key = w + '|' + JSON.stringify(G.loadouts[w] || {});
+    if (shotCache.has(key)) { im.src = shotCache.get(key); continue; }
+    unlockShotAsync(u).then(url => { if (!url) return; shotPut(key, url); if (im.isConnected) im.src = url; }).catch(() => {});
+  }
+}
+// 19/11 b: cache das fotos com teto; a que sai solta o blob (antes ficava na memoria a sessao inteira). A tela de morte
+// tambem usa (mesma arma do mesmo jeito = mesma foto, sem montar e desenhar de novo a cada morte)
+function shotPut(key, url) {
+  shotCache.set(key, url);
+  if (shotCache.size > 40) { const k0 = shotCache.keys().next().value, u0 = shotCache.get(k0); shotCache.delete(k0); if (typeof u0 === 'string' && u0.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(u0), 5000); }
+}
+async function cachedShot(u) {
+  const key = u.wpn + '|' + JSON.stringify(u.lo || {});
+  if (shotCache.has(key)) return shotCache.get(key);
+  const url = await unlockShotAsync(u); if (url) shotPut(key, url);
+  return url;
+}
+function unlockShot(u) { const g = shotPrep(u); return g ? shotTake(g) : null; }
+function unlockShotAsync(u) {
+  const run = shotLock.then(async () => {
+    const g = shotPrep(u); if (!g) return null;
+    const rt = shotR.capabilities.isWebGL2 && shotR.readRenderTargetPixelsAsync ? shotTarget() : null;
+    // compila pro MESMO alvo do desenho (saida de cor diferente = outro shader, compilado na hora). 19/11 b: o alvo vai ATIVO no
+    // renderizador; passar ele como 3o argumento do compile (que e a CENA alvo) quebrava ("traverseVisible is not a function")
+    // e a compilacao antecipada nao acontecia: o shader compilava na hora do desenho (a travada que esta fila existe pra evitar)
+    const prevRT = shotR.getRenderTarget(); if (rt) shotR.setRenderTarget(rt);
+    const done = compileSafe(shotScene, shotCam, null, 4000, shotR); shotR.setRenderTarget(prevRT); await done;
+    await new Promise(r => setTimeout(r, 0)); // desenho e leitura noutra tarefa (nao soma com a montagem)
+    return rt ? shotTakeAsync(g) : shotTake(g);
+  });
+  shotLock = run.catch(() => null);
+  return run;
+}
+// 19/11: o toDataURL do canvas WebGL esperava a placa terminar tudo (~27 ms por foto no perfil). Aqui desenha num alvo proprio e
+// le assincrono (cerca do WebGL2, como a foto da tela de morte); o PNG sai pelo toBlob (codifica fora do processo do jogo)
+const SHOT_W = 260, SHOT_H = 130; let shotRT = null, shotBuf = null, shotCv = null;
+function shotTarget() {
+  if (!shotRT) { shotRT = new THREE.WebGLRenderTarget(SHOT_W, SHOT_H, { samples: 4 }); shotRT.texture.colorSpace = THREE.SRGBColorSpace; shotBuf = new Uint8Array(SHOT_W * SHOT_H * 4); shotCv = Object.assign(document.createElement('canvas'), { width: SHOT_W, height: SHOT_H }); }
+  return shotRT;
+}
+async function shotTakeAsync(gun) {
+  shotTarget();
+  const prev = shotR.getRenderTarget(), pc = shotR.getClearColor(new THREE.Color()), pa = shotR.getClearAlpha();
+  shotR.setRenderTarget(shotRT); shotR.setClearColor(0x000000, 0); shotR.clear(); shotR.render(shotScene, shotCam);
+  shotR.setRenderTarget(prev); shotR.setClearColor(pc, pa); shotScene.remove(gun);
+  await shotR.readRenderTargetPixelsAsync(shotRT, 0, 0, SHOT_W, SHOT_H, shotBuf);
+  const g = shotCv.getContext('2d'), img = g.createImageData(SHOT_W, SHOT_H), row = SHOT_W * 4;
+  for (let y = 0; y < SHOT_H; y++) img.data.set(shotBuf.subarray((SHOT_H - 1 - y) * row, (SHOT_H - y) * row), y * row); // a leitura vem de cabeca pra baixo
+  g.putImageData(img, 0, 0);
+  const blob = await new Promise(r => shotCv.toBlob(r, 'image/png'));
+  return blob ? URL.createObjectURL(blob) : null;
+}
+function shotTake(gun) {
+  // renderizador dividido com a Loja: a previa ao vivo usa o mesmo canvas (tamanho dela volta depois da foto)
+  const live = shotR.domElement.isConnected, was = shotR.getSize(new THREE.Vector2());
+  shotR.setSize(260, 130, false); shotR.setScissorTest(false);
+  shotR.render(shotScene, shotCam); shotScene.remove(gun);
+  const url = shotR.domElement.toDataURL();
+  if (live) shotR.setSize(was.x, was.y, false);
+  return url;
+}
+function shotPrep(u) {
   if (!CATEGORY[u.wpn]) return null;
   if (!shotR) {
     shotR = offscreen(); // dividido com a Loja (um contexto WebGL so)
@@ -587,13 +688,7 @@ function unlockShot(u) {
   const solo = !gun.userData.muzzle; // peca sozinha: mais respiro em volta
   const k = Math.max(box.max.z - box.min.z, (box.max.y - box.min.y) * 2) * (solo ? 0.8 : 0.56);
   Object.assign(shotCam, { left: -k, right: k, top: k / 2, bottom: -k / 2 }); shotCam.updateProjectionMatrix();
-  // renderizador dividido com a Loja: a previa ao vivo usa o mesmo canvas (tamanho dela volta depois da foto)
-  const live = shotR.domElement.isConnected, was = shotR.getSize(new THREE.Vector2());
-  shotR.setSize(260, 130, false); shotR.setScissorTest(false);
-  shotR.render(shotScene, shotCam); shotScene.remove(gun);
-  const url = shotR.domElement.toDataURL();
-  if (live) shotR.setSize(was.x, was.y, false);
-  return url;
+  return gun;
 }
 onProgress((e) => {
   // Rovex Pass: abriu nivel na partida = aviso na pilha, e o fim da partida lista tudo
@@ -638,6 +733,8 @@ onProgress((e) => {
 // Eu = minha classe/variante; outro jogador = a classe que ele mandou; bot = o modelo padrao da categoria.
 // killfeed (05/11, pedido dele): atropelo com o carro, granada e explosao com o estouro
 const FEED_ICO = { car: `<svg viewBox="0 0 48 48" aria-hidden="true">${DEATH_SVG.car}</svg>`, frag: `<svg viewBox="0 0 48 48" aria-hidden="true">${BOOM_SVG}</svg>`, carx: `<svg viewBox="0 0 48 48" aria-hidden="true">${BOOM_SVG}</svg>`, rpg: `<svg viewBox="0 0 48 48" aria-hidden="true">${BOOM_SVG}</svg>` };
+const fmtRace = (sec) => { const m = Math.floor(sec / 60), r = sec - m * 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(2); }; // Pulo do Gato: 0:42.31
+G.fmtRace = fmtRace;
 function gunName(id, wpn) {
   if (!WEAPONS[wpn]) return t('w_' + wpn);
   if (wpn === 'fists' || wpn === 'minigun') return wName(wpn);
@@ -686,7 +783,7 @@ if (/RubberRiotDesktop/.test(navigator.userAgent)) document.body.classList.add('
 }
 window.__A = ARS; window.__G = G; window.__AU = audio; window.__T = { isSharedGeo, smoothCacheSize, rigidCacheSize }; window.__R = renderer; window.__S = scene; window.__I = input; window.__C = camera; window.__VM = vm; // atalhos de depuracao
 G.addXp = addXp;
-G.unlockShot = (u) => unlockShot(u); // depuracao: foto do banner de desbloqueio
+G.unlockShot = (u) => unlockShot(u); G.unlockShotAsync = (u) => unlockShotAsync(u); // depuracao: foto do banner de desbloqueio
 
 // rankeada: pontos no fim da partida (vitoria + bonus; derrota = 0; sala com bots vale menos). A tela do fim
 // mostra a contagem; faixa nova vira aviso grande.
@@ -747,7 +844,7 @@ function setMap(id) {
   G.M = getMap(id);
   preloadMap(id); // ja comeca a baixar o modelo do Blender (Draco) enquanto o lobby roda
   world && world.dispose(); objectives && objectives.dispose();
-  world = buildWorld(scene, G.M);
+  world = buildWorld(scene, G.M); if (import.meta.env.DEV) window.__W = world; // teste: varredura dos mapas
   objectives = buildObjectives(scene, G.M);
   brView && brView.dispose(); brView = G.brView = G.M.id === 'ilha' ? new BrView(scene, G.M) : null; // loot, caixote e iris do battle royale
   fieldView && fieldView.dispose(); fieldView = G.fieldView = new FieldView(scene); // molas, buracos e guarda-chuvas
@@ -775,14 +872,17 @@ function uploadWorld() {
 // 08/11 (producao: carregamento INFINITO): o compileAsync do three 0.169 estoura dentro do proprio setTimeout quando um
 // material e trocado/descartado no meio (currentProgram undefined -> "reading 'isReady'") e a promessa NUNCA termina.
 // Este faz o mesmo (compila e espera o navegador terminar), mas material sem programa conta como pronto e tem teto de tempo.
-function compileSafe(sc, cam, target = null, maxMs = 5000) {
+function compileSafe(sc, cam, target = null, maxMs = 5000, R = renderer) {
   let mats = null;
-  try { mats = renderer.compile(sc, cam, target); } catch (e) { console.warn('compile falhou', e); return Promise.resolve(); }
+  // 19/11 (medido: 9-10 shaders compilando NO MEIO de toda partida): a partida desenha dentro do composer (textura linear) e o
+  // aquecimento compilava pra tela (srgb): o programa saia diferente e compilava de novo na partida. Compila no alvo do composer
+  const prevRT = R === renderer ? R.getRenderTarget() : null, rt = R === renderer && !prevRT ? composer?.readBuffer : null;
+  try { if (rt) R.setRenderTarget(rt); mats = R.compile(sc, cam, target); } catch (e) { console.warn('compile falhou', e); return Promise.resolve(); } finally { if (rt) R.setRenderTarget(prevRT); }
   if (!(mats instanceof Set) || !mats.size) return Promise.resolve();
   const t0 = performance.now();
   return new Promise((res) => {
     const chk = () => {
-      for (const m of mats) { let ok = true; try { const pr = renderer.properties.get(m)?.currentProgram; ok = !pr || typeof pr.isReady !== 'function' || pr.isReady(); } catch { ok = true; } if (ok) mats.delete(m); }
+      for (const m of mats) { let ok = true; try { const pr = R.properties.get(m)?.currentProgram; ok = !pr || typeof pr.isReady !== 'function' || pr.isReady(); } catch { ok = true; } if (ok) mats.delete(m); }
       if (!mats.size || performance.now() - t0 > maxMs) res(); else setTimeout(chk, 16);
     };
     setTimeout(chk, 0);
@@ -814,7 +914,11 @@ G.lookOfId = (id) => (id === G.myId ? wornLook() : lookOf(G.remotes.get(id) || {
 G.camera = camera;
 G.tracerOf = (id) => id === G.myId ? settings.tracer : G.remoteTracer.get(id) || 'chalk';
 
-function lookOf(p) { return G.remoteLook.get(p.id) || (p.bot ? botLook(p.id) : null); }
+function lookOf(p) { return lookShown(G.remoteLook.get(p.id) || (p.bot ? botLook(p.id) : null)); }
+// 19/11 (pedido dele: efeitos dos outros pesam, no lobby e na partida): Ajustes > Esconder efeitos dos outros = aura (fx) e skin
+// animada do corpo dos OUTROS voltam pro padrao (o resto do visual fica). O seu continua como voce montou
+function lookShown(L) { return L && settings.hideOtherFx && ((L.fx && L.fx !== 'none') || (L.skin && L.skin !== 'none')) ? { ...L, fx: 'none', skin: 'none' } : L; }
+function reapplyOtherLooks() { for (const [id, r] of G.remotes) { if (r.mob || !r.char?.setLook) continue; const p = G.snap?.players?.find(x => x.id === id); const L = p ? lookOf(p) : lookShown(G.remoteLook.get(id)); if (L) { r.char.setLook(L); warmChar(r); } } }
 
 // peca nova no meio da partida (arma de outro com camo que ainda nao apareceu): compila em segundo plano e so
 // mostra quando o shader esta pronto. Antes a 1a aparicao de cada camo travava o quadro compilando (03/11)
@@ -884,8 +988,8 @@ function modeVoice(key, prio) {
 }
 const teamKey = (base, team) => team === 'red' || team === 'blue' ? base + '_' + team : null;
 // trilha da partida (06/11, pedido dele): modo novo tem musica propria no tema; depois o mapa; senao sorteia entre as 4 de sempre
-const MODE_TRACK = { heist: 'music_heist', smuggle: 'music_heist', borroes: 'music_borroes', arte: 'music_borroes', infect: 'music_borroes', bomb: 'music_bomb', escort: 'music_escort' };
-const MAP_TRACK = { deserto: 'music_deserto', ferradura: 'music_heist', moeda: 'music_heist', tinteiro: 'music_borroes', bonde: 'music_escort', apito: 'music_escort' };
+const MODE_TRACK = { heist: 'music_heist', trem: 'music_trem' /* 19/11: trilha propria */, smuggle: 'music_heist', borroes: 'music_borroes', arte: 'music_borroes', infect: 'music_borroes', bomb: 'music_bomb', escort: 'music_escort' };
+const MAP_TRACK = { telhados: 'music_bh_telhados', picadeiro: 'music_bh_picadeiro', caixotes: 'music_bh_caixotes', montagem: 'music_bh_montagem', nanquim: 'music_bh_nanquim' /* 19/11: um tema por percurso */, deserto: 'music_deserto', ferradura: 'music_heist', moeda: 'music_heist', tinteiro: 'music_borroes', bonde: 'music_escort', apito: 'music_escort' };
 function matchTrack() {
   if (G.mode === 'br' || G.duo || G.bounce) return 'music_br';
   if (G.blitz) return G.M?.id === 'deserto' ? 'music_deserto' : 'music_blitz';
@@ -897,7 +1001,7 @@ function presenceText() {
   const s = G.snap, parts = [];
   if (G.range) return 'Treinando no estande · Rubber Riot';
   if (G.tutorial) return 'No tutorial · Rubber Riot';
-  parts.push(modeName(G.mode)); parts.push(t('map_' + (G.M?.id || '')));
+  parts.push(modeName(G.hc || G.mode)); parts.push(t('map_' + (G.M?.id || '')));
   const ts = s.teamScore; if (ts && G.myTeam) { const mine = ts[G.myTeam] ?? 0, other = ts[G.myTeam === 'red' ? 'blue' : 'red'] ?? 0; parts.push(`${mine} x ${other}`); }
   const rn = s.round?.n ?? s.esc?.round; if (rn) parts.push(t('roundN', { n: rn }));
   if (G.me) parts.push(`${G.me.kills || 0}/${G.me.deaths || 0} K/D`);
@@ -928,6 +1032,7 @@ function bufPos(b, t) {
   return [c.p[0] + (c.p[0] - a.p[0]) * ex, c.p[1] + (c.p[1] - a.p[1]) * ex, c.p[2] + (c.p[2] - a.p[2]) * ex];
 }
 function onSnap(s) {
+  if (s.cfg && G.net?.ws && !G.podStay) { G.lobbyCfg = s.cfg; G.lobbyHost = s.host; G.lobbyHumans = s.players.filter(p => !p.bot && !p.mob).length; } // 19/11: Alterar partida online mesmo sem ter passado pelo lobby
   voSnap(s);
   // narrador: ultimo minuto (so em partida corrida; modo de rounds zera o relogio a cada round)
   if (G.state === 'game' && !s.round && !G.range && !G.tutorial && G.snap?.time > 60 && s.time <= 60 && s.time > 50) audio.voice('lastmin');
@@ -936,7 +1041,7 @@ function onSnap(s) {
   // (menor atraso) e sobe devagar (relogios andam um pouco diferente). Sem 'sc' (servidor velho) fica como antes
   if (G.net?.ws && Number.isFinite(s.sc)) { const o = performance.now() - s.sc * 1000; G.svOff = G.svOff == null || o < G.svOff || o - G.svOff > 1000 ? o : G.svOff + (o - G.svOff) * 0.002; } // relogio do servidor recomecou (sala nova): pega o novo na hora
   if (s.mut !== G.mutSeen) { G.mutSeen = s.mut; if (s.mut && G.state === 'game') { hud.message(t('evOn', { e: t('ev_' + s.mut) }), 3.5); audio.play('ringbell', { vol: 0.6, ui: true }); } } // evento de fim de semana: anuncia na entrada
-  { const wasBz = G.blitz; G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen; G.blitz = s.blitz || false; if (!wasBz && G.blitz && G.state === 'game') audio.music(true, matchTrack()); } // blitz chegou depois do inicio: troca pra trilha dele
+  { const wasBz = G.blitz; G.mode = s.mode; G.duo = !!s.duo; G.bounce = !!s.bounce; G.bOpen = !!s.bOpen; G.blitz = s.blitz || false; G.hc = s.hc || false; document.body.classList.toggle('hc', !!G.hc && G.state === 'game'); document.body.classList.toggle('bhop', s.mode === 'bhop' && G.state === 'game'); /* 19/11: Preto no Branco (sem HUD) */ if (!wasBz && G.blitz && G.state === 'game') audio.music(true, matchTrack()); } // blitz chegou depois do inicio: troca pra trilha dele
   if (s.map && s.map !== G.M.id) setMap(s.map);
   const seen = new Set();
   for (const p of s.players) {
@@ -944,7 +1049,7 @@ function onSnap(s) {
       G.me = p;
       if (G.player) {
         G.player.hp = p.hp;
-        hud.hp(p.hp, 100 * (EV(s.mut)?.hp || 1));
+        hud.hp(p.hp, 100 * (EV(s.mut)?.hp || 1) * (G.hc ? HC.hp : 1));
         hud.armor(p.armor || 0, s.mode === 'br' || p.armor > 0); // colete de campo aparece em todo modo
         document.body.classList.toggle('mode-br', s.mode === 'br');
         document.body.classList.toggle('mode-pve', s.mode === 'borroes' || s.mode === 'gungame'); // noite dos borroes: sem sequencias na tela
@@ -966,7 +1071,9 @@ function onSnap(s) {
     seen.add(p.id);
     const r = remoteFor(p);
     // trocou de time (infectado): o boneco e' refeito na cor nova
-    if (p.team !== r.team && !r.mob) { scene.remove(r.char.root); freeChar(r.char); r.char = new Character(p.team, divTagText(p.dt) + p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; warmChar(r); }
+    // 19/11 (log dele: troca de rodada do Roubo ao Trem = 16 bonecos refeitos NUM quadro so, 257 ms + 1054 ms): troca de time entra
+    // numa fila e sai no maximo 2 por quadro (frameBody chama teamSwapTick). O boneco velho fica ate a vez dele (poucos quadros)
+    if (p.team !== r.team && !r.mob && r.swapTo !== p.team) { r.swapTo = p.team; r.swapP = p; (G.teamSwapQ ||= []).push(r); }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
     { // 14/11 (pedido dele: 'bots lagando no offline'): o worker manda 60 estados/s e a tela roda a 75+; quadro sem estado novo = bot
@@ -1029,8 +1136,8 @@ function onSnap(s) {
     else G.myCar = null;
   }
   // Roube o Cofre: cofre, van, bolsas e barra; quem esta com a bolsa fica lento e so de pistola (player.js)
-  if (s.heist) { G.heistView ||= new HeistView(scene); G.heistView.sync(s.heist, (id) => id === G.myId ? G.player?.pos : G.remotes.get(id)?.pos, G.myId); if (G.player) { const mine = s.heist.bags.some(b => b[1] === 1 && b[2] === G.myId); if (s.heist.kind === 'smuggle') { if (mine && !G.player.crated) hud.message(t('smCarry'), 2.6); G.player.crated = mine; G.player.bagged = false; } else { G.player.crated = false; G.player.bagged = mine; if (G.player.bagged && G.player.wpn !== 'pistol') G.player.equip('pistol'); } } }
-  else if (G.heistView) { G.heistView.dispose(); G.heistView = null; if (G.player) { G.player.bagged = false; G.player.crated = false; } }
+  if (s.heist) { G.heistView ||= new HeistView(scene); if (s.heist.kind === 'train' && G.heistView) G.heistView.trainSt = s.heist.tr?.[0] ?? 2; G.heistView.sync(s.heist, (id) => id === G.myId ? G.player?.pos : G.remotes.get(id)?.pos, G.myId); if (G.player) { const mine = s.heist.bags.some(b => b[1] === 1 && b[2] === G.myId); if (s.heist.kind === 'smuggle') { if (mine && !G.player.crated) hud.message(t('smCarry'), 2.6); G.player.crated = mine; G.player.bagged = false; } else { const jw = mine && s.heist.bags.some(b => b[1] === 1 && b[2] === G.myId && b[5]); if (jw && !G.player.jeweled) hud.message(t('trJewelCarry'), 2.6); G.player.jeweled = jw; G.player.crated = false; G.player.bagged = mine; if (G.player.bagged && G.player.wpn !== 'pistol') G.player.equip('pistol'); } } }
+  else if (G.heistView) { G.heistView.dispose(); G.heistView = null; if (G.player) { G.player.bagged = false; G.player.crated = false; G.player.jeweled = false; } }
   // Noite dos Borroes: portas, armas na parede, leite, pocas, bolas de tinta e rolos
   if (s.bor) { if (!G.borView) { G.borView = new BorView(scene, G.M); G.borView.setNames((w) => gunName(G.myId, w), (w) => G.player?.lo(w)); } G.borView.sync(s.bor); }
   else if (G.borView) { G.borView.dispose(); G.borView = null; hud.prompt(null); }
@@ -1113,7 +1220,7 @@ function onEvent(e) {
         if (G.mode === 'br' && inGame) setTimeout(() => tip('ping'), 9000); // marcacao: dica de primeira vez (depois da do modo)
         if (e.air && G.bounce) hud.alert(t('bounceDrop'), t(settings.autoChute ? 'bounceDropAuto' : (isTouch ? 'bounceDropTouch' : 'bounceDropKey')), 'red');
         if (!G.inRing || e.pos[2] < (G.M.ring?.c[2] ?? 1e9) - 10) G.inRing = false; // saiu do ringue
-        hud.hp(100 * (EV(G.snap?.mut)?.hp || 1), 100 * (EV(G.snap?.mut)?.hp || 1)); hud.weapon(G.player);
+        { const mx = 100 * (EV(G.snap?.mut)?.hp || 1) * (G.hc ? HC.hp : 1); hud.hp(mx, mx); } hud.weapon(G.player);
         $('dead').hidden = true; document.body.classList.remove('is-dead');
         G.deathPos = null;
       } else if (inGame) fx.puff([e.pos[0], 1, e.pos[2]], 5, 0.8, 0xece9e1, 0.6);
@@ -1132,6 +1239,7 @@ function onEvent(e) {
       const rSilOn = isSilenced(G.remoteLo.get(e.id)?.[e.wpn]), rSil = rSilOn && !lzBody ? (INTEGRAL_SIL.includes(rBody) ? audio.gunSound(rBody, null) : null) || audio.silSound(e.wpn) : null; // 13/11: silenciador de fabrica (Psiu, Sussurro) = tiro abafado proprio
       audio.play(rSil || rSnd, { pos: e.o, vol: inGame ? 0.75 : 0.12, key: 'rgun' + e.id, max: 2, muffle: rSilOn && !rSil, dry: !!rSil });
       const rg = r?.char.gun?.userData; if (rg?.drum) rg.drum.rotation.z += Math.PI / 3; // tambor do revolver gira no boneco tambem
+      r?.char?.fired?.(); // 19/11: atirou = sai do idle (olhada na arma)
       if (e.e) {
         const mz = r?.char.gun?.userData.muzzle;
         const o = mz ? mz.getWorldPosition(new THREE.Vector3()).toArray() : e.o;
@@ -1177,13 +1285,16 @@ function onEvent(e) {
       if (e.id === G.myId) { gainXp('assist'); chEvent({ type: 'assist' }); audio.play('ding', { ui: true, vol: 0.35, key: 'ding', max: 1 }); }
       break;
     case 'kill': {
+      if (e.wpn === 'trem' && inGame) modeVoice('train_crushed');
       if (inGame && !G.tutorial && !G.range) { if (e.v === G.myId) statAdd('deaths'); if (e.a === G.myId && e.streak) statMax('bestStreak', e.streak); } // Perfil
       if (inGame && G.matchLog && e.a === G.myId && e.v !== G.myId) { const L = G.matchLog; L.best = Math.max(L.best || 0, e.streak || 0); if (e.head) L.headKills = (L.headKills || 0) + 1; }
       if (e.v === G.myId && (G.mode === 'bomb' || G.mode === 'br') && !G.bounceBack) { $('specBar').hidden = false; $('dead').classList.add('spec'); } // sem renascer: assiste
       if (e.v === G.myId) G.inRing = false; // perdeu no ringue: a parede da iris volta pra quem assiste
       const vPos = e.pos || posOf(e.v);
       if (inGame) replay.setKill(performance.now() / 1000, e, vPos, G.myId);
-      if (vPos && inGame) {
+      // 20/11: morte longe (> 70 m, alem da nevoa) nao solta efeito nenhum (ninguem enxerga); o som de morte continua
+      const vFar = vPos && camera.position.distanceToSquared(tmpV.fromArray(vPos)) > 70 * 70 && e.v !== G.myId && e.a !== G.myId;
+      if (vPos && inGame && !vFar) {
         fx.puff([vPos[0], vPos[1] + 0.8, vPos[2]], 9, 1.1, 0xece9e1, 0.9);
         fx.splat([vPos[0], vPos[1], vPos[2]], 1.8);
         fx.stars([vPos[0], vPos[1] + 1.2, vPos[2]]);
@@ -1225,7 +1336,7 @@ function onEvent(e) {
         // mira do toque e um botao liga/desliga: morreu mirando, renasce sem mira (gun game reclamava)
         input.touch.ads = false; input.adsLatch = false; input.adsBtn?.classList.remove('on'); G.player.adsK = 0;
         $('dead').hidden = false; document.body.classList.add('is-dead');
-        $('deadBy').textContent = e.a ? t('killedYou', { n: nameOf(e.a) }) : t('selfKill');
+        $('deadBy').textContent = e.wpn === 'trem' ? t('trDeadBy') : e.a ? t('killedYou', { n: nameOf(e.a) }) : t('selfKill'); // 19/11 b: ficou dentro do trem quando ele partiu
         G.killer = e.a;
         audio.stopKey('gun');
         // kill cam em quadrinhos (so quando alguem te pegou; iris, queda e bigorna propria nao)
@@ -1238,16 +1349,35 @@ function onEvent(e) {
           const kbp = G.remoteBp.get(e.a)?.[e.wpn];
           const klo = kbp ? bpLoadout(kbp) : G.mode === 'gungame' ? { body: G.ladder[Math.min(G.snap?.players?.find(x => x.id === e.a)?.gunLvl || 0, G.ladder.length - 1)]?.body } : G.remoteLo.get(e.a)?.[e.wpn] || defaultLoadout(e.wpn);
           // foto lida da placa sem travar (03/11): a tira entra quando fica pronta, se voce ainda estiver na tela de morte
-          shootPanels(renderer, scene, { pos: kr.pos, yaw: kr.yaw || 0 }).then(imgs => {
+          shootPanels(renderer, scene, { pos: kr.pos, yaw: kr.yaw || 0 }).then(async imgs => {
             if (life !== G.lifeN || G.player?.alive || G.state !== 'game') return;
-            imgs[1] = CATEGORY[e.wpn] ? unlockShot({ wpn: e.wpn, lo: klo }) : null;
+            imgs[1] = CATEGORY[e.wpn] ? await cachedShot({ wpn: e.wpn, lo: klo }).catch(() => null) : null; // 19/11: compila em paralelo (sem travar); 19/11 b: do cache
+            if (life !== G.lifeN || G.player?.alive || G.state !== 'game') return;
             const kLvl = G.snap?.players?.find(x => x.id === e.a)?.lvl || kr.lvl || null, kVar = klo?.cvName || (klo?.ws ? t('ws_' + klo.ws) : kbp ? t(kbp) : null); // nivel de quem te pegou e a variante/skin da arma dele
             cm.innerHTML = stripHtml(imgs, { killer: nameOf(e.a), wpn: wn, lvl: kLvl, variant: kVar, hp: e.ahp, dist: Math.round(Math.hypot(kr.pos[0] - dpos[0], kr.pos[2] - dpos[2])), head: e.head, t, icon: DEATH_SVG[e.wpn] || null });
-            cm.hidden = false; cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
+            cm.hidden = false; paintKc(cm); cm.classList.remove('in'); void cm.offsetWidth; cm.classList.add('in');
             audio.play('comic', { ui: true, vol: 0.55 });
           });
         }
       }
+      break;
+    }
+    // Pulo do Gato (19/11): o servidor manda de volta pro inicio (caiu ou chegou); a posicao aqui vale na hora
+    case 'bhReset': {
+      // 19/11 (pedido dele): o chao do percurso mata. Respingo do tema onde a pessoa caiu (eu e os outros) e o clarao de dano
+      const Fl = FLOOR[G.M?.bh?.skin] || FLOOR.telhados, was = e.id === G.myId ? G.player?.pos : G.remotes.get(e.id)?.pos;
+      if (e.why === 'fall' && inGame && was) { const at = [was[0], 1.4, was[2]]; fx.puff(at, 10, 1.2, Fl.puff, 0.9); fx.word(Fl.word, [at[0], at[1] + 1.6, at[2]], 1.8, 0.7); audio.play(Fl.snd === 'burn' ? 'explosion' : 'whoosh', { pos: at, vol: 0.5, rate: Fl.snd === 'burn' ? 2.2 : 0.7, key: 'bhfl', max: 2 }); }
+      if (e.id === G.myId && G.player) {
+        G.player.pos = [...e.pos]; G.player.vel = [0, 0, 0]; G.player.yaw = e.yaw ?? G.player.yaw; G.player.onGround = true;
+        if (e.why === 'fall' && inGame) { hud.message(t('bhDie_' + (G.M?.bh?.skin || 'telhados')), 1.6); G.hurtFlash = 0.8; G.shake(0.35); }
+      }
+      break;
+    }
+    case 'bhGo': if (inGame) { hud.stampText(t('bhGo'), ''); audio.play('ui_click', { ui: true, vol: 0.9 }); } break; // 19/11: saiu da largada = relogio correndo
+    case 'bhDone': {
+      const tt = fmtRace(e.t);
+      if (e.id === G.myId && inGame) { hud.stampText(t(e.rec ? 'bhRecord' : 'bhFinish'), tt); audio.play(e.rec ? 'levelup' : 'unlock', { ui: true, vol: 0.8, jitter: 0 }); }
+      else if (inGame) hud.feed(`<span class="${teamCls(e.id)}">${esc(nameOf(e.id))}</span> ${t('bhFeed', { t: tt })}`, false);
       break;
     }
     case 'reload':
@@ -1340,20 +1470,28 @@ function onEvent(e) {
       if (!inGame) break;
       const sm = G.snap?.heist?.kind === 'smuggle';
       if (e.act === 'bank') { const k = teamKey(sm ? 'crate' : 'cash', G.snap?.heist?.atk); if (k) modeVoice(k); } // narrador: "time X roubou o dinheiro"
-      if (e.act === 'take') { if (e.id === G.myId) { if (!sm) hud.message(t('hsYouBag'), 2.4); audio.play('pickup', { ui: true, vol: 0.7 }); } else hud.message(t('hsTake', { n: nameOf(e.id) }), 1.8); }
+      if (e.act === 'take') { if (e.id === G.myId) { if (!sm && !e.jw) hud.message(t('hsYouBag'), 2.4); audio.play('pickup', { ui: true, vol: 0.7 }); } else hud.message(t('hsTake', { n: nameOf(e.id) }), 1.8); }
       else if (e.act === 'drop') { hud.message(t('hsDrop'), 1.8); audio.play('land', { pos: e.pos, vol: 0.8 }); }
       else if (e.act === 'return') hud.message(t('hsReturn'), 1.8);
       else if (e.act === 'bank' && sm) { hud.message(t('smBank', { n: e.money, q: G.snap?.heist?.quota || 5, s: e.bonus }), 2.6); audio.play('pickup', { ui: true, vol: 0.8 }); if (e.id === G.myId) gainXp('streak'); }
-      else if (e.act === 'bank') { { const f = (n) => Number(n || 0).toLocaleString('pt-BR'); hud.message(t('hsBank', { v: f(HEIST.bagValue), m: f(e.money), q: f(HEIST.quota), s: e.bonus }), 2.6); } /* valor de verdade da bolsa e o total (04/11: dizia 1000) */ audio.play('cashreg', { vol: 0.85, ui: true, key: 'cash', max: 2 }); if (e.id === G.myId) gainXp('streak'); }
+      else if (e.act === 'bank') { { const f = (n) => Number(n || 0).toLocaleString('pt-BR'); const q = G.snap?.heist?.quota || HEIST.quota; hud.message(e.jw ? t('trBankJ', { m: f(e.money), q: f(q), s: e.bonus }) : t('hsBank', { v: f(e.v || HEIST.bagValue), m: f(e.money), q: f(q), s: e.bonus }), 2.6); } /* valor de verdade da bolsa e o total (04/11: dizia 1000) */ audio.play('cashreg', { vol: 0.85, ui: true, key: 'cash', max: 2 }); if (e.id === G.myId) gainXp('streak'); }
       break;
+    // Roubo ao Trem (19/11 b): chegada, portas e partida
+    case 'trainSoon': if (inGame) { hud.alert(t('trSoonT'), t('trSoonS'), 'enemy'); modeVoice('train_soon', true); audio.play('trainwhistle', { pos: [-40, 3, 0], vol: 0.55 }); } break;
+    case 'trainArrive': if (inGame) hud.message(t('trArrive'), 2.4); break;
+    case 'trainOpen': if (inGame) { const atk = e.atk === G.myTeam; hud.alert(t('trOpenT'), t(atk ? 'trOpenAtk' : 'trOpenDef'), atk ? (G.myTeam || 'red') : 'enemy'); modeVoice('train_open', true); } break;
+    case 'trainClosing': if (inGame) { hud.alert(t('trCloseT'), t('trCloseS'), 'enemy'); modeVoice('train_closing', true); G.shake(0.12); } break;
+    case 'trainEject': if (inGame && e.id === G.myId && G.player) { G.player.pos = [...e.pos]; G.player.vel = [0, 0, 0]; G.player.onGround = true; hud.message(t('trEjected'), 2.6); audio.play('whoosh', { ui: true, vol: 0.6 }); G.shake(0.3); } break;
+    case 'trainLeave': if (inGame) hud.message(t('trLeave'), 2.2); break;
+    case 'trainGone': if (inGame) { hud.message(t('trGone'), 2.4); modeVoice('train_gone'); } break;
     case 'heistPass': // Contrabando: o caixote voa (arco desenhado pelo HeistView)
       if (inGame) { G.heistView?.pass(e); audio.play('whoosh', { pos: e.from, vol: 0.7 }); if (e.to === G.myId) hud.message(t('smCatch'), 1.8); }
       break;
     case 'heistRound':
-      if (inGame) { const mine = e.win === G.myTeam; hud.alert(t('hsWinR', { t: t(e.win === 'red' ? 'h_red' : 'h_blue') }), t(e.why === 'quota' ? (G.snap?.heist?.kind === 'smuggle' ? 'smWhyQuota' : 'hsWhyQuota') : 'hsWhyTime') + ` · ${e.wins.red} x ${e.wins.blue}`, mine ? (G.myTeam || 'red') : 'enemy'); audio.play(mine ? 'win' : 'lose', { ui: true, vol: 0.6 }); const k = teamKey('round', e.win); if (k) modeVoice(k, true); }
+      if (inGame) { const mine = e.win === G.myTeam; hud.alert(t('hsWinR', { t: t(e.win === 'red' ? 'h_red' : 'h_blue') }), t(e.why === 'quota' ? (G.snap?.heist?.kind === 'smuggle' ? 'smWhyQuota' : 'hsWhyQuota') : e.why === 'train' ? 'hsWhyTrain' : 'hsWhyTime') + ` · ${e.wins.red} x ${e.wins.blue}`, mine ? (G.myTeam || 'red') : 'enemy'); audio.play(mine ? 'win' : 'lose', { ui: true, vol: 0.6 }); const k = teamKey('round', e.win); if (k) modeVoice(k, true); }
       break;
     case 'heistNew':
-      if (inGame) { const atk = e.atk === G.myTeam; const smq = G.snap?.heist?.kind === 'smuggle'; hud.alert(t(atk ? 'hsAtk' : 'hsDef'), t(atk ? (smq ? 'smAtkSub' : 'hsAtkSub') : (smq ? 'smDefSub' : 'hsDefSub')), atk ? (G.myTeam || 'red') : 'enemy'); }
+      if (inGame) { const atk = e.atk === G.myTeam; const smq = G.snap?.heist?.kind === 'smuggle', trq = G.snap?.heist?.kind === 'train'; hud.alert(t(atk ? 'hsAtk' : 'hsDef'), t(atk ? (smq ? 'smAtkSub' : trq ? 'trAtkSub' : 'hsAtkSub') : (smq ? 'smDefSub' : trq ? 'trDefSub' : 'hsDefSub')), atk ? (G.myTeam || 'red') : 'enemy'); }
       break;
     case 'trainWarn': // trem desgovernado: apito e aviso (o trilho vermelho vem pelo estado)
       if (inGame) { audio.play('trainwhistle', { pos: [e.a[0], 1, e.a[1]], vol: 1, key: 'train', max: 1 }); hud.message(t('trainWarn'), 2.4); }
@@ -1389,7 +1527,7 @@ function onEvent(e) {
       }
       break;
     case 'look':
-      if (e.id !== G.myId) { G.remoteLook.set(e.id, e.look); { const rl = G.remotes.get(e.id); if (rl) { rl.char.setLook(e.look); warmChar(rl); } } }
+      if (e.id !== G.myId) { G.remoteLook.set(e.id, e.look); { const rl = G.remotes.get(e.id); if (rl) { rl.char.setLook(lookShown(e.look)); warmChar(rl); } } }
       break;
     case 'ladder': // escada de armas sorteada pra partida
       G.ladder = e.list.map(b => ({ wpn: wpnOfBody(b), body: b })); G.ladderId = e.id;
@@ -1600,6 +1738,11 @@ function onEvent(e) {
       if (!inGame) break;
       fx.explosion(e.pos); audio.play('explosion', { pos: e.pos, vol: 0.85, rate: 0.85, key: 'boom', max: 3 });
       (G.fires ||= []).push({ pos: e.pos, t: e.dur || 5, acc: 0 });
+      break;
+    case 'goo': // Grudenta (19/11): estoura em gosma rosa e a poca fica dur s
+      if (!inGame) break;
+      fx.splat(e.pos, 2.2, 0xe0507f); fx.puff([e.pos[0], e.pos[1] + 0.3, e.pos[2]], 7, 0.45, 0xe0507f, 0.5); audio.play('splat', { pos: e.pos, vol: 1, rate: 0.7 }); audio.play('slurp', { pos: e.pos, vol: 0.7, rate: 0.8 });
+      { const m = fx.gooPool(e.pos, e.r || NADES.goo.pool); scene.add(m); (G.goos ||= []).push({ pos: e.pos, r: e.r || NADES.goo.pool, t: e.dur || NADES.goo.time, dur: e.dur || NADES.goo.time, mine: e.owner === G.myId || (!!e.tm && e.tm === G.myTeam), m }); }
       break;
     case 'smoke': // fumaca: nuvem grossa que tapa a visao por dur s
       if (inGame) { (G.smokeFx ||= []).push(smokeCloud(e.pos, e.dur || 12)); audio.play('pump', { pos: e.pos, vol: 0.6, rate: 0.6 }); }
@@ -2002,7 +2145,7 @@ function animateEndXp(from, to, gained) {
 function onMsg(m) {
   if (m.t === 'snap') onSnap(m);
   else if (m.t === 'latr') { G.myPing = Math.round(performance.now() - m.c); PERF.pmax = Math.max(PERF.pmax || 0, G.myPing); } // ping do Tab (15/11: e o pior dos 10 s pro relatorio)
-  else if (m.t === 'ev') onEvent(m);
+  else if (m.t === 'ev') { const a0 = performance.now(); onEvent(m); perfEv(m, performance.now() - a0); }
   else if (m.t === 'kicked') { // host tirou da sala ou ficou parado demais: volta pro menu com o aviso (sem reconectar)
     G.kickedWhy = m.why === 'afk' ? 'kickedAfk' : 'kickedHost';
     if (G.net) G.net.onclose = () => {};
@@ -2231,6 +2374,7 @@ const breathe = () => new Promise(r => setTimeout(r, 0));
 function warmGuns() { return Promise.race([warmGunsNow(), new Promise(r => setTimeout(r, 8000))]); }
 async function warmGunsNow() {
   try {
+    warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11). 19/11: no COMECO (no fim, o teto de 8 s deixava pra depois da partida abrir)
     const seen = new Set(); // escada com o mesmo modelo repetido: monta uma vez so
     const list = (G.mode === 'gungame' ? G.ladder.map(u => [u.wpn, { ...(G.loadouts[u.wpn] || {}), body: u.body }]).filter(([w, lo]) => { const k = w + ':' + lo.body + ':' + (lo.camo || ''); if (seen.has(k)) return false; seen.add(k); return true; })
       : [...new Set([...PRIMARIES, 'pistol', 'melee'])].map(w => [w, G.loadouts[w]]));
@@ -2238,9 +2382,9 @@ async function warmGunsNow() {
     for (const [w, lo] of list) { const gun = buildGun(w, lo); if (gun) grp.add(gun); }
     vm.scene.add(grp);
     await compileSafe(vm.scene, vm.camera);
-    vm.scene.remove(grp);
+    vm.scene.remove(grp); loadProgress(0.6, 0.72);
     await breathe();
-    const cast = await warmCast(); // 14/11: bonecos e armas dos bots/jogadores prontos antes de abrir (eram montados no meio da partida: 100-700 ms parado)
+    const cast = await warmCast(); loadProgress(0.72, 0.95); // 14/11: bonecos e armas dos bots/jogadores prontos antes de abrir (eram montados no meio da partida: 100-700 ms parado)
     // 03/11 (bateria de desempenho): a cena da partida tambem (mapa, bonecos e armas de quem ja esta na sala) + as
     // 8 skins animadas. Sem isso a 1a imagem compilava tudo junto: 0,5 s (contra todos) a 1 s (noite) de tela parada.
     // compileAsync usa a compilacao paralela do navegador (KHR_parallel_shader_compile): o carregamento nao trava
@@ -2248,20 +2392,34 @@ async function warmGunsNow() {
     const wornSkins = new Set([wornLook()?.skin, ...[...G.remotes.values()].map(r => lookOf(r)?.skin)]); // 09/11: celular so compila as skins em uso (sao 29 programas)
     for (const id of Object.keys(SKIN_CODE)) if (wornSkins.has(id)) skins.add(new THREE.Mesh(tiny, skinMat(id))); // 10/11: PC tambem so as em uso (eram 29 programas, o grosso da espera)
     skins.position.copy(camera.position); scene.add(skins);
-    const airs = [fx.blimpMesh('red'), bomberMesh('red')]; for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular
+    let fxWarmFrom = fx.list.length, warmSmoke = null; // efeitos disparados so pra compilar (saem no finally)
+    const airs = [fx.blimpMesh('red'), fx.protBubble(), bomberMesh('red'), ...[planeMesh, trainMesh, sentryMesh, beaconMesh].map(f => { try { return f('red'); } catch { return null; } }), ...[handMesh, ammoboxMesh, anvilMesh].map(f => { try { return f(); } catch { return null; } })].filter(Boolean); for (const a of airs) { a.position.copy(camera.position); scene.add(a); } // 08/11: a 1a chamada do dirigivel compilava na hora e travava o celular. 19/11 (medido: 1a chamada do Biplano travava 159 ms; Sentinela, Mao e Trem tambem): todas as sequencias entram aqui
+    { const c = camera.position, d = camera.getWorldDirection(new THREE.Vector3()), o = c.clone().addScaledVector(d, 3), e = o.clone().addScaledVector(d, 20); // balas em lote (cada estilo), fumaca e bigorna: programas prontos antes do 1o tiro
+      for (const st of ['chalk', 'plasma', 'fire', 'laser']) fx.bullet(o.toArray(), e.toArray(), st, 'rifle'); fx.puff(o.toArray(), 1, 0.2); fx.bb?.update(0.001); fx.pb?.update(0.001);
+      // 19/11 (log do jogo dele: quique de granada 773 ms, flash 122 ms e +4 shaders no meio do Roubo ao Trem): TODO efeito dispara uma
+      // vez aqui, compila junto com o mapa e sai antes da partida abrir
+      fxWarmFrom = fx.list.length; const q = o.toArray(), tryFx = (f) => { try { f(); } catch { /* efeito que nao existe neste modo */ } };
+      tryFx(() => fx.explosion(q)); tryFx(() => fx.flashBang(q)); tryFx(() => fx.splat(q)); tryFx(() => fx.stars(q)); tryFx(() => fx.word('PÁ!', q, 1, 0.1)); tryFx(() => fx.gooPool(q));
+      tryFx(() => { warmSmoke = smokeCloud(q, 0.1); });
+      for (const k of ['frag', 'smoke', 'flash', 'thermo', 'goo', 'tomahawk', 'rocket']) tryFx(() => { const n = fx.nadeMesh(k); if (n) { n.position.copy(o); airs.push(n); scene.add(n); } }); }
     await breathe();
     // elenco na frente da camera: sobe pra placa e compila junto com o mapa (14/11: a 1a aparicao subia as malhas no meio da partida)
     if (cast) { cast.position.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(4)); scene.add(cast); }
+    const bhHid = []; // pecas das armadilhas escondidas (jato apagado) que entram so pra compilar
     try {
+      // 19/11: Pulo do Gato sem lobby (solo) criava armadilhas e chao no 1o quadro da partida (compilava ali): agora entram aqui
+      if (G.M?.bh && (!G.bhTraps || G.bhTraps.M !== G.M)) { G.bhTraps?.dispose(); G.bhTraps = new BhTrapView(scene, G.M); G.bhTraps.M = G.M; G.bhFloor?.dispose(); G.bhFloor = new BhFloor(scene, G.M); }
+      G.bhTraps?.root?.traverse(o => { if (!o.visible) { o.visible = true; bhHid.push(o); } }); // jato comeca apagado: o compile pula o invisivel
       uploadWorld(); // 09/11: mapa inteiro sobe pra placa aqui, nao na primeira vez que entra na tela
-      await compileSafe(scene, camera);
+      await compileSafe(scene, camera); loadProgress(0.95, 1);
     } finally {
       scene.remove(skins); tiny.dispose(); for (const a of airs) scene.remove(a);
+      for (const f of fx.list.splice(fxWarmFrom)) { scene.remove(f.obj); try { f.done?.(f.obj); } catch { /* */ } } // efeitos do aquecimento saem (o programa fica: keepPrograms)
+      if (warmSmoke) { scene.remove(warmSmoke.grp); warmSmoke.mat.dispose(); warmSmoke = null; }
+      for (const o of bhHid) o.visible = false;
       // o elenco SEMPRE sai da cena (mesmo com erro): fica so o compartilhado, ja na placa
       if (cast) { scene.remove(cast); for (const o of cast.userData.chars) freeChar(o); for (const g of cast.userData.guns) { const k = g.userData.dropKey; if (k && !DROP_TPL.has(k)) { cast.remove(g); DROP_TPL.set(k, g); } else disposeGun(g); } cast.clear(); } // 0.20.2: arma ja montada vira molde da arma largada
     }
-    await breathe();
-    warmDeathFx(renderer, camera); // shaders das mortes lendarias (08/11): nada de travar na 1a morte
   } catch (e) { console.warn('aquecimento das armas falhou', e); }
 }
 
@@ -2276,7 +2434,7 @@ async function warmCast() {
     // visuais: os bots que podem entrar (bot1..bot18 cobre a sala cheia e as reposicoes) + quem ja esta na sala
     const looks = new Map();
     for (let i = 1; i <= 18; i++) { const L = botLook('bot' + i); looks.set(JSON.stringify(L), L); }
-    for (const L of G.remoteLook.values()) if (L) looks.set(JSON.stringify(L), L);
+    for (const L0 of G.remoteLook.values()) { const L = lookShown(L0); if (L) looks.set(JSON.stringify(L), L); }
     const cast = new THREE.Group(); cast.userData.chars = []; cast.userData.guns = [];
     let i = 0; const spot = (o) => { o.position.set((i % 6) * 0.9 - 2.5, 0, -Math.floor(i / 6) * 0.9); i++; cast.add(o); };
     for (const L of looks.values()) { const c = new Character('red', '', L); cast.userData.chars.push(c); spot(c.root); if (await slice()) break; }
@@ -2302,11 +2460,48 @@ function idleWarmGuns() {
   for (const w of Object.keys(pool)) for (const body of pool[w]) list.push([w, { body }]);
   const ric = window.requestIdleCallback || ((f) => setTimeout(() => f({ timeRemaining: () => 8 }), 50));
   const step = (dl) => {
-    if (G.state === 'loading') { ric(step, { timeout: 2000 }); return; } // carregando: deixa o carregamento trabalhar
-    while (list.length && dl.timeRemaining() > 6) { const [w, lo] = list.shift(); try { disposeGun(buildGun(w, lo)); } catch { /* */ } }
-    if (list.length) ric(step, { timeout: 4000 });
+    if (G.state !== 'menu') { ric(step, { timeout: 2000 }); return; } // 19/11 (perfil: montava arma DURANTE a partida, 4-5% da CPU): so no menu
+    let forced = dl.didTimeout ? 1 : 0; // 19/11: sem sobra de quadro (menu desenhando sem parar) o navegador chama por tempo esgotado: monta 1 mesmo assim
+    while (list.length && (dl.timeRemaining() > 6 || forced-- > 0)) { const [w, lo] = list.shift(); try { disposeGun(buildGun(w, lo)); } catch { /* */ } }
+    if (list.length) ric(step, { timeout: 600 });
   };
   ric(step, { timeout: 4000 });
+  idleWarmFx(); // 19/11: shaders em paralelo (antes esperavam todos os modelos de bot)
+}
+// 19/11 (pedido dele: compilar TODOS os shaders na tela inicial): ainda no menu, nas sobras de tempo, um de cada coisa que aparece
+// na partida compila contra a LUZ e a NEVOA da cena do jogo (o programa depende delas): armas que voce equipou, skins de corpo,
+// bolha de nascimento, mancha de tinta, sequencias, mortes lendarias. Com o keepPrograms o programa fica pra sessao toda e o
+// carregamento da partida acha quase tudo pronto. So roda com o menu parado (G.state 'menu'); no carregamento espera
+let fxWarmDone = false;
+const WARM_KEEP = {}; // exemplares vivos (fora da cena) que seguram o numero do shader no three: ver idleWarmFx
+async function idleWarmFx() {
+  if (fxWarmDone || !renderer.compileAsync) return; fxWarmDone = true;
+  const ric = window.requestIdleCallback || ((f) => setTimeout(f, 50));
+  const calm = async () => { while (G.state !== 'menu') await new Promise(r => setTimeout(r, 700)); await new Promise(r => ric(r, { timeout: 3000 })); };
+  const at = () => camera.position.clone().add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(4));
+  const run = async (objs, sc, cam) => { // compila o grupo com a luz/nevoa de 'sc' sem colocar nada na cena
+    await calm(); const g = new THREE.Group(); for (const o of objs) if (o) g.add(o); g.position.copy(at());
+    g.updateMatrixWorld(true); await compileSafe(g, cam, sc, 4000); return g;
+  };
+  try {
+    await calm(); warmDeathFx(renderer, camera); // barato (3 shaders): primeiro
+    const coarse = matchMedia?.('(pointer: coarse)').matches; // celular: so as skins em uso (cada uma e um programa)
+    const tiny = new THREE.BoxGeometry(0.01, 0.01, 0.01), skinIds = coarse ? [wornLook()?.skin].filter(id => SKIN_CODE[id]) : Object.keys(SKIN_CODE);
+    await run(skinIds.map(id => new THREE.Mesh(tiny, skinMat(id))), scene, camera); tiny.dispose();
+    const splat = new THREE.Mesh(new THREE.PlaneGeometry(0.01, 0.01), new THREE.MeshBasicMaterial({ transparent: true, polygonOffset: true, polygonOffsetFactor: -3, depthWrite: false })); // mesmo programa da mancha de tinta (fx.splat)
+    const mk = (f, a) => { try { return a === undefined ? f() : f(a); } catch { return null; } };
+    await run([fx.protBubble(), splat, mk(fx.blimpMesh.bind(fx), 'red'), mk(bomberMesh, 'red'), mk(planeMesh, 'red'), mk(trainMesh, 'red'), mk(sentryMesh, 'red'), mk(beaconMesh, 'red'), mk(handMesh), mk(ammoboxMesh), mk(anvilMesh)], scene, camera);
+    splat.geometry.dispose(); splat.material.dispose(); // o programa fica (keepPrograms)
+    // Pulo do Gato: chao mortal (shader proprio com nevoa) e armadilhas (o jato comeca apagado: liga so pra compilar).
+    // NAO descarta: o three apaga o numero do codigo do shader quando o ultimo material com ele e descartado, e o proximo
+    // chao ganhava numero novo = compilava de novo em toda partida. Um exemplar vivo fora da cena segura o numero
+    { const hold = WARM_KEEP.bh = new THREE.Group(); mk(() => new BhFloor(hold, getMap('telhados'))); mk(() => new BhTrapView(hold, getMap('telhados')));
+      hold.traverse(o => { o.visible = true; }); await run([hold], scene, camera); }
+    // armas que voce usa (com camo), na cena da arma na mao
+    await calm(); const LO = mk(matchLoadouts) || {}, guns = [...new Set([...PRIMARIES, 'pistol', 'melee'])].map(w => mk(() => buildGun(w, LO[w])));
+    const grp = await run(guns, vm.scene, vm.camera); for (const g of grp.children.slice()) disposeGun(g);
+
+  } catch (e) { console.warn('aquecimento do menu falhou', e); }
 }
 
 // todo mundo pronto: intertitulo de carregamento e entra na partida
@@ -2319,11 +2514,11 @@ async function beginMatch(join) {
   await runLoading({ map: G.M.id, mode: G.duo ? 'duo' : G.bounce ? 'bounce' : G.mode, join });
   LT.cortina = Math.round(performance.now() - lt0);
   if (G.state !== 'loading') return;
-  await preloadMap(G.M.id); LT.mapa = Math.round(performance.now() - lt0); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
+  loadProgress(0.15, 0.45); await preloadMap(G.M.id); LT.mapa = Math.round(performance.now() - lt0); loadProgress(0.45, 0.6); // 06/11 (pedido dele): a partida so abre com o mapa do Blender no lugar (nada de caixa trocando na frente dele)
   await warmGuns(); LT.armas = Math.round(performance.now() - lt0);
   // 15/11: 1a foto de desbloqueio ainda no carregamento (cria o 2o contexto e compila os shaders dele); a do meio da partida sai leve
   try { unlockShot({ wpn: CATEGORY[settings.primary] ? settings.primary : 'smg' }); } catch { /* */ }
-  hideLoading(); LT.total = Math.round(performance.now() - lt0);
+  loadProgress(1); hideLoading(); LT.total = Math.round(performance.now() - lt0);
   G.state = 'game'; PERF.matches++;
   funil('jogou');
   audio.music(true, matchTrack());
@@ -2495,7 +2690,7 @@ async function quitGame() {
 let lobbyPickMode = null;
 function syncLobbyPick(mode) {
   // escada de armas e infectado: a arma vem do jogo, ninguem escolhe
-  const off = mode === 'gungame' || mode === 'infect';
+  const off = mode === 'gungame' || mode === 'infect' || mode === 'bhop'; // 19/11 (pedido dele): Pulo do Gato e so a faca, sem Arsenal
   $('lbPick').hidden = off;
   if (off || lobbyPickMode === mode) return;
   lobbyPickMode = mode;
@@ -2534,7 +2729,8 @@ function renderLobbyPick() {
   $('lbSkills').onclick = () => openLobbyScreen('skills');
   $('lbCh').onclick = () => openLobbyScreen('challenges');
   // nome proprio do modelo montado em cada principal
-  $('lbPickList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
+  $('lbPickList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" data-shot="${w}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
+  fillShots($('lbPickList')); // 19/11: fotos das armas pela fila sem trava (antes: 7 armas montadas e compiladas na hora, partida rodando atras)
   $('lbPickList').querySelectorAll('button').forEach(b => b.onclick = () => {
     settings.primary = b.dataset.w; saveSettings(); sendLoadout();
     audio.play('pickup', { ui: true, vol: 0.5 });
@@ -2559,7 +2755,8 @@ function renderPausePick() {
   $('pauseSmith').onclick = openGameSmith;
   if (off) return;
   const list = PRIMARIES;
-  $('pkList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" src="${unlockShot({ wpn: w, slot: 'camo', id: G.loadouts[w]?.camo || null }) || ''}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
+  $('pkList').innerHTML = list.map(w => `<button role="radio" aria-checked="${settings.primary === w}" data-w="${w}"><img alt="" data-shot="${w}"><span>${G.loadouts[w]?.body ? partName('body', G.loadouts[w].body) : wName(w)}</span></button>`).join('');
+  fillShots($('pkList')); // 19/11: fotos das armas pela fila sem trava (antes: 7 armas montadas e compiladas na hora, partida rodando atras)
   $('pkList').querySelectorAll('button').forEach(b => b.onclick = () => {
     settings.primary = b.dataset.w; saveSettings(); applyLoadoutLater(true);
     audio.play('pickup', { ui: true, vol: 0.5 });
@@ -2677,7 +2874,8 @@ function startRange(cat, body) {
   G.range.primary = settings.primary; // devolve a principal salva na saida
   rangeCat = cat;
   $('menu').hidden = true;
-  const rangeNet = new LocalNet({ mode: 'ffa', map: 'estande', bots: 0, lobby: false, limit: 9999, time: 3600 }); // 14/11 (pedido dele): estande proprio, nao mais a Vila rangeNet.core.noDrops = true; // campo de treino: alvo nao larga arma
+  const rangeNet = new LocalNet({ mode: 'ffa', map: 'estande', bots: 0, lobby: false, limit: 9999, time: 3600 }); // 14/11 (pedido dele): estande proprio, nao mais a Vila
+  rangeNet.core.noDrops = true; // campo de treino: alvo nao larga arma (19/11: estava dentro do comentario da linha de cima e nao rodava)
   startGame(rangeNet, settings.name || (rovexGuest() ? rovexGuestName() : t('youCap'))).catch(() => { G.range?.dispose(); G.range = null; });
 }
 $('rangeBack').onclick = () => { audio.play('ui_back', { ui: true }); quitGame(); };
@@ -2713,7 +2911,7 @@ const ui = initMenus({
   // fora da malha e o raio errava. Centro so das pecas de verdade e, se errar, procura em espiral em volta ate achar a arma
   smithCenterPick: () => smithCenterPick(),
   retPreview: (cv) => retPreview(cv),
-  onSmith: (gun, cat, charm, extra) => { const smithId = (G.smithN = (G.smithN || 0) + 1), swap = () => { if (smithId !== G.smithN) { disposeGun(gun); return; } for (const o of smithHolder.children) disposeGun(o); smithHolder.clear(); if (!gun) return; const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo */ smithHolder.add(gun); if (cat !== 'melee') { attachCharm(gun, charm ?? wornLook().charm, 1); attachKc(gun, extra?.kc, extra?.kills || 0); applyStickers(gun, extra?.stk); } }; /* 09/11: a arma velha fica na tela ate o shader da nova ficar pronto (sem travada) e so entao e liberada (vazava a cada clique) */ if (!gun) { swap(); return; } compileSafe(gun, smithCam, smithScene, 3000).then(swap, swap); },
+  onSmith: (gun, cat, charm, extra, key) => { const smithId = (G.smithN = (G.smithN || 0) + 1), fade = !!gun && key !== G.smithKey, t0 = fade ? performance.now() : -1e9; G.smithKey = key; if (fade) smithVeil(true); /* 19/11 (pedido dele): a antiga some num veu da cor do palco, loader no meio, e a nova aparece quando o shader fica pronto */ if (fade) setTimeout(() => { if (smithId !== G.smithN) return; for (const o of smithHolder.children) disposeGun(o); smithHolder.clear(); }, SMITH_FADE); /* a antiga sai da memoria ja no escuro, sem esperar a nova */ const swap = () => { if (smithId !== G.smithN) { disposeGun(gun); return; } const wait = SMITH_FADE - (performance.now() - t0); if (wait > 0) { setTimeout(swap, wait); return; } for (const o of smithHolder.children) disposeGun(o); smithHolder.clear(); if (!gun) { smithVeil(false); return; } const lz = gun.userData.laser; if (lz) lz.beam.scale.z = 0.35; gun.userData.saber?.ignite(); if (gun.userData.sword) gun.rotation.z += Math.PI / 2; /* 07/11 (pedido dele): espada de pe na vitrine, face da lamina pra camera (deitada so se via o fio) */ gun.updateMatrixWorld(true); { const bm = lz?.beam, bp = bm?.parent; bp?.remove(bm); const c = new THREE.Box3().setFromObject(gun).getCenter(new THREE.Vector3()); bp?.add(bm); gun.position.x -= c.x; gun.position.z -= c.z; } /* gira em torno do meio da arma, nao do cabo. 19/11 (bug dele): o feixe do laser (metros) entrava na conta e a arma com laser girava pela ponta */ smithHolder.add(gun); if (cat !== 'melee') { attachCharm(gun, charm ?? wornLook().charm, 1); attachKc(gun, extra?.kc, extra?.kills || 0); applyStickers(gun, extra?.stk); } requestAnimationFrame(() => smithVeil(false)); }; if (!gun) { swap(); return; } compileSafe(gun, smithCam, smithScene, 3000).then(swap, swap); },
   onBackFromSettingsInGame: () => { $('menu').hidden = true; $('pause').hidden = false; },
   // arsenal aberto do lobby: aplica a arma montada e volta pra sala (ready = ja marca pronto)
   onBackToLobby: (ready) => closeLobbySmith(ready),
@@ -2724,6 +2922,7 @@ const ui = initMenus({
   leave: () => quitGame(),
   loadoutsChanged: (l) => { G.loadouts = l; },
 });
+if (import.meta.env.DEV) window.__UI = ui; // teste: abrir telas direto (so no dev)
 
 // ---------- loop ----------
 let last = performance.now();
@@ -2762,7 +2961,12 @@ function nadeArc(p) {
 // lentos, travadas (>100 ms), chamadas de desenho do quadro inteiro, shaders, memoria e a placa. O servidor so anota no log
 // 14/11 b (pedido dele: "bem detalhado, TODAS as metricas"): tempo da logica x do desenho, travadas por faixa, tarefas longas do
 // navegador, chamadas de desenho por quadro (media/pico), bateria (notebook fora da tomada economiza), aparelho, ajustes e estado
-const PERF = { ft: [], cpu: [], rnd: [], dr: [], t0: 0, gpu: null, start: performance.now(), lt: 0, ltMs: 0, matches: 0, prog0: -1, bat: null };
+const PERF = { ft: [], cpu: [], rnd: [], dr: [], t0: 0, gpu: null, start: performance.now(), lt: 0, ltMs: 0, matches: 0, prog0: -1, bat: null, evMs: {}, evN: {}, snd: 0, fxMax: 0, shotAt: -1e9, slowShot: 0, slow: 0, rShots: 0 };
+// 19/11 (fila: "FPS cai quando os OUTROS atiram"): o que roda junto. Tempo de cada tipo de evento do servidor (tiro dos outros,
+// acerto, explosao...), sons tocados, efeitos vivos e quantos quadros lentos (>50 ms) cairam ate 150 ms depois de um tiro dos outros
+const PD = { ev: [], ms: [], dr: [], sp: [], by: {}, t0: 0, prog0: -1, snd: 0, n: 0 }; // log de desempenho do dev (.perf/live.log): antes do perfEv e do audio.play que usam
+function perfEv(m, ms) { const k = m.k || '?'; if (import.meta.env.DEV) PD.ev.push(k); PERF.evMs[k] = (PERF.evMs[k] || 0) + ms; PERF.evN[k] = (PERF.evN[k] || 0) + 1; if (k === 'shot' && m.id !== G.myId) { PERF.shotAt = performance.now(); PERF.rShots++; } }
+{ const play0 = audio.play.bind(audio); audio.play = (...a) => { PERF.snd++; PD.snd++; return play0(...a); }; }
 try { new PerformanceObserver((l) => { for (const e of l.getEntries()) { PERF.lt++; PERF.ltMs += e.duration; } }).observe({ type: 'longtask', buffered: false }); } catch { /* navegador sem longtask */ }
 try { navigator.getBattery?.().then(b => { PERF.bat = b; }).catch(() => {}); } catch { /* */ }
 // 15/11: a cada 100 ms agenda uma tarefa e mede quanto ela atrasou. Atraso alto = o app (quadro atras de quadro) segurou a fila,
@@ -2786,12 +2990,35 @@ function telemTick(now) {
   el.hidden = false;
   el.innerHTML = `<span><b>${TEL.fps}</b> ${t('qps')}</span><span>${t('telPing')} <b class="${online && me?.pg > 150 ? 'bad' : ''}">${ping}</b></span><span>${t('telLoss')} <b class="${loss > 2 ? 'bad' : ''}">${online ? loss.toFixed(1) + '%' : '0%'}</b></span><span><b>${new Date().toLocaleTimeString(L)}</b></span>`;
 }
+// DEV: captura de picos por quadro (>22 ms) com os eventos de rede vistos naquele quadro; manda a cada ~3 s pra /__perf/log (vite.config.js)
+
+function perfDev(ms, now) {
+  if (!(ms > 0 && ms < 5000)) return;
+  const calls = renderer.info.render.calls, evn = PD.ev.length;
+  PD.ms.push(ms); PD.dr.push(calls);
+  if (evn) { for (let i = 0; i < evn; i++) { const k = PD.ev[i], b = PD.by[k] || (PD.by[k] = { n: 0, sum: 0, max: 0 }); b.n++; b.sum += ms; if (ms > b.max) b.max = ms; } }
+  if (ms > 22 && PD.sp.length < 60) PD.sp.push({ t: Math.round(now), ms: +ms.toFixed(1), calls, ev: PD.ev.slice(), fx: fx?.list?.length || 0, pm: G.progMid?.length ?? -1, prog: renderer.info.programs?.length || 0 });
+  PD.ev.length = 0;
+  if (!PD.t0) PD.t0 = now;
+  if (now - PD.t0 < 3000) return;
+  const a = PD.ms.slice().sort((x, y) => x - y), n = a.length, d = PD.dr, q = (p) => +a[Math.min(n - 1, Math.floor(n * p))].toFixed(1);
+  let ds = 0, dm = 0; for (let i = 0; i < d.length; i++) { ds += d[i]; if (d[i] > dm) dm = d[i]; }
+  let s = 0; for (let i = 0; i < n; i++) s += a[i];
+  const prog = renderer.info.programs?.length || 0;
+  const rec = { at: new Date().toISOString(), n, fps: +(1000 * n / s).toFixed(1), p50: q(0.5), p99: q(0.99), max: +a[n - 1].toFixed(1), drAvg: +(ds / n).toFixed(1), drMax: dm, prog, newProg: PD.prog0 < 0 ? 0 : prog - PD.prog0, fx: fx?.list?.length || 0, snd: PD.snd, mode: G.mode, map: G.M?.id, by: PD.by, spikes: PD.sp.slice(), };
+  PD.prog0 = prog; PD.t0 = now; PD.ms.length = PD.dr.length = PD.sp.length = 0; PD.by = {}; PD.snd = 0;
+  try { fetch('/__perf/log', { method: 'POST', body: JSON.stringify(rec), keepalive: true }).catch(() => {}); } catch { /* sem rede */ }
+}
 function perfTick(ms, now) {
-  if (G.state !== 'game' || document.hidden) { PERF.ft.length = PERF.cpu.length = PERF.rnd.length = PERF.dr.length = 0; PERF.t0 = now; PERF.lt = PERF.ltMs = 0; return; }
-  if (ms > 0 && ms < 5000) { PERF.ft.push(ms); PERF.dr.push(renderer.info.render.calls); }
+  if (G.state !== 'game' || document.hidden) { PERF.ft.length = PERF.cpu.length = PERF.rnd.length = PERF.dr.length = 0; PERF.t0 = now; PERF.lt = PERF.ltMs = 0; PD.t0 = 0; PD.ev.length = 0; return; }
+  if (ms > 0 && ms < 5000) { PERF.ft.push(ms); PERF.dr.push(renderer.info.render.calls); if (ms > 50) { PERF.slow++; if (now - PERF.shotAt < 150) PERF.slowShot++; } }
+  PERF.fxMax = Math.max(PERF.fxMax, fx?.list?.length || 0);
+  if (import.meta.env.DEV) perfDev(ms, now);
   if (now - PERF.t0 < 10000) return;
   const a = PERF.ft.sort((x, y) => x - y), n = a.length, cpu = PERF.cpu.sort((x, y) => x - y), rnd = PERF.rnd.sort((x, y) => x - y), dr = PERF.dr.sort((x, y) => x - y);
   const lt = PERF.lt, ltMs = PERF.ltMs; PERF.t0 = now; PERF.ft = []; PERF.cpu = []; PERF.rnd = []; PERF.dr = []; PERF.lt = PERF.ltMs = 0;
+  const evTop = Object.entries(PERF.evMs).sort((x, y) => y[1] - x[1]).slice(0, 5).map(([k, v]) => k + ':' + PERF.evN[k] + ':' + v.toFixed(0)).join(' '), ev = { evTop: evTop.slice(0, 90), snd: PERF.snd, fxMax: PERF.fxMax, rShots: PERF.rShots, slow: PERF.slow, slowShot: PERF.slowShot }; // o servidor so aceita numero e texto curto
+  PERF.evMs = {}; PERF.evN = {}; PERF.snd = 0; PERF.fxMax = 0; PERF.rShots = 0; PERF.slow = 0; PERF.slowShot = 0;
   if (n < 10) return;
   const sum = a.reduce((s, x) => s + x, 0), I = renderer.info, P = G.player;
   if (PERF.gpu == null) { try { const gl = renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); PERF.gpu = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).slice(0, 90); } catch { PERF.gpu = '?'; } }
@@ -2806,6 +3033,7 @@ function perfTick(ms, now) {
   G.net.send({ t: 'perf',
     // 15/11: rede x PC. gap = maior buraco entre estados (normal ~50-70), pmax = pior ping, tq = maior atraso do app pra rodar uma tarefa da fila
     gap, pmax, tq,
+    ...ev, // 19/11: eventos da janela [tipo, quantos, ms], sons, efeitos vivos (pico), tiros dos outros, quadros lentos e quantos logo apos tiro dos outros
     // quadro
     fps: Math.round(n * 1000 / sum), p50: pq(a, .5), p95: pq(a, .95), p99: pq(a, .99), max: Math.round(a[n - 1]), f50: a.filter(x => x > 50).length, f100: a.filter(x => x > 100).length, f250: a.filter(x => x > 250).length, frames: n,
     js50: pq(cpu, .5), js99: pq(cpu, .99), draw50: pq(rnd, .5), draw99: pq(rnd, .99), lt, ltMs: Math.round(ltMs),
@@ -2828,12 +3056,22 @@ function perfTick(ms, now) {
 // pela fila de tarefas antes: o que chegou da rede roda primeiro. rr_noyield=1 no localStorage desliga (pra comparar)
 const YIELD = /RubberRiotDesktop|Electron/.test(navigator.userAgent) && (() => { try { return localStorage.getItem('rr_noyield') !== '1'; } catch { return true; } })();
 const nextFrame = () => requestAnimationFrame(frame);
+// 19/11 (pedido dele: compilar TODOS os shaders no inicio e nunca travar na partida): o three destroi o programa quando o
+// ultimo material que usa ele e descartado (mancha, bolha, efeito de morte...) e o proximo igual COMPILA DE NOVO. Aqui todo
+// programa que ja compilou ganha +1 uso e fica pra sessao toda (alguns KB cada, ~100 programas). G.progMid (dev) conta
+// programa compilado com a partida rolando: o aquecimento tem que deixar isso em zero
+let keptN = 0;
+function keepPrograms() {
+  const P = renderer.info.programs; if (!P || (P.length === keptN && (!keptN || P[keptN - 1].__rrKeep))) return;
+  for (const p of P) if (!p.__rrKeep) { p.__rrKeep = true; p.usedTimes++; if (G.state === 'game' && !G.intro) (G.progMid ||= []).push(p.name + ' ' + String(p.cacheKey).slice(0, 120)); }
+  keptN = P.length;
+}
 function frame() {
   if (YIELD) setTimeout(nextFrame, 0); else requestAnimationFrame(frame);
   const now = performance.now();
   const cap = +settings.fpsCap || 0; // limite de FPS (10/11); 0 = sem limite (no app de PC o navegador nao trava em 60)
   if (cap && now - lastDraw < 1000 / cap - 1.5) return;
-  perfTick(now - lastDraw, now); telemTick(now); renderer.info.reset();
+  perfTick(now - lastDraw, now); telemTick(now); keepPrograms(); renderer.info.reset();
   lastDraw = now; dynResTick(now); HOSE_FRAME.n++;
   const realDt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -2853,11 +3091,24 @@ function frame() {
 function boostHud(realDt) {
   const B = boostInfo(), on = B.active && G.state === 'game' && !G.range && !G.tutorial, el = $('xpChip');
   if (on && boostCounts()) boostTick(realDt * 1000);
+  if (wboostInfo().active && G.state === 'game' && !G.range && !G.tutorial && boostCounts()) wboostTick(realDt * 1000); // ficha de arma: mesmo relogio
   // 08/11 (pedido dele): avisa ao entrar na partida e some; a ficha continua contando sem nada na tela
   if (!on) G.xpChipUntil = 0; else if (!G.xpChipUntil) G.xpChipUntil = performance.now() + 5000;
   const show = on && performance.now() < G.xpChipUntil;
-  document.body.classList.toggle('xp2', show);
+  const wShow = wboostInfo().active && G.state === 'game' && !G.range && !G.tutorial && (!G.wxpChipUntil || performance.now() < G.wxpChipUntil);
+  document.body.classList.toggle('xp2', show || wShow); // uma troca so por quadro (os dois selos)
   if (!el) return; el.hidden = !show; if (!show) return;
+  const why = G.snap?.over ? '' : weekend() ? t('boostPauseWknd') : G.blitz ? t('boostPauseBlitz') : '';
+  const s = Math.ceil(B.ms / 1000), txt = why || `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${String(Math.floor(s / 60) % 60).padStart(Math.floor(s / 3600) ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`;
+  if (el.dataset.t !== txt) { el.dataset.t = txt; el.classList.toggle('paused', !!why); el.querySelector('.t').textContent = txt; }
+}
+// 19/11 (pedido dele): selo da ficha de XP de ARMA do lado do da conta (mesma regra: aparece 5 s ao entrar/usar e some)
+function wboostHud() {
+  const B = wboostInfo(), on = B.active && G.state === 'game' && !G.range && !G.tutorial, el = $('wxpChip'); if (!el) return;
+  if (!on) G.wxpChipUntil = 0; else if (!G.wxpChipUntil) G.wxpChipUntil = performance.now() + 5000;
+  const show = on && performance.now() < G.wxpChipUntil;
+  el.hidden = !show; if (!show) return;
+  if (!el.dataset.ic) { el.dataset.ic = '1'; el.querySelector('.lb').textContent = t('wxpChip'); }
   const why = G.snap?.over ? '' : weekend() ? t('boostPauseWknd') : G.blitz ? t('boostPauseBlitz') : '';
   const s = Math.ceil(B.ms / 1000), txt = why || `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${String(Math.floor(s / 60) % 60).padStart(Math.floor(s / 3600) ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`;
   if (el.dataset.t !== txt) { el.dataset.t = txt; el.classList.toggle('paused', !!why); el.querySelector('.t').textContent = txt; }
@@ -2880,8 +3131,17 @@ function eliteTick(dt) {
   if (!moved) return;
   elitePulso().then(j => { if (!j) return; if (!j.elegivel || j.feito) eliteOff = true; if (j.ganhou) { hud.message(t('ech_won'), 5); audio.play('unlock', { vol: 0.9, ui: true }); loadMe?.(); } });
 }
+function teamSwapTick() {
+  const Q = G.teamSwapQ; if (!Q?.length) return;
+  for (let n = 0; n < 2 && Q.length; n++) {
+    const r = Q.shift(), p = r.swapP; if (!p || r.swapTo == null) continue;
+    if (!G.remotes.has(r.id) || r.team === r.swapTo) { r.swapTo = null; continue; }
+    scene.remove(r.char.root); freeChar(r.char); r.char = new Character(r.swapTo, divTagText(p.dt) + p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; r.team = r.swapTo; r.swapTo = null; warmChar(r);
+  }
+}
 function frameBody(now, realDt) {
-  boostHud(realDt);
+  teamSwapTick();
+  boostHud(realDt); wboostHud();
   // camera lenta no abate final
   if (G.slowT > 0) G.slowT -= realDt;
   G.timeScale += ((G.slowT > 0 ? 0.25 : 1) - G.timeScale) * Math.min(1, realDt * 8);
@@ -2965,6 +3225,15 @@ function frameBody(now, realDt) {
   G.strikes?.update(dt, G.t, G.blimpMeshes);
   if (G.heistView && G.state === 'lobby') { G.heistView.dispose(); G.heistView = null; if (G.player) { G.player.bagged = false; G.player.crated = false; } } // 05/11: voltou pro lobby, o cofre da rodada anterior sai (senao trocar de modo mantinha ele)
   if (G.heistView) { G.heistView.update(dt, G.t); G.heistView.hud(G.snap?.heist, G.myTeam, G.state === 'game'); }
+  // Roubo ao Trem (19/11 b): o trem anda (trainview.js) e a colisao do mapa acompanha (sem trem, aberto, fechado)
+  if (G.M?.trainDoors && G.snap?.heist?.tr) { if (!G.trainView || G.trainView.M !== G.M) { G.trainView?.dispose(); G.trainView = new TrainView(scene, G.M); } G.trainView.update(dt, G.snap.heist, fx, audio); G.M.boxes = trainBoxesFor(G.M, G.snap.heist); }
+  else if (G.trainView) { G.trainView.dispose(); G.trainView = null; }
+  // Pulo do Gato (19/11): armadilhas de tempo; pegou = arremessado (o empurrao entra na fisica do meu boneco)
+  if (G.M?.bh && (G.state === 'game' || G.state === 'lobby')) { // 19/11 c (pedido dele): no lobby o mapa aparece igual (armadilha e chao), so sem empurrar
+    if (!G.bhTraps || G.bhTraps.M !== G.M) { G.bhTraps?.dispose(); G.bhTraps = new BhTrapView(scene, G.M); G.bhTraps.M = G.M; G.bhFloor?.dispose(); G.bhFloor = new BhFloor(scene, G.M); }
+    G.bhTraps.update(dt, G.snap?.sc, G.state === 'game' && !G.paused && G.player?.alive && !G.intro ? G.player : null, (T, at) => { audio.play(T.kind === 'stomp' ? 'anvilfall' : 'whoosh', { vol: 0.7, ui: true, rate: T.kind === 'jet' ? 1.4 : 1 }); G.shake(0.35); fx.word(T.kind === 'jet' ? 'FIUU!' : T.kind === 'stomp' ? 'PLAFT!' : 'PÁ!', [at.x, at.y + 0.8, at.z], 1.4, 0.5); });
+    G.bhFloor?.update(dt, G.bhTraps.clock || 0);
+  } else if (G.bhTraps) { G.bhTraps.dispose(); G.bhTraps = null; G.bhFloor?.dispose(); G.bhFloor = null; }
   downMarks();
   if (G.borView) {
     G.borView.update(dt, G.t);
@@ -3139,14 +3408,14 @@ function frameBody(now, realDt) {
     } else { r.occl = false; r.seenT = G.t; }
     const behind = camD > 9 && G.state === 'game' && !replay.on && frLim < Math.PI && (r.pos[0] - camera.position.x) * camF.x + (r.pos[1] + 1 - camera.position.y) * camF.y + (r.pos[2] - camera.position.z) * camF.z < camD * Math.cos(Math.min(Math.PI, frLim + Math.asin(Math.min(1, 3 / camD))));
     const hideB = !!(r.occl || behind || r.warming); if (r.char.body.visible === hideB) r.char.body.visible = !hideB;
-    const chStep = !r.occl && ((camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on); // fora da tela: a vez dele vem 10x por segundo
-    if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); try { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); } catch (e) { reportaErro(e, 'boneco ' + G.mode + '/' + (r.wpn || '')); } r.animAcc = 0; } // 15/11: erro num boneco nao para o quadro (travava todo mundo)
+    const chStep = (!r.occl || !!r.char.draw) && ((camD < 70 && camFr.intersectsSphere(chSph.set(tmpV.set(r.pos[0], r.pos[1] + 1, r.pos[2]), 4))) || r.animAcc >= 0.1 || replay.on); // fora da tela: a vez dele vem 10x por segundo
+    if (chStep) { r.animAcc = Math.min(r.animAcc, 0.1); try { r.char.update(r.animAcc, { anim: r.anim, pitch: r.pitch, alive: r.alive, speed: r.speed, t: G.t, airH: r.pos[1], steer: r.steer, aimOff: r.aimOff }); } catch (e) { reportaErro(e, 'boneco ' + G.mode + '/' + (r.wpn || '')); } r.animAcc = 0 } // 15/11: erro num boneco nao para o quadro (travava todo mundo)
     if (chStep === !!r.frozen) { r.frozen = !chStep; if (r.frozen) r.char.root.updateMatrixWorld = NO_MATRIX; else delete r.char.root.updateMatrixWorld; }
     const bh = (G.state === 'game' && EV(G.snap?.mut)?.bigHead) || 1; // evento Cabecao
     r.headK = bh; // area do tiro na cuca acompanha (shared/map.js rayPlayer)
     if (r.char.headK !== bh) { r.char.headK = bh; r.char.head.scale.setScalar(bh); }
     r.char.lod(camD * lodK);
-    r.char.tag.visible = r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || r === aimedFoe); // 09/11 (pedido dele): nome do inimigo so com ele na mira
+    r.char.tag.visible = !G.hc && r.alive && G.state === 'game' && (r.team && r.team === G.myTeam || r === aimedFoe); // 09/11 (pedido dele): nome do inimigo so com ele na mira; 19/11: Preto no Branco sem nome nenhum
     if (r.team && r.team === G.myTeam) r.char.sharpTag(renderer);
   }
   flash?.update(camera, G.remotes, G.myTeam, G.state !== 'game' || !!G.player?.alive);
@@ -3176,7 +3445,10 @@ function frameBody(now, realDt) {
     const H = G.snap?.heist;
     if (H && !carPr && p.alive && !G.down && G.myTeam === H.atk && !(G.player.bagged || G.player.crated)) {
       const K = heistCfg(H), d2 = (q, r) => q && (q[0] - p.pos[0]) ** 2 + (q[2] - p.pos[2]) ** 2 < r * r && Math.abs(q[1] - p.pos[1]) < 2.5;
-      if ((H.open && H.bags.some(b => b[1] === 0) && d2(H.vault, K.takeR)) || H.bags.some(b => b[1] === 2 && d2(b[3], K.touchR))) bagPr = t(H.kind === 'smuggle' ? (isTouch ? 'crateTakeTouch' : 'crateTake') : (isTouch ? 'bagTakeTouch' : 'bagTake'), { k: bindLabel(settings, 'use', G.pad?.active ? 1 : 0) });
+      const trOk = !H.tr || H.tr[0] === TR.open; // trem: so com ele parado e aberto
+      const jwHere = trOk && H.lux && H.bags.some(b => b[1] === 0 && b[5]) && d2(H.lux, K.takeR); // trem: joias no vagao de luxo (livres desde o comeco)
+      if (jwHere) bagPr = t(isTouch ? 'jewelTakeTouch' : 'jewelTake', { k: bindLabel(settings, 'use', G.pad?.active ? 1 : 0) });
+      else if ((trOk && H.open && H.bags.some(b => b[1] === 0 && !b[5]) && d2(H.vault, K.takeR)) || H.bags.some(b => b[1] === 2 && d2(b[3], K.touchR))) bagPr = t(H.kind === 'smuggle' ? (isTouch ? 'crateTakeTouch' : 'crateTake') : (isTouch ? 'bagTakeTouch' : 'bagTake'), { k: bindLabel(settings, 'use', G.pad?.active ? 1 : 0) });
     }
     if (bagPr) { hud.prompt(bagPr); if (input.useBtn) input.useBtn.hidden = false; }
     else if (G.bagPrompt) { hud.prompt(null); if (input.useBtn) input.useBtn.hidden = true; }
@@ -3194,7 +3466,7 @@ function frameBody(now, realDt) {
       if (input.useBtn && G.mode !== 'bomb' && G.mode !== 'borroes') input.useBtn.hidden = !near; // toque: botao de usar aparece perto da arma
     } else if (G.dropPrompt) { hud.prompt(null); G.dropPrompt = false; if (input.useBtn && G.mode !== 'bomb' && G.mode !== 'br' && G.mode !== 'borroes') input.useBtn.hidden = true; }
     G.useWas = !!inp.use;
-    if (G.M) G.M.dyn = [...(G.snap?.esc ? [trainBox(G.M, G.snap.esc.d)] : G.snap?.heist ? heistBoxes(G.snap.heist) : G.snap?.bor ? borDoorBoxes(G.M, G.snap.bor.doors) : []), ...propBoxes(G.snap?.blimps, G.snap?.cars)]; // bonde (01/11), cofre e van (03/11) e portas fechadas da noite solidos: voce nao atravessa e a bala para
+    if (G.M) G.M.dyn = [...(G.snap?.esc ? [trainBox(G.M, G.snap.esc.d)] : G.snap?.heist ? heistBoxes(G.snap.heist, G.M) : G.snap?.bor ? borDoorBoxes(G.M, G.snap.bor.doors) : []), ...propBoxes(G.snap?.blimps, G.snap?.cars)]; // bonde (01/11), cofre e van (03/11) e portas fechadas da noite solidos: voce nao atravessa e a bala para
     if (!G.paused) p.update(dt, inp);
     ctxHint(realDt, p);
     modeTipsTick(realDt, G, p, inp, p.alive && !G.paused && !G.intro && !replay.on && !G.tutorial && !G.range && !(G.snap?.freeze > 0) && !G.over); // dicas do modo (07/11)
@@ -3220,7 +3492,7 @@ function frameBody(now, realDt) {
     if (stimOn !== !!G.stimFx) { G.stimFx = stimOn; document.body.classList.toggle('stim-rush', stimOn); }
     // distancia de desenho: Curta/Media/Longa nos Ajustes (07/11). Luneta (zoom grande mirando) enxerga longe e a nevoa abre junto
     const longEye = (big || zoom >= 3) && p.adsK > 0.5;
-    const dd = longEye ? DRAW_DIST.scope : DRAW_DIST[settings.draw] || DRAW_DIST.mid;
+    const dd = longEye ? DRAW_DIST.scope : drawDist(settings.draw);
     if (camera.far !== dd) camera.far = dd;
     // nevoa: comeca na metade da distancia e fecha antes do corte (nada some de repente). rrBase: a nevoa do proprio mapa (Tinteiro e Docas tem a deles, mais fechada)
     if (scene.fog) { const b = scene.fog.rrBase ||= [scene.fog.near, scene.fog.far]; const ff = longEye ? Math.min(b[1], dd * 0.96) : Math.min(b[1], dd * 0.94); scene.fog.far = ff; scene.fog.near = Math.min(b[0], ff * 0.45); }
@@ -3348,7 +3620,7 @@ function frameBody(now, realDt) {
     hud.frame(p, realDt, settings);
     { // 13/11 (pedido dele): aviso de quem pegou objetivo/sequencia SEMPRE abaixo do painel do objetivo do modo (Contrabando, Cofre, Bonde, Bomba...)
       const now = performance.now();
-      if (now - (G.evTopT || 0) > 250) { G.evTopT = now;
+      if (now - (G.evTopT || 0) > 1000) { G.evTopT = now; // 19/11: 1x por s (getBoundingClientRect força layout)
         const ev = $('evStack'); let low = 0;
         for (const id of ['hsBar', 'escBar', 'bombBar']) { const e = $(id); if (!e || e.hidden || getComputedStyle(e).display === 'none') continue; const r = e.getBoundingClientRect(); if (r.height && r.left < innerWidth / 2 + 120 && r.right > innerWidth / 2 - 120 && r.top < innerHeight * 0.4) low = Math.max(low, r.bottom); }
         const want = low ? Math.round(low + 8) + 'px' : ''; if (ev && ev.style.top !== want) ev.style.top = want;
@@ -3644,7 +3916,7 @@ const BOOT_T = performance.now();
   await Promise.race([loadArsenal(), new Promise(r => setTimeout(r, 6000))]);
   // 08/11: rede lenta passou dos 6 s: a sua arma pode ter saido provisoria; quando tudo chegar ela e remontada
   loadArsenal().then(() => idleWarmGuns()).catch(() => {});
-  loadArsenal().then(() => { const p = G.player; if (p?.alive && vm.gun?.userData.provisional && !G.specVm) vm.setWeapon(p.wpn, p.lo(p.wpn), true); }).catch(() => {});
+  loadArsenal().then(() => { const p = G.player; if (p?.alive && vm.gun?.userData.provisional && !G.specVm) vm.setWeapon(p.wpn, p.lo(p.wpn), true); ui.refreshSmith?.(); }).catch(() => {});
   await document.fonts.ready.catch(() => {});
   // celular: o pavio chega na bomba e a tela de entrada espera o toque em Jogar (o toque ja pediu tela cheia
   // e deitado); so ai sai e a abertura de sempre continua
@@ -3782,4 +4054,16 @@ function tickNadeFx(dt) {
   film.uniforms.smoke.value = veil;
   for (const f of G.fires || []) { f.t -= dt; f.acc += dt; if (f.acc > 0.12) { f.acc = 0; const a = Math.random() * 6.28, r = Math.random() * 3.6; fx.puff([f.pos[0] + Math.cos(a) * r, (f.pos[1] || 0) + 0.3, f.pos[2] + Math.sin(a) * r], 2, 0.7, Math.random() < 0.5 ? 0xf08a2a : 0xffc24a, 0.5); } }
   if (G.fires) G.fires = G.fires.filter(f => f.t > 0);
+  // Grudenta: a poca encolhe no ultimo segundo e sai; eu dentro de uma do outro time = grudado (o grude dura um tico depois de sair)
+  if (G.goos?.length || G.gooT > 0) {
+    const me = G.player?.pos; let inside = false;
+    for (const z of G.goos || []) {
+      z.t -= dt; const k = Math.min(1, z.t / 0.8, (z.dur - z.t) / 0.15 + 0.2); z.m.scale.set(z.r * k, 1, z.r * k);
+      if (me && !z.mine && G.player.alive && (me[0] - z.pos[0]) ** 2 + (me[2] - z.pos[2]) ** 2 < z.r * z.r && Math.abs(me[1] - z.pos[1]) < 1) inside = true;
+      if (z.t <= 0) scene.remove(z.m);
+    }
+    if (G.goos) G.goos = G.goos.filter(z => z.t > 0);
+    if (inside && !(G.gooT > 0)) { hud.message(t('gooStuck'), 1.6); fx.word(t('gooWord'), [me[0], me[1] + 1.8, me[2]], 1.2, 0.6); }
+    G.gooT = inside ? NADES.goo.linger : Math.max(0, (G.gooT || 0) - dt);
+  }
 }

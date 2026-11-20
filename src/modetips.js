@@ -6,7 +6,7 @@
 import { t } from './i18n.js';
 import { MODES } from '../shared/weapons.js';
 
-const N = { ffa: 2, tdm: 2, gungame: 2, ctf: 2, dom: 2, escort: 2, heist: 3, smuggle: 2, infect: 2, bomb: 2, br: 2, bounce: 2, duo: 2, borroes: 3 };
+const N = { ffa: 2, tdm: 2, gungame: 2, ctf: 2, dom: 2, escort: 2, heist: 3, smuggle: 2, trem: 2, infect: 2, bomb: 2, br: 2, bounce: 2, duo: 2, borroes: 3 };
 const FIRST = 6, EVERY = 70, SHOW = 7, CALM = 4;
 
 let el = null, key = '', list = [], i = 0, wait = FIRST, showT = 0, calm = 0, lastHp = null;

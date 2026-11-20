@@ -167,6 +167,8 @@ class Audio {
 
   // narrador (06/11): uma fala por vez, nivel constante; a musica so abaixa um pouco enquanto ele fala (cruza com ela).
   // Fala nova durante outra: a de agora termina e a nova entra em seguida (fila de 1; a mais velha da fila cai).
+  // 19/11: deixa prontas as falas que tem hora marcada (contagem): carregar na hora atrasava a fala
+  preloadVo(keys) { if (!this.ctx) return; for (const k of keys) { this.load('vo_' + k); for (let i = 2; i <= (VO_ALT[k] || 1); i++) this.load('vo_' + k + '_v' + i); } }
   voice(key, o = {}) {
     if (!this.ctx || !(this.vol.vo > 0) || this.voBlock?.()) return; // voBlock: main.js cala ele no Campo de treino (regra dele 06/11)
     // variacoes (13/11, pedido dele): a mesma situacao tem 2-3 falas; sorteia sem repetir a ultima. noBase: so as variacoes
@@ -179,16 +181,18 @@ class Audio {
     }
     const n = 'vo_' + key, now = this.ctx.currentTime;
     if (this.voLast?.[key] > now - 6) return;           // mesma fala repetida em seguida nao
-    if (!this.buf[n]) { this.load(n).then(() => this.buf[n] && this.voice(key, o)); return; }
-    if (this.voUntil > now + 0.05) { this.voNext = key; return; }
+    // 19/11 (pedido dele: locutor fora de sincronia com a apresentacao do modo nas rodadas novas): fala de CONTAGEM (o.sync) nunca
+    // espera. Sem o audio pronto, nao toca atrasada (pula); com outra fala tocando, corta a outra e entra na hora
+    if (!this.buf[n]) { if (o.sync) { this.load(n); return; } this.load(n).then(() => this.buf[n] && this.voice(key, o)); return; }
+    if (this.voUntil > now + 0.05) { if (!o.sync) { this.voNext = key; return; } try { this.voSrc?.stop(); } catch { /* ja parou */ } this.voNext = null; this.voUntil = now; }
     (this.voLast ||= {})[key] = now;
     const src = this.ctx.createBufferSource(), g = this.ctx.createGain();
     src.buffer = this.buf[n]; g.gain.value = o.vol ?? 0.85;
-    src.connect(g).connect(this.voBus); src.start(now + 0.03);
+    src.connect(g).connect(this.voBus); src.start(now + 0.03); this.voSrc = src;
     const dur = this.buf[n].duration; this.voUntil = now + 0.03 + dur;
     this.onVoice?.(key, dur); // legenda (06/11)
     this.duck(0.62, dur + 0.1);
-    src.onended = () => { const k = this.voNext; this.voNext = null; if (k) this.voice(k); };
+    src.onended = () => { if (this.voSrc === src) this.voSrc = null; else return; const k = this.voNext; this.voNext = null; if (k) this.voice(k); }; // cortada por fala de contagem: nao puxa a fila
   }
 
   setListener(pos, fwd, up) {

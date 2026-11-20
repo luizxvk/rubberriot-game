@@ -76,6 +76,9 @@ export const BLITZ_MAX = 24, TEAM_MAX_BLITZ = 12 /* 07/11 noite (pedido dele): v
 // Blitz (02/11): 12x12 nos mapas grandes em tres regras; o id do modo diz a regra de base. Vale XP em dobro (evento fixo)
 export const SOON_MODES = ['borroes', 'arte']; // 13/11 (pedido dele): PvE fora do ar, cartao com "Em breve"
 export const BLITZ_BASE = { blitz: 'tdm', blitz_ctf: 'ctf', blitz_dom: 'dom' };
+// 19/11 (pedido dele): modo hardcore "Preto no Branco": regras do Mata-Mata, metade da vida (morre mais rapido), sem HUD (so o placar),
+// sem minimapa, sem nome de quem e do time e sem contador de municao. XP em dobro no lancamento (HC.xp)
+export const HC_BASE = { pnb: 'tdm' }, HC = { hp: 0.5, xp: 2 };
 export const BLITZ_XP = 2;
 
 // granadas: G = fragmentacao, F = flash
@@ -89,12 +92,15 @@ export const NADES = {
   tomahawk: { speed: 44, lift: 6.5, fuse: 30, hitR: 0.9 }, // 04/11: mais longe, em parabola; no chao fica ate 30 s e o dono pega de volta passando em cima
   thermo: { speed: 27, fuse: 1.8, radius: 5.5, dmg: 71, burn: 3.8, burnR: 4, burnDps: 13.5 }, // 14/11 (pedido dele): dano -25% (95 -> 71, fogo 18 -> 13,5/s) e fogo so 3,8 s (era 5)
   smoke: { speed: 28, fuse: 1.4, radius: 6.5, time: 12 },
+  // 19/11 (pedido dele): Grudenta. Bola de borracha derretida: estoura numa poca (pool m de raio, time s) e quem e do outro time
+  // pisa fica GRUDADO: anda a slow da velocidade, sem correr nem pular, e o grude dura linger s depois de sair. dmg = so o estouro (perto)
+  goo: { speed: 26, fuse: 1.5, radius: 2.2, dmg: 25, pool: 3.4, time: 6.5, slow: 0.3, linger: 0.6 },
   beacon: { speed: 16, fuse: 0.7, hp: 120 },
   // 05/11 (pedido dele): cai no chao e reabastece quem passa por cima (dono e aliados). lvl = nivel da conta; cd = espera por jogador.
   // Explode em 3 casos: acabou o tempo, gastou os usos ou o inimigo destruiu a tiro (hp). blast/dmg = raio e dano da explosao
   ammobox: { speed: 18, fuse: 0.8, time: 30, uses: 2, radius: 1.7, lvl: 15, cd: 4, hp: 60, blast: 4.5, dmg: 90 },
 };
-export const LETHALS = ['frag', 'tomahawk', 'thermo'], TACTICALS = ['flash', 'smoke', 'beacon', 'ammobox'];
+export const LETHALS = ['frag', 'tomahawk', 'thermo', 'goo'], TACTICALS = ['flash', 'smoke', 'beacon', 'ammobox'];
 
 // sequencias de abates (cartoon): radar espiao, chuva de bigornas, dirigivel atirador e,
 // com 15 sem cair, a Torta Atomica: avisa o outro time e depois de `delay` s derruba todo inimigo vivo
@@ -223,12 +229,17 @@ export const MODES = {
   ctf:      { name: 'Captura a Bandeira', teams: true, limit: 3,   desc: 'Roube a bandeira deles e traga pra sua base. 3 capturas.' },
   // vermelho empurra o bonde (fica no circulo em volta dele), azul segura; limit = % do caminho (placar)
   escort:   { name: 'Escolta',           teams: true,  limit: 100, time: 210, desc: 'Ataque empurra o Bonde da Tinta até a garagem ficando perto dele; defesa segura até o tempo acabar.' },
+  // 19/11 (pedido dele): Bunny Hop. So faca, ninguem da dano; percurso suspenso, caiu volta pro inicio; melhor tempo vence
+  bhop:     { name: 'Pulo do Gato',      teams: false, limit: 0,   time: 480, desc: 'Só faca: pule de plataforma em plataforma até a chegada. Caiu, volta pro início. Melhor tempo vence.' },
+  pnb:      { name: 'Preto no Branco',   teams: true,  limit: 40,  base: 'tdm', desc: 'Mata-Mata sem tela: só o placar. Metade da vida, sem minimapa, sem munição na tela e sem nome do time. XP em dobro.' },
   blitz:    { name: 'Blitz',             teams: true,  limit: 75,  desc: '16 contra 16 na Fronteira. 75 nocautes do time vencem.' },
   blitz_ctf: { name: 'Blitz: Bandeira',  teams: true,  limit: 3,   desc: '16 contra 16 na Fronteira ou no Canyon Poeira. Captura a bandeira, 3 capturas.' },
   blitz_dom: { name: 'Blitz: Dominação', teams: true,  limit: 200, desc: '16 contra 16 na Fronteira ou no Canyon Poeira. Segure A, B e C.' },
   dom:      { name: 'Dominação',         teams: true,  limit: 150, desc: 'Segure os pontos A, B e C. Cada ponto rende pontos por segundo.' },
   // vermelho ataca (planta), azul defende (desarma); sem renascer na rodada; limit = rodadas pra vencer
   smuggle:  { name: 'Contrabando',       teams: true,  limit: 3,   time: 180, desc: 'Ataque leva os caixotes do armazém até o barco; defesa segura. Melhor de 4.' },
+  // 19/11 (pedido dele): Roubo ao Trem. Motor do Cofre: dinheiro no vagao-forte (arromba) e joias no vagao de luxo (pesadas)
+  trem:     { name: 'Roubo ao Trem',     teams: true,  limit: 3,   time: 180, desc: 'Ataque arromba o vagão-forte e pega as joias do vagão de luxo; leva tudo até o caminhão. Defesa segura. Melhor de 4.' },
   heist:    { name: 'Roube o Cofre',     teams: true,  limit: 3,   time: 180, desc: 'Ataque arromba o cofre e leva as bolsas até a van; defesa segura. Melhor de 4.' },
   bomb:     { name: 'Plantar a Bomba',   teams: true,  limit: 4,   desc: 'Ataque planta a bomba no ponto A ou B, defesa desarma. Sem renascer na rodada.' },
   // azul = sobreviventes, vermelho = infectados (quem cai vira infectado)
@@ -255,6 +266,11 @@ export const HEIST = { rounds: 4, time: 180, crack: 15, crackR: 5.5, bags: 8, ba
 // Contrabando no Cais (04/11, pedido dele): variante do Cofre (mesmo motor heist.js). Sem arrombar: a pilha do armazem ja
 // esta aberta; o caixote e pesado (lento, sem correr, sem pular, sem atirar) e da pra PASSAR pra um colega (bola de rugbi).
 // quota = caixotes no barco pra levar a rodada; bagValue 1 = conta caixote
+// Roubo ao Trem (19/11): 6 malotes de 10 mil no vagao-forte (precisa arrombar) + 3 caixas de joias de 20 mil no luxo (abertas desde
+// o comeco, mas pesadas: anda a 60% e sem correr). Meta 80 mil: da pra fechar so com dinheiro, so que as joias encurtam o caminho
+// 19/11 b (pedido dele): o trem CHEGA. Rodada comeca sem ele; em arriveAt s sai do tunel oeste e freia em arriveDur s; abre as portas;
+// faltando closeAt s fecha (quem esta dentro e jogado pra fora), closeDur s depois parte (quem ficou dentro morre) em leaveDur s pro tunel leste. off = distancia escondida
+export const TRAIN_HEIST = { arriveAt: 15, soonAt: 7, arriveDur: 8, closeAt: 20, closeDur: 6, leaveDur: 9, off: 82, crack: 12, crackR: 4.2, bags: 9, cash: 6, bagValue: 10000, jewelValue: 20000, quota: 80000, jewelSlow: 0.6, vanR: 3.5 };
 export const SMUGGLE = { crack: 0.01, bags: 8, bagValue: 1, quota: 5, bankBonus: 25, carrySlow: 0.6, vanR: 3.2, passR: 16, passCone: 0.5, passT: 0.55 };
 // 13/11 (pedido dele): PB ja vem com silenciador e nao troca bocal. Tiro abafado = bocal silenciador OU corpo com silenciador de fabrica
 export const INTEGRAL_SIL = ['pistol_12', 'fusil_16']; // PB e AS Val

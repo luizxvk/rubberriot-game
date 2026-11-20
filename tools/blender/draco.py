@@ -6,10 +6,12 @@ RAW = r'D:\Desktop\fokusstudios\tinta-louca\tools\blender\glb-raw'
 OUT = r'D:\Desktop\fokusstudios\tinta-louca\public\models\maps'
 ONLY = globals().get('ONLY')  # opcional: lista de mapas
 res = {}
-prev = bpy.context.window.scene
+W = bpy.context.window  # 19/11: em fundo (blender -b) nao ha janela
+prev = W.scene if W else bpy.context.scene
 for f in sorted(os.listdir(RAW)):
     if not f.endswith('.glb') or (ONLY and f[:-4] not in ONLY): continue
-    scn = bpy.data.scenes.new('tmp_draco'); bpy.context.window.scene = scn
+    scn = bpy.data.scenes.new('tmp_draco')
+    if W: W.scene = scn
     with bpy.context.temp_override(scene=scn):
         bpy.ops.import_scene.gltf(filepath=os.path.join(RAW, f))
         objs = list(scn.objects)
@@ -21,6 +23,7 @@ for f in sorted(os.listdir(RAW)):
     for o in objs: bpy.data.objects.remove(o, do_unlink=True)
     for m in meshes:
         if m.users == 0: bpy.data.meshes.remove(m)
-    bpy.context.window.scene = prev; bpy.data.scenes.remove(scn)
+    if W: W.scene = prev
+    bpy.data.scenes.remove(scn)
     res[f] = [round(os.path.getsize(os.path.join(RAW, f)) / 1e6, 2), round(os.path.getsize(os.path.join(OUT, f)) / 1e6, 2)]
 result = res

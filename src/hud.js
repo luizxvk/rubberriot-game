@@ -12,6 +12,11 @@ import { badgeSvg } from './rank.js';
 import { partName } from './arsenal.js';
 import { isTouch } from './input.js';
 import { audio } from './audio.js';
+// 19/11 (celular a 20 FPS): ler innerWidth/innerHeight depois de mexer no DOM obriga o navegador a refazer o layout da pagina
+// inteira NA HORA (perfil do celular: nadeWarn + objectives = ~20% do processador). O tamanho da tela fica guardado e so muda no resize
+let VW = innerWidth, VH = innerHeight;
+addEventListener('resize', () => { VW = innerWidth; VH = innerHeight; });
+visualViewport?.addEventListener('resize', () => { VW = innerWidth; VH = innerHeight; });
 // icone do que a pessoa usa pra jogar, do lado do nome no placar (Material Icons: computer, smartphone, sports_esports)
 const DEV_ICON = {
   pc: 'M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z',
@@ -43,8 +48,9 @@ export const STREAK_SVG = {
 // icone no quadrinho do meio; as sequencias vem do STREAK_SVG. Mesmo viewBox 48 e traco de tinta
 const INK_S = 'stroke="#141210" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"';
 export const NADE_SVG = {"ammobox":"<rect x=\"7\" y=\"19\" width=\"34\" height=\"22\" rx=\"2\" fill=\"#a8743f\" stroke=\"#141210\" stroke-width=\"2.5\"/><path d=\"M7 30h34\" stroke=\"#141210\" stroke-width=\"2\"/><path d=\"M15 19V12a3 3 0 0 1 6 0v7zM27 19V12a3 3 0 0 1 6 0v7z\" fill=\"#d9b24c\" stroke=\"#141210\" stroke-width=\"2\"/><path d=\"M7 19l6 6M41 19l-6 6M7 41l6-6M41 41l-6-6\" stroke=\"#141210\" stroke-width=\"2\"/>","frag":"<ellipse cx=\"24\" cy=\"28\" rx=\"11\" ry=\"13\" fill=\"#5b6b43\" stroke=\"#141210\" stroke-width=\"3\"/><path d=\"M18 14h12v-4H18z\" fill=\"#3a3632\" stroke=\"#141210\" stroke-width=\"2.5\"/><path d=\"M30 12c6 0 8 4 7 9\" fill=\"none\" stroke=\"#141210\" stroke-width=\"3\"/>","tomahawk":"<path d=\"M14 40 32 10\" stroke=\"#8a5a2b\" stroke-width=\"5\" stroke-linecap=\"round\"/><path d=\"M14 40 32 10\" stroke=\"#141210\" stroke-width=\"7\" stroke-linecap=\"round\" opacity=\".25\"/><path d=\"M27 8c8 1 13 6 13 13l-9-3-4 3z\" fill=\"#cfd4d6\" stroke=\"#141210\" stroke-width=\"3\" stroke-linejoin=\"round\"/>","thermo":"<rect x=\"15\" y=\"12\" width=\"18\" height=\"28\" rx=\"4\" fill=\"#3a3632\" stroke=\"#141210\" stroke-width=\"3\"/><rect x=\"15\" y=\"22\" width=\"18\" height=\"7\" fill=\"#f08a2a\" stroke=\"#141210\" stroke-width=\"2\"/><path d=\"M20 8h8v4h-8z\" fill=\"#c9a34a\" stroke=\"#141210\" stroke-width=\"2.5\"/><path d=\"M36 14c4 3 4 8 0 11\" fill=\"none\" stroke=\"#f08a2a\" stroke-width=\"3\"/>","flash":"<rect x=\"17\" y=\"12\" width=\"14\" height=\"28\" rx=\"3\" fill=\"#ece9e1\" stroke=\"#141210\" stroke-width=\"3\"/><path d=\"M19 20h10M19 28h10\" stroke=\"#141210\" stroke-width=\"2\"/><path d=\"M38 8l-4 7h5l-5 8\" fill=\"none\" stroke=\"#e3b23c\" stroke-width=\"3\" stroke-linejoin=\"round\"/>","smoke":"<rect x=\"16\" y=\"20\" width=\"14\" height=\"22\" rx=\"3\" fill=\"#8e958c\" stroke=\"#141210\" stroke-width=\"3\"/><rect x=\"16\" y=\"26\" width=\"14\" height=\"5\" fill=\"#5f8f5f\"/><path d=\"M14 18c-4-1-5-6-1-8 1-5 7-6 10-3 3-3 9-1 9 4 4 1 5 6 1 8\" fill=\"#d9d6cf\" stroke=\"#141210\" stroke-width=\"2.5\"/>","beacon":"<circle cx=\"22\" cy=\"24\" r=\"10\" fill=\"#9fb4c6\" stroke=\"#141210\" stroke-width=\"3\"/><path d=\"M16 33l-4 9M28 33l4 9M22 34v8\" stroke=\"#141210\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M29 16V6l9 3-9 3\" fill=\"#ece9e1\" stroke=\"#141210\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><circle cx=\"22\" cy=\"13\" r=\"3\" fill=\"#7fe6ff\" stroke=\"#141210\" stroke-width=\"2\"/>"};
+NADE_SVG.goo = '<path d="M9 40c-3 0-4-3-1-4 4-2 9-1 16-1s12-1 16 1c3 1 2 4-1 4z" fill="#e0507f" stroke="#141210" stroke-width="2.5" stroke-linejoin="round"/><circle cx="24" cy="23" r="11" fill="#e0507f" stroke="#141210" stroke-width="2.5"/><path d="M17 31c0 3-1 5-2 6M24 34v4M31 31c0 3 1 4 2 5" stroke="#141210" stroke-width="2.5" stroke-linecap="round"/><rect x="21" y="8" width="6" height="5" rx="1" fill="#f2c14e" stroke="#141210" stroke-width="2.5"/><circle cx="31" cy="8" r="3" fill="none" stroke="#141210" stroke-width="2.5"/><circle cx="20" cy="20" r="2.5" fill="#f59ab8"/>'; // Grudenta (19/11)
 export const DEATH_SVG = {
-  ...STREAK_SVG, tomahawk: NADE_SVG.tomahawk, thermo: NADE_SVG.thermo, beacon: NADE_SVG.beacon,
+  ...STREAK_SVG, tomahawk: NADE_SVG.tomahawk, thermo: NADE_SVG.thermo, goo: NADE_SVG.goo, beacon: NADE_SVG.beacon,
   car: `<path d="M6 30l3-9c1-3 3-4 6-4h14c3 0 5 1 7 4l5 9v6H6z" fill="currentColor" ${INK_S}/><circle cx="15" cy="36" r="5" fill="#ece9e1" ${INK_S}/><circle cx="33" cy="36" r="5" fill="#ece9e1" ${INK_S}/>`,
   frag: `<circle cx="22" cy="29" r="13" fill="currentColor" ${INK_S}/><path d="M17 16h10v-5H17z" fill="#ece9e1" ${INK_S}/><path d="M27 13c6-1 9 2 9 7" fill="none" ${INK_S}/><circle cx="36" cy="22" r="3" fill="#ece9e1" ${INK_S}/><path d="M16 27h12M22 21v16" stroke="#141210" stroke-width="2" opacity=".5"/>`,
   flame: `<path d="M24 5c3 7 11 11 11 21a11 11 0 0 1-22 0c0-6 3-9 5-11 0 5 2 7 4 7-1-7 0-12 2-17z" fill="#f08a2a" ${INK_S}/><path d="M24 26c2 3 5 4 5 8a5 5 0 0 1-10 0c0-3 3-5 5-8z" fill="#ffe066" ${INK_S}/>`,
@@ -87,18 +93,24 @@ export class Hud {
 
   // colete do battle royale (some fora do modo)
   armor(v, on) {
-    const box = $('armorBox');
-    box.hidden = !on;
-    if (on) $('armorBar').style.width = Math.max(0, Math.min(100, v)) + '%';
+    const box = $('armorBox'), w = Math.max(0, Math.min(100, v)) + '%';
+    if (box.hidden !== !on) box.hidden = !on;
+    if (on && w !== this.armorW) { this.armorW = w; $('armorBar').style.width = w; } // 19/11: so quando muda
   }
 
   hp(v, max = 100) { // max: evento Tanque de Borracha/Casca de Ovo (08/11) muda a vida cheia
-    this.el.hp.textContent = Math.max(0, Math.round(v));
-    this.el.hpBar.style.width = Math.max(0, Math.min(100, v / (max || 100) * 100)) + '%';
-    this.el.hpBox.classList.toggle('low', v <= 35 * (max || 100) / 100);
+    // 19/11 (perfil: linha mais cara do HUD): so mexe no DOM quando o numero/barra mudam (antes escrevia todo quadro)
+    const n = Math.max(0, Math.round(v)), w = Math.max(0, Math.min(100, v / (max || 100) * 100)).toFixed(1), low = v <= 35 * (max || 100) / 100;
+    if (n !== this.hpN) { this.hpN = n; this.el.hp.textContent = n; }
+    if (w !== this.hpW) { this.hpW = w; this.el.hpBar.style.width = w + '%'; }
+    if (low !== this.hpLow) { this.hpLow = low; this.el.hpBox.classList.toggle('low', low); }
   }
 
   frame(p, dt, settings) {
+    // Pulo do Gato (19/11): cronometro grande embaixo do placar (tempo correndo e o melhor). So mexe no texto quando muda
+    { const me = this.g?.snap?.players?.find(o => o.id === this.g.myId), bh = this.g?.mode === 'bhop' && this.g?.state === 'game' ? me?.bh : null;
+      let el = this.bhEl; if (!el && bh) { el = this.bhEl = document.createElement('div'); el.className = 'bh-clock'; el.setAttribute('aria-live', 'off'); el.innerHTML = '<b></b><small></small>'; document.getElementById('hud').appendChild(el); }
+      if (el) { el.hidden = !bh; if (bh) { const f = this.g.fmtRace || ((x) => x.toFixed(1)), a = f(bh[0]).slice(0, -1), b = bh[1] ? t('bhBest', { t: f(bh[1]) }) : t('bhNoBest'); if (el.dataset.a !== a) { el.dataset.a = a; el.firstChild.textContent = a; } if (el.dataset.b !== b) { el.dataset.b = b; el.lastChild.textContent = b; } } } }
     // municao: redesenha sempre que muda (tiro, recarga, pickup, troca)
     const a = p.ammo[p.wpn];
     const key = p.wpn + ':' + (a ? a.mag + '/' + a.reserve : '') + ':' + p.owned.join(',');
@@ -137,7 +149,7 @@ export class Hud {
       else if (mag > 2 && a.mag <= Math.max(2, Math.ceil(mag * 0.25))) { txt = a.reserve > 0 && key ? t('ammoLowKey', { k: key }) : t('ammoLow'); cls = 'low'; } // com a tecla (pedido dele 01/11, estilo COD)
     } else if (p.alive && p.reloadT > 0) { txt = t('ammoReloading'); cls = 'busy'; }
     if (el.textContent !== txt) el.textContent = txt;
-    el.className = 'ammo-alert ' + cls;
+    if (el.className !== 'ammo-alert ' + cls) el.className = 'ammo-alert ' + cls; // 19/11: so quando muda (todo quadro invalidava o estilo)
     el.hidden = !txt;
   }
 
@@ -172,7 +184,7 @@ export class Hud {
       const mid = snap.infT > 0 ? `<div><span class="lbl">${t('inf_in')}</span><span class="val">${Math.ceil(snap.infT)}</span></div>` : '';
       html = `<div class="red"><span class="lbl">${t('inf_h_inf')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('inf_h_surv')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
     } else if (cfg.teams) {
-      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
+      let mid = `<div><span class="lbl">${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || snap.hc || mode)}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       if (mode === 'dom') mid = `<div class="zones">${snap.zones.map(z => `<span class="zchip ${z.owner || ''} ${z.bonus ? 'bonus' : ''}">${z.id}</span>`).join('')}</div>`;
       if (mode === 'ctf') mid = `<div><span class="lbl">${t('h_caps')}</span><span class="val">${snap.limit ?? cfg.limit}</span></div>`;
       html = `<div class="red"><span class="lbl">${t('h_red')}</span><span class="val">${snap.teamScore.red}</span></div>${mid}<div class="blue"><span class="lbl">${t('h_blue')}</span><span class="val">${snap.teamScore.blue}</span></div>${clock}`;
@@ -201,7 +213,9 @@ export class Hud {
     // narrador (06/11): "Ladies and gentlemen, lights, camera..." durante a contagem (3,3 s, termina antes do 1) e "RUBBER RIOT!" cravado na largada
     const quietVo = !!(this.g?.range || this.g?.tutorial);
     const laterRound = (snap?.round?.n ?? snap?.esc?.round ?? 1) >= 2; // 08/11: abertura so no 1o round; do 2o em diante, "Next round"
-    if (f > 0.05 && f <= 3.4 && !snap?.loading && !this.voIntro) { this.voIntro = true; if (!quietVo) audio.voice(laterRound ? 'round_next' : 'start_a'); }
+    if ((snap?.loading || f > 3.4) && !this.voPre) { this.voPre = true; audio.preloadVo(['start_a', 'start_b', 'round_next']); } // carregando/esperando: ja deixa pronto
+    if (f <= 0 && !snap?.loading) this.voPre = false;
+    if (f > 0.05 && f <= 3.4 && !snap?.loading && !this.voIntro) { this.voIntro = true; if (!quietVo) audio.voice(laterRound ? 'round_next' : 'start_a', { sync: true }); }
     if (f <= 0) this.voIntro = false;
     el.box.hidden = !num && !sub;
     // Bate-Volta: tela escura durante a contagem (ninguem fica vendo os outros parados no ar)
@@ -212,7 +226,7 @@ export class Hud {
       el.num.classList.toggle('go', go);
       el.num.classList.remove('tick'); void el.num.offsetWidth; if (num) el.num.classList.add('tick');
       // 3, 2, 1 = tique de relogio subindo o tom; Ja! = apito
-      if (go) { audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 }); if (!quietVo && !laterRound) audio.voice('start_b'); }
+      if (go) { audio.play('go', { ui: true, vol: 0.55, jitter: 0, key: 'count', max: 1 }); if (!quietVo && !laterRound) audio.voice('start_b', { sync: true }); }
       else if (num) audio.play('tick', { ui: true, vol: 0.45, rate: 0.9 + (3 - Number(num)) * 0.08, jitter: 0, key: 'count', max: 1 });
     }
     if (el.sub.textContent !== sub) el.sub.textContent = sub;
@@ -231,7 +245,8 @@ export class Hud {
     if (cv.width !== S * dpr) { cv.width = cv.height = S * dpr; }
     const g = cv.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, S, S);
+    // 19/11 (perfil): limpar a tela de 480x480 todo quadro sem nada desenhado custava; so limpa se o quadro anterior desenhou
+    if (this.threatDrew) { g.clearRect(0, 0, S, S); this.threatDrew = false; }
     if (!on || !p?.alive) return;
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
     const R = 84, MAX = 32;
@@ -242,6 +257,7 @@ export class Hud {
       const shooting = (G.seen.get(r.id) || 0) > G.t + 1.2;
       const moving = (r.speed || 0) > 2.2;
       if (!shooting && !moving) continue;
+      this.threatDrew = true;
       const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz); // 0 = na frente
       const k = 1 - d / MAX;
       const front = Math.abs(a) < 0.45 ? 0.45 : 1; // na frente voce ja ve: o arco fica discreto
@@ -384,7 +400,7 @@ export class Hud {
       el.innerHTML = '<svg viewBox="0 0 24 24"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg><i></i>';
       root.appendChild(el); this.nadeEls.push(el);
     }
-    const v = new THREE.Vector3(), W = innerWidth, H = innerHeight, m = 46;
+    const v = new THREE.Vector3(), W = VW, H = VH, m = 46;
     this.nadeEls.forEach((el, i) => {
       const n = list[i];
       el.hidden = !n;
@@ -640,10 +656,21 @@ export class Hud {
     g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.stroke();
     if (uav) { g.fillStyle = '#141210'; g.font = '800 12px Grandstander'; g.textAlign = 'center'; g.fillText('UAV', R, 172); }
     if (jam) { // por cima de tudo: o mapa some, o resto do HUD segue
-      g.clearRect(0, 0, 180, 180); g.save(); g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.clip(); g.fillStyle = '#d9d4c8'; g.fillRect(0, 0, 180, 180);
-      for (let i = 0; i < 260; i++) { const a = Math.random(); g.fillStyle = a < 0.5 ? '#ece9e1' : '#a39b8e'; g.fillRect(Math.random() * 180, Math.random() * 180, 2 + a * 3, 2 + a * 3); }
-      g.restore(); g.lineWidth = 5; g.strokeStyle = '#141210'; g.beginPath(); g.arc(R, R, R - 3, 0, Math.PI * 2); g.stroke();
-      g.fillStyle = '#141210'; g.font = '800 13px Grandstander'; g.textAlign = 'center'; g.fillText(t('talcJam'), R, R + 5);
+      // 19/11 (perfil com bots usando Talco: era a linha mais cara do HUD): 260 quadradinhos trocando de cor um a um + texto,
+      // 30x/s. Agora 3 quadros de chiado desenhados uma vez (por idioma) e alternados
+      const lang = t('talcJam');
+      if (this.jamLang !== lang) {
+        this.jamLang = lang;
+        this.jamCv = [0, 1, 2].map(() => {
+          const c = document.createElement('canvas'); c.width = c.height = 180; const q = c.getContext('2d');
+          q.save(); q.beginPath(); q.arc(R, R, R - 3, 0, Math.PI * 2); q.clip(); q.fillStyle = '#d9d4c8'; q.fillRect(0, 0, 180, 180);
+          for (const col of ['#ece9e1', '#a39b8e']) { q.fillStyle = col; for (let i = 0; i < 130; i++) { const a = Math.random(); q.fillRect(Math.random() * 180, Math.random() * 180, 2 + a * 3, 2 + a * 3); } }
+          q.restore(); q.lineWidth = 5; q.strokeStyle = '#141210'; q.beginPath(); q.arc(R, R, R - 3, 0, Math.PI * 2); q.stroke();
+          q.fillStyle = '#141210'; q.font = '800 13px Grandstander'; q.textAlign = 'center'; q.fillText(lang, R, R + 5);
+          return c;
+        });
+      }
+      g.clearRect(0, 0, 180, 180); g.drawImage(this.jamCv[(this.jamI = ((this.jamI || 0) + 1) % 3)], 0, 0);
     }
     // granadas e sequencias prontas
     const me = snap.players.find(o => o.id === G.myId);
@@ -718,7 +745,7 @@ export class Hud {
   // [pausa][vida] / [chat][sequencias] / minimapa embaixo do que estiver mais baixo, encolhendo pra nao chegar no analogico
   touchLayout(G) {
     const now = performance.now();
-    if (now - (this.tlT || 0) < 250) return;
+    if (now - (this.tlT || 0) < 1000) return; // 19/11: era 250 ms; cada passada forca o layout da pagina (perfil do celular)
     this.tlT = now;
     const q = (s) => { const e = document.querySelector(s); if (!e || e.hidden || getComputedStyle(e).display === 'none') return null; const r = e.getBoundingClientRect(); return r.width ? r : null; };
     // 13/11: o que o jogador moveu no editor de HUD (data-he-moved) fica onde ele pos e sai da pilha automatica
@@ -835,8 +862,8 @@ export class Hud {
       const held = o.zid && (o.zid === D.id || o.zid === want); // a zona em que a pessoa esta mora na HUD, nao no mundo
       v.fromArray(o.p).project(camera);
       if (v.z > 1) { if (held) D.at = null; continue; }
-      const x = THREE.MathUtils.clamp((v.x * 0.5 + 0.5) * innerWidth, 24, innerWidth - 24);
-      const y = THREE.MathUtils.clamp((-v.y * 0.5 + 0.5) * innerHeight, 70, innerHeight - 24);
+      const x = THREE.MathUtils.clamp((v.x * 0.5 + 0.5) * VW, 24, VW - 24);
+      const y = THREE.MathUtils.clamp((-v.y * 0.5 + 0.5) * VH, 70, VH - 24);
       if (held) { D.at = [x, y]; continue; }
       const d = me ? Math.round(Math.hypot(o.p[0] - me.pos[0], o.p[2] - me.pos[2])) : 0;
       html += `<div style="left:${x}px;top:${y}px"><span class="pin ${o.cls}">${o.txt}</span><span class="dist">${o.sub ? esc(o.sub) + ' · ' : ''}${d} m</span></div>`;
@@ -912,7 +939,7 @@ export class Hud {
   }
   board(show, snap, players, meId, chs = null) {
     const b = this.el.board;
-    b.hidden = !show;
+    if (b.hidden !== !show) b.hidden = !show;
     if (!show && this.slideT) { clearInterval(this.slideT); this.slideT = 0; } // Tab fechado: o deslize para
     if (!show || !snap) return;
     const cfg = MODES[snap.mode];
@@ -921,7 +948,7 @@ export class Hud {
     const rows = (list) => list.map(p => `<tr class="${p.id === meId ? 'me' : ''}${bomb && !p.alive ? ' dead' : ''}"><td>${bomb ? `<span class="life ${p.alive ? 'on' : 'off'}" title="${t(p.alive ? 'b_alive' : 'b_dead')}"></span>` : ''}${p.team ? `<span class="tteam" style="background:var(--${p.team})"></span>` : ''}${p.rk >= 0 ? badgeSvg(p.rk, 16) : ''}${p.dt ? divChip(p.dt) : ''}${esc(p.name)}${devIcon(p.dv)}${p.pr ? ` <em class="prest">★${p.pr > 1 ? p.pr : ''}</em>` : ''}${p.elite ? eliteTag() : ''}${p.bot ? ` <small>(${t('bot')})</small>` : ''}</td>${snap.mode === 'gungame' ? `<td class="n">${p.gunLvl + 1}</td>` : ''}<td class="n">${p.kills}</td><td class="n">${p.assists || 0}</td><td class="n">${p.deaths}</td><td class="n">${p.score}</td><td class="n ${p.pg ? (p.pg < 80 ? 'pg-ok' : p.pg < 160 ? 'pg-mid' : 'pg-bad') : ''}">${p.pg || '–'}</td></tr>`).join('');
     const head = `<tr><th>${t('b_player')}</th>${snap.mode === 'gungame' ? `<th class="n">${t('b_step')}</th>` : ''}<th class="n">${t('b_kills')}</th><th class="n">${t('b_assists')}</th><th class="n">${t('b_deaths')}</th><th class="n">${t('b_score')}</th><th class="n">${t('b_ping')}</th></tr>`;
     const sort = (l) => [...l].sort((a, b) => b.score - a.score || b.kills - a.kills);
-    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || snap.mode)}</h3>`;
+    let html = `<h3>${modeName(snap.duo ? 'duo' : snap.bounce ? 'bounce' : snap.blitz || snap.hc || snap.mode)}</h3>`;
     if (cfg.teams) {
       for (const tm of ['red', 'blue']) html += `<table><caption style="text-align:left;font-family:var(--display);padding:6px 0 2px;color:var(--${tm})">${t(TEAM[tm])} · ${snap.teamScore[tm]}</caption>${head}${rows(sort(players.filter(p => p.team === tm && !p.mob)))}</table>`;
     } else html += `<table>${head}${rows(sort(players))}</table>`;

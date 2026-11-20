@@ -1,0 +1,23 @@
+﻿const { chromium } = require('D:/Desktop/fokusstudios/template-magazine/node_modules/playwright');
+(async () => { const b = await chromium.connectOverCDP('http://127.0.0.1:9334'); const ctx = b.contexts()[0]; const p = await ctx.newPage();
+  await p.setViewportSize({ width: 1600, height: 900 });
+  await p.goto('http://localhost:5197/?semconta'); await p.waitForFunction(() => window.__solo && window.__G?.fx && __A.arsenalLoaded?.(), null, { timeout: 120000 });
+  await p.evaluate(async () => (await import('/src/newspop.js')).closeNews()); await p.waitForTimeout(12000);
+  await p.evaluate(() => window.__solo({ mode: 'ffa', map: 'vila', bots: 7, difficulty: 'normal', lobby: false, limit: 0 }));
+  await p.waitForFunction(() => __G.state === 'game' && __G.world !== null, null, { timeout: 120000 });
+  await p.evaluate(() => { setInterval(() => { __G.paused = false; const e = document.getElementById('pause'); if (e) e.hidden = true; }, 30); });
+  await p.waitForFunction(() => !__G.intro && !(__G.snap?.freeze > 0), null, { timeout: 30000 }).catch(() => {});
+  await p.waitForTimeout(3000);
+  const s = await ctx.newCDPSession(p); await s.send('Profiler.enable'); await s.send('Profiler.setSamplingInterval', { interval: 200 }); await s.send('Profiler.start');
+  const st = await p.evaluate(() => new Promise(res => { const C = __G.net.core, me = C.players.get(__G.myId), ft = []; let last = performance.now(); const t0 = last; __G.input && (window.__fire = true);
+    const iv = setInterval(() => { const bots = [...C.players.values()].filter(o => o.bot && o.alive); const o = bots[0]; if (o) C.damage(o, me, 999, 'rifle', false); }, 700);
+    const tick = () => { const n = performance.now(); ft.push(n - last); last = n; if (n - t0 < 15000) return requestAnimationFrame(tick); clearInterval(iv); ft.sort((a, b) => a - b); res({ n: ft.length, p50: ft[ft.length >> 1].toFixed(1), p99: ft[Math.floor(ft.length * .99)].toFixed(1), max: ft[ft.length - 1].toFixed(1), over13: ft.filter(x => x > 13.3).length }); }; requestAnimationFrame(tick); }));
+  const { profile } = await s.send('Profiler.stop');
+  console.log('quadros', JSON.stringify(st));
+  const self = new Map(), byId = new Map(profile.nodes.map(n => [n.id, n])); const dt = profile.timeDeltas; const cnt = new Map();
+  profile.samples.forEach((id, i) => cnt.set(id, (cnt.get(id) || 0) + (dt[i] || 0)));
+  for (const [id, us] of cnt) { const n = byId.get(id), f = n.callFrame, k = (f.functionName || '(anon)') + ' ' + f.url.replace(/^.*\/(src|shared|node_modules\/\.vite\/deps)\//, '$1/').replace(/\?.*$/, '') + ':' + (f.lineNumber + 1); self.set(k, (self.get(k) || 0) + us); }
+  const tot = [...self.values()].reduce((a, b) => a + b, 0);
+  for (const [k, us] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log((us / 1000).toFixed(0).padStart(6) + ' ms ' + (100 * us / tot).toFixed(1).padStart(5) + '% ' + k);
+  require('fs').writeFileSync(__dirname + '/cpu-ffa.cpuprofile', JSON.stringify(profile));
+  await p.close(); process.exit(0); })();

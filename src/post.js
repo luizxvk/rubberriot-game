@@ -1,3 +1,4 @@
+import { SIGHT_CLEAR } from './toon.js';
 // Pelicula de 1930: P&B (ou colorizado a mao), grao, riscos, poeira, tremulacao,
 // balanco do quadro, vinheta e a IRIS de transicao.
 import * as THREE from 'three';
@@ -85,6 +86,7 @@ export function makePipeline(renderer, scene, camera, vm) {
   const vmPass = new RenderPass(vm.scene, vm.camera);
   vmPass.clear = false;
   vmPass.clearDepth = true;
+  { const r0 = vmPass.render.bind(vmPass); vmPass.render = (...a) => { const C = SIGHT_CLEAR.value; C.x = Math.min(1, (vm.ads || 0) * 1.4); C.y = vm.camera.aspect || 1.78; try { r0(...a); } finally { C.x = 0; } }; } // 19/11: mirando, sem contorno preto em volta da mira
   composer.addPass(vmPass);
   const film = new ShaderPass(FilmShader);
   composer.addPass(film);

@@ -68,7 +68,7 @@ function show(i) {
 
 export function startAnn() {
   clearInterval(timer);
-  timer = setInterval(() => { if (!hold && !document.hidden) show(idx + 1); }, 6000);
+  timer = setInterval(() => { if (!hold && !document.hidden && !document.getElementById('menu')?.hidden) show(idx + 1); }, 6000); // 19/11: menu escondido (partida) = parado (medir o texto forcava layout no meio do jogo)
 }
 export function stopAnn() { clearInterval(timer); timer = 0; }
 

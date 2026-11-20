@@ -57,7 +57,7 @@ const D = {
     ww_sniper_3: 'Ping Velho', ww_fusil_9: 'Trovão de Lata', ww_subfusil_12: 'Tamborzão', ww_pistol_7: 'Quarenta e Cinco', ww_pistol_8: 'Cabo de Vassoura', ww_pistol_9: 'Estrelinha', ww_pistol_10: 'Bang-Bang',
     sideTitle: 'Escolha seu lado', sideAtk: 'Ataque', sideAtkTip: 'Leva a bomba e planta no A ou no B', sideDef: 'Defesa', sideDefTip: 'Segura o A e o B e desarma a bomba', sideCount: '{n} de {max} pessoas', sideNote: 'No intervalo os lados trocam', sideSwap: 'Trocar lado',
     eliteOnly: 'Exclusiva do Elite Rovex', camo_hexelite: 'Favo Elite (reativa)', eliteTag: 'Elite Rovex',
-    gsParts: 'Peças', gsStats: 'Status', slot_bp: 'Variante', bpNone: 'Montagem livre', bpNoneSub: 'Você escolhe cada peça', bpSub: 'Já montada, com {c}', bpToday: 'Elite de hoje: {c}', bpLocked: 'Sai num desafio de elite',
+    gsParts: 'Peças', gsStats: 'Status', slot_bp: 'Variante', bpLockMsg: 'Variante pronta não se edita. Pra trocar peças, volte pra Montagem livre.', bpLockGo: 'Trocar variante', bpNone: 'Montagem livre', bpNoneSub: 'Você escolhe cada peça', bpSub: 'Já montada, com {c}', bpToday: 'Elite de hoje: {c}', bpLocked: 'Sai num desafio de elite',
     bp_faisca: 'Faísca de Palco', bp_fornalha: 'Fornalha', bp_pararaios: 'Para-Raios', bp_grandefinal: 'Grande Final', bp_matabarrao: 'Mata-Borrão',
     camo_hellfire: 'Inferno de Palco', camo_tesla: 'Bobina Tesla', camo_inkwell: 'Poço de Nanquim', camo_marquee: 'Letreiro', cg_legend: 'Lendárias (desafio de elite)',
     elTitle: 'Elite do dia', elDone: 'Elite completo! Liberou', elReward: 'Libera: {v} ({w}) com {c}', elAllBp: 'Todas as variantes na mão: vale o XP',
@@ -154,7 +154,7 @@ const D = {
     ww_sniper_3: 'Old Ping', ww_fusil_9: 'Tin Thunder', ww_subfusil_12: 'Big Drum', ww_pistol_7: 'Forty-Five', ww_pistol_8: 'Broomhandle', ww_pistol_9: 'Little Star', ww_pistol_10: 'Bang-Bang',
     sideTitle: 'Pick your side', sideAtk: 'Attack', sideAtkTip: 'Carry the bomb and plant it at A or B', sideDef: 'Defense', sideDefTip: 'Hold A and B and defuse the bomb', sideCount: '{n} of {max} players', sideNote: 'Sides switch at halftime', sideSwap: 'Switch side',
     eliteOnly: 'Rovex Elite exclusive', camo_hexelite: 'Elite Comb (reactive)', eliteTag: 'Rovex Elite',
-    gsParts: 'Attachments', gsStats: 'Stats', slot_bp: 'Variant', bpNone: 'Custom build', bpNoneSub: 'Pick every part yourself', bpSub: 'Pre-built, with {c}', bpToday: "Today's elite: {c}", bpLocked: 'Comes from an elite challenge',
+    gsParts: 'Attachments', gsStats: 'Stats', slot_bp: 'Variant', bpLockMsg: 'Pre-built variants can’t be edited. To change parts, switch back to Custom build.', bpLockGo: 'Change variant', bpNone: 'Custom build', bpNoneSub: 'Pick every part yourself', bpSub: 'Pre-built, with {c}', bpToday: "Today's elite: {c}", bpLocked: 'Comes from an elite challenge',
     bp_faisca: 'Stage Spark', bp_fornalha: 'Furnace', bp_pararaios: 'Lightning Rod', bp_grandefinal: 'Grand Finale', bp_matabarrao: 'Blotter',
     camo_hellfire: 'Stage Inferno', camo_tesla: 'Tesla Coil', camo_inkwell: 'Inkwell', camo_marquee: 'Marquee', cg_legend: 'Legendary (elite challenge)',
     elTitle: 'Daily elite', elDone: 'Elite complete! Unlocked', elReward: 'Unlocks: {v} ({w}) with {c}', elAllBp: 'You own every variant: XP only',
@@ -578,6 +578,16 @@ D.pt.m.blitz_ctf = 'Blitz: Bandeira'; D.pt.md.blitz_ctf = '16 contra 16 na Front
 D.en.m.blitz_ctf = 'Blitz: Flag'; D.en.md.blitz_ctf = '16 vs 16 on Frontier or Dust Canyon. Steal their flag, 3 captures. Double XP.';
 D.pt.m.blitz_dom = 'Blitz: Dominação'; D.pt.md.blitz_dom = '16 contra 16 na Fronteira ou no Canyon Poeira. Segure A, B e C. XP em dobro.';
 D.en.m.blitz_dom = 'Blitz: Domination'; D.en.md.blitz_dom = '16 vs 16 on Frontier or Dust Canyon. Hold A, B and C. Double XP.';
+// 19/11 (pedido dele): hardcore com nome do jogo. Preto no Branco = so o nanquim e o papel, nada de enfeite na tela
+D.pt.m.pnb = 'Preto no Branco'; D.pt.md.pnb = 'Mata-Mata sem tela: só o placar. Metade da vida, sem minimapa, sem munição na tela e sem nome do time. XP em dobro.';
+D.en.m.pnb = 'Black & White'; D.en.md.pnb = 'Team KO with no HUD, just the score. Half health, no minimap, no ammo counter and no team names. Double XP.';
+// 19/11 (pedido dele): Bunny Hop = Pulo do Gato. 5 percursos
+D.pt.m.bhop = 'Pulo do Gato'; D.pt.md.bhop = 'Só faca: pule de plataforma em plataforma até a chegada. Caiu, volta pro início. Melhor tempo vence.';
+D.en.m.bhop = 'Bunny Hop'; D.en.md.bhop = 'Knife only: jump from platform to platform to the finish. Fall and you go back to the start. Best time wins.';
+Object.assign(D.pt, { bhFall: 'Caiu! De volta ao início', bhFinish: 'Chegou!', bhRecord: 'Recorde!', bhFeed: 'chegou em {t}', bhBest: 'Melhor: {t}', bhNoBest: 'Sem tempo ainda',
+  map_telhados: 'Telhados da Vila', map_picadeiro: 'Picadeiro', map_caixotes: 'Caixotes do Cais', map_montagem: 'Linha de Montagem', map_nanquim: 'Nuvens de Nanquim' });
+Object.assign(D.en, { bhFall: 'You fell! Back to the start', bhFinish: 'Finished!', bhRecord: 'New record!', bhFeed: 'finished in {t}', bhBest: 'Best: {t}', bhNoBest: 'No time yet',
+  map_telhados: 'Village Rooftops', map_picadeiro: 'Big Top', map_caixotes: 'Dockside Crates', map_montagem: 'Assembly Line', map_nanquim: 'Ink Clouds' });
 Object.assign(D.pt, { blitzPill: 'Evento · 2x XP', blitzOn: 'Blitz: XP em dobro!', cfgRkNo: 'Só em Bandeira, Dominação, Escolta e Blitz' });
 Object.assign(D.en, { blitzPill: 'Event · 2x XP', blitzOn: 'Blitz: double XP!', cfgRkNo: 'Only in Flag, Domination, Escort and Blitz' });
 Object.assign(D.pt, { teamSwapBtn: 'Trocar de time', teamNo_mode: 'Neste modo não dá pra trocar de time', teamNo_same: 'Você já está nesse time', teamNo_full: 'O outro time já tem mais gente: trocar desequilibra', teamNo_cd: 'Espere {n} min pra trocar de time de novo', teamSwapYou: 'Agora você joga no {t}', teamSwapThem: '{n} foi pro {t}', kicked: '{n} foi removido pelo host', leftAfk: '{n} saiu por ficar parado', kickedHost: 'O host tirou você da sala. Dá pra entrar de novo pelo código.', kickedAfk: 'Você ficou parado tempo demais e saiu da sala.', lbKick: 'Remover {n} da sala', lbGiveHost: 'Passar o host para {n}' });
@@ -797,7 +807,7 @@ Object.assign(D.pt, { cgSrcShop: 'Loja', cgSrcPlay: 'Jogando' });
 Object.assign(D.en, { cgSrcShop: 'Shop', cgSrcPlay: 'Earned' });
 Object.assign(D.pt, { cg_rank: 'Rankeada', cg_special: 'Especiais', cg_pass: 'Rovex Pass', cg_shopreact: 'Reativas da Loja',
   shopShelf_bundle: 'Pacotes', shopShelf_react: 'Camuflagens reativas', shopShelf_camo: 'Camuflagens', shopShelf_skin: 'Skins', shopShelf_hat: 'Chapéus', shopShelf_ret: 'Retículas',
-  shk_react: 'Camuflagem reativa', shopStage: 'Estágio {n} de 4', shopWeekly: 'Muda toda semana',
+  shk_react: 'Camuflagem reativa', shopStage: 'Estágio {n} de 4', shopWeekly: 'Muda toda semana', shopDailyShelf: 'Muda todo dia',
   camo_oilslick: 'Mancha de Óleo', camo_tvstatic: 'Chuvisco de TV', camo_honey: 'Mel Escorrendo', camo_confetti: 'Confete', camo_vinyl: 'Disco de Vinil', camo_frost: 'Geada', camo_ivy: 'Hera Viva', camo_stormcell: 'Trovoada',
   lk_skin_papelao: 'Papelão', lk_skin_trico: 'Tricô da Vovó', lk_skin_aquarela: 'Aquarela', lk_skin_pixel: '8 Bits',
   lk_hat_sorvete: 'Sorvete de Duas Bolas', lk_hat_alavanca: 'Alavanca de Fliperama', lk_hat_cogumelo: 'Chapéu de Cogumelo',
@@ -809,7 +819,7 @@ Object.assign(D.pt, { cg_rank: 'Rankeada', cg_special: 'Especiais', cg_pass: 'Ro
   si_pGaragem: 'Pacote Garagem', sid_pGaragem: 'Skin Papelão com a camo Disco de Vinil.' });
 Object.assign(D.en, { cg_rank: 'Ranked', cg_special: 'Special', cg_pass: 'Rovex Pass', cg_shopreact: 'Shop reactive',
   shopShelf_bundle: 'Bundles', shopShelf_react: 'Reactive camos', shopShelf_camo: 'Camos', shopShelf_skin: 'Skins', shopShelf_hat: 'Hats', shopShelf_ret: 'Reticles',
-  shk_react: 'Reactive camo', shopStage: 'Stage {n} of 4', shopWeekly: 'Changes every week',
+  shk_react: 'Reactive camo', shopStage: 'Stage {n} of 4', shopWeekly: 'Changes every week', shopDailyShelf: 'Changes every day',
   camo_oilslick: 'Oil Slick', camo_tvstatic: 'TV Static', camo_honey: 'Dripping Honey', camo_confetti: 'Confetti', camo_vinyl: 'Vinyl Record', camo_frost: 'Hoarfrost', camo_ivy: 'Living Ivy', camo_stormcell: 'Thunderhead',
   lk_skin_papelao: 'Cardboard', lk_skin_trico: 'Granny Knit', lk_skin_aquarela: 'Watercolor', lk_skin_pixel: '8-Bit',
   lk_hat_sorvete: 'Double Scoop', lk_hat_alavanca: 'Arcade Stick', lk_hat_cogumelo: 'Mushroom Hat',
@@ -886,8 +896,8 @@ Object.assign(D.pt, {"vosub_flagtake_red": "O time vermelho roubou a bandeira! P
 Object.assign(D.en, {"vosub_flagtake_red": "Red team swiped the flag! Catch 'em!", "vosub_flagtake_blue": "Blue team swiped the flag! Catch 'em!", "vosub_flagcap_red": "RED TEAM captured the flag!", "vosub_flagcap_blue": "BLUE TEAM captured the flag!", "vosub_flagback": "The flag's back home, folks!", "vosub_zone_red": "Red team takes the point!", "vosub_zone_blue": "Blue team takes the point!", "vosub_vault": "The vault is OPEN! Grab the dough!", "vosub_cash_red": "Red team robbed the money from the vault!", "vosub_cash_blue": "Blue team robbed the money from the vault!", "vosub_crate_red": "Red team loaded a crate on the boat!", "vosub_crate_blue": "Blue team loaded a crate on the boat!", "vosub_bombplant": "The bomb is planted! Tick tock, folks!", "vosub_bombdefuse": "Bomb defused! Phew, that was close!", "vosub_round_red": "That round goes to the red team!", "vosub_round_blue": "That round goes to the blue team!", "vosub_checkpoint": "The trolley hit a checkpoint!", "vosub_overtime": "OVERTIME, folks! It's not over yet!", "vosub_outbreak": "Uh oh, folks... we've got an infection!", "vosub_lastone": "Only one survivor left standing!", "vosub_wave": "Here comes another wave, folks!", "vosub_boss": "Oh boy, here comes a BIG one!", "vosub_supply": "Supply drop, coming down!"});
 
 // Bolso e ficha de XP em dobro (06/11)
-Object.assign(D.pt, { pocket: 'Bolso', boostSub: 'Itens que você usa quando quiser.', boostName: 'XP em dobro', boostDesc: '1 hora de partida por ficha. O tempo só corre jogando e pausa no fim de semana e no Blitz, que já dão 2x.', boostElite: 'Elite: {n} fichas novas todo mês. Rovex Pass: ficha extra em alguns níveis.', boostUse: 'Usar', boostAdd: 'Somar +1 h', boostActive: 'Ativa: faltam {t} de partida', boostEmpty: 'Sem fichas agora.', boostKey: 'Atalho na partida: {k}', boostGot: 'Fichas de XP em dobro no Bolso!', boostOn: 'XP em dobro ativado: 1 hora de partida', boostNone: 'Sem fichas de XP em dobro no Bolso', boostPauseWknd: 'pausada: fim de semana já dá 2x', boostPauseBlitz: 'pausada: o Blitz já dá 2x', k_boost: 'Usar ficha de XP em dobro', passBoost: '+1 ficha 2x', el_xp: '6 fichas de XP em dobro por mês', el_xpD: 'Cada ficha vale 1 hora de partida em 2x. Use pelo Bolso quando quiser; o tempo só corre jogando.', epOn: 'Você é Elite: 6 fichas de 2x XP por mês' });
-Object.assign(D.en, { pocket: 'Pocket', boostSub: 'Items you use whenever you want.', boostName: 'Double XP', boostDesc: '1 hour of match time per token. The clock only runs while you play and pauses on weekends and in Blitz, which already give 2x.', boostElite: 'Elite: {n} new tokens every month. Rovex Pass: bonus token on some levels.', boostUse: 'Use', boostAdd: 'Add +1 h', boostActive: 'Active: {t} of match time left', boostEmpty: 'No tokens right now.', boostKey: 'In-match shortcut: {k}', boostGot: 'Double XP tokens in your Pocket!', boostOn: 'Double XP on: 1 hour of match time', boostNone: 'No Double XP tokens in your Pocket', boostPauseWknd: 'paused: weekend already gives 2x', boostPauseBlitz: 'paused: Blitz already gives 2x', k_boost: 'Use a Double XP token', passBoost: '+1 2x token', el_xp: '6 Double XP tokens a month', el_xpD: 'Each token is 1 hour of match time at 2x. Use it from your Pocket whenever you want; the clock only runs while you play.', epOn: "You're Elite: 6 Double XP tokens a month" });
+Object.assign(D.pt, { pocket: 'Bolso', boostSub: 'Itens que você usa quando quiser.', boostName: 'XP em dobro', wboostName: 'XP de arma em dobro', wxpChip: 'Arma', wboostDesc: '1 hora de partida por ficha: o modelo na sua mão sobe 2x mais rápido. O XP da conta não muda; dá pra usar junto com a ficha de XP da conta.', wboostElite: 'Elite: {n} fichas de arma novas todo mês.', boostDesc: '1 hora de partida por ficha. O tempo só corre jogando e pausa no fim de semana e no Blitz, que já dão 2x.', boostElite: 'Elite: {n} fichas novas todo mês. Rovex Pass: ficha extra em alguns níveis.', boostUse: 'Usar', boostAdd: 'Somar +1 h', boostActive: 'Ativa: faltam {t} de partida', boostEmpty: 'Sem fichas agora.', boostKey: 'Atalho na partida: {k}', boostGot: 'Fichas de XP em dobro no Bolso!', boostOn: 'XP em dobro ativado: 1 hora de partida', boostNone: 'Sem fichas de XP em dobro no Bolso', boostPauseWknd: 'pausada: fim de semana já dá 2x', boostPauseBlitz: 'pausada: o Blitz já dá 2x', k_boost: 'Usar ficha de XP em dobro', passBoost: '+1 ficha 2x', el_xp: '6 fichas de XP em dobro + 6 de XP de arma por mês', el_xpD: 'Cada ficha vale 1 hora de partida em 2x (conta ou arma). Use pelo Bolso quando quiser; o tempo só corre jogando.', epOn: 'Você é Elite: 6 fichas de 2x XP e 6 de 2x XP de arma por mês' });
+Object.assign(D.en, { pocket: 'Pocket', boostSub: 'Items you use whenever you want.', boostName: 'Double XP', wboostName: 'Double Weapon XP', wxpChip: 'Weapon', wboostDesc: '1 hour of match time per token: the model in your hands levels up 2x faster. Account XP stays the same; it stacks with the account Double XP token.', wboostElite: 'Elite: {n} new weapon tokens every month.', boostDesc: '1 hour of match time per token. The clock only runs while you play and pauses on weekends and in Blitz, which already give 2x.', boostElite: 'Elite: {n} new tokens every month. Rovex Pass: bonus token on some levels.', boostUse: 'Use', boostAdd: 'Add +1 h', boostActive: 'Active: {t} of match time left', boostEmpty: 'No tokens right now.', boostKey: 'In-match shortcut: {k}', boostGot: 'Double XP tokens in your Pocket!', boostOn: 'Double XP on: 1 hour of match time', boostNone: 'No Double XP tokens in your Pocket', boostPauseWknd: 'paused: weekend already gives 2x', boostPauseBlitz: 'paused: Blitz already gives 2x', k_boost: 'Use a Double XP token', passBoost: '+1 2x token', el_xp: '6 Double XP + 6 Double Weapon XP tokens a month', el_xpD: 'Each token is 1 hour of match time at 2x (account or weapon). Use it from your Pocket whenever you want; the clock only runs while you play.', epOn: "You're Elite: 6 Double XP and 6 Double Weapon XP tokens a month" });
 
 // Novidades da remasterizacao (07/11): popup ao logar (newspop.js) + cartao no carrossel
 Object.assign(D.pt, { np_title: 'O estúdio reformou tudo', np_sub: 'Desde a última sessão, o Rubber Riot passou por uma remasterização inteira.',
@@ -1229,6 +1239,35 @@ Object.assign(D.en, {"v20_sub": "Divisions are here: 12 clans, each with its own
 // novidades como jornal (16/11)
 Object.assign(D.pt, {"np_paper": "O Diário da Vila Borracha", "np_ed": "Edição {v}", "np_price": "Grátis", "v20_head": "Chegaram as Divisões!"});
 Object.assign(D.en, {"np_paper": "The Rubber Village Daily", "np_ed": "Edition {v}", "np_price": "Free", "v20_head": "Divisions have arrived!"});
+// 0.21 (19/11, pedido dele): jornal com Roubo ao Trem e Pulo do Gato no carrossel (foto de cada mapa) e o resto da leva nas fichas
+Object.assign(D.pt, { v21_head: 'Assalto no trem e pulo nos telhados!', v21_sub: 'Dois modos novos, seis mapas novos e um jogo mais leve. Veja tudo o que mudou na 0.21.', v21_tag: 'Modos novos',
+  v21_heroD: 'Roube o Expresso Dourado em equipe ou encare 5 percursos de pulo, só na faca, contra o relógio.',
+  v21m_expresso: 'Roubo ao Trem: pegue as joias do vagão de luxo, arrombe o vagão-forte e leve tudo até o caminhão.',
+  v21m_telhados: '381 m em zigue-zague de telhado em telhado, com piche fervendo embaixo. O mais fácil.',
+  v21m_picadeiro: '517 m em espiral subindo até 18 m de altura, sobre um mar de brasas.',
+  v21m_caixotes: '534 m em serpente pelos caixotes do cais. Caiu na água, o tubarão agradece.',
+  v21m_montagem: '616 m de esteira, com retas e curvas fechadas, em cima de um tanque de ácido.',
+  v21m_nanquim: '776 m num redemoinho que só abre. O mais longo e o mais difícil.',
+  v21traps: 'Armadilhas que arremessam', v21trapsD: 'Vassoura, pêndulo, socador, esmagador e jato no vão. Pegou, voa longe.',
+  v21perf: 'Tiroteio mais leve', v21perfD: 'Traçados com efeito, fumaça e itens do trem custam bem menos por quadro.',
+  v21streak: 'Sequências sem travar', v21streakD: 'Biplano, Sentinela e cia. não engasgam mais na primeira chamada.',
+  v21music: 'Trilhas novas', v21musicD: 'Uma pro Roubo ao Trem e uma pra cada percurso, leves na memória.',
+  v21cards: 'Cards de modo', v21cardsD: 'O texto longo rola sozinho e a setinha agora fica na grade.',
+  v21fix: 'Correções', v21fixD: 'Pulo do Gato sem bots, cronômetro só ao sair da largada e todo mapa com foto no seletor.' });
+Object.assign(D.en, { v21_head: 'Train heist and rooftop jumps!', v21_sub: 'Two new modes, six new maps and a lighter game. See everything new in 0.21.', v21_tag: 'New modes',
+  v21_heroD: 'Rob the Golden Express as a team or take on 5 jump courses, knife only, against the clock.',
+  v21m_expresso: 'Train Robbery: grab the jewels from the luxury car, crack the armored car and haul it all to the truck.',
+  v21m_telhados: '381 m zigzag from roof to roof over boiling tar. The easiest one.',
+  v21m_picadeiro: '517 m spiral climbing up to 18 m high, over a sea of embers.',
+  v21m_caixotes: '534 m snaking across the dock crates. Fall in the water and the shark says thanks.',
+  v21m_montagem: '616 m of conveyor belt, straights and sharp turns, above an acid tank.',
+  v21m_nanquim: '776 m in a whirl that keeps opening up. The longest and the hardest.',
+  v21traps: 'Traps that launch you', v21trapsD: 'Sweeper, pendulum, puncher, crusher and gap jet. Get caught and you fly.',
+  v21perf: 'Lighter gunfights', v21perfD: 'Fancy tracers, smoke and train pickups cost much less per frame.',
+  v21streak: 'Streaks without stutter', v21streakD: 'Biplane, Sentry and friends no longer hitch on the first call.',
+  v21music: 'New soundtracks', v21musicD: 'One for Train Robbery and one for each course, light on memory.',
+  v21cards: 'Mode cards', v21cardsD: 'Long text scrolls by itself and the arrow now sits on the grid.',
+  v21fix: 'Fixes', v21fixD: 'Bunny Hop without bots, timer only starts off the start pad and every map has a photo in the picker.' });
 
 // resgate so no fim do carrossel (16/11)
 Object.assign(D.pt, {"np_giftHint": "Passe o carrossel até o fim pra liberar a recompensa."});
@@ -1241,3 +1280,50 @@ Object.assign(D.en, {"s_telemetry": "Telemetry (FPS, ping, packet loss and time)
 // 16/11 (pedido dele): secao Exclusivos Elite+ da Loja
 Object.assign(D.pt, { shopEliteH: 'Exclusivos Elite+', shopEliteSubOn: 'Resgate de graça enquanto o Elite+ estiver ativo', shopEliteSubOff: 'Só quem tem Elite+ resgata', shopGetElite: 'Adquirir Elite+', shopGetEliteSub: 'Assine na Rovex e resgate tudo daqui de graça', shopEliteOnly: 'Exclusivo Elite+' });
 Object.assign(D.en, { shopEliteH: 'Elite+ Exclusives', shopEliteSubOn: 'Redeem for free while your Elite+ is active', shopEliteSubOff: 'Only Elite+ members can redeem', shopGetElite: 'Get Elite+', shopGetEliteSub: 'Subscribe on Rovex and redeem everything here for free', shopEliteOnly: 'Elite+ exclusive' });
+
+// 19/11 (pedido dele): Roubo ao Trem no Expresso Dourado
+Object.assign(D.pt, { map_expresso: 'Expresso Dourado', trVault: 'Vagão-forte', trLux: 'Joias', trYouJewel: 'Joias nas mãos: leve até o caminhão (pesadas, sem correr)', trJewelCarry: 'Caixa de joias! Pesada: sem correr até o caminhão', trBankJ: 'Joias no caminhão! ${m} de ${q} (+{s} s)', trAtkSub: 'Pegue as joias do vagão de luxo, arrombe o vagão-forte e leve tudo até o caminhão', trDefSub: 'Segure o vagão-forte e o de luxo; malote caído: fique em cima pra devolver', jewelTake: '{k}: pegar a caixa de joias', jewelTakeTouch: 'Pegar a caixa de joias', mt_trem_1: 'As joias do vagão de luxo já estão livres: valem o dobro, mas quem carrega anda devagar.', mt_trem_2: 'Pra arrombar o vagão-forte tem que estar dentro dele; quem fica na plataforma não conta.' });
+Object.assign(D.en, { map_expresso: 'Golden Express', trVault: 'Armored car', trLux: 'Jewels', trYouJewel: 'Jewels in hand: take them to the truck (heavy, no sprint)', trJewelCarry: 'Jewel case! Heavy: no sprinting to the truck', trBankJ: 'Jewels in the truck! ${m} of ${q} (+{s} s)', trAtkSub: 'Grab the jewels in the luxury car, crack the armored car and haul it all to the truck', trDefSub: 'Hold the armored car and the luxury car; dropped bag: stand on it to return it', jewelTake: '{k}: grab the jewel case', jewelTakeTouch: 'Grab the jewel case', mt_trem_1: 'The jewels in the luxury car are free from the start: worth double, but the carrier walks slowly.', mt_trem_2: 'To crack the armored car you have to be inside it; standing on the platform does not count.' });
+D.pt.m.trem = 'Roubo ao Trem'; D.pt.md.trem = 'Ataque pega as joias do vagão de luxo e arromba o vagão-forte; leva tudo até o caminhão. Joias valem o dobro e são pesadas. Defesa segura. Melhor de 4.';
+D.en.m.trem = 'Train Robbery'; D.en.md.trem = 'Attack grabs the jewels from the luxury car and cracks the armored car, then hauls it all to the truck. Jewels are worth double and heavy. Defense holds. Best of 4.';
+
+// 19/11 (pedido dele): Grudenta, letal de borracha derretida
+Object.assign(D.pt, { n_goo: 'Grudenta', nd_goo: 'Estoura numa poça de borracha derretida por 6,5 s: quem é do outro time e pisa fica grudado (anda bem devagar, sem correr nem pular).', gooStuck: 'Grudado! Saia da poça de borracha', gooWord: 'GRUDOU!' });
+Object.assign(D.en, { n_goo: 'Gum Bomb', nd_goo: 'Bursts into a puddle of melted rubber for 6.5 s: enemies who step in get stuck (very slow, no sprint or jump).', gooStuck: 'Stuck! Get out of the rubber puddle', gooWord: 'STUCK!' });
+
+// 19/11: itens novos da Loja (chaveiros e mortes)
+Object.assign(D.pt, { lk_death_foguete: 'Foguetório', lk_death_apagado: 'Apagado', lk_charm_locomotiva: 'Maria-Fumaça', lk_charm_relogio: 'Relógio de Bolso' });
+Object.assign(D.en, { lk_death_foguete: 'Firework Finale', lk_death_apagado: 'Erased', lk_charm_locomotiva: 'Steam Engine', lk_charm_relogio: 'Pocket Watch' });
+
+// 19/11: Ajustes > Video
+Object.assign(D.pt, { s_hideOtherFx: 'Esconder efeitos de skin dos outros (mais leve)' });
+Object.assign(D.en, { s_hideOtherFx: "Hide other players' skin effects (lighter)" });
+
+// 19/11 b: o trem chega e vai embora
+Object.assign(D.pt, { trSoonT: 'O TREM ESTÁ VINDO', trSoonS: 'Ele sai do túnel oeste em instantes. Saia do trilho!', trArrive: 'O trem está chegando na estação', trOpenT: 'O TREM LIBEROU AS CARGAS', trOpenAtk: 'Os bens chegaram: roubem as joias e arrombem o vagão-forte!', trOpenDef: 'Protejam a carga: segurem o vagão-forte e o de luxo!', trCloseT: 'O TREM VAI PARTIR', trCloseS: 'Portas fechando: quem ficar dentro não sai vivo!', trEjected: 'O trem está indo embora: você foi jogado pra fora!', trLeave: 'O trem está partindo', trGone: 'O trem foi embora com o que ficou dentro', trDeadBy: 'O trem partiu com você dentro!', w_trem: 'Trem', hsWhyTrain: 'O trem foi embora' });
+Object.assign(D.en, { trSoonT: 'THE TRAIN IS COMING', trSoonS: 'It comes out of the west tunnel any second. Get off the tracks!', trArrive: 'The train is pulling into the station', trOpenT: 'THE TRAIN UNLOCKED THE CARGO', trOpenAtk: 'The loot is here: grab the jewels and crack the armored car!', trOpenDef: 'Protect the cargo: hold the armored car and the luxury car!', trCloseT: 'THE TRAIN IS LEAVING', trCloseS: 'Doors closing: anyone left inside will not make it!', trEjected: 'The train is leaving: you got thrown off!', trLeave: 'The train is pulling out', trGone: 'The train left with whatever stayed on board', trDeadBy: 'The train left with you inside!', w_trem: 'Train', hsWhyTrain: 'The train left' });
+Object.assign(D.pt, {"vosub_train_soon": "Lá vem o trem! Todo mundo a postos!", "vosub_train_open": "O trem chegou e a carga está aberta! Ladrões, vão buscar! Guardas, segurem a linha!", "vosub_train_closing": "Todos a bordo? Não, todos PRA FORA! O trem está saindo da estação!", "vosub_train_gone": "E lá se vai o trem! O que ficou a bordo já era!", "vosub_train_crushed": "Alguém perdeu a parada!"});
+Object.assign(D.en, {"vosub_train_soon": "Here comes the train! Everybody, get ready!", "vosub_train_open": "The train is in, and the cargo is open! Thieves, go get it! Guards, hold the line!", "vosub_train_closing": "All aboard? No, all OFF! The train is leaving the station!", "vosub_train_gone": "And there goes the train! Whatever stayed on board is gone for good!", "vosub_train_crushed": "Somebody missed their stop!"});
+
+// 19/11: Pulo do Gato, chao que mata (um por percurso)
+Object.assign(D.pt, { bhDie_telhados: 'O piche fervendo te pegou! De volta ao início', bhDie_picadeiro: 'Caiu nas brasas! De volta ao início', bhDie_caixotes: 'O tubarão te pegou! De volta ao início', bhDie_montagem: 'Caiu no ácido! De volta ao início', bhDie_nanquim: 'O nanquim te engoliu! De volta ao início' });
+Object.assign(D.en, { bhDie_telhados: 'The boiling tar got you! Back to the start', bhDie_picadeiro: 'You fell in the embers! Back to the start', bhDie_caixotes: 'The shark got you! Back to the start', bhDie_montagem: 'You fell in the acid! Back to the start', bhDie_nanquim: 'The ink swallowed you! Back to the start' });
+Object.assign(D.pt, { bhGo: 'VALENDO!' }); Object.assign(D.en, { bhGo: 'GO!' });
+
+// 19/11 (pedido dele): Skills e Equipamento de campo com frases curtas e diretas (as longas esticavam todas as cartas)
+Object.assign(D.pt, { skHint: 'Escolha 3. Toque num slot e depois na skill.', tt_sk_slots: 'Seus 3 slots', tt_sk_slotsD: 'Três skills ligadas a partida toda. Escolha o slot que quer trocar.', ht_skills: 'Três skills ficam ligadas a partida toda, mais um equipamento de campo pra usar na hora certa.', skFieldHint: 'Escolha 1. Use com Z ou direcional pra direita. A barra enche com pontos e abates.', fdCd: '· {n} pts',
+  skd_maos: 'Recarga +25%, troca +30%, escalada +30%', skd_catador: 'Cada abate devolve um pente', skd_lince: 'Mira 25% mais rápido, 15% menos recuo',
+  skd_sangue: 'Abaixo de 35 de vida: recarga e mira +30%', skd_carrinho: 'Correndo, agache pra deslizar', skd_bolso: '+1 granada de cada e +30% de munição',
+  skd_couro: '30% menos dano de explosão', skd_folego: 'A vida volta após 4 s sem dano', skd_pavio: 'Sequências custam 1 abate a menos',
+  skd_fervor: 'Atira correndo (o tiro abre mais)', skd_pique: 'Recarrega correndo e 10% mais rápido', skd_fantasma: 'Some do radar e das sequências. Passos mudos',
+  fdd_umbrella: 'Escudo na frente por 5 s. Não vai com akimbo', fdd_stim: '+70 de vida em 1,5 s e apaga o fogo', fdd_vest: 'Nasce de colete: 70% menos dano',
+  fdd_spring: 'Trampolim por 20 s: quem pisa voa', fdd_hole: 'Te leva pra outro canto do mapa', fdd_anvil: 'Bigorna cai onde você mira',
+  fdd_hook: 'Puxa até uma beirada a 34 m. 2 usos' });
+Object.assign(D.en, { skHint: 'Pick 3. Tap a slot, then a skill.', tt_sk_slots: 'Your 3 slots', tt_sk_slotsD: 'Three skills stay on the whole match. Pick the slot you want to swap.', ht_skills: 'Three skills stay on the whole match, plus one piece of field gear for the right moment.', skFieldHint: 'Pick 1. Use with Z or d-pad right. The bar fills with points and kills.', fdCd: '· {n} pts',
+  skd_maos: 'Reload +25%, swap +30%, climb +30%', skd_catador: 'Each kill refills one mag', skd_lince: 'Aim 25% faster, 15% less recoil',
+  skd_sangue: 'Below 35 health: reload and aim +30%', skd_carrinho: 'Crouch while sprinting to slide', skd_bolso: '+1 of each grenade, +30% ammo',
+  skd_couro: '30% less blast damage', skd_folego: 'Health regens after 4 s without damage', skd_pavio: 'Streaks cost 1 kill less',
+  skd_fervor: 'Shoot while sprinting (more spread)', skd_pique: 'Reload while sprinting, 10% faster', skd_fantasma: 'Off radar and streaks. Silent steps',
+  fdd_umbrella: 'Front shield for 5 s. Not with akimbo', fdd_stim: '+70 health over 1.5 s, puts out fire', fdd_vest: 'Spawn with a vest: 70% less damage',
+  fdd_spring: 'Trampoline for 20 s: step on it and fly', fdd_hole: 'Takes you elsewhere on the map', fdd_anvil: 'Anvil drops where you aim',
+  fdd_hook: 'Pulls you to a ledge up to 34 m. 2 uses' });

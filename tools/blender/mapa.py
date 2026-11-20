@@ -7,8 +7,10 @@ import bpy, bmesh, json, math, os, random
 from mathutils import Vector, Matrix
 
 MAP = globals().get('MAP', 'vila')
+TRAIN = globals().get('TRAIN', 0)  # 19/11 b: Expresso: TRAIN=1 desenha SO o trem (expresso_trem.glb, anda no jogo); sem, o mapa sem o trem
+OUT = MAP + ('_trem' if TRAIN else '')
 HERE = r'D:\Desktop\fokusstudios\tinta-louca\tools\blender'
-GLB = os.path.join(r'D:\Desktop\fokusstudios\tinta-louca\tools\blender\glb-raw', MAP + '.glb')  # cru; no fim o draco.py grava public/models/maps/<MAP>.glb comprimido
+GLB = os.path.join(r'D:\Desktop\fokusstudios\tinta-louca\tools\blender\glb-raw', OUT + '.glb')  # cru; no fim o draco.py grava public/models/maps/<MAP>.glb comprimido
 L = json.load(open(os.path.join(HERE, MAP + '-layout.json'), encoding='utf-8'))
 # paleta por mapa: Vila = vilarejo de reboco colorido; Fronteira = forte de fronteira, adobe e madeira queimada de sol
 TH = {
@@ -31,14 +33,21 @@ TH = {
   'xilindro': {'walls': ['e6dfcc'], 'wood': '8a6a4a', 'woodd': '5d4a3a', 'woodl': 'b89a74', 'stone': 'b9b6ae', 'stoned': '8a877e', 'slate': '3a3836', 'rock': '8a857c', 'sky': 'c4c6c2'},
   'trapiche': {'walls': ['e9c9a4', 'd9a98a', 'e8b98f', 'dcae86'], 'wood': '9d8263', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'b9b2a4', 'stoned': '8b8478', 'slate': '5f4a3e', 'rock': '8a857c', 'sky': 'f0d2b0'},
   'estande': {'walls': ['d8c8a8'], 'wood': '8a5a3a', 'woodd': '4a2e1e', 'woodl': 'c49a6a', 'stone': 'b9b2a4', 'stoned': '8a847a', 'slate': '3a2a24', 'rock': '8a857c', 'sky': '2a2420'},  # Estande Gargalhada (14/11): barracao de teatro com barraca de tiro
+  # Pulo do Gato (19/11): percursos suspensos; cada um com a sua cor
+  'telhados': {'walls': ['e8dcc4', 'e3c3a6', 'c9cdb4', 'bfc8cc', 'e8d69a'], 'wood': 'a0794f', 'woodd': '6b4a2c', 'woodl': 'c9a77a', 'stone': 'b9b2a4', 'stoned': '8f897e', 'slate': '4a4540', 'rock': '8a857c', 'sky': 'e9d6b4'},
+  'picadeiro': {'walls': ['f0ebe0'], 'wood': '9a6a3a', 'woodd': '5e3e22', 'woodl': 'c49a6a', 'stone': 'd8c8a8', 'stoned': '9a8a6a', 'slate': '3a2a24', 'rock': '8a857c', 'sky': 'e8c9b0'},
+  'caixotes': {'walls': ['e9c9a4'], 'wood': '9d8263', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'b9b2a4', 'stoned': '8b8478', 'slate': '5f4a3e', 'rock': '8a857c', 'sky': 'b9d3dc'},
+  'montagem': {'walls': ['c9c4b8'], 'wood': '9a7a52', 'woodd': '5e4630', 'woodl': 'c4a57a', 'stone': 'c9c4b8', 'stoned': '8e8a80', 'slate': '3e3a36', 'rock': '8a857c', 'sky': 'bdb8ae'},
+  'nanquim': {'walls': ['2a2632'], 'wood': '3a3440', 'woodd': '1d1a22', 'woodl': '4a4452', 'stone': '2e2a34', 'stoned': '1a171e', 'slate': '121014', 'rock': '2a2630', 'sky': '2a2632'},
+  'expresso': {'walls': ['e3cfae'], 'wood': '8a6a4a', 'woodd': '54402c', 'woodl': 'b89a74', 'stone': 'cfc6b2', 'stoned': '9a917e', 'slate': '3a3632', 'rock': '9a8b74', 'sky': 'e9cfa3'},  # Expresso Dourado (19/11): patio de trem
   'fronteira': {'walls': ['e3cfae', 'd9b48f', 'e8dcc0', 'cfa98a', 'ddc59a'], 'wood': '94704a', 'woodd': '5e4128', 'woodl': 'bf9c70', 'stone': 'c2b49a', 'stoned': '948670', 'slate': '7a4a34', 'rock': '9a8b74', 'sky': 'dcd8cc'},
 }[MAP]
 EAVE = 0.35
 os.makedirs(os.path.dirname(GLB), exist_ok=True); os.makedirs(os.path.join(HERE, 'out'), exist_ok=True)
 
-SCN = 'RR_' + MAP.capitalize()
+SCN = 'RR_' + OUT.capitalize()
 scn = bpy.data.scenes.get(SCN) or bpy.data.scenes.new(SCN)
-bpy.context.window.scene = scn
+if bpy.context.window: bpy.context.window.scene = scn  # 19/11: em fundo (blender -b) nao ha janela
 for o in list(scn.collection.all_objects): bpy.data.objects.remove(o, do_unlink=True)
 
 def srgb(h): return tuple(((int(h[i:i + 2], 16) / 255) ** 2.2) for i in (0, 2, 4))
@@ -1513,10 +1522,191 @@ def proof(b):
         while z < mx[2] - 2:
             box(PAPER, [x - 0.5, mn[1] - 0.12, z - 0.18], [x + 0.5, mn[1] - 0.02, z + 0.18]); z += 6
 
+# ---------- Pulo do Gato (19/11): colunas dos percursos ----------
+# A colisao e a coluna inteira (chao ate o topo). O topo do desenho fica EXATAMENTE na altura de pisar e nada sobe acima dele
+# (o boneco atravessaria). Tampa 6 cm pra fora do corpo; detalhes sempre alguns cm afastados (anti-pisca)
+BH = {}
+def bhmats():
+    if BH: return BH
+    BH.update(red=mat('bh_red', 'c23a2c'), white=mat('bh_white', 'f0ebe0'), yel=mat('bh_yellow', 'f2c230'), blue=mat('bh_blue', '2f5b8a'),
+              ink=mat('bh_ink', '141210'), inkg=mat('bh_ink_gloss', '2a2433'), steel=mat('bh_steel', '5a5e66'), steeld=mat('bh_steel_dark', '3a3d44'),
+              green=mat('bh_green', '4f8a52'), paper=PAPER, tile=RRED, tileb=RBLUE)
+    return BH
+def bhcap(b, top, rim, th=0.28, out=0.06):
+    y = b['max'][1]
+    box(top, [b['min'][0] - out, y - th, b['min'][2] - out], [b['max'][0] + out, y, b['max'][2] + out])
+    box(rim, [b['min'][0] - out - 0.04, y - th - 0.12, b['min'][2] - out - 0.04], [b['max'][0] + out + 0.04, y - th + 0.02, b['max'][2] + out + 0.04])
+def bhroof(b):  # Telhados: casinha com terraco (topo = laje de telha)
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; s = b.get('seed') or 0
+    wall = WALLS[s % len(WALLS)]
+    box(wall, [b['min'][0] + 0.08, 0, b['min'][2] + 0.08], [b['max'][0] - 0.08, y - 0.4, b['max'][2] - 0.08])
+    box(STONE, [b['min'][0] + 0.04, 0, b['min'][2] + 0.04], [b['max'][0] - 0.04, 0.6, b['max'][2] - 0.04])
+    bhcap(b, M['tile'] if s % 2 else M['tileb'], TRIM, th=0.32)
+    if h > 3.6 and min(w, d) > 2.2:
+        for face in ('+x', '-x', '+z', '-z'):
+            fx = b['max'][0] - 0.08 if face == '+x' else b['min'][0] + 0.08 if face == '-x' else cx
+            fz = b['max'][2] - 0.08 if face == '+z' else b['min'][2] + 0.08 if face == '-z' else cz
+            window(face, fx, min(y - 1.3, 2.4), fz, w=0.8, h=0.9)
+def bhdrum(b):  # Picadeiro: tambor listrado com tampa quadrada de pedestal
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.05
+    n = max(2, int((y - 0.3) / 0.9)); hh = (y - 0.3) / n
+    for k in range(n): cyl(M['red'] if k % 2 == 0 else M['white'], (cx, cz), r, k * hh, (k + 1) * hh - 0.001, seg=20)
+    bhcap(b, M['yel'], M['blue'], th=0.3)
+def bhcrate(b):  # Caixotes: pilha de caixote em cima de estacas no mar
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]
+    for sx in (-1, 1):
+        for sz in (-1, 1): cyl(WOODD, (cx + sx * (w / 2 - 0.3), cz + sz * (d / 2 - 0.3)), 0.22, 0, y - 1.25, seg=10)
+    box(WOOD, [b['min'][0] + 0.12, y - 1.25, b['min'][2] + 0.12], [b['max'][0] - 0.12, y - 0.3, b['max'][2] - 0.12])
+    for k in (0.25, 0.75): box(WOODD, [b['min'][0] + 0.08, y - 1.25 + 0.95 * k - 0.05, b['min'][2] + 0.08], [b['max'][0] - 0.08, y - 1.25 + 0.95 * k + 0.05, b['max'][2] - 0.08])
+    bhcap(b, WOODL, WOODD, th=0.3)
+def bhbeam(b):  # Linha de Montagem: coluna de aco e chapa com borda listrada de perigo
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]
+    hx, hz = min(0.5, w / 2 - 0.1), min(0.5, d / 2 - 0.1)
+    box(M['steeld'], [cx - hx, 0, cz - hz], [cx + hx, y - 0.5, cz + hz])
+    box(M['steel'], [b['min'][0] + 0.05, y - 0.5, b['min'][2] + 0.05], [b['max'][0] - 0.05, y - 0.3, b['max'][2] - 0.05])
+    bhcap(b, M['steel'], M['yel'], th=0.3)
+    L = max(w, d); n = int(L / 0.5)
+    for k in range(0, n, 2):  # listras pretas na borda amarela (fora dela)
+        t0 = -L / 2 + k * 0.5
+        if w >= d: box(M['ink'], [cx + t0, y - 0.43, b['min'][2] - 0.16], [cx + t0 + 0.25, y - 0.31, b['max'][2] + 0.16])
+        else: box(M['ink'], [b['min'][0] - 0.16, y - 0.43, cz + t0], [b['max'][0] + 0.16, y - 0.31, cz + t0 + 0.25])
+def bhink(b):  # Nanquim: coluna de tinta escorrendo, tampa preta com borda de papel
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.08; s = b.get('seed') or 0
+    cyl(M['ink'], (cx, cz), r * 0.75, 0, y - 0.3, seg=16, r2=r * 0.95)
+    for k in range(3):  # pingos escorrendo pela coluna
+        a = (s * 1.7 + k * 2.1)
+        cyl(M['ink'], (cx + math.cos(a) * r * 0.86, cz + math.sin(a) * r * 0.86), 0.14, y - 0.3 - (1.2 + k * 0.7), y - 0.31, seg=8, r2=0.2)
+    bhcap(b, M['inkg'], M['paper'], th=0.3)
+def bhpad(b, goal):
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; sk = b.get('skin')
+    body = {'picadeiro': M['red'], 'caixotes': WOOD, 'montagem': M['steeld'], 'nanquim': M['ink']}.get(sk, STONE)
+    box(body, [b['min'][0] + 0.1, 0, b['min'][2] + 0.1], [b['max'][0] - 0.1, y - 0.3, b['max'][2] - 0.1])
+    if goal:  # chegada: piso quadriculado e arco com faixa por cima (postes do lado de fora do piso)
+        n = 6; q = w / n
+        for i in range(n):
+            for j in range(n): box(M['ink'] if (i + j) % 2 else M['white'], [b['min'][0] + i * q, y - 0.3, b['min'][2] + j * q], [b['min'][0] + (i + 1) * q, y, b['min'][2] + (j + 1) * q])
+        box(M['red'], [b['min'][0] - 0.1, y - 0.42, b['min'][2] - 0.1], [b['max'][0] + 0.1, y - 0.31, b['max'][2] + 0.1])
+        for sg in (-1, 1): cyl(M['white'], (cx + sg * (w / 2 + 0.25), cz), 0.12, y - 0.42, y + 3.7, seg=10)
+        box(M['red'], [cx - w / 2 - 0.35, y + 3.55, cz - 0.08], [cx + w / 2 + 0.35, y + 4.05, cz + 0.08])
+    else:
+        bhcap(b, M['green'], M['white'], th=0.3)
+def bhstart(b): bhpad(b, False)
+def bhgoal(b): bhpad(b, True)
+
+# 19/11 b (pedido dele: "plataformas diversas em cada mapa"): 3 tipos a mais por percurso, cada um com silhueta propria.
+# Mesmas regras: topo plano EXATAMENTE na altura de pisar (tampa do tamanho da colisao), nada acima dele, detalhe afastado
+def _long(b):
+    (w, h, d), (cx, cy, cz) = dims(b); return w >= d
+# --- Telhados ---
+def bhchimney(b):  # chamine de tijolo: pilha estreita com faixas
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]
+    box(M['red'], [b['min'][0] + 0.1, 0, b['min'][2] + 0.1], [b['max'][0] - 0.1, y - 0.3, b['max'][2] - 0.1])
+    for k in range(1, int((y - 0.3) / 1.1)):
+        yy = k * 1.1; box(STONED, [b['min'][0] + 0.06, yy - 0.06, b['min'][2] + 0.06], [b['max'][0] - 0.06, yy + 0.06, b['max'][2] - 0.06])
+    bhcap(b, STONE, M['ink'], th=0.3)
+def bhtank(b):  # caixa-d'agua: 4 pernas, tanque redondo de madeira com cintas, tampa quadrada
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.08
+    for sx in (-1, 1):
+        for sz in (-1, 1): cyl(WOODD, (cx + sx * r * 0.6, cz + sz * r * 0.6), 0.1, 0, y - 1.6, seg=8)
+    cyl(WOOD, (cx, cz), r, y - 1.6, y - 0.3, seg=18)
+    for yy in (y - 1.3, y - 0.65): cyl(M['steeld'], (cx, cz), r + 0.03, yy - 0.05, yy + 0.05, seg=18)
+    bhcap(b, WOODD, M['white'], th=0.3)
+def bhplank(b):  # prancha entre dois cavaletes (varal de roupa pendurado de lado)
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; L = _long(b)
+    for t in (-0.38, 0.38):
+        px, pz = (cx + t * w, cz) if L else (cx, cz + t * d)
+        box(WOODD, [px - 0.18, 0, pz - 0.18], [px + 0.18, y - 0.3, pz + 0.18])
+    bhcap(b, WOODL, WOODD, th=0.3)
+# --- Picadeiro ---
+def bhpole(b):  # poste listrado em espiral com tampa de estrela (quadrada)
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.25
+    n = max(2, int((y - 0.3) / 0.6)); hh = (y - 0.3) / n
+    for k in range(n): cyl(M['white'] if k % 2 else M['blue'], (cx, cz), r, k * hh, (k + 1) * hh - 0.001, seg=14)
+    bhcap(b, M['red'], M['yel'], th=0.3)
+def bhball(b):  # bola gigante de equilibrio: esfera achatada em aneis, tampa quadrada
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; R0 = min(w, d) / 2 - 0.05
+    cyl(M['blue'], (cx, cz), 0.35, 0, y - R0 * 1.6, seg=10)  # pedestal fino
+    yc = y - 0.3 - R0 * 0.8; segs = 8
+    for k in range(segs):
+        a0, a1 = -math.pi / 2 + k * math.pi / segs, -math.pi / 2 + (k + 1) * math.pi / segs
+        cyl(M['red'] if k % 2 else M['yel'], (cx, cz), max(0.05, math.cos(a0) * R0), yc + math.sin(a0) * R0 * 0.8, yc + math.sin(a1) * R0 * 0.8 - 0.001, seg=16, r2=max(0.05, math.cos(a1) * R0))
+    bhcap(b, M['white'], M['red'], th=0.3)
+def bhseesaw(b):  # gangorra: prancha comprida em cima de um barril de apoio
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]
+    cyl(M['red'], (cx, cz), 0.7, 0, y - 0.3, seg=16)
+    for yy in (0.6, y - 0.9): cyl(M['white'], (cx, cz), 0.73, yy - 0.08, yy + 0.08, seg=16)
+    bhcap(b, M['yel'], M['blue'], th=0.3)
+# --- Caixotes ---
+def bhbarrel(b):  # pilha de barris (um em cima do outro)
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.05
+    n = max(1, int((y - 0.3) / 1.2)); hh = (y - 0.3) / n
+    for k in range(n):
+        y0 = k * hh; cyl(WOOD, (cx, cz), r * 0.92, y0, y0 + hh * 0.5, seg=16, r2=r); cyl(WOOD, (cx, cz), r, y0 + hh * 0.5, y0 + hh - 0.001, seg=16, r2=r * 0.92)
+        for yy in (y0 + hh * 0.2, y0 + hh * 0.8): cyl(M['steeld'], (cx, cz), r * 0.97 + 0.02, yy - 0.04, yy + 0.04, seg=16)
+    bhcap(b, WOODD, M['steeld'], th=0.3)
+def bhpiling(b):  # estaca solitaria com corda enrolada
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.15
+    cyl(WOODD, (cx, cz), r, 0, y - 0.3, seg=12)
+    for k in range(3): cyl(WOODL, (cx, cz), r + 0.05, y - 1.2 + k * 0.14, y - 1.12 + k * 0.14, seg=12)
+    bhcap(b, WOOD, WOODD, th=0.3)
+def bhgang(b):  # passarela de prancha com estacas nas pontas e corrimao de corda baixo (abaixo do topo)
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; L = _long(b)
+    for t in (-0.42, 0, 0.42):
+        px, pz = (cx + t * w, cz) if L else (cx, cz + t * d)
+        cyl(WOODD, (px, pz), 0.2, 0, y - 0.3, seg=10)
+    bhcap(b, WOODL, WOODD, th=0.3)
+    n = int((max(w, d)) / 0.5)
+    for k in range(1, n):  # tabuas: frestas escuras na lateral da tampa (2 cm pra fora)
+        t = -max(w, d) / 2 + k * 0.5
+        if L: box(WOODD, [cx + t - 0.03, y - 0.27, b['min'][2] - 0.09], [cx + t + 0.03, y - 0.03, b['max'][2] + 0.09])
+        else: box(WOODD, [b['min'][0] - 0.09, y - 0.27, cz + t - 0.03], [b['max'][0] + 0.09, y - 0.03, cz + t + 0.03])
+# --- Montagem ---
+def bhgear(b):  # engrenagem deitada em cima de um eixo
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.05
+    cyl(M['steeld'], (cx, cz), 0.45, 0, y - 0.5, seg=12)
+    cyl(M['steel'], (cx, cz), r * 0.82, y - 0.62, y - 0.3, seg=20)
+    for k in range(10):  # dentes em volta (abaixo da tampa)
+        a = k / 10 * 2 * math.pi
+        obox(M['steel'], (cx + math.cos(a) * r * 0.88, y - 0.47, cz + math.sin(a) * r * 0.88), (0.36, 0.26, 0.3), ry=-math.degrees(a))
+    bhcap(b, M['yel'], M['ink'], th=0.3)
+def bhmachine(b):  # maquina: caixa com tubos e mostrador
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]
+    box(M['steeld'], [b['min'][0] + 0.1, 0, b['min'][2] + 0.1], [b['max'][0] - 0.1, y - 0.3, b['max'][2] - 0.1])
+    box(M['green'], [b['min'][0] + 0.05, y - 1.6, b['min'][2] + 0.05], [b['max'][0] - 0.05, y - 0.45, b['max'][2] - 0.05])
+    for s in (-1, 1): cyl(M['steel'], (cx + s * (w / 2 - 0.05 + 0.18), cz), 0.12, 0.3, y - 0.5, seg=8)
+    bhcap(b, M['steel'], M['yel'], th=0.3)
+def bhpipe(b):  # boca de cano grosso subindo do chao
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.08
+    cyl(M['steel'], (cx, cz), r * 0.85, 0, y - 0.3, seg=16)
+    for yy in (1.0, y - 0.8): cyl(M['steeld'], (cx, cz), r * 0.85 + 0.08, yy - 0.12, yy + 0.12, seg=16)
+    bhcap(b, M['steeld'], M['yel'], th=0.3)
+# --- Nanquim ---
+def bhdrop(b):  # gota de tinta de cabeca pra baixo (ponta fina embaixo)
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; r = min(w, d) / 2 - 0.05
+    cyl(M['ink'], (cx, cz), 0.12, 0, y - 1.8, seg=10, r2=r * 0.5)
+    cyl(M['ink'], (cx, cz), r * 0.5, y - 1.8, y - 0.3, seg=14, r2=r * 0.95)
+    bhcap(b, M['inkg'], M['paper'], th=0.3)
+def bhnib(b):  # pena de caneta tinteiro deitada (comprida e estreita) em cima do corpo da caneta
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; L = _long(b)
+    cyl(M['inkg'], (cx, cz), 0.35, 0, y - 0.6, seg=12)
+    cyl(M['yel'], (cx, cz), 0.4, y - 0.9, y - 0.75, seg=12)
+    bhcap(b, M['yel'], M['ink'], th=0.3)
+    if L: box(M['ink'], [cx - w / 2 + 0.3, y - 0.43, cz - 0.06], [cx + w / 2 - 0.3, y - 0.31, cz + 0.06])  # fenda da pena: friso escuro embaixo da tampa
+    else: box(M['ink'], [cx - 0.06, y - 0.43, cz - d / 2 + 0.3], [cx + 0.06, y - 0.31, cz + d / 2 - 0.3])
+def bhcloud(b):  # nuvem de nanquim: bolas embaixo da tampa larga
+    M = bhmats(); (w, h, d), (cx, cy, cz) = dims(b); y = b['max'][1]; s = b.get('seed') or 0
+    cyl(M['ink'], (cx, cz), 0.5, 0, y - 1.2, seg=10)
+    for k in range(5):
+        a = s + k * 1.26; rr = min(w, d) * 0.3
+        cyl(M['inkg'], (cx + math.cos(a) * rr * 0.7, cz + math.sin(a) * rr * 0.7), rr * 0.55, y - 1.25 - (k % 2) * 0.1, y - 0.31, seg=12, r2=rr * 0.7)
+    bhcap(b, M['paper'], M['ink'], th=0.3)
+
 DRAW = {'house': house, 'rock': rock, 'tower': tower, 'roof': lambda b: None, 'crate': crate, 'post': slimpost if MAP in ('ferradura', 'moeda') else post, 'pillar': pillarfn, 'vat': vat, 'machine': machine, 'pipe': lowpipe if MAP == 'refinaria' else pipe, 'concrete': concrete, 'silo': silo, 'derrick': derrick, 'marble': marble, 'column': column, 'rail': rail, 'counter': counter, 'bankroof': bankroof, 'duct': duct, 'coreto': coreto, 'coretoroof': coretoroof, 'bench': bench, 'hedge': hedge, 'lamp': lamp, 'dumpster': dumpster, 'car': lambda b: None, 'container': container, 'contshell': contshell, 'contdoor': contdoor, 'gantry': gantry, 'platform': deck, 'bridge': catwalk if MAP == 'fabrica' else concrete if MAP == 'apito' else deck, 'step': step, 'tank': tank,
         'wall': wallfn, 'hwall': hwall, 'hfloor': lambda b: box(WOODL, [b['min'][0] + 0.02, b['min'][1] + 0.005, b['min'][2] + 0.02], [b['max'][0] - 0.02, b['max'][1] - 0.005, b['max'][2] - 0.02]), 'hroof': lambda b: box(STONE, b['min'], b['max']), 'table': table,
         'quayedge': lambda b: None, 'boat': boat, 'boatcabin': boatcabin, 'boatstack': boatstack, 'plank': plank, 'shed': shed, 'shedroof': shedroof, 'cratepile': cratepile, 'forklift': forklift, 'barrel': barrel, 'bollard': bollard, 'railcar': railcar, 'crane': crane_leg, 'cranebeam': gantry,
         'studiowall': studiowall, 'studioext': studioext, 'desk': desk, 'easel': easel, 'shelf': shelf, 'booth': booth, 'roofdeck': roofdeck, 'chimney': chimney, 'forestedge': lambda b: None, 'granite': granite, 'copperroof': copperroof, 'goldtrim': goldtrim, 'mintsign': lambda b: None, 'tree': lambda b: None, 'log': lambda b: None}
+DRAW.update({'bhroof': bhroof, 'bhdrum': bhdrum, 'bhcrate': bhcrate, 'bhbeam': bhbeam, 'bhink': bhink, 'bhstart': bhstart, 'bhgoal': bhgoal})
+DRAW.update({k: globals()[k] for k in ('bhchimney', 'bhtank', 'bhplank', 'bhpole', 'bhball', 'bhseesaw', 'bhbarrel', 'bhpiling', 'bhgang', 'bhgear', 'bhmachine', 'bhpipe', 'bhdrop', 'bhnib', 'bhcloud')})  # 19/11 b: plataformas variadas  # Pulo do Gato (19/11)
 if MAP == 'deserto': DRAW.update({'cliff': cliff, 'mesa': mesa, 'rockstep': rockstep, 'dune': dune, 'cactus': cactus, 'adobe': adobe, 'adobewall': adobewall, 'truck': lambda b: None, 'wall': canyonwall})  # caminhao = modelo do Tripo no jogo (MAP_KEEP)
 if MAP == 'ilha': DRAW.update({'gantry': gantry_leg, 'derrick': lambda b: gantry_leg(b, RUST, RUSTD), 'pillar': snag, 'ringfloor': lambda b: None, 'rope': lambda b: None, 'post': lambda b: None, 'pipe': pipe, 'wall': border})  # ringue fica o do jogo (MAP_KEEP)
 if MAP == 'tinteiro': DRAW.update({'vat': paintcan, 'rock': lambda b: None})  # floresta (pedra, tronco, arvore) fica a do jogo
@@ -1678,7 +1868,191 @@ if MAP == 'estande':
                         for t in (0.32, 0.88): box(HAYD, [x + t * BW - 0.025, y0 + 0.03, depth[1] - 0.01], [x + t * BW + 0.025, y0 + BH - 0.03, depth[1] + 0.012])
                     x += BW + 0.02
     DRAW.update({'gallwall': gallwall, 'shootcounter': shootcounter, 'lanediv': lanediv, 'distpost': distpost, 'backdrop': backdrop, 'haybale': haybale})
+# ---------- Expresso Dourado (19/11, Roubo ao Trem): vagoes, locomotiva, plataforma e trilhos ----------
+# Cada peca na medida da caixa de colisao (shared/map.js expresso); detalhe sempre fora do plano da face (anti-pisca).
+if MAP == 'expresso':
+    FY, WH = 1.0, 4.6
+    GOLD, FABG, FABR, COAL = mat('gold', 'd8a93a'), mat('fab_green', '3f6a4a'), mat('fab_red', '8a2a3a'), mat('coal', '24211e')
+    ROOFT, IRONT, LOCOR, BRASS2 = mat('car_roof', '3a3632'), mat('iron_t', '2a2724'), mat('loco_red', '9a3226'), mat('brass_t', 'c9a04a')
+    PANEL, BALLAST, PLATE = mat('panel', '7a5434'), mat('ballast', '9a8d78'), mat('plate', '6e6a64')
+    def cm(col, k=1.0):
+        h = '%06x' % (col or 0x5d6066); h = dk(h, k) if k != 1.0 else h
+        return mat('car_' + h, h)
+    def wheel(x, z, r=0.42, w=0.12, y=None):
+        if TRAIN: return  # 19/11 b: roda e peca nossa (gira no jogo)
+        y = r + 0.18 if y is None else y
+        tube(IRONT, 'z', (y, x), r, z - w / 2, z + w / 2, 16); tube(STEELL, 'z', (y, x), r * 0.35, z - w / 2 - 0.02, z + w / 2 + 0.02, 10)
+    def bogie(xc, z0, z1):
+        box(IRONT, [xc - 1.15, 0.45, z0 + 0.45], [xc + 1.15, 0.78, z1 - 0.45])
+        for dx in (-0.75, 0.75):
+            for zz in (-0.82, 0.82): wheel(xc + dx, zz)
+    def tchassis(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); sk = b.get('skin')
+        box(WOOD if sk != 'loco' else PLATE, [mn[0], mx[1] - 0.12, mn[2]], mx)  # piso (o topo da caixa e o chao de dentro)
+        box(IRONT, [mn[0] + 0.25, 0.62, mn[2] + 0.2], [mx[0] - 0.25, mx[1] - 0.12, mx[2] - 0.2])  # longarina
+        for x in (mn[0], mx[0]): box(IRONT, [x - 0.03 if x == mn[0] else x - 0.3, 0.55, c[2] - 0.35], [x + 0.3 if x == mn[0] else x + 0.03, 0.85, c[2] + 0.35])  # engate
+        if sk == 'loco':  # rodas motrizes grandes (vermelhas) e as pequenas da frente
+            for x in (29.6, 31.4, 33.2):
+                for zz in (-1.0, 1.0): wheel(x, zz, 0.62, 0.14); tube(LOCOR, 'z', (0.8, x), 0.5, zz - 0.085, zz + 0.085, 16)
+            if not TRAIN: box(STEELL, [29.6, 0.74, mx[2] - 0.98], [33.2, 0.86, mx[2] - 0.92]); box(STEELL, [29.6, 0.74, mn[2] + 0.92], [33.2, 0.86, mn[2] + 0.98])  # biela (no trem que anda ela e do jogo)
+            for x in (35.6, 36.6):
+                for zz in (-0.82, 0.82): wheel(x, zz, 0.38)
+            bogie(24.8, mn[2], mx[2])
+            return
+        if w >= 5: bogie(mn[0] + 2.0, mn[2], mx[2]); bogie(mx[0] - 2.0, mn[2], mx[2])
+        else: bogie(c[0], mn[2], mx[2])
+    def twall(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); sk = b.get('skin'); M = cm(b.get('col'))
+        box(M, mn, mx)
+        if w <= d: return  # parede da ponta: lisa
+        so = 1 if c[2] > 0 else -1; fo = mx[2] if so > 0 else mn[2]; fi = mn[2] if so > 0 else mx[2]
+        def band(m, y0, y1, out, x0=mn[0], x1=mx[0], face=fo, s=so):
+            if y0 < mn[1] - 1e-6 or y1 > mx[1] + 1e-6: return
+            lo, hi = (face - 0.005, face + out) if s > 0 else (face - out, face + 0.005)
+            box(m, [x0 - 0.012, y0, lo], [x1 + 0.012, y1, hi])  # 1,2 cm alem da ponta: a ponta da faixa nunca fica no plano da ponta da parede
+        if sk == 'luxo': band(GOLD, FY + 0.92, FY + 1.02, 0.025); band(GOLD, WH - 0.32, WH - 0.24, 0.025)
+        elif sk == 'passageiros': band(TRIM, FY + 0.9, FY + 1.05, 0.025); band(TRIM, WH - 0.34, WH - 0.22, 0.025)
+        elif sk == 'breque': band(cm(0xf0ebe0), FY + 0.95, FY + 1.05, 0.025)
+        elif sk == 'forte':  # rebites em fila (cabeca saindo 3 cm)
+            for y in (FY + 0.25, FY + 1.6, WH - 0.25):
+                if mn[1] <= y - 0.05 and y + 0.05 <= mx[1]:
+                    x = mn[0] + 0.25
+                    while x < mx[0] - 0.2: band(STEELL, y - 0.045, y + 0.045, 0.03, x - 0.045, x + 0.045); x += 0.5
+        elif sk == 'loco': band(LOCOR, FY + 0.95, FY + 1.1, 0.025)
+        if sk in ('luxo', 'passageiros', 'breque'):  # lambri de madeira por dentro ate 1 m
+            band(PANEL if sk != 'luxo' else mat('panel_lux', '5a2a22'), FY + 0.002, FY + 1.0, 0.02, face=fi, s=-so)
+    def troof(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        box(ROOFT, mn, mx)
+        sk = b.get('skin')
+        if sk in ('luxo', 'passageiros', 'breque', 'forte'):  # forro por dentro (2 cm abaixo do teto, entre as paredes)
+            box(mat('ceil_lux', 'e8d6b0') if sk == 'luxo' else STEEL if sk == 'forte' else mat('ceil', 'e8dcc4'), [mn[0] + 0.4, mn[1] - 0.02, mn[2] + 0.4], [mx[0] - 0.4, mn[1], mx[2] - 0.4])
+        for z, s in ((mn[2], -1), (mx[2], 1)): box(IRONT, [mn[0] - 0.03, mn[1] - 0.06, z - 0.04 if s > 0 else z - 0.06], [mx[0] + 0.03, mn[1] + 0.08, z + 0.06 if s > 0 else z + 0.04])  # pingadeira
+        if b.get('skin') == 'forte':
+            for x in [mn[0] + 1.0 + k * 2.0 for k in range(int((w - 1.0) / 2.0) + 1)]: box(STEELD, [x - 0.1, mx[1], mn[2] + 0.2], [x + 0.1, mx[1] + 0.04, mx[2] - 0.2])
+    def troofc(b):  # lanternim: faixa de janelinhas dos dois lados e tampa escura
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        box(cm(b.get('col'), 0.8), mn, [mx[0], mx[1] - 0.08, mx[2]]); box(ROOFT, [mn[0] - 0.08, mx[1] - 0.08, mn[2] - 0.12], [mx[0] + 0.08, mx[1], mx[2] + 0.12])
+        n = int(w / 1.0)
+        for k in range(n):
+            x0 = mn[0] + k * w / n + 0.15; x1 = x0 + w / n - 0.3
+            for z, s in ((mn[2], -1), (mx[2], 1)): box(GLASS, [x0, mn[1] + 0.08, z - 0.02 if s < 0 else z - 0.005], [x1, mx[1] - 0.16, z + 0.005 if s < 0 else z + 0.02])
+    def tgang(b):
+        mn, mx = b['min'], b['max']; box(PLATE, mn, mx)
+        for x in (mn[0] + 0.15, mx[0] - 0.15): box(STEELD, [x - 0.05, mx[1], mn[2] + 0.1], [x + 0.05, mx[1] + 0.02, mx[2] - 0.1])
+    def tseat(b):
+        mn, mx = b['min'], b['max']; box(WOODD, mn, [mx[0], mx[1] - 0.1, mx[2]]); box(FABG, [mn[0], mx[1] - 0.1, mn[2] + 0.03], [mx[0] - 0.005, mx[1], mx[2] - 0.03])
+    def tseatb(b):
+        mn, mx = b['min'], b['max']; box(WOODD, mn, mx); box(FABG, [mn[0] - 0.04, mn[1] + 0.55, mn[2] + 0.06], [mn[0], mx[1] - 0.08, mx[2] - 0.06])
+    def tsofa(b):
+        mn, mx = b['min'], b['max']; box(FABR, mn, mx)
+        for x in (mn[0], mx[0]): box(mat('fab_red_d', '6a1e2c'), [x - 0.06 if x == mn[0] else x - 0.0, mn[1], mn[2] + 0.02], [x + 0.0 if x == mn[0] else x + 0.06, mx[1] + 0.2, mx[2] - 0.02])
+    def tsofab(b):
+        mn, mx = b['min'], b['max']; box(FABR, mn, mx); box(GOLD, [mn[0] - 0.02, mx[1] - 0.06, mn[2] + 0.04], [mx[0] + 0.02, mx[1] + 0.02, mx[2] - 0.04])
+    def tcase(b):  # vitrine: base de madeira, tampo de vidro com quina dourada
+        mn, mx = b['min'], b['max']; y = mn[1] + 0.72
+        box(mat('panel_lux', '5a2a22'), mn, [mx[0], y, mx[2]]); box(GLASS, [mn[0] + 0.03, y, mn[2] + 0.03], [mx[0] - 0.03, mx[1], mx[2] - 0.03])
+        for x in (mn[0], mx[0]):
+            for z in (mn[2], mx[2]): box(GOLD, [x - 0.04, y, z - 0.04], [x + 0.04, mx[1] + 0.02, z + 0.04])
+        box(GOLD, [mn[0] - 0.02, y - 0.04, mn[2] - 0.02], [mx[0] + 0.02, y + 0.02, mx[2] + 0.02])
+    def tbar(b):
+        mn, mx = b['min'], b['max']; box(PANEL, mn, [mx[0], mx[1] - 0.06, mx[2]]); box(WOODL, [mn[0] - 0.05, mx[1] - 0.06, mn[2] - 0.05], [mx[0] + 0.05, mx[1], mx[2] + 0.05])
+        for z in (mn[2] + 0.4, mx[2] - 0.4): cyl(GLASS, (mn[0] + 0.45, z), 0.06, mx[1], mx[1] + 0.3, 8)
+    def tsafe(b):  # cofre: corpo de aco, porta redonda virada pro sul (-z), roda e segredo dourados
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        box(STEELD, mn, mx); box(STEEL, [mn[0] - 0.04, mx[1] - 0.12, mn[2] - 0.04], [mx[0] + 0.04, mx[1] + 0.02, mx[2] + 0.04])
+        yc = mn[1] + h * 0.48; z = mn[2]
+        tube(STEEL, 'z', (yc, c[0]), 0.85, z - 0.08, z + 0.01, 24)
+        tube(GOLD, 'z', (yc, c[0]), 0.12, z - 0.17, z - 0.07, 12)  # cubo do volante no centro da porta
+        for a in (0, 60, 120): obox(GOLD, (c[0], yc, z - 0.115), (0.9, 0.06, 0.05), rz=a)  # volante de 3 raios
+        tube(GOLD, 'z', (yc + 0.5, c[0] + 0.45), 0.13, z - 0.14, z - 0.07, 14); tube(STEELD, 'z', (yc + 0.5, c[0] + 0.45), 0.05, z - 0.16, z - 0.13, 8)  # segredo
+    def tshelf(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        for x in (mn[0], mx[0] - 0.06): box(STEELD, [x, mn[1], mn[2]], [x + 0.06, mx[1], mx[2]])
+        for k in range(4):
+            y = mn[1] + 0.05 + k * (h - 0.1) / 3; box(STEEL, [mn[0] + 0.06, y - 0.03, mn[2]], [mx[0] - 0.06, y + 0.03, mx[2]])
+            if k < 3:
+                x = mn[0] + 0.15
+                while x + 0.5 < mx[0] - 0.1: box(mat('cash', '6f8f4a'), [x, y + 0.03, mn[2] + 0.08], [x + 0.45, y + 0.33, mx[2] - 0.08]); x += 0.55
+    def tgold(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); bw, bh = 0.32, 0.16
+        for r in range(int(h / (bh + 0.01))):
+            y0 = mn[1] + r * (bh + 0.01); x = mn[0] + 0.02 + (bw / 2 if r % 2 else 0)
+            while x + bw <= mx[0] - 0.01:
+                box(GOLD, [x, y0, mn[2] + 0.05], [x + bw - 0.02, y0 + bh, mx[2] - 0.05]); x += bw
+    def ttender(b):  # bunker do carvao: casco oco (4 paredes) e o carvao 15 cm abaixo da borda
+        mn, mx = b['min'], b['max']; t = 0.12
+        box(IRONT, [mn[0], mn[1], mn[2]], [mx[0], mx[1], mn[2] + t]); box(IRONT, [mn[0], mn[1], mx[2] - t], [mx[0], mx[1], mx[2]])
+        box(IRONT, [mn[0], mn[1], mn[2] + t], [mn[0] + t, mx[1], mx[2] - t]); box(IRONT, [mx[0] - t, mn[1], mn[2] + t], [mx[0], mx[1], mx[2] - t])
+        box(COAL, [mn[0] + t, mn[1], mn[2] + t], [mx[0] - t, mx[1] - 0.15, mx[2] - t])
+        for k, (x, z) in enumerate(((mn[0] + 1.2, -0.6), (mn[0] + 2.6, 0.7), (mn[0] + 4.1, -0.2), (mn[0] + 4.9, 0.9))): lump(COAL, (x, mx[1] - 0.15, z), (0.9, 0.3, 0.9), 30 + k, 8)
+        box(LOCOR, [mn[0] - 0.005, mx[1] - 0.5, mn[2] - 0.03], [mx[0] + 0.005, mx[1] - 0.36, mn[2] + 0.001]); box(LOCOR, [mn[0] - 0.005, mx[1] - 0.5, mx[2] - 0.001], [mx[0] + 0.005, mx[1] - 0.36, mx[2] + 0.03])
+    def tboiler(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); r = d / 2; yc = mn[1] + r
+        tube(IRONT, 'x', (yc, c[2]), r, mn[0], mx[0] - 0.6, 28); tube(STEELD, 'x', (yc, c[2]), r, mx[0] - 0.6, mx[0], 28)
+        for x in (mn[0] + 1.5, mn[0] + 4.0, mn[0] + 6.5): tube(BRASS2, 'x', (yc, c[2]), r + 0.03, x - 0.06, x + 0.06, 28)
+        tube(STEELL, 'x', (yc + 0.9, c[2]), 0.22, mx[0], mx[0] + 0.12, 14); tube(mat('lamp_glass', 'f2d27a'), 'x', (yc + 0.9, c[2]), 0.15, mx[0] + 0.12, mx[0] + 0.15, 12)  # farol
+    def tstack(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); cyl(IRONT, (c[0], c[2]), w * 0.36, mn[1] - 0.2, mx[1] - 0.25, 16, r2=w * 0.48); cyl(IRONT, (c[0], c[2]), w * 0.5, mx[1] - 0.25, mx[1], 16)
+    def tdome(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); cyl(BRASS2, (c[0], c[2]), w * 0.45, mn[1] - 0.2, mx[1] - 0.2, 16); cyl(BRASS2, (c[0], c[2]), w * 0.45, mx[1] - 0.2, mx[1], 16, r2=w * 0.2)
+    def tcow(b):
+        mn, mx = b['min'], b['max']
+        prism(LOCOR, [(mn[0], mn[1] + 0.12), (mx[0], mn[1] + 0.12), (mn[0], mx[1])], mn[2], mx[2], False)
+        for z in [mn[2] + 0.3 + k * 0.45 for k in range(int((mx[2] - mn[2] - 0.6) / 0.45) + 1)]: obox(IRONT, ((mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2 + 0.06, z), (0.06, 1.0, 0.06), rz=-52)
+    def tcupola(b):
+        mn, mx = b['min'], b['max']; box(cm(b.get('col')), mn, [mx[0], mx[1] - 0.1, mx[2]]); box(ROOFT, [mn[0] - 0.1, mx[1] - 0.1, mn[2] - 0.1], [mx[0] + 0.1, mx[1], mx[2] + 0.1])
+        for z, s in ((mn[2], -1), (mx[2], 1)): box(GLASS, [mn[0] + 0.3, mn[1] + 0.35, z - 0.02 if s < 0 else z - 0.005], [mx[0] - 0.3, mx[1] - 0.3, z + 0.005 if s < 0 else z + 0.02])
+    def tstove(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); box(IRONT, mn, mx); cyl(IRONT, (c[0], c[2]), 0.1, mx[1], WH, 8)
+    def tplat(b):  # plataforma de concreto: borda de pedra no lado do trem e faixa amarela de seguranca
+        mn, mx = b['min'], b['max']
+        box(CONC, mn, mx); box(CONCD, [mn[0] - 0.02, mx[1] - 0.15, mn[2] - 0.04], [mx[0] + 0.02, mx[1] + 0.012, mn[2] + 0.5])
+        box(YEL, [mn[0], mx[1] + 0.012, mn[2] + 0.55], [mx[0], mx[1] + 0.02, mn[2] + 0.85])
+        x = mn[0] + 3
+        while x < mx[0]: box(CONCD, [x - 0.02, mx[1], mn[2] + 0.9], [x + 0.02, mx[1] + 0.008, mx[2]]); x += 3
+    def tcanopy(b):
+        mn, mx = b['min'], b['max']; box(mat('canopy', '7a3a2c'), mn, mx)
+        box(WOODD, [mn[0] - 0.05, mn[1] - 0.35, mn[2] - 0.05], [mx[0] + 0.05, mn[1] + 0.05, mn[2] + 0.06])
+        box(WOODD, [mn[0] - 0.05, mn[1] - 0.25, mx[2] - 0.06], [mx[0] + 0.05, mn[1] + 0.05, mx[2] + 0.05])
+        x = mn[0] + 0.4
+        while x < mx[0]: box(TRIM, [x - 0.12, mn[1] - 0.5, mn[2] - 0.03], [x + 0.12, mn[1] - 0.35, mn[2] + 0.03]); x += 0.6  # lambrequim (franja da cobertura)
+    def tflat(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b)
+        box(WOOD, [mn[0], mx[1] - 0.18, mn[2]], mx); box(IRONT, [mn[0] + 0.2, 0.6, mn[2] + 0.15], [mx[0] - 0.2, mx[1] - 0.18, mx[2] - 0.15])
+        for x in (mn[0] + 2.0, mx[0] - 2.0):
+            box(IRONT, [x - 1.15, 0.45, c[2] - 1.05], [x + 1.15, 0.7, c[2] + 1.05])
+            for dx in (-0.75, 0.75):
+                for zz in (-0.82, 0.82): wheel(x + dx, c[2] + zz)
+    def tsleepers(b):
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); n = int(h / 0.25)
+        for r in range(n):
+            y0 = mn[1] + r * 0.25; along = r % 2 == 0
+            if along:
+                for k in range(3): z0 = mn[2] + k * d / 3; box(WOODD, [mn[0], y0, z0 + 0.02], [mx[0], y0 + 0.24, z0 + d / 3 - 0.02])
+            else:
+                x = mn[0]
+                while x + 0.3 <= mx[0] + 1e-6: box(WOOD, [x + 0.02, y0, mn[2]], [x + 0.28, y0 + 0.24, mx[2]]); x += 0.6
+    def ttunnel(b):  # boca de tunel: pedra em volta do vao (6,6 x 6,2 m) e o fundo preto 5 cm pra dentro (o trem some nele)
+        mn, mx = b['min'], b['max']; (w, h, d), c = dims(b); sg = 1 if c[0] < 0 else -1; front = mx[0] if sg > 0 else mn[0]
+        zo, yo = 3.3, 6.2
+        box(STONED, [mn[0], 0, mn[2]], [mx[0], mx[1], c[2] - zo]); box(STONED, [mn[0], 0, c[2] + zo], [mx[0], mx[1], mx[2]]); box(STONED, [mn[0], yo, c[2] - zo], [mx[0], mx[1], c[2] + zo])
+        a, e = (mn[0], front - 0.05) if sg > 0 else (front + 0.05, mx[0])
+        box(mat('void', '0b0a09'), [a, 0, c[2] - zo], [e, yo, c[2] + zo])
+        f0, f1 = (front - 0.12, front + 0.03) if sg > 0 else (front - 0.03, front + 0.12)
+        for z in (c[2] - zo - 0.35, c[2] + zo): box(STONE, [f0, 0, z], [f1, yo + 0.35, z + 0.35])  # moldura saindo 3 cm
+        box(STONE, [f0, yo + 0.35, c[2] - zo - 0.35], [f1, yo + 0.8, c[2] + zo + 0.35])
+    DRAW.update({'ttunnel': ttunnel, 'tchassis': tchassis, 'twall': twall, 'troof': troof, 'troofc': troofc, 'tgang': tgang, 'tseat': tseat, 'tseatb': tseatb, 'tsofa': tsofa, 'tsofab': tsofab,
+                 'tcase': tcase, 'tbar': tbar, 'tsafe': tsafe, 'tshelf': tshelf, 'tgold': tgold, 'ttender': ttender, 'tboiler': tboiler, 'tstack': tstack, 'tdome': tdome,
+                 'tcow': tcow, 'tcupola': tcupola, 'tstove': tstove, 'tplat': tplat, 'tcanopy': tcanopy, 'tflat': tflat, 'tsleepers': tsleepers, 'tstep': step, 'truck': lambda b: None})
+    def railway(zc, x0, x1):  # leito de brita, dormentes a cada 0,7 m e os dois trilhos (so desenho: 18 cm, o pe passa)
+        box(BALLAST, [x0, 0, zc - 1.5], [x1, 0.03, zc + 1.5])
+        x = x0 + 0.3
+        while x < x1 - 0.2: box(WOODD, [x - 0.12, 0.03, zc - 1.25], [x + 0.12, 0.09, zc + 1.25]); x += 0.7
+        for z in (zc - 0.82, zc + 0.82): box(STEELL, [x0, 0.09, z - 0.04], [x1, 0.18, z + 0.04])
+
 for b in L['boxes']:
+    if bool(b.get('train')) != bool(TRAIN): continue  # trem num arquivo, mapa no outro
     fn = DRAW.get(b['k'])
     if fn: fn(b)
     else: skipped[b['k']] = skipped.get(b['k'], 0) + 1
@@ -1698,6 +2072,8 @@ if MAP == 'bonde':
         for p, q in ((T[2], T[0]), (T[-3], T[-1])):
             nx, nz = q[2] - p[2], -(q[0] - p[0]); n = math.hypot(nx, nz) or 1
             signal(p[0] + nx / n * 3.0, p[2] + nz / n * 3.0, p[1], '+z')
+if MAP == 'expresso':
+    if not TRAIN: railway(0, -41.5, 41.5); railway(-14, -41.5, 41.5)
 if MAP == 'docas':
     lighthouse(-34, -96); rowboat(22, -53, 15); rowboat(-21, -52, -160); rowboat(30, -57, 80)
 if MAP == 'tinteiro':
@@ -1784,10 +2160,12 @@ CAMS = {'vila': (('alto', (52, -52, 48), (0, 0, 0)), ('rua', (0, -30, 2.2), (0, 
         'xilindro': (('alto', (46, -62, 52), (0, 0, 0)), ('galeria', (0, -20, 1.7), (0, 10, 2.5)), ('celas', (-3, -6, 4.3), (-8, 6, 1.5)), ('patio', (10, -38, 2), (-4, -26, 2.5)), ('armarios', (-13.7, -22, 1.7), (-13.7, 4, 1.5))),
         'trapiche': (('alto', (40, -40, 34), (0, 0, 0)), ('rua', (0, -24, 1.7), (0, 10, 2)), ('casarao', (0, 8, 1.7), (0, 24, 3)), ('quintal', (-28, -26, 1.7), (-24, 10, 2))),
         'estande': (('baia', (0, -29, 1.7), (0, 10, 1.5)), ('fundo', (-9, 18, 2.5), (4, 40, 2.2)), ('lado', (12, -31, 2.6), (-6, -12, 1.4))),
+        **{m: (('alto', (70, -70, 58), (0, 0, 4)),) for m in ('telhados', 'picadeiro', 'caixotes', 'montagem', 'nanquim')},
+        'expresso': (('alto', (58, -58, 46), (0, 0, 1)), ('patio', (-1, 31, 1.8), (4, 0, 2.6)), ('luxo', (-13.6, 0.6, 2.7), (-2, 0.2, 2.2)), ('forte', (2.2, 0.8, 2.7), (8, -1.5, 2.0)), ('plataforma', (-24, -6.5, 2.7), (12, -5.5, 2.4))),
         'fronteira': (('alto', (72, -72, 62), (0, 0, 0)), ('forte', (14, 50, 2.2), (0, 70, 5)), ('meio', (-30, 12, 2.2), (30, -4, 3)), ('casas', (-44, -6, 6), (-58, -22, 3)))}[MAP]
 for nm, loc, tgt in CAMS:
     cam.location = Vector(loc); cam.rotation_euler = (Vector(tgt) - cam.location).to_track_quat('-Z', 'Y').to_euler()
-    scn.render.filepath = os.path.join(HERE, 'out', MAP + '-' + nm + '.png'); bpy.ops.render.render(write_still=True, scene=scn.name); renders.append(scn.render.filepath)
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, MAP + '.blend'), copy=True)
-_g = dict(globals()); _g['ONLY'] = [MAP]; exec(open(os.path.join(HERE, 'draco.py'), encoding='utf-8').read(), _g); bpy.context.window.scene = scn  # Draco (pedido dele 06/11): grava o comprimido em public/models/maps
+    scn.render.filepath = os.path.join(HERE, 'out', OUT + '-' + nm + '.png'); bpy.ops.render.render(write_still=True, scene=scn.name); renders.append(scn.render.filepath)
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, OUT + '.blend'), copy=True)
+_g = dict(globals()); _g['ONLY'] = [OUT]; exec(open(os.path.join(HERE, 'draco.py'), encoding='utf-8').read(), _g); (bpy.context.window and setattr(bpy.context.window, 'scene', scn))  # Draco (pedido dele 06/11): grava o comprimido em public/models/maps
 result = {'draco_mb': _g.get('result'), 'pisca': len(BAD), 'pisca_ex': BAD[:12], 'objetos': len(objs), 'triangulos': tri, 'sem_desenho': skipped, 'glb': GLB, 'renders': renders}

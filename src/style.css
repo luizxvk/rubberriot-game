@@ -1180,6 +1180,19 @@ body.touchmode .elite-track { top: calc(max(10px, env(safe-area-inset-top)) + 56
 #scr-arsenal .slot span { display: block; font-family: var(--display); font-size: 14px; line-height: 1.15; white-space: nowrap; overflow: hidden; }
 #scr-arsenal .slot:hover, #scr-arsenal .slot:focus-visible { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); background: var(--paper-2); }
 #scr-arsenal .slot:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+/* 19/11: variante pronta = pecas travadas, aviso pra voltar pra Montagem livre */
+#scr-arsenal .slot.locked { opacity: .5; border-style: dashed; box-shadow: none; transform: none; cursor: var(--cur-arrow); }
+.bp-lock[hidden] { display: none; }
+body.bp-locked #smithHint { display: none; }
+body:has(#scr-arsenal[hidden]) .bp-lock, body:has(#menu[hidden]) .bp-lock { display: none; }
+.bp-lock { position: fixed; z-index: 3; left: 50%; bottom: 150px; transform: translateX(-50%); width: max-content; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: min(640px, calc(100vw - 32px)); margin: 0; padding: 8px 12px; border: 2px solid var(--ink, #141210); border-radius: 12px; background: #f4ecd6; color: #141210; font: 700 13px/1.3 Grandstander, sans-serif; box-shadow: 3px 3px 0 #141210; }
+.bp-lock svg { width: 18px; height: 18px; flex: none; color: #c23a2c; }
+.bp-lock span { flex: 1 1 220px; }
+.bp-lock button { flex: none; padding: 6px 12px; border: 2px solid #141210; border-radius: 999px; background: #c23a2c; color: #fff; font: inherit; cursor: var(--cur-hand, pointer); }
+.bp-lock.pulse { animation: bpPulse .45s ease; }
+@keyframes bpPulse { 0%, 100% { translate: 0; } 25% { translate: -5px; } 75% { translate: 5px; } }
+@media (max-height: 620px) and (orientation: landscape) { .bp-lock { position: static; transform: none; width: auto; max-width: none; margin: 0; grid-column: 1 / -1; flex: 0 0 100%; font-size: 11.5px; padding: 6px 8px; gap: 6px; box-shadow: 2px 2px 0 #141210; } .bp-lock span { flex-basis: 140px; } .bp-lock button { padding: 4px 10px; } }
+@media (prefers-reduced-motion: reduce) { .bp-lock.pulse { animation: none; } }
 #scr-arsenal .slot.disabled { opacity: .45; box-shadow: none; border-style: dashed; cursor: var(--cur-arrow); transform: none; }
 #scr-arsenal .slot-bp { grid-column: 1 / -1; padding: 9px 12px 10px; border-style: dashed; box-shadow: none; }
 #scr-arsenal .slot-bp span { font-size: 17px; }
@@ -1369,7 +1382,7 @@ body.touchmode .elite-track { top: calc(max(10px, env(safe-area-inset-top)) + 56
 .comic { display: flex; gap: 10px; margin-top: 14px; width: min(760px, 92vw); }
 .kc-p { position: relative; flex: 1; margin: 0; background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); aspect-ratio: 3 / 2; overflow: hidden; }
 .kc-p:nth-child(1) { transform: rotate(-1.5deg); } .kc-p:nth-child(2) { transform: rotate(1deg); } .kc-p:nth-child(3) { transform: rotate(-0.5deg); }
-.kc-p img, .kc-blank { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.45) brightness(1.08); }
+.kc-p img, .kc-p canvas.kc-cv, .kc-blank { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.45) brightness(1.08); }
 .kc-blank { background: radial-gradient(circle, #d9d4c8 1.2px, transparent 1.4px) 0 0 / 6px 6px, #ece9e1; }
 /* meio-tom de jornal por cima da foto */
 .kc-p::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, rgba(20,18,16,.28) 1px, transparent 1.3px) 0 0 / 4px 4px; mix-blend-mode: multiply; pointer-events: none; }
@@ -2536,6 +2549,24 @@ body.mode-pve #streaks, body.mode-pve #stkPane, body.mode-pve .t-streak, body.mo
 .sp-price { display: flex; align-items: center; gap: 6px; margin-top: auto !important; padding-top: 12px; font-family: var(--display) !important; font-size: 28px !important; }
 .sp-soon { margin-top: 8px !important; color: var(--red); font-size: 13px !important; }
 
+/* 19/11 (pedido dele): secao com menos itens que vagas = cartoes largos, um por coluna, com raridade e o que o item faz.
+   A arte fica a esquerda (maior), o texto a direita numa faixa escura; o preco continua no canto de sempre */
+.shop-grid.few { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.shop-tile.ext .st-art { left: 24%; top: 50%; width: min(36%, 170px); }
+.shop-tile.ext:hover .st-art, .shop-tile.ext:focus-visible .st-art { transform: translate(-50%, -54%) rotate(-2deg) scale(1.06); }
+.shop-tile.ext .st-foot { top: 0; left: 46%; padding: 14px 14px 12px 16px; grid-template-areas: 'n n' 'r r' 'd d' 'k p'; grid-template-rows: auto auto 1fr auto; align-items: start; row-gap: 6px; background: linear-gradient(90deg, rgba(8,10,16,0), rgba(8,10,16,.72) 14%); border-left: 3px dashed rgba(255,255,255,.18); }
+.shop-tile.ext .st-foot b { font-size: 22px; }
+.shop-tile.ext .st-foot small, .shop-tile.ext .st-price { align-self: end; }
+.st-rar { grid-area: r; justify-self: start; padding: 2px 9px; border: 2px solid var(--ink); border-radius: 999px; background: var(--rc1); color: var(--ink); font-family: var(--body); font-weight: 800; font-size: 11.5px; line-height: 1.3; box-shadow: 2px 2px 0 var(--ink); }
+.st-desc { grid-area: d; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; font-family: var(--body); font-weight: 700; font-size: 13px; line-height: 1.35; color: rgba(255,255,255,.9); text-wrap: pretty; max-width: 42ch; }
+.shop-tile.ext .st-price { font-size: 19px; }
+@media (max-height: 520px) {
+  .shop-tile.ext .st-foot { padding: 8px 8px 8px 10px; row-gap: 3px; }
+  .shop-tile.ext .st-foot b { font-size: 14px; -webkit-line-clamp: 1; }
+  .st-rar { font-size: 9.5px; padding: 1px 6px; box-shadow: 1px 1px 0 var(--ink); }
+  .st-desc { font-size: 10.5px; line-height: 1.25; -webkit-line-clamp: 2; }
+  .shop-tile.ext .st-price { font-size: 13px; }
+}
 /* celular deitado: cartoes menores, popup mais baixo */
 @media (max-height: 520px) {
   .shop-card { height: calc(100dvh - 16px); }
@@ -3514,15 +3545,16 @@ body.xp2 .tip { top: calc(max(12px, env(safe-area-inset-top)) + 100px); } /* dic
 .pk-use:focus-visible { outline: 3px solid #ffd23a; outline-offset: 3px; }
 @media (max-width: 520px) { .pk-item { grid-template-columns: 64px 1fr; } .pk-use { grid-column: 1 / -1; } .pk-token { width: 60px; height: 60px; font-size: 21px; } }
 /* selo da ficha ativa: pendurado embaixo do placar; os avisos descem pra nao ficar por cima */
-.xp-chip { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 58px); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 2px; background: var(--ink); color: var(--paper); border-radius: 999px; border: 3px solid #ffd23a; font-family: var(--display); font-size: 14px; white-space: nowrap; pointer-events: none; z-index: 3; }
+.xp-chips { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 58px); transform: translateX(-50%); display: flex; gap: 8px; align-items: center; pointer-events: none; }
+.xp-chip { display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 2px; background: var(--ink); color: var(--paper); border-radius: 999px; border: 3px solid #ffd23a; font-family: var(--display); font-size: 14px; white-space: nowrap; pointer-events: none; z-index: 3; }
 .xp-chip[hidden] { display: none; }
 .xp-chip .c { width: 22px; height: 22px; border-radius: 50%; background: #ffd23a; color: var(--red); display: grid; place-items: center; font-size: 10px; border: 2px solid var(--ink); }
 .xp-chip .t { font-family: var(--body); font-weight: 800; font-size: 14px; color: #ffd23a; }
 .xp-chip.paused { border-color: var(--graphite); }
 .xp-chip.paused .c { background: var(--paper-2); }
 .xp-chip.paused .t { color: var(--paper-2); font-size: 12px; }
-body.touchmode .xp-chip { top: calc(max(10px, env(safe-area-inset-top)) + 50px); }
-body.mode-br .xp-chip { top: calc(max(10px, env(safe-area-inset-top)) + 112px); }
+body.touchmode .xp-chips { top: calc(max(10px, env(safe-area-inset-top)) + 50px); }
+body.mode-br .xp-chips { top: calc(max(10px, env(safe-area-inset-top)) + 112px); }
 body.xp2 .ev-stack { top: 104px; }
 body.xp2.mode-br .ev-stack { top: 154px; }
 body.xp2.touchmode .ev-stack { top: 96px; }
@@ -4259,7 +4291,7 @@ body.touchmode.mv-open #touch .tbtn.inspect, body.touchmode.mv-open #touch .tbtn
 .radar { scale: var(--hud-k, 1); transform-origin: 0 0; }
 .hud-bl { scale: var(--hud-k, 1); transform-origin: 0 100%; }
 .hud-br { scale: var(--hud-k, 1); transform-origin: 100% 100%; }
-.dom-cap, .esc-bar, .compass, .ev-stack, .xp-chip { scale: var(--hud-k, 1); transform-origin: 0 0; }
+.dom-cap, .esc-bar, .compass, .ev-stack, .xp-chips { scale: var(--hud-k, 1); transform-origin: 0 0; }
 #touch .tstk { scale: var(--hud-k, 1); }
 body.touchmode .hud-bl { transform-origin: 0 0; }
 body.touchmode .hud-br { transform-origin: 100% 0; }
@@ -4860,6 +4892,13 @@ body.range #scorePlaque, body.range #streaks, body.range #touch .tstk { display:
 /* 16/11 (pedido dele): Skills e Equipamento de campo com todas as cartas da MESMA altura (a da carta mais alta) */
 .sk-grid { grid-auto-rows: 1fr; }
 .sk-card { height: 100%; }
+/* 19/11 (pedido dele): cartas mais baixas; as frases ficaram curtas, entao o padding tambem enxuga */
+.sk-card { padding: 7px 9px 7px 8px; row-gap: 1px; }
+@media (max-width: 560px) { /* celular: icone menor sobra largura e o texto nao quebra uma palavra por linha */
+  .sk-card { grid-template-columns: 30px 1fr; column-gap: 7px; padding: 7px 7px 7px 6px; }
+  .sk-ico { width: 30px; height: 30px; border-width: 2px; } .sk-ico svg { width: 17px; height: 17px; }
+  .sk-card b { font-size: 13px; padding-right: 17px; } .sk-card small { font-size: 11px; }
+}
 /* 16/11 (pedido dele): carimbo "feito" visivel. Era absoluto em cima do numero e com multiply (sumia no fundo escuro do Elite).
    Agora entra na fileira, antes do numero, com fundo de papel */
 .ch-list li .ch-stamp, #chElite .ch-stamp { position: static; flex: none; order: 2; transform: rotate(-8deg); align-self: center; opacity: 1; mix-blend-mode: normal; background: var(--paper); color: var(--red); box-shadow: 2px 2px 0 var(--ink); font-size: 16px; padding: 1px 9px; }
@@ -5060,6 +5099,20 @@ body.range #scorePlaque, body.range #streaks, body.range #touch .tstk { display:
 .np-slide.dvh .np-tag, .np-slide.dvs .np-tag { position: absolute; top: 16px; left: 18px; }
 .np-slide.dvh figcaption small, .np-slide.dvs figcaption small { max-width: 52ch; }
 @media (max-width: 560px) { .news-pop .np-reel { height: clamp(330px, 52vh, 400px); } .np-slide.dvh, .np-slide.dvs { padding: 44px 48px 24px; } }
+/* 0.21 (19/11): carrossel de mapas. Abertura = mosaico com as 6 fotos; cada mapa = foto cobrindo o quadro e legenda num degrade escuro */
+.np-slide.mph, .np-slide.mps { grid-template-rows: none; align-content: center; gap: 10px; padding: 46px 62px 26px; }
+.np-slide.mph .np-tag, .np-slide.mps .np-tag { position: absolute; top: 16px; left: 18px; z-index: 2; }
+.np-mp-wall { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(100%, 460px); }
+.np-slide .np-mp-wall img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border: 2px solid var(--ink); border-radius: 8px; filter: none; box-shadow: 2px 2px 0 #0a0908; animation: none; }
+.np-slide.mph figcaption small { max-width: 52ch; }
+.np-slide.mps { align-content: end; padding: 0 62px 24px; }
+.np-slide.mps > img { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; max-height: none; object-fit: cover; filter: none; }
+.np-slide.mps::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to top, rgba(20, 14, 10, .88), rgba(20, 14, 10, .35) 45%, transparent 70%); }
+.np-slide.mps figcaption { position: relative; z-index: 2; }
+.np-slide.mps.on > img { animation: npMapIn 1.2s ease-out both; }
+@keyframes npMapIn { from { transform: scale(1.08); } to { transform: scale(1); } }
+@media (max-width: 560px) { .np-slide.mph { padding: 44px 48px 24px; } .np-mp-wall { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .np-slide.mps { padding: 0 48px 20px; } .np-slide.mps figcaption small { display: block; } }
+@media (prefers-reduced-motion: reduce) { .np-slide.mps.on > img { animation: none; } }
 
 /* resgate das Novidades so no fim do carrossel (16/11) + cabecalho do jornal livre do botao de fechar */
 .news-pop .np-gift:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.6); }
@@ -5118,3 +5171,52 @@ body.pf-open #pause { visibility: hidden; }
 .st-elonly .el-hex { width: 14px; height: 14px; }
 #shopBuy.el-buy { background: linear-gradient(135deg, var(--elite), var(--elite-2)); color: #fff; }
 #shopPopPrice .st-elonly { font-size: 17px; padding: 2px 9px 2px 5px; }
+/* 19/11: ficha de XP de ARMA no Bolso (azul, pra nao confundir com a da conta) */
+.pk-item.pk-wpn .pk-token { background: #7fd8ff; box-shadow: inset 0 -6px 0 #3fa6d6, 3px 3px 0 var(--ink); color: var(--ink); text-shadow: 2px 2px 0 #fff; }
+.pk-item.pk-wpn.none .pk-token { background: var(--paper-2); color: var(--graphite); box-shadow: none; text-shadow: none; }
+.pocket .pk-body { max-height: min(70dvh, 560px); overflow-y: auto; }
+.xp-chip .xi { width: 16px; height: 16px; flex: none; }
+.xp-chip.wpn { border-color: #7fd8ff; }
+.xp-chip.wpn .c { background: #7fd8ff; color: var(--ink); }
+.xp-chip.wpn .t { color: #7fd8ff; }
+
+/* 19/11 (pedido dele): Preto no Branco (hardcore). Tela limpa como no COD: so o placar fica. Sai vida, municao, armas, minimapa,
+   bussola, mira, killfeed, dicas de tecla, sequencias e marcadores. Fica: placar, marca de acerto, direcao do dano, luneta e avisos */
+body.hc #hud .hud-bl, body.hc #hud .hud-br, body.hc #hud .radar, body.hc #hud #kit, body.hc #hud #compass, body.hc #hud #cross,
+body.hc #hud #feed, body.hc #hud #streaks, body.hc #hud #objMarkers, body.hc #hud #ammoAlert, body.hc #hud #reloadRing, body.hc #hud #fieldHud,
+body.hc #hud #ammoFx, body.hc #hud .nade-warn { display: none !important; }
+
+/* 19/11: Pulo do Gato, cronometro embaixo do placar */
+.bh-clock { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 64px); transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; padding: 6px 16px 7px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); pointer-events: none; }
+.bh-clock[hidden] { display: none; }
+.bh-clock b { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.bh-clock small { font-family: var(--body); font-weight: 800; font-size: 12px; color: var(--graphite); }
+body.touchmode .bh-clock { top: calc(max(10px, env(safe-area-inset-top)) + 54px); padding: 4px 12px 5px; }
+body.touchmode .bh-clock b { font-size: 22px; }
+/* Pulo do Gato: so a faca; some o que nao serve (municao, granadas, sequencias, equipamento, vida) e fica minimapa e placar */
+body.bhop #hud .hud-br, body.bhop #hud #kit, body.bhop #hud #streaks, body.bhop #hud #fieldHud, body.bhop #hud .hp, body.bhop #hud #armorBox { display: none !important; }
+
+/* 19/11 (pedido dele): cartao de modo = icone desenhado + titulo de tamanho fixo (ate 2 linhas) + descricao de tamanho unico que
+   rola por dentro (sem barra; a setinha de descer do arrows.js aparece quando nao cabe) */
+.lb-modes-grid button { display: flex; flex-direction: column; gap: 6px; }
+.md-head { display: flex; align-items: center; gap: 9px; min-height: 46px; flex: none; }
+.lb-modes-grid button:has(.hot-pill, .soon-pill, .blitz-pill) .md-head { padding-right: 46px; }
+.md-ico { width: 44px; height: 44px; flex: none; }
+.md-t { display: grid; gap: 1px; min-width: 0; }
+.lb-modes-grid .md-t b { font-size: 16px; line-height: 1.08; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.lb-modes-grid .md-t em { font-size: 11px; line-height: 1.2; }
+.lb-modes-grid .md-desc { flex: 1; min-height: 0; overflow-y: auto; font-size: 12.5px; line-height: 1.32; padding-bottom: 14px; }
+.lb-modes-grid button[aria-checked="true"] .md-ico { filter: drop-shadow(0 0 0 transparent); background: var(--paper); border-radius: 10px; }
+@media (max-height: 520px), (max-width: 560px) { .md-head { min-height: 36px; gap: 7px; } .md-ico { width: 34px; height: 34px; } .lb-modes-grid .md-t b { font-size: 14.5px; } .lb-modes-grid .md-desc { font-size: 11px; } }
+.lb-modes-grid .md-desc { padding-bottom: 2px; padding-right: 4px; }
+.lb-modes-grid .md-desc.more { -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent); }
+.lb-modes-grid .md-desc { scrollbar-width: none; }
+
+/* 19/11 (pedido dele): troca de arma no Arsenal = a antiga some num veu da cor do palco, loader, a nova aparece (main.js smithVeil) */
+#smithVeil { position: fixed; z-index: 5; pointer-events: none; opacity: 0; transition: opacity .26s ease; display: grid; place-items: center;
+  background: radial-gradient(closest-side, #151310 62%, rgba(21, 19, 16, .85) 78%, rgba(21, 19, 16, 0) 100%); }
+#smithVeil.on { opacity: 1; transition-duration: .16s; }
+#smithVeil .sv-spin { width: 38px; height: 38px; border-radius: 50%; border: 4px dashed var(--paper); opacity: 0; transition: opacity .2s; }
+#smithVeil.on .sv-spin { opacity: .85; transition-delay: .25s; animation: svSpin 1s linear infinite; } /* troca rapida: o loader nem aparece */
+@keyframes svSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #smithVeil.on .sv-spin { animation: none; } }

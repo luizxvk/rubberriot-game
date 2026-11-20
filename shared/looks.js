@@ -148,7 +148,7 @@ LOOKS.face = [
 LOOKS.charm = [
   { id: 'none', lvl: 1, r: 0 }, { id: 'bilhete', lvl: 1, r: 0, pass: true }, { id: 'estatueta', lvl: 1, r: 0, pass: true },
   { id: 'torta', lvl: 1, r: 1, pass: true }, { id: 'rolo', lvl: 1, r: 1, pass: true }, { id: 'camera', lvl: 1, r: 1, pass: true }, { id: 'lampada', lvl: 1, r: 1, pass: true }, { id: 'cadeira', lvl: 1, r: 2, pass: true }, { id: 'megafone', lvl: 1, r: 2, pass: true }, { id: 'bigorna', lvl: 1, r: 2, pass: true },
-  { id: 'dado', lvl: 1, r: 1, shop: true }, { id: 'pato', lvl: 1, r: 1, shop: true },
+  { id: 'dado', lvl: 1, r: 1, shop: true }, { id: 'pato', lvl: 1, r: 1, shop: true }, { id: 'locomotiva', lvl: 1, r: 1, shop: true }, { id: 'relogio', lvl: 1, r: 1, shop: true }, // 19/11: Maria-Fumaca e Relogio de Bolso (Tripo, so na Loja)
   { id: 'sino', lvl: 1, r: 1, rank: 1 }, // rankeada, tema ringue (05/11)
 ];
 // chaveiro de ouro da arma (07/11, pedido dele): miniatura do modelo, dourada, de quem virou mestre dela (masteryDone).
@@ -157,7 +157,7 @@ for (const b of MASTERY_BODIES) if (b !== 'pistol_11') LOOKS.charm.push({ id: 'm
 LOOKS.death = [
   { id: 'derrete', lvl: 1, r: 0 }, // padrao (10/11, pedido dele): derrete numa poca de borracha, igual aos viloes
   { id: 'pancake', lvl: 1, r: 0 }, { id: 'tabua', lvl: 1, r: 0, pass: true }, { id: 'fita', lvl: 1, r: 1, pass: true }, { id: 'anjo', lvl: 1, r: 2, elite: true }, { id: 'sanfona', lvl: 1, r: 1, pass: true },
-  { id: 'balao', lvl: 1, r: 2, shop: true }, { id: 'mola', lvl: 1, r: 2, shop: true }, { id: 'nocaute', lvl: 1, r: 2, rank: 2 },
+  { id: 'balao', lvl: 1, r: 2, shop: true }, { id: 'mola', lvl: 1, r: 2, shop: true }, { id: 'foguete', lvl: 1, r: 2, shop: true }, { id: 'apagado', lvl: 1, r: 2, shop: true }, // 19/11: Foguetorio e Apagado (so na Loja) { id: 'nocaute', lvl: 1, r: 2, rank: 2 },
   { id: 'caixao', lvl: 1, r: 2, elite: true, wasShop: true }, // Volta pro Caixao: so com Elite ativo (10/11, pedido dele; era da Loja)
 ];
 export const DEFAULT_LOOK = { hat: 'bowler', eyes: 'classic', glove: 'classic', gloveCol: '#faf8f2', shirt: '#141210', pattern: 'plain', fx: 'none', skin: 'none', face: 'none', charm: 'none', death: 'derrete' };

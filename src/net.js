@@ -77,12 +77,14 @@ export class WsNet {
       // so resolve quando o servidor confirma a sala; codigo que nao existe volta como erro
       let inRoom = false;
       const fail = (code, msg) => { clearTimeout(to); const e = new Error(msg); e.code = code; rej(e); };
+      this.snapBase = null; // conexao nova: espera um quadro inteiro (pede logo que entrar na sala, abaixo)
       ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'join', name, room: this.room, mode: this.mode, map: this.map, bots: this.bots, join: this.join, quick: this.quick, ranked: this.ranked, token: token(), sid: sessionId() })); };
       ws.onerror = () => { if (!opened) fail('down', 'Não deu pra conectar em ' + this.url); };
       ws.onmessage = (e) => {
         const now = performance.now();
         this.lastMsg = now;
         let m; try { m = JSON.parse(e.data); } catch { return; }
+        if (m.t === 'snap') { m = this.mergeSnap(m); if (!m) return; } // 19/11: estado chega so com o que mudou (core.js deltaSnap)
         // 15/11 (relatorio): maior buraco entre estados do servidor (20/s = 50 ms); o relatorio de desempenho le e zera a cada 10 s
         if (m.t === 'snap') { if (this.snapAt) this.gapMax = Math.max(this.gapMax || 0, now - this.snapAt); this.snapAt = now;
           // telemetria (16/11): perda de pacotes pelo relogio do servidor (20 estados/s = 0,05 s). So conta quando pula um envio de verdade
@@ -91,7 +93,7 @@ export class WsNet {
         if (!inRoom) {
           if (m.t === 'err') { fail(m.code, m.code); ws.close(); return; }
           // jogo rapido: daqui pra frente e' uma sala comum (reconectar volta pra ela pelo codigo)
-          if (m.t === 'room') { inRoom = true; clearTimeout(to); this.join = true; if (this.quick || this.ranked) { this.room = m.code; this.quick = false; this.ranked = false; } res(); }
+          if (m.t === 'room') { inRoom = true; clearTimeout(to); ws.send('{"t":"kf"}'); this.join = true; if (this.quick || this.ranked) { this.room = m.code; this.quick = false; this.ranked = false; } res(); }
         }
         this.onmsg(m);
       };
@@ -99,6 +101,18 @@ export class WsNet {
     });
   }
   send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }
+  // junta o envio parcial (d: 1) com o ultimo estado inteiro: cada jogador e o topo viram objetos NOVOS (quem compara o estado
+  // anterior com o novo continua funcionando). Antes do 1o quadro inteiro, parcial e descartado (nao ha base)
+  mergeSnap(m) {
+    if (!m.d) { this.snapBase = { top: m, pl: new Map(m.players.map(p => [p.id, p])) }; return m; }
+    const B = this.snapBase; if (!B) return null;
+    const top = { ...B.top }; for (const k in m) if (k !== 'd' && k !== 'rmt' && k !== 'players') top[k] = m[k];
+    if (m.rmt) for (const k of m.rmt) delete top[k];
+    const pl = new Map();
+    top.players = m.players.map(p => { const o = { ...(B.pl.get(p.id) || {}) }; for (const k in p) if (k !== 'rm') o[k] = p[k]; if (p.rm) for (const k of p.rm) delete o[k]; pl.set(p.id, o); return o; });
+    this.snapBase = { top, pl };
+    return top;
+  }
   // o servidor manda algo pelo menos 4x por segundo; 5 s mudo = conexao morta sem aviso (wifi desligado).
   // Larga o socket velho e avisa como se tivesse fechado (o jogo tenta voltar pro mesmo boneco)
   update() {

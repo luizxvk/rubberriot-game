@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { pushSoon } from './rovex.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { toon, outline, geo, isSharedGeo } from './toon.js';
+import { toon, outline, outlineVar, geo, isSharedGeo } from './toon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeGun } from './guns.js';
 import { SIGHT_KIND, sightGeoFor, loadComic, comicGeo, hasComic } from './sights.js';
@@ -26,6 +26,9 @@ const parts = {};  // nome -> { geo, box }
 if (import.meta.env?.DEV) window.__parts = parts; // depuracao local (lente fora do lugar etc.)
 let ready = null;
 let allLoaded = false;
+// 19/11 (bug dele: Arsenal com as armas ANTIGAS depois de salvar o arquivo no dev): trocar este modulo a quente criava uma copia
+// sem os modelos carregados. Mudou aqui = recarrega a pagina inteira
+if (import.meta.hot) import.meta.hot.decline();
 // 08/11 (bug em producao, iPad/Edge): o arsenal fica 'pronto' com o 1o pacote, mas metralhadora e pacotes extras chegam
 // depois. Corpo que ainda nao chegou nao pode quebrar a montagem: entra outro corpo da categoria ou a arma provisoria
 export const arsenalLoaded = () => allLoaded;
@@ -171,6 +174,7 @@ export const convOptions = (body) => Object.keys(CONV_KITS[body] || {});
 const AKIMBO_BODIES = { smg: ['subfusil_5', 'subfusil_16' /* Mac 10 (13/11, pedido dele) */], shotgun: ['shotgun_2'], sniper: ['sniper_5'] /* Sentenca (13/11, pedido dele) */ };
 export const SPIN_LOAD = ['sniper_5']; // recarga = giro de 360 da arma (13/11)
 export function handleFits(body, cat, id) { if (GADGETS[id]) return GADGETS[id].body === body; return id !== 'akimbo' || cat === 'pistol' || !!AKIMBO_BODIES[cat]?.includes(body); }
+const NO_FREE_SCOPE = ['subfusil_5'];
 const NO_SCOPE = ['pistol_15']; // 13/11: Pederneira (pederneira de 1826): o cao atravessava toda mira; so a alca de ferro
 export function scopeFits(body, cat, id) {
   if (!id) return cat !== 'sniper';
@@ -187,6 +191,7 @@ export function scopeFits(body, cat, id) {
 export function freeScope(cat, body) {
   const C = CATEGORY[cat];
   if (!C || cat === 'sniper' || cat === 'melee' || !C.scopes.length) return null;
+  if (NO_FREE_SCOPE.includes(body)) return null; // 19/11 (pedido dele): Cuspideira sai com a mira de ferro, sem o ponto vermelho padrao
   return C.scopes.find(id => scopeFits(body, cat, id)) || null;
 }
 
@@ -1093,7 +1098,7 @@ export function ttApply(cfg) {
     let rear = back.length ? hiOf(mid(back)) : front;
     if (rear === front && cfg.ironRear) {
       const zr = bl0.min.z + Lb * cfg.ironRear, fx0 = cxI(front), w0 = Math.max(0.0015 * u, Lb * 0.003); let ty = -Infinity;
-      for (const g of body) { const q = g.attributes.position; for (let i = 0; i < q.count; i++) if (Math.abs(q.getZ(i) - zr) < Lb * 0.01 && Math.abs(q.getX(i) - fx0) < w0) ty = Math.max(ty, q.getY(i)); }
+      for (const k of [1, 3, 8]) { if (ty > -Infinity) break; for (const g of body) { const q = g.attributes.position; for (let i = 0; i < q.count; i++) if (Math.abs(q.getZ(i) - zr) < Lb * 0.01 * k && Math.abs(q.getX(i) - fx0) < w0 * k) ty = Math.max(ty, q.getY(i)); } } // 19/11: modelo sem vertice bem na coluna da massa: alarga a busca
       if (ty > -Infinity) { const ge = new THREE.BufferGeometry(); ge.boundingBox = new THREE.Box3(new THREE.Vector3(fx0, ty - 0.004 * u, zr - 0.001 * u), new THREE.Vector3(fx0, ty, zr + 0.001 * u)); ge.setAttribute('position', new THREE.Float32BufferAttribute([fx0, ty, zr], 3)); rear = ge; }
     }
     const fz = P.ironPt.z, rz = czI(rear), blenI = Lb;
@@ -1118,7 +1123,14 @@ export function ttApply(cfg) {
       P.ironDepth = rz - fz;
       if (Math.abs(P.ironTilt) > 0.2) P.ironTilt = Math.sign(P.ironTilt) * 0.2; // teto: alca alta de distancia nao deita a arma
     }
+    // 19/11 (pedido dele: alinhar a mira de TODAS as armas; auditoria de ADS por arma, scratchpad/ads): ajuste fino medido no print.
+    // ironNudge = [inclinacao, giro] em graus (inclinacao + = a alca sobe na tela; giro + = a alca vai pra DIREITA, medido);
+    // ironLift = sobe a linha de visada em mm (corpo da arma tapando o centro)
+    if (cfg.ironLift) P.ironPt.y += cfg.ironLift * 0.001 * u;
+    if (cfg.ironShiftX) P.ironPt.x += cfg.ironShiftX * 0.001 * u; // 19/11: alca/massa fora do eixo de lado (Pederneira, Chauchat): desloca a linha em mm
+    if (cfg.ironNudge) { P.ironTilt = (P.ironTilt || 0) + (cfg.ironNudge[0] || 0) * Math.PI / 180; P.ironYaw = (P.ironYaw || 0) + (cfg.ironNudge[1] || 0) * Math.PI / 180; }
   }
+  P.ironAdj = cfg.ironLift || cfg.ironShiftX ? [(cfg.ironShiftX || 0) * 0.001 * u, (cfg.ironLift || 0) * 0.001 * u] : null; // 19/11: o mesmo ajuste vale na arma sem peca de ferro (ownIronPoint)
   if (mag.length) { const mg = mergeGeometries(mag); mg.computeBoundingBox(); parts[cid] = { geo: mg, box: mg.boundingBox.clone(), ww2: true, tt: true }; }
   else if (parts[cid]?.tt) delete parts[cid];
   return true;
@@ -2442,7 +2454,7 @@ function buildGunParts(wpn, lo) {
     cantedInfo = { part: cantedId, big: false, kind: null, zoom: 1.25, eye, len: sz * S, lensR: lr * S, lens, lift: 0, tilt: 0, roll: CANTED_ROLL };
     if (mainCant) { scopeInfo = { ...cantedInfo, zoom: Math.min(SCOPE_ZOOM[mainCant] || 1.4, 1.8) }; cantedInfo = null; } // a 45 graus e a mira principal (ADS ja deita a arma)
   }
-  const iron = (lo.scope === IRON_OWN ? (ironUp && parts[lo.body].ironPt ? parts[lo.body].ironPt.clone() : ownIronPoint(lo.body, cx)) : new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6)).sub(origin).multiplyScalar(S);
+  const iron = (lo.scope === IRON_OWN ? (ironUp && parts[lo.body].ironPt ? parts[lo.body].ironPt.clone() : ownIronPoint(lo.body, cx).add(new THREE.Vector3(parts[lo.body].ironAdj?.[0] || 0, parts[lo.body].ironAdj?.[1] || 0, 0))) : new THREE.Vector3(cx, bodyBox.max.y + 0.06, bodyBox.min.z + len * 0.6)).sub(origin).multiplyScalar(S);
   { const dy = (typeof window !== 'undefined' && window.__ironDy?.[lo.body]) ?? IRON_DY[lo.body]; if (lo.scope === IRON_OWN && dy) iron.y += dy; } // 15/11: ponta da massa no centro da tela (medido no jogo)
   // skin de modelo: o neon e uma malha a parte que nunca pega camo nem pintura (04/11)
   if (parts[lo.body].neon) { const nm = new THREE.Mesh(parts[lo.body].neon, NEON_MAT); nm.position.copy(origin).multiplyScalar(-1); inner.add(nm); }
@@ -2458,8 +2470,63 @@ function buildGunParts(wpn, lo) {
     if (eyeY != null) k = Math.min(k, Math.max(0.35, (eyeY - 0.012 - axisY) / (bb.max.y * msc * k * S) * k));
     if (k < 1) { for (const x of list) x.scale.setScalar(msc * k); const nr = -bb.min.z * msc * k - back; muzzle.position.z += (reach - nr) * S; }
   }
+  if (lo.merge !== false) mergeGunParts(holder, inner, magMesh);
   stampSpace(holder, mat, partMat, parts[lo.body].box.getCenter(new THREE.Vector3()).sub(origin).multiplyScalar(S));
   return holder;
+}
+
+// Junta as pecas paradas da arma (22/11, desempenho: 103 malhas = 103 desenhos por quadro na mao, o maior custo de CPU).
+// Pecas filhas diretas de `inner` com o MESMO material viram UMA malha (e um contorno so, com a espessura de cada peca por vertice).
+// Fica solto: o que alguem referencia no userData (pente, mira, vidro, tambor, ferrolho...), peca com filho de verdade e o que nao e malha comum.
+// A geometria vai assada no espaco da PRIMEIRA peca do grupo (o corpo): a camo le a posicao local, entao o desenho nao muda.
+const mergeTmpM = new THREE.Matrix4();
+function mergeGunParts(holder, inner, magMesh) {
+  const refs = new Set(); if (magMesh) refs.add(magMesh);
+  const take = (v, d) => { if (!v || typeof v !== 'object') return; if (v.isObject3D) { refs.add(v); return; } if (d > 0) for (const k in v) take(v[k], d - 1); };
+  for (const k in holder.userData) take(holder.userData[k], 2);
+  holder.updateMatrixWorld(true);
+  const groups = new Map();
+  for (const o of inner.children) {
+    const m = o.material;
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || refs.has(o) || !m || Array.isArray(m) || m.isShaderMaterial || m.transparent || !o.visible || !o.geometry.attributes.position) continue;
+    if (Object.keys(o.userData).some(k => k !== 'sight')) continue;
+    const ol = o.children.find(c => c.material?.uniforms?.th);
+    if (o.children.length !== (ol ? 1 : 0)) continue;
+    let g = groups.get(m.uuid); if (!g) groups.set(m.uuid, g = { m, list: [] });
+    g.list.push({ o, ol });
+  }
+  for (const { m, list } of groups.values()) {
+    if (list.length < 2) continue;
+    const first = list[0].o; first.updateMatrix();
+    const inv = first.matrix.clone().invert(), hasUv = list.every(({ o }) => o.geometry.attributes.uv), allIdx = list.every(({ o }) => o.geometry.index);
+    const fills = [], hulls = [];
+    for (const { o, ol } of list) {
+      o.updateMatrix(); const mx = mergeTmpM.multiplyMatrices(inv, o.matrix), flip = mx.determinant() < 0;
+      let g = allIdx && !flip ? o.geometry.clone() : o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'uv' && hasUv)) g.deleteAttribute(k);
+      for (const k of Object.keys(g.morphAttributes)) delete g.morphAttributes[k];
+      if (!g.attributes.normal) g.computeVertexNormals();
+      g.clearGroups(); g.applyMatrix4(mx);
+      if (flip) for (const k of Object.keys(g.attributes)) { const a = g.attributes[k], n = a.itemSize, arr = a.array; for (let i = 0; i < arr.length; i += n * 3) for (let j = 0; j < n; j++) { const t = arr[i + n + j]; arr[i + n + j] = arr[i + 2 * n + j]; arr[i + 2 * n + j] = t; } }
+      fills.push(g);
+      if (ol) {
+        const h = ol.geometry.clone(); for (const k of Object.keys(h.attributes)) if (k !== 'position' && k !== 'normal') h.deleteAttribute(k);
+        h.applyMatrix4(mx);
+        if (flip && h.index) { const a = h.index.array; for (let i = 0; i < a.length; i += 3) { const t = a[i + 1]; a[i + 1] = a[i + 2]; a[i + 2] = t; } }
+        h.setAttribute('aTh', new THREE.BufferAttribute(new Float32Array(h.attributes.position.count).fill(ol.material.uniforms.th.value), 1));
+        hulls.push(h);
+      }
+    }
+    const fg = mergeGeometries(fills, false), hg = hulls.length ? mergeGeometries(hulls, false) : null;
+    for (const g of fills) g.dispose(); for (const g of hulls) g.dispose();
+    if (!fg || (hulls.length && !hg)) { fg?.dispose(); hg?.dispose(); continue; }
+    fg.userData.gunOwn = true;
+    const mesh = new THREE.Mesh(fg, m); mesh.renderOrder = first.renderOrder;
+    mesh.position.copy(first.position); mesh.quaternion.copy(first.quaternion); mesh.scale.copy(first.scale);
+    if (hg) outlineVar(mesh, hg);
+    inner.add(mesh);
+    for (const { o } of list) { for (const c of [...o.children]) o.remove(c); inner.remove(o); if (o.geometry.userData.gunOwn) o.geometry.dispose(); }
+  }
 }
 
 // 09/11 (print dele: no laser o desenho vinha maior): cada peca tem escala e origem proprias, entao a estampa media diferente em cada uma.
