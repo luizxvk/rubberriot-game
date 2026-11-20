@@ -948,7 +948,7 @@ function warmChar(r) {
 function remoteFor(p) {
   let r = G.remotes.get(p.id);
   if (!r) {
-    r = { id: p.id, mob: p.mob || null, char: p.mob ? new MobChar(p.mob) : new Character(p.team, divTagText(p.dt) + p.name, lookOf(p)), pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
+    r = { id: p.id, mob: p.mob || null, char: p.mob ? new MobChar(p.mob) : new Character(p.team, divTagText(p.dt) + p.name, lookOf(p)), drawTeam: p.team, pos: [...p.pos], target: [...p.pos], vel: [0, 0, 0], yaw: p.yaw, alive: p.alive, team: p.team, name: p.name, anim: p.anim, wpn: p.wpn, pitch: 0, speed: 0 };
     scene.add(r.char.root);
     G.remotes.set(p.id, r);
     warmChar(r);
@@ -1073,7 +1073,9 @@ function onSnap(s) {
     // trocou de time (infectado): o boneco e' refeito na cor nova
     // 19/11 (log dele: troca de rodada do Roubo ao Trem = 16 bonecos refeitos NUM quadro so, 257 ms + 1054 ms): troca de time entra
     // numa fila e sai no maximo 2 por quadro (frameBody chama teamSwapTick). O boneco velho fica ate a vez dele (poucos quadros)
-    if (p.team !== r.team && !r.mob && r.swapTo !== p.team) { r.swapTo = p.team; r.swapP = p; (G.teamSwapQ ||= []).push(r); }
+    // 20/11 (hotfix, bug dele: bot que trocou de time ficava com a cor velha: aliado com cara de inimigo, o tiro passava e ele 'nao morria'):
+    // compara com o time DESENHADO (r.team ja vira o novo logo abaixo, e a fila achava que nao tinha nada pra trocar)
+    if (p.team !== r.drawTeam && !r.mob && r.swapTo !== p.team) { r.swapTo = p.team; r.swapP = p; (G.teamSwapQ ||= []).push(r); }
     if (!r.alive && p.alive) r.pos = [...p.pos];
     r.leanT = p.ln || 0;
     { // 14/11 (pedido dele: 'bots lagando no offline'): o worker manda 60 estados/s e a tela roda a 75+; quadro sem estado novo = bot
@@ -3135,8 +3137,9 @@ function teamSwapTick() {
   const Q = G.teamSwapQ; if (!Q?.length) return;
   for (let n = 0; n < 2 && Q.length; n++) {
     const r = Q.shift(), p = r.swapP; if (!p || r.swapTo == null) continue;
-    if (!G.remotes.has(r.id) || r.team === r.swapTo) { r.swapTo = null; continue; }
-    scene.remove(r.char.root); freeChar(r.char); r.char = new Character(r.swapTo, divTagText(p.dt) + p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; r.team = r.swapTo; r.swapTo = null; warmChar(r);
+    const to = r.team; // o time mais novo (o snapshot pode ter mudado de novo enquanto esperava na fila)
+    if (!G.remotes.has(r.id) || r.drawTeam === to) { r.swapTo = null; continue; }
+    scene.remove(r.char.root); freeChar(r.char); r.char = new Character(to, divTagText(p.dt) + p.name, lookOf(p)); scene.add(r.char.root); r.loKey = null; r.drawTeam = to; r.swapTo = null; warmChar(r);
   }
 }
 function frameBody(now, realDt) {

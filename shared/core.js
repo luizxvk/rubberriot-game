@@ -1124,6 +1124,14 @@ export class Core {
   }
 
   // Acerto vindo do cliente: confere arma, alcance, linha de visao e taxa de dano
+  // 20/11 (hotfix, bug dele "vida infinita" que nao reproduziu): todo tiro de humano RECUSADO vai pro log do servidor com o motivo
+  // (no maximo 1 por segundo por jogador). So anota; a regra nao muda
+  hitRej(p, v, m, why, info) {
+    if (!p || p.bot) return 0;
+    const now = this.clock || 0; if (now - (p.rejAt ?? -9) < 1) return 0; p.rejAt = now;
+    this.flag(p, 'tiroRecusado', { why, wpn: m.wpn, pw: p.wpn, lw: p.lastWpn, v: v?.id, bot: !!v?.bot, d: v ? Math.round(Math.sqrt(dist2(p.pos, v.pos)) * 10) / 10 : null, map: this.M?.id, mode: this.mode, ...info });
+    return 0;
+  }
   validHit(p, v, m) {
     const w = WEAPONS[m.wpn];
     if (!w || !Number.isFinite(m.dmg) || m.dmg <= 0) return 0;
@@ -1131,11 +1139,11 @@ export class Core {
     if (this.mode === 'infect' && p.team === 'red' && !w.melee) return 0;
     // faca rapida vale com qualquer arma na mao; o resto so com a arma que ele segura
     if (m.wpn === 'ubshot') { if ((this.clock || 0) - (p.ubAt ?? -9) > 0.6 || gadgetOf(p.los?.rifle) !== 'gd_shot') return 0; } // so logo depois do cartucho
-    else if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return 0;
+    else if (!w.melee && m.wpn !== p.wpn && m.wpn !== p.lastWpn) return this.hitRej(p, v, m, 'arma');
     const eye = [p.pos[0], p.pos[1] + 1.5, p.pos[2]];
     const d = Math.sqrt(dist2(eye, v.pos));
     const range = w.melee ? (m.wpn === 'fists' ? w.range : bodyTrait(this.bodyOf(p, 'melee')).range || w.range) * 1.4 + 0.6 : (w.range || 260) * ((AMMO[this.ammoOf(p, m.wpn)] || {}).range || 1) * (CONV_RANGE[this.bodyOf(p, m.wpn) + '|' + p.los?.[m.wpn]?.conv] || 1) * (bodyTrait(this.bodyOf(p, m.wpn)).rangeK || 1); // balote alcanca mais; rangeK (13/11): modelo de curta distancia (Simeon North)
-    if (d > range) return 0;
+    if (d > range) return this.hitRej(p, v, m, 'alcance', { range: Math.round(range) });
     if (!w.melee) this.aimCheck(p, v, eye, d, m.wpn);
     if (w.melee) { const now = this.clock || 0; if (now - (p.meleeAt || -9) < 0.3) return 0; p.meleeAt = now; return Math.min(m.dmg, w.dmg); }
     const hb = v.mob ? MOBS[v.mob].hb : null; // vilao da noite: peito e cabeca pela ficha (chefao de 6 m)
@@ -1145,13 +1153,13 @@ export class Core {
     if (!hasLOS(this.M, eye, chest) && !hasLOS(this.M, eye, head)) {
       // perfurante: passa por parede fina, com menos dano
       const spC = wallSpan(this.M, eye, chest), spH = wallSpan(this.M, eye, head), sp = spC.sum <= spH.sum ? spC : spH;
-      if (am !== 'ap' || sp.sum > A.pierce) return 0;
+      if (am !== 'ap' || sp.sum > A.pierce) return this.hitRej(p, v, m, 'parede', { eye: eye.map(x => Math.round(x * 10) / 10), at: v.pos.map(x => Math.round(x * 10) / 10) });
       wallK = A.wallK * A.wallFall ** Math.max(0, sp.n - 1); // 09/11 (pedido dele): 1a parede tira 25%; cada parede a mais tira bem mais
     }
     const tr = bodyTrait(this.bodyOf(p, m.wpn));
     const maxShot = w.dmg * (tr.pellets || w.pellets || 1) * (tr.dmg || 1) * (this.bpOf(p, m.wpn).dmg || 1) * (A.dmg || 1) * wallK * 1.25;
     const dmg = Math.min(m.dmg, maxShot);
-    if (p.budget < dmg) return Math.max(0, p.budget);
+    if (p.budget < dmg) { if (p.budget <= 0) this.hitRej(p, v, m, 'saldo', { dmg: Math.round(dmg) }); return Math.max(0, p.budget); }
     p.budget -= dmg;
     return dmg;
   }
